@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
-import { Loader2, GraduationCap, Check } from 'lucide-react'
+import { Loader2, GraduationCap, BookOpen, Users, Zap, ArrowRight } from 'lucide-react'
 import { loginAction } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,9 +19,21 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 const features = [
-  'Ödev ve test takibini otomatikleştirin',
-  'Risk altındaki öğrencileri anında görün',
-  'Velilerle tek tıkla paylaşın',
+  {
+    icon: BookOpen,
+    title: 'Kitap & Test Takibi',
+    desc: 'Ödevleri otomatikleştirin, tamamlanma oranlarını anlık izleyin.',
+  },
+  {
+    icon: Zap,
+    title: 'Risk Analizi',
+    desc: 'Gecikme ve risk altındaki öğrencileri tek bakışta görün.',
+  },
+  {
+    icon: Users,
+    title: 'Veli İletişimi',
+    desc: 'Velileri tek tıkla davet edin, şeffaf ilerleme paylaşın.',
+  },
 ]
 
 export default function LoginPage() {
@@ -44,117 +56,176 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left: Branding */}
-      <div className="hidden lg:flex flex-col w-[460px] shrink-0 auth-hero p-12 relative overflow-hidden">
+      {/* Left: Hero panel */}
+      <div className="hidden lg:flex flex-col w-[520px] shrink-0 auth-hero dot-grid relative overflow-hidden">
+        {/* Glow orbs */}
         <div
-          className="absolute -top-24 -right-24 w-96 h-96 rounded-full opacity-[0.06]"
-          style={{ background: 'radial-gradient(circle, white, transparent)' }}
+          className="absolute -top-40 -left-20 w-[500px] h-[500px] rounded-full blur-3xl pointer-events-none"
+          style={{ background: 'radial-gradient(circle, oklch(0.57 0.26 282 / 0.18) 0%, transparent 70%)' }}
         />
         <div
-          className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(circle, white, transparent)' }}
+          className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl pointer-events-none"
+          style={{ background: 'radial-gradient(circle, oklch(0.48 0.22 265 / 0.15) 0%, transparent 70%)' }}
         />
 
-        <div className="flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+        {/* Logo */}
+        <div className="relative z-10 flex items-center gap-3 px-12 pt-10">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.48 0.22 265))' }}
+          >
             <GraduationCap className="size-5 text-white" />
           </div>
-          <span className="font-bold text-lg text-white tracking-tight">Koçluk Takip</span>
+          <span className="font-extrabold text-lg text-white tracking-tight">Koçluk Takip</span>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center relative z-10 mt-16">
-          <h2 className="text-3xl font-bold text-white mb-4 leading-snug">
-            Öğrencilerinizi<br />
-            <span className="text-white/55">tek ekranda</span> takip edin
-          </h2>
-          <p className="text-white/55 text-sm mb-10 leading-relaxed max-w-xs">
-            Kitaplar, testler, ödevler ve veli iletişimi — Excel&apos;e gerek kalmadan.
-          </p>
+        {/* Hero content */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center px-12">
+          <div className="mb-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/8 border border-white/12 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-xs text-white/60 font-semibold tracking-wide">Eğitim Koçluğu Platformu</span>
+            </div>
+            <h2 className="text-5xl font-black text-white mb-5 leading-[1.1] tracking-tight">
+              Öğrencilerinizi<br />
+              <span
+                className="bg-clip-text text-transparent"
+                style={{ backgroundImage: 'linear-gradient(135deg, oklch(0.80 0.18 282), oklch(0.85 0.12 265))' }}
+              >
+                akıllıca
+              </span>{' '}
+              takip<br />
+              edin
+            </h2>
+            <p className="text-white/50 text-base leading-relaxed max-w-xs">
+              Kitaplar, testler, ödevler ve veli iletişimi — Excel&apos;e gerek kalmadan.
+            </p>
+          </div>
 
           <div className="space-y-4">
-            {features.map((f) => (
-              <div key={f} className="flex items-start gap-3 text-sm text-white/70">
-                <div className="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center shrink-0 mt-0.5">
-                  <Check className="size-2.5 text-white" />
+            {features.map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="flex items-start gap-4">
+                <div className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Icon className="size-4 text-white/70" />
                 </div>
-                {f}
+                <div>
+                  <p className="text-sm font-bold text-white/85">{title}</p>
+                  <p className="text-xs text-white/45 mt-0.5 leading-relaxed">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div className="flex gap-8 mt-12 pt-8 border-t border-white/8">
+            {[
+              { value: '3', label: 'Kullanıcı rolü' },
+              { value: '100%', label: 'Web tabanlı' },
+              { value: '7/24', label: 'Erişim' },
+            ].map(({ value, label }) => (
+              <div key={label}>
+                <p className="text-2xl font-black text-white">{value}</p>
+                <p className="text-xs text-white/35 mt-0.5 font-medium">{label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="text-[11px] text-white/25 relative z-10">© 2026 Koçluk Takip</p>
+        <p className="relative z-10 text-[11px] text-white/18 px-12 pb-8">
+          © 2026 Koçluk Takip · Tüm hakları saklıdır
+        </p>
       </div>
 
       {/* Right: Form */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
-        <div className="w-full max-w-[360px]">
+        <div className="w-full max-w-[400px]">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2.5 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <GraduationCap className="size-4 text-primary" />
+          <div className="lg:hidden flex items-center gap-2.5 mb-10">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.48 0.22 265))' }}
+            >
+              <GraduationCap className="size-4 text-white" />
             </div>
-            <span className="font-bold text-base tracking-tight">Koçluk Takip</span>
+            <span className="font-extrabold text-base tracking-tight">Koçluk Takip</span>
           </div>
 
           <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-tight mb-1.5">Tekrar hoşgeldiniz</h1>
-            <p className="text-muted-foreground text-sm">Hesabınıza giriş yapın</p>
+            <h1 className="text-3xl font-black tracking-tight mb-2">Tekrar hoşgeldiniz</h1>
+            <p className="text-muted-foreground text-sm">Hesabınıza giriş yaparak devam edin</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-sm font-medium">E-posta</Label>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-semibold">E-posta</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="ornek@mail.com"
                 autoComplete="email"
-                className="h-11"
+                className="h-12 rounded-xl border-border/80 bg-card shadow-xs focus-visible:ring-2 focus-visible:ring-primary/30"
                 aria-invalid={!!errors.email}
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
+                <p className="text-xs text-destructive font-medium">{errors.email.message}</p>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-sm font-medium">Şifre</Label>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-semibold">Şifre</Label>
               <Input
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                className="h-11"
+                className="h-12 rounded-xl border-border/80 bg-card shadow-xs focus-visible:ring-2 focus-visible:ring-primary/30"
                 aria-invalid={!!errors.password}
                 {...register('password')}
               />
               {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
+                <p className="text-xs text-destructive font-medium">{errors.password.message}</p>
               )}
             </div>
 
             {serverError && (
-              <div className="rounded-lg bg-destructive/8 border border-destructive/20 px-3.5 py-2.5">
-                <p className="text-xs text-destructive">{serverError}</p>
+              <div className="rounded-xl bg-destructive/8 border border-destructive/20 px-4 py-3.5">
+                <p className="text-xs text-destructive font-medium">{serverError}</p>
               </div>
             )}
 
             <Button
               type="submit"
-              className="w-full h-11 text-sm font-medium"
+              className="w-full h-12 text-sm font-bold rounded-xl shadow-md gap-2"
+              style={{
+                background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))',
+              }}
               disabled={isPending}
             >
-              {isPending && <Loader2 className="size-4 animate-spin" />}
-              Giriş Yap
+              {isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <>
+                  Giriş Yap
+                  <ArrowRight className="size-4" />
+                </>
+              )}
             </Button>
           </form>
 
-          <p className="text-sm text-muted-foreground text-center mt-6">
+          <div className="relative my-7">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border/60" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-background px-3 text-muted-foreground">veya</span>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground text-center">
             Hesabın yok mu?{' '}
             <Link
               href="/register"
-              className="text-primary font-medium hover:underline underline-offset-4"
+              className="text-primary font-bold hover:underline underline-offset-4"
             >
               Kayıt ol
             </Link>

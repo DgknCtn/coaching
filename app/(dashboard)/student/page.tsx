@@ -1,5 +1,6 @@
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
+import { BookOpen, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,47 +37,82 @@ export default async function StudentPage() {
   const upcoming = (batches ?? []).filter(b => b.due_date >= todayStr)
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-xl font-semibold mb-6">Ödevlerim</h1>
+    <div className="p-6 md:p-8 max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="mb-8 pb-6 border-b">
+        <h1 className="text-2xl font-extrabold tracking-tight mb-1">Ödevlerim</h1>
+        <p className="text-sm text-muted-foreground">
+          {overdue.length > 0 && (
+            <span className="text-red-600 font-semibold">{overdue.length} gecikmiş · </span>
+          )}
+          {upcoming.length} yaklaşan ödev
+        </p>
+      </div>
+
+      {/* Overdue alert banner */}
+      {overdue.length > 0 && (
+        <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-red-500 bg-red-50/60 border-red-200">
+          <AlertTriangle className="size-4 text-red-600 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-red-700">{overdue.length} gecikmiş ödev</p>
+            <p className="text-xs text-red-600/75 mt-0.5">Bunları en kısa sürede tamamlamayı unutma!</p>
+          </div>
+        </div>
+      )}
 
       {overdue.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-sm font-medium text-red-600 mb-2">Geciken Ödevler</h2>
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="size-4 text-red-500" />
+            <h2 className="text-sm font-bold text-red-600">Geciken Ödevler</h2>
+          </div>
           <HomeworkList batches={overdue as any} />
         </section>
       )}
 
       {upcoming.length > 0 ? (
-        <section className="mb-6">
-          <h2 className="text-sm font-medium mb-2">Bu Hafta ve Yaklaşan</h2>
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <ClipboardList className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-bold text-foreground">Bu Hafta ve Yaklaşan</h2>
+          </div>
           <HomeworkList batches={upcoming as any} />
         </section>
       ) : overdue.length === 0 ? (
-        <div className="py-16 text-center text-muted-foreground rounded-xl border border-dashed">
-          <p>Bekleyen ödev yok. 🎉</p>
+        <div className="py-16 flex flex-col items-center justify-center text-center rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40">
+          <CheckCircle2 className="size-10 text-emerald-500 mb-3" />
+          <p className="font-bold text-emerald-700">Tüm ödevler tamamlandı!</p>
+          <p className="text-sm text-emerald-600/70 mt-1">Harika iş çıkardın.</p>
         </div>
       ) : null}
 
+      {/* Book progress */}
       {(bookProgress?.length ?? 0) > 0 && (
         <section>
-          <h2 className="text-sm font-medium mb-3">Kitap İlerlemem</h2>
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b">
+            <BookOpen className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-bold">Kitap İlerlemem</h2>
+          </div>
           <div className="space-y-3">
             {bookProgress!.map(p => (
-              <div key={p.student_book_assignment_id} className="rounded-xl border bg-card p-4">
-                <div className="flex items-center justify-between mb-1.5">
+              <div key={p.student_book_assignment_id} className="rounded-2xl border bg-card p-5 shadow-xs">
+                <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="text-sm font-medium">{p.book_title}</p>
-                    <p className="text-xs text-muted-foreground">{p.subject}</p>
+                    <p className="text-sm font-bold">{p.book_title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{p.subject}</p>
                   </div>
-                  <p className="text-sm font-bold">{p.completion_percentage}%</p>
+                  <span className="text-2xl font-black text-foreground">{p.completion_percentage}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-2.5 rounded-full bg-muted overflow-hidden mb-2">
                   <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${Math.min(100, Number(p.completion_percentage))}%` }}
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${Math.min(100, Number(p.completion_percentage))}%`,
+                      background: 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
+                    }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1.5">
+                <p className="text-xs text-muted-foreground font-medium">
                   {p.completed_tests} / {p.total_tests} test tamamlandı · {p.remaining_tests} kaldı
                 </p>
               </div>

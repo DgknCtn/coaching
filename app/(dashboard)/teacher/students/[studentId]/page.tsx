@@ -1,13 +1,17 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
 import { InviteDialog } from './invite-dialog'
+import { StatCard } from '@/components/shared/stat-card'
+import { BookCard } from '@/components/shared/book-card'
+import { EmptyState } from '@/components/shared/empty-state'
+import { PageHeader } from '@/components/shared/page-header'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,14 +32,12 @@ export default async function StudentDetailPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  // Book progress
   const { data: bookProgress } = await supabase
     .from('student_book_progress_view')
     .select('*')
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
 
-  // Homework batches
   const { data: homeworkBatches } = await supabase
     .from('homework_batches')
     .select(`
@@ -48,7 +50,6 @@ export default async function StudentDetailPage({
     .order('due_date', { ascending: false })
     .limit(20)
 
-  // Parent links
   const { data: parentLinks } = await supabase
     .from('parent_student_links')
     .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
@@ -56,7 +57,6 @@ export default async function StudentDetailPage({
     .eq('workspace_id', workspaceId)
     .neq('status', 'removed')
 
-  // Books available to assign (not yet assigned in active term)
   const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
   let availableBooks: { id: string; title: string; subject: string }[] = []
   if (activeTerm) {
@@ -69,7 +69,6 @@ export default async function StudentDetailPage({
     availableBooks = (data ?? []).filter(b => !assignedBookIds.includes(b.id))
   }
 
-  // Weekly summary
   const { data: weeklySummary } = await supabase
     .from('student_weekly_homework_summary_view')
     .select('*')
@@ -80,120 +79,119 @@ export default async function StudentDetailPage({
   const hasAccount = !!student.profile_id
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <Link href="/teacher/students">
-            <Button variant="ghost" size="icon-sm">
-              <ArrowLeft className="size-4" />
+    <div className="p-6 md:p-8 max-w-4xl mx-auto">
+      <PageHeader
+        backHref="/teacher/students"
+        title={student.full_name}
+        subtitle={[student.email, student.phone].filter(Boolean).join(' · ')}
+        badges={
+          <>
+            {student.exam_type && <Badge variant="secondary" className="rounded-lg">{student.exam_type}</Badge>}
+            {student.grade_level && <Badge variant="outline" className="rounded-lg">{student.grade_level}</Badge>}
+          </>
+        }
+        action={
+          <Link href={`/teacher/students/${studentId}/homework/new`}>
+            <Button
+              size="sm"
+              className="gap-2 rounded-xl h-9 font-semibold shadow-sm"
+              style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))' }}
+            >
+              <Plus className="size-4" /> Ödev Ver
             </Button>
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold">{student.full_name}</h1>
-              {student.exam_type && <Badge variant="secondary">{student.exam_type}</Badge>}
-              {student.grade_level && <Badge variant="outline">{student.grade_level}</Badge>}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {student.email ?? ''}{student.phone ? ` · ${student.phone}` : ''}
-            </p>
-          </div>
-        </div>
-        <Link href={`/teacher/students/${studentId}/homework/new`}>
-          <Button size="sm">
-            <Plus className="size-4" /> Ödev Ver
-          </Button>
-        </Link>
-      </div>
+        }
+      />
 
       {/* Weekly summary cards */}
       {weeklySummary && (
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { label: 'Verilen', value: weeklySummary.assigned_tests },
-            { label: 'Tamamlanan', value: weeklySummary.completed_tests },
-            { label: 'Bekleyen', value: weeklySummary.pending_tests },
-            { label: 'Geciken', value: weeklySummary.overdue_tests, alert: Number(weeklySummary.overdue_tests) > 0 },
-          ].map(({ label, value, alert }) => (
-            <Card key={label} className={alert ? 'border-red-200 bg-red-50' : ''}>
-              <CardContent className="pt-3 pb-3 text-center">
-                <p className={`text-2xl font-bold ${alert ? 'text-red-600' : ''}`}>{value}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <StatCard
+            icon={ClipboardList}
+            label="Verilen"
+            value={weeklySummary.assigned_tests ?? 0}
+            colorScheme="indigo"
+          />
+          <StatCard
+            icon={CheckCircle2}
+            label="Tamamlanan"
+            value={weeklySummary.completed_tests ?? 0}
+            colorScheme="emerald"
+          />
+          <StatCard
+            icon={ClipboardList}
+            label="Bekleyen"
+            value={weeklySummary.pending_tests ?? 0}
+            colorScheme="neutral"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Geciken"
+            value={weeklySummary.overdue_tests ?? 0}
+            colorScheme={Number(weeklySummary.overdue_tests) > 0 ? 'red' : 'neutral'}
+          />
         </div>
       )}
 
       <Tabs defaultValue="books">
-        <TabsList className="mb-4">
-          <TabsTrigger value="books">
-            <BookOpen className="size-3.5 mr-1" /> Kitaplar
+        <TabsList className="mb-6 h-10 rounded-xl p-1 bg-muted">
+          <TabsTrigger value="books" className="gap-1.5 rounded-lg text-xs font-semibold">
+            <BookOpen className="size-3.5" /> Kitaplar
           </TabsTrigger>
-          <TabsTrigger value="homework">
-            <ClipboardList className="size-3.5 mr-1" /> Ödevler
+          <TabsTrigger value="homework" className="gap-1.5 rounded-lg text-xs font-semibold">
+            <ClipboardList className="size-3.5" /> Ödevler
           </TabsTrigger>
-          <TabsTrigger value="parents">
-            <Users className="size-3.5 mr-1" /> Veliler
+          <TabsTrigger value="parents" className="gap-1.5 rounded-lg text-xs font-semibold">
+            <Users className="size-3.5" /> Veliler
           </TabsTrigger>
           {student.notes && (
-            <TabsTrigger value="notes">
-              <StickyNote className="size-3.5 mr-1" /> Notlar
+            <TabsTrigger value="notes" className="gap-1.5 rounded-lg text-xs font-semibold">
+              <StickyNote className="size-3.5" /> Notlar
             </TabsTrigger>
           )}
         </TabsList>
 
         {/* BOOKS TAB */}
         <TabsContent value="books">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium text-sm">Atanmış Kitaplar</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-bold text-sm text-foreground">Atanmış Kitaplar</h2>
             {activeTerm && availableBooks.length > 0 && (
-              <AssignBookDialog
-                studentId={studentId}
-                books={availableBooks}
-              />
+              <AssignBookDialog studentId={studentId} books={availableBooks} />
             )}
           </div>
           {!bookProgress?.length ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">
-              Henüz kitap atanmamış.
-              {activeTerm && availableBooks.length > 0 && ' Kitap eklemek için "Kitap Ata" butonunu kullanın.'}
-              {!activeTerm && ' Önce aktif bir dönem oluşturun.'}
+            <div className="bg-card rounded-2xl border shadow-xs">
+              <EmptyState
+                icon={BookOpen}
+                title="Henüz kitap atanmamış"
+                description={
+                  activeTerm && availableBooks.length > 0
+                    ? 'Kitap eklemek için "Kitap Ata" butonunu kullanın.'
+                    : !activeTerm
+                    ? 'Önce aktif bir dönem oluşturun.'
+                    : 'Bu dönemdeki tüm kitaplar atanmış.'
+                }
+              />
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               {bookProgress.map((p) => (
-                <Card key={p.student_book_assignment_id}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div>
-                        <Link href={`/teacher/books/${p.book_id}`} className="font-medium text-sm hover:underline">
-                          {p.book_title}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">{p.subject}</p>
-                      </div>
-                      {p.exam_type && <Badge variant="secondary" className="text-xs shrink-0">{p.exam_type}</Badge>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{p.completed_tests} / {p.total_tests} test</span>
-                        <span>{p.completion_percentage}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full"
-                          style={{ width: `${Math.min(100, Number(p.completion_percentage))}%` }}
-                        />
-                      </div>
-                      {p.target_end_date && (
-                        <p className="text-xs text-muted-foreground">
-                          Hedef: {new Date(p.target_end_date).toLocaleDateString('tr-TR')}
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                <BookCard
+                  key={p.student_book_assignment_id}
+                  book={{
+                    id: p.book_id,
+                    title: p.book_title,
+                    subject: p.subject,
+                    exam_type: p.exam_type,
+                  }}
+                  progress={{
+                    completed: p.completed_tests,
+                    total: p.total_tests,
+                    percentage: Number(p.completion_percentage),
+                    targetDate: p.target_end_date,
+                  }}
+                  href={`/teacher/books/${p.book_id}`}
+                />
               ))}
             </div>
           )}
@@ -201,47 +199,87 @@ export default async function StudentDetailPage({
 
         {/* HOMEWORK TAB */}
         <TabsContent value="homework">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium text-sm">Ödevler</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-bold text-sm">Ödevler</h2>
             <Link href={`/teacher/students/${studentId}/homework/new`}>
-              <Button size="xs" variant="outline">
+              <Button size="sm" variant="outline" className="gap-1.5 rounded-xl h-9 font-semibold">
                 <Plus className="size-3" /> Ödev Ver
               </Button>
             </Link>
           </div>
           {!homeworkBatches?.length ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">Henüz ödev yok.</div>
+            <div className="bg-card rounded-2xl border shadow-xs">
+              <EmptyState
+                icon={ClipboardList}
+                title="Henüz ödev yok"
+                description="Bu öğrenciye ödev vererek takip etmeye başlayın."
+                action={{ label: 'Ödev Ver', href: `/teacher/students/${studentId}/homework/new` }}
+              />
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {homeworkBatches.map((batch) => {
                 const items = batch.homework_items as { id: string; status: string }[] ?? []
                 const total = items.length
                 const completed = items.filter(i => i.status === 'completed').length
                 const isOverdue = new Date(batch.due_date) < new Date() && items.some(i => i.status === 'pending')
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+                const isComplete = total > 0 && completed === total
                 return (
-                  <Card key={batch.id} className={isOverdue ? 'border-red-200' : ''}>
-                    <CardContent className="flex items-center justify-between py-3">
-                      <div>
-                        <p className="text-sm font-medium">
+                  <div
+                    key={batch.id}
+                    className={cn(
+                      'bg-card rounded-2xl border px-5 py-4 flex items-center justify-between gap-4 shadow-xs transition-all',
+                      isOverdue && 'border-l-[3px] border-l-red-400',
+                      isComplete && 'border-l-[3px] border-l-emerald-400',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-bold truncate">
                           {batch.title ?? new Date(batch.due_date).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs text-muted-foreground">
-                            Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
-                          </p>
-                          {isOverdue && (
-                            <span className="text-xs text-red-600 flex items-center gap-0.5">
-                              <AlertTriangle className="size-3" /> Gecikmiş
-                            </span>
-                          )}
+                        {isOverdue && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-red-600 font-bold">
+                            <AlertTriangle className="size-3" /> Gecikmiş
+                          </span>
+                        )}
+                        {isComplete && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-emerald-600 font-bold">
+                            <CheckCircle2 className="size-3" /> Tamamlandı
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
+                      </p>
+                      {total > 0 && (
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[100px]">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${pct}%`,
+                                background: isOverdue
+                                  ? 'oklch(0.54 0.22 20)'
+                                  : isComplete
+                                  ? 'oklch(0.50 0.18 155)'
+                                  : 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground font-semibold">{pct}%</span>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{completed}/{total}</p>
-                        <p className="text-xs text-muted-foreground">tamamlandı</p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-black">
+                        {completed}
+                        <span className="text-muted-foreground text-sm font-normal">/{total}</span>
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-medium">tamamlandı</p>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -250,8 +288,8 @@ export default async function StudentDetailPage({
 
         {/* PARENTS TAB */}
         <TabsContent value="parents">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium text-sm">Veliler</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-bold text-sm">Veliler</h2>
             <InviteDialog
               studentId={studentId}
               studentName={student.full_name}
@@ -259,7 +297,7 @@ export default async function StudentDetailPage({
             />
           </div>
           {!hasAccount && (
-            <div className="mb-3">
+            <div className="mb-4">
               <InviteDialog
                 studentId={studentId}
                 studentName={student.full_name}
@@ -268,23 +306,37 @@ export default async function StudentDetailPage({
             </div>
           )}
           {!parentLinks?.length ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Bağlı veli yok.</div>
+            <div className="bg-card rounded-2xl border shadow-xs">
+              <EmptyState
+                icon={Users}
+                title="Bağlı veli yok"
+                description="Veli davet ederek takip sürecine dahil edin."
+              />
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {parentLinks.map((link) => {
-                const profile = link.profiles as unknown as { full_name: string; email: string } | null
+                const prof = link.profiles as unknown as { full_name: string; email: string } | null
                 return (
-                  <Card key={link.id}>
-                    <CardContent className="flex items-center justify-between py-3">
-                      <div>
-                        <p className="text-sm font-medium">{profile?.full_name ?? 'Davet bekleniyor'}</p>
-                        <p className="text-xs text-muted-foreground">{profile?.email ?? ''}</p>
+                  <div key={link.id} className="bg-card rounded-2xl border px-5 py-4 flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 ring-1 ring-border">
+                        <span className="text-sm font-black text-muted-foreground">
+                          {(prof?.full_name ?? 'V').charAt(0).toUpperCase()}
+                        </span>
                       </div>
-                      <Badge variant={link.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                        {link.status === 'active' ? 'Aktif' : link.status === 'invited' ? 'Davet edildi' : link.status}
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                      <div>
+                        <p className="text-sm font-bold">{prof?.full_name ?? 'Davet bekleniyor'}</p>
+                        <p className="text-xs text-muted-foreground">{prof?.email ?? ''}</p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={link.status === 'active' ? 'default' : 'secondary'}
+                      className="text-xs rounded-lg"
+                    >
+                      {link.status === 'active' ? 'Aktif' : link.status === 'invited' ? 'Davet edildi' : link.status}
+                    </Badge>
+                  </div>
                 )
               })}
             </div>
@@ -293,11 +345,9 @@ export default async function StudentDetailPage({
 
         {student.notes && (
           <TabsContent value="notes">
-            <Card>
-              <CardContent className="pt-4">
-                <p className="text-sm whitespace-pre-wrap">{student.notes}</p>
-              </CardContent>
-            </Card>
+            <div className="bg-card rounded-2xl border shadow-xs p-6">
+              <p className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{student.notes}</p>
+            </div>
           </TabsContent>
         )}
       </Tabs>
