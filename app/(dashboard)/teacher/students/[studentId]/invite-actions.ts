@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
@@ -9,7 +10,11 @@ export async function createInviteAction(studentId: string, role: 'student' | 'p
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
-  const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  // İsteğin geldiği host'u kullan — env var'a bağımlı değil, her ortamda doğru çalışır
+  const headersList = await headers()
+  const host = headersList.get('host') ?? 'localhost:3000'
+  const proto = headersList.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')
+  const appUrl = `${proto}://${host}`
 
   const { data: student } = await supabase
     .from('students')
