@@ -33,8 +33,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Korumalı rotalar — giriş gerekmez
-  const publicPaths = ['/login', '/register', '/invite/']
-  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p))
+  const publicPaths = ['/', '/login', '/register', '/invite/', '/demo']
+  const isPublicPath =
+    pathname === '/' || publicPaths.some((p) => p !== '/' && pathname.startsWith(p))
 
   // Giriş yapmamış kullanıcı korumalı rotaya girmeye çalışıyor
   if (!user && !isPublicPath) {

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { LandingPage } from '@/components/marketing/landing-page'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,7 @@ export default async function RootPage() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    return <LandingPage />
   }
 
   const { data: profile } = await supabase
@@ -21,7 +22,6 @@ export default async function RootPage() {
 
   if (!profile?.default_workspace_id) redirect('/login')
 
-  // owner ve teacher için 2 ayrı satır olabilir — ilkini al
   const { data: member } = await supabase
     .from('workspace_members')
     .select('role')
