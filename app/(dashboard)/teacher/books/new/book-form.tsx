@@ -142,7 +142,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium">Bölümler</h2>
           <p className="text-xs text-muted-foreground">
-            Toplam: {fields.reduce((sum, _, i) => sum, 0)} bölüm
+            Toplam: {fields.length} bölüm
           </p>
         </div>
 
