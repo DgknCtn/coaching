@@ -32,10 +32,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Korumalı rotalar — giriş gerekmez
-  const publicPaths = ['/', '/login', '/register', '/invite/', '/demo']
+  // Giriş gerektirmeyen herkese açık rotalar (tam eşleşme veya segment sınırı)
   const isPublicPath =
-    pathname === '/' || publicPaths.some((p) => p !== '/' && pathname.startsWith(p))
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/demo' ||
+    pathname.startsWith('/invite/')
 
   // Giriş yapmamış kullanıcı korumalı rotaya girmeye çalışıyor
   if (!user && !isPublicPath) {
@@ -49,6 +52,50 @@ export async function middleware(request: NextRequest) {
     const dashboardUrl = request.nextUrl.clone()
     dashboardUrl.pathname = '/'
     return NextResponse.redirect(dashboardUrl)
+  }
+
+  // Rol bazlı panel koruması: bir kullanıcının rolüne ait olmayan panele
+  // girmesini engelle ve doğru paneline yönlendir (getXContext'in /login'e
+  // atmasından daha iyi UX + ek savunma katmanı).
+  const roleAreas = [
+    { prefix: '/teacher', roles: ['owner', 'teacher', 'assistant'] },
+    { prefix: '/student', roles: ['student'] },
+    { prefix: '/parent', roles: ['parent'] },
+  ] as const
+  const area = user ? roleAreas.find((a) => pathname.startsWith(a.prefix)) : undefined
+
+  if (user && area) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, default_workspace_id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle()
+
+    if (profile?.default_workspace_id) {
+      const { data: members } = await supabase
+        .from('workspace_members')
+        .select('role')
+        .eq('profile_id', profile.id)
+        .eq('workspace_id', profile.default_workspace_id)
+        .eq('status', 'active')
+
+      const userRoles = (members ?? []).map((m) => m.role as string)
+      const hasAccess = userRoles.some((r) => area.roles.includes(r as never))
+
+      if (!hasAccess) {
+        // Kullanıcıyı sahip olduğu role uygun panele yönlendir
+        const home = userRoles.includes('student')
+          ? '/student'
+          : userRoles.includes('parent')
+            ? '/parent'
+            : userRoles.some((r) => ['owner', 'teacher', 'assistant'].includes(r))
+              ? '/teacher'
+              : '/login'
+        const url = request.nextUrl.clone()
+        url.pathname = home
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return supabaseResponse

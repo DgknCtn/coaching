@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
+import { studentSchema, firstIssue } from '@/lib/validation'
 
 export async function createStudentAction(
   fullName: string,
@@ -13,6 +14,9 @@ export async function createStudentAction(
   examType: string | undefined,
   notes: string | undefined
 ) {
+  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, notes })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId, profile } = await getTeacherContext()
   const supabase = await createClient()
 
@@ -42,6 +46,9 @@ export async function updateStudentAction(
   examType: string | undefined,
   notes: string | undefined
 ) {
+  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, notes })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
