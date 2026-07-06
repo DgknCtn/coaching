@@ -70,6 +70,13 @@ export default async function ParentPage() {
           return b.due_date < todayStr && (b.homework_items as { status: string }[]).some(i => i.status === 'pending')
         })
 
+        // Genel (dönem geneli) ilerleme — atanmış tüm kitaplar üzerinden.
+        const overallTotal = bookProgress.reduce((s, p) => s + Number(p.total_tests ?? 0), 0)
+        const overallCompleted = bookProgress.reduce((s, p) => s + Number(p.completed_tests ?? 0), 0)
+        const overallPct = overallTotal > 0 ? Math.round((overallCompleted / overallTotal) * 100) : 0
+        const hasActivity = bookProgress.length > 0 || batches.length > 0
+        const onTrack = hasActivity && overdueBatches.length === 0
+
         return (
           <div key={student.id} className="mb-12">
             {/* Student header card */}
@@ -103,7 +110,42 @@ export default async function ParentPage() {
               </div>
             </div>
 
-            {/* Weekly summary */}
+            {/* Genel durum (dönem geneli) */}
+            {hasActivity && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+                  <TrendingUp className="size-4 text-muted-foreground" /> Genel Durum
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <StatCard
+                    icon={TrendingUp}
+                    label="Genel İlerleme"
+                    value={`${overallPct}%`}
+                    colorScheme={overallPct >= 70 ? 'emerald' : overallPct >= 40 ? 'indigo' : 'red'}
+                  />
+                  <StatCard
+                    icon={BookOpen}
+                    label="Tamamlanan Test"
+                    value={overallCompleted}
+                    subValue={`/${overallTotal}`}
+                    colorScheme="neutral"
+                  />
+                  <StatCard
+                    icon={BookOpen}
+                    label="Aktif Kitap"
+                    value={bookProgress.length}
+                    colorScheme="neutral"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Bu haftanın özeti */}
+            {weekly && (
+              <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+                <ClipboardList className="size-4 text-muted-foreground" /> Bu Hafta
+              </h3>
+            )}
             {weekly && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <StatCard
@@ -133,16 +175,31 @@ export default async function ParentPage() {
               </div>
             )}
 
-            {/* Overdue alert */}
+            {/* Gecikme uyarısı */}
             {overdueBatches.length > 0 && (
-              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-red-500 bg-red-50/60 border-red-200 mb-6">
-                <AlertTriangle className="size-4 text-red-600 shrink-0" />
+              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-red-500 bg-red-50/60 border-red-200 dark:bg-red-950/30 dark:border-red-900/50 mb-6">
+                <AlertTriangle className="size-4 text-red-600 dark:text-red-400 shrink-0" />
                 <div>
-                  <p className="text-sm font-bold text-red-700">
+                  <p className="text-sm font-bold text-red-700 dark:text-red-300">
                     {overdueBatches.length} gecikmiş ödev grubu
                   </p>
-                  <p className="text-xs text-red-600/70 mt-0.5">
+                  <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-0.5">
                     Öğretmeninizle iletişime geçin.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Yolunda gidiyor mesajı */}
+            {onTrack && (
+              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-emerald-500 bg-emerald-50/60 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50 mb-6">
+                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                    Her şey yolunda
+                  </p>
+                  <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
+                    Gecikmiş ödev yok, güzel gidiyor.
                   </p>
                 </div>
               </div>
