@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
+import { bookSchema, firstIssue } from '@/lib/validation'
 
 export interface SectionInput {
   title: string
@@ -19,6 +20,9 @@ export async function createBookAction(
   termId: string,
   sections: SectionInput[]
 ) {
+  const parsed = bookSchema.safeParse({ title, subject, publisher, examType, description, termId, sections })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 

@@ -3,8 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
+import { termSchema, firstIssue } from '@/lib/validation'
 
 export async function createTermAction(name: string, startDate?: string, endDate?: string) {
+  const parsed = termSchema.safeParse({ name, startDate, endDate })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId, profile } = await getTeacherContext()
   const supabase = await createClient()
 

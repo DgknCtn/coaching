@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { studentSchema, firstIssue } from '@/lib/validation'
+import { studentSchema, assignBookSchema, firstIssue } from '@/lib/validation'
 
 export async function createStudentAction(
   fullName: string,
@@ -76,6 +76,9 @@ export async function assignBookAction(
   startDate: string | undefined,
   targetEndDate: string | undefined
 ) {
+  const parsed = assignBookSchema.safeParse({ studentId, bookId, startDate, targetEndDate })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId, activeTerm } = await getTeacherContext()
   const supabase = await createClient()
 

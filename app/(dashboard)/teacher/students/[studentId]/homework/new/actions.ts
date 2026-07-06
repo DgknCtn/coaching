@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
+import { homeworkBatchSchema, firstIssue } from '@/lib/validation'
 
 interface HomeworkItem {
   student_book_assignment_id: string
@@ -17,6 +18,9 @@ export async function createHomeworkBatchAction(
   title: string | undefined,
   items: HomeworkItem[]
 ) {
+  const parsed = homeworkBatchSchema.safeParse({ workspaceId, termId, studentId, dueDate, title, items })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   await getTeacherContext() // auth check
   const supabase = await createClient()
 
