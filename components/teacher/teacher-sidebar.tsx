@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, BookOpen, CalendarDays, LogOut, Menu, X, GraduationCap,
 } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 
@@ -36,6 +36,16 @@ export function TeacherSidebar({ workspaceName, userName, activeTerm }: Props) {
     startTransition(async () => { await logoutAction() })
   }
 
+  // Mobil menü açıkken Escape ile kapat (klavye erişilebilirliği).
+  useEffect(() => {
+    if (!mobileOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
+
   const brand = (
     <div className="px-3 mb-6">
       <div className="sidebar-brand-gradient rounded-2xl px-3.5 py-3 border border-white/8">
@@ -60,13 +70,14 @@ export function TeacherSidebar({ workspaceName, userName, activeTerm }: Props) {
   )
 
   const nav = (
-    <nav className="flex flex-col gap-0.5 flex-1 px-3">
+    <nav aria-label="Ana menü" className="flex flex-col gap-0.5 flex-1 px-3">
       {navItems.map((item) => {
         const active = isActive(item.href, item.exact)
         return (
           <Link
             key={item.href}
             href={item.href}
+            aria-current={active ? 'page' : undefined}
             onClick={() => setMobileOpen(false)}
             className={cn(
               'relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-150',
@@ -149,7 +160,9 @@ export function TeacherSidebar({ workspaceName, userName, activeTerm }: Props) {
         <button
           onClick={() => setMobileOpen((v) => !v)}
           className="p-2 rounded-xl hover:bg-sidebar-accent text-sidebar-foreground/60 transition-colors"
-          aria-label="Menu"
+          aria-label={mobileOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
@@ -160,8 +173,9 @@ export function TeacherSidebar({ workspaceName, userName, activeTerm }: Props) {
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
           />
-          <aside className="relative w-72 h-full bg-sidebar flex flex-col py-5 gap-2 shadow-2xl">
+          <aside id="mobile-nav" className="relative w-72 h-full bg-sidebar flex flex-col py-5 gap-2 shadow-2xl">
             {brand}
             {nav}
             {footer}

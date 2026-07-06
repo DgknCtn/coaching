@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ClipboardList, LogOut, Menu, X, GraduationCap } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 
@@ -19,6 +19,15 @@ export function StudentSidebar({ studentName }: Props) {
   function handleLogout() {
     startTransition(async () => { await logoutAction() })
   }
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
 
   const isActive = pathname === '/student'
 
@@ -49,9 +58,10 @@ export function StudentSidebar({ studentName }: Props) {
   )
 
   const nav = (
-    <nav className="flex flex-col gap-0.5 flex-1 px-3">
+    <nav aria-label="Ana menü" className="flex flex-col gap-0.5 flex-1 px-3">
       <Link
         href="/student"
+        aria-current={isActive ? 'page' : undefined}
         onClick={() => setMobileOpen(false)}
         className={cn(
           'relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-150',
@@ -119,6 +129,9 @@ export function StudentSidebar({ studentName }: Props) {
         <button
           onClick={() => setMobileOpen((v) => !v)}
           className="p-2 rounded-xl hover:bg-sidebar-accent text-sidebar-foreground/60"
+          aria-label={mobileOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
@@ -126,8 +139,8 @@ export function StudentSidebar({ studentName }: Props) {
 
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-30 pt-14">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-72 h-full bg-sidebar flex flex-col py-5 gap-2 shadow-2xl">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+          <aside id="mobile-nav" className="relative w-72 h-full bg-sidebar flex flex-col py-5 gap-2 shadow-2xl">
             {brand}
             {nav}
             {footer}

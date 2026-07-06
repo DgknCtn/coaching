@@ -1,5 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
+import { reportError } from '@/lib/observability'
+
 export default function DashboardError({
   error,
   reset,
@@ -8,6 +11,10 @@ export default function DashboardError({
   reset: () => void
 }) {
   const isDev = process.env.NODE_ENV === 'development'
+
+  useEffect(() => {
+    reportError(error, { digest: error.digest, source: 'dashboard-error-boundary' })
+  }, [error])
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-6 text-center">

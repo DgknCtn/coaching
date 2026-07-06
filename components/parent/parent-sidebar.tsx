@@ -1,7 +1,7 @@
 'use client'
 
 import { LogOut, Menu, X, GraduationCap, Heart } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { logoutAction } from '@/app/(auth)/actions'
 
 interface Props {
@@ -16,6 +16,15 @@ export function ParentSidebar({ parentName, studentNames }: Props) {
   function handleLogout() {
     startTransition(async () => { await logoutAction() })
   }
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
 
   const brand = (
     <div className="px-3 mb-6">
@@ -113,6 +122,9 @@ export function ParentSidebar({ parentName, studentNames }: Props) {
         <button
           onClick={() => setMobileOpen((v) => !v)}
           className="p-2 rounded-xl hover:bg-sidebar-accent text-sidebar-foreground/60"
+          aria-label={mobileOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
@@ -120,8 +132,8 @@ export function ParentSidebar({ parentName, studentNames }: Props) {
 
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-30 pt-14">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-72 h-full bg-sidebar flex flex-col py-5 shadow-2xl">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+          <aside id="mobile-nav" className="relative w-72 h-full bg-sidebar flex flex-col py-5 shadow-2xl">
             {inner}
           </aside>
         </div>

@@ -38,6 +38,7 @@ export async function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/demo' ||
+    pathname === '/api/health' ||
     pathname.startsWith('/invite/')
 
   // Giriş yapmamış kullanıcı korumalı rotaya girmeye çalışıyor

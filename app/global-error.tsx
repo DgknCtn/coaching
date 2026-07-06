@@ -1,5 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
+import { reportError } from '@/lib/observability'
+
 export default function GlobalError({
   error,
   reset,
@@ -8,6 +11,10 @@ export default function GlobalError({
   reset: () => void
 }) {
   const isDev = process.env.NODE_ENV === 'development'
+
+  useEffect(() => {
+    reportError(error, { digest: error.digest, source: 'global-error-boundary' })
+  }, [error])
 
   return (
     <html lang="tr">
