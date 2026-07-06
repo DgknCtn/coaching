@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2, FileText } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -91,15 +91,22 @@ export default async function StudentDetailPage({
           </>
         }
         action={
-          <Link href={`/teacher/students/${studentId}/homework/new`}>
-            <Button
-              size="sm"
-              className="gap-2 rounded-xl h-9 font-semibold shadow-sm"
-              style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))' }}
-            >
-              <Plus className="size-4" /> Ödev Ver
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/teacher/students/${studentId}/report`}>
+              <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
+                <FileText className="size-4" /> Rapor
+              </Button>
+            </Link>
+            <Link href={`/teacher/students/${studentId}/homework/new`}>
+              <Button
+                size="sm"
+                className="gap-2 rounded-xl h-9 font-semibold shadow-sm"
+                style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))' }}
+              >
+                <Plus className="size-4" /> Ödev Ver
+              </Button>
+            </Link>
+          </div>
         }
       />
 
