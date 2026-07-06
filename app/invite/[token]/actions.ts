@@ -2,16 +2,21 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { hashToken } from '@/lib/invite'
+import { authErrorToTr, inviteErrorToTr } from '@/lib/auth-errors'
+import { acceptInviteSchema, firstIssue } from '@/lib/validation'
 import { redirect } from 'next/navigation'
 
 export async function acceptInviteAction(token: string, fullName: string, email: string, password: string) {
+  const parsed = acceptInviteSchema.safeParse({ fullName, email, password })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const tokenHash = await hashToken(token)
   const supabase = await createClient()
 
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password })
 
   if (signUpError && signUpError.message !== 'User already registered') {
-    return { error: signUpError.message }
+    return { error: authErrorToTr(signUpError.message) }
   }
 
   let authUserId = signUpData?.user?.id
@@ -37,7 +42,7 @@ export async function acceptInviteAction(token: string, fullName: string, email:
     p_email: email,
   })
 
-  if (rpcError) return { error: rpcError.message }
+  if (rpcError) return { error: inviteErrorToTr(rpcError.message) }
 
   redirect('/')
 }

@@ -70,6 +70,23 @@ export const homeworkBatchSchema = z.object({
   items: z.array(homeworkItemSchema).min(1, 'En az bir test seçin.').max(500),
 })
 
+export const loginSchema = z.object({
+  email: z.string().trim().email('Geçerli bir e-posta girin.'),
+  password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+})
+
+export const registerSchema = loginSchema.extend({
+  fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
+  workspaceName: z.string().trim().max(120).optional().or(z.literal('')),
+})
+
+// Davet kabul: ad, e-posta, şifre.
+export const acceptInviteSchema = z.object({
+  fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
+  email: z.string().trim().email('Geçerli bir e-posta girin.'),
+  password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+})
+
 // Zod hatalarını tek bir kullanıcı-dostu string'e çevirir.
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Girdiğiniz bilgiler geçersiz.'
