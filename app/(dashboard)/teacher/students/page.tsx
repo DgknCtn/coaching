@@ -30,6 +30,7 @@ export default async function StudentsPage() {
     .select('*')
     .eq('workspace_id', workspaceId)
     .order('student_full_name')
+    .limit(500)
 
   return (
     <div className="p-6">

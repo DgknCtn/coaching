@@ -11,6 +11,7 @@ export default async function TermsPage() {
     .select('id, name, start_date, end_date, status, created_at')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false })
+    .limit(500)
 
   return (
     <div className="p-6 max-w-3xl mx-auto">

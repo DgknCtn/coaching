@@ -21,6 +21,7 @@ export default async function BooksPage() {
     .eq('workspace_id', workspaceId)
     .neq('status', 'archived')
     .order('created_at', { ascending: false })
+    .limit(500)
 
   if (activeTerm) {
     booksQuery.eq('academic_term_id', activeTerm.id)
