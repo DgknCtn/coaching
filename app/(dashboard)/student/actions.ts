@@ -3,8 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getStudentContext } from '@/lib/workspace'
+import { uuidSchema, firstIssue } from '@/lib/validation'
 
 export async function markCompletedAction(homeworkItemId: string) {
+  const parsed = uuidSchema.safeParse(homeworkItemId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   await getStudentContext() // auth check
   const supabase = await createClient()
 
@@ -18,6 +22,9 @@ export async function markCompletedAction(homeworkItemId: string) {
 }
 
 export async function revertCompletedAction(homeworkItemId: string) {
+  const parsed = uuidSchema.safeParse(homeworkItemId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   await getStudentContext()
   const supabase = await createClient()
 

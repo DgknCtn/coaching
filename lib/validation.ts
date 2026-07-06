@@ -16,7 +16,8 @@ export const studentSchema = z.object({
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
 })
 
-const uuid = z.string().uuid('Geçersiz kayıt kimliği.')
+export const uuidSchema = z.string().uuid('Geçersiz kayıt kimliği.')
+const uuid = uuidSchema
 const optionalDate = z
   .string()
   .trim()
