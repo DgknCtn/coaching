@@ -6,6 +6,7 @@ import { z } from 'zod'
 // anlamlı, Türkçe hata mesajları üretmek için).
 
 const EXAM_TYPES = ['TYT', 'AYT', 'LGS', 'KPSS', 'DGS', 'Other'] as const
+export const LESSON_TYPES = ['yuz_yuze_ozel', 'online_birebir', 'online_grup', 'bireysel_kocluk'] as const
 
 export const studentSchema = z.object({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
@@ -13,6 +14,7 @@ export const studentSchema = z.object({
   phone: z.string().trim().max(30).optional().or(z.literal('')),
   gradeLevel: z.string().trim().max(30).optional().or(z.literal('')),
   examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
+  lessonType: z.enum(LESSON_TYPES, { message: 'Geçersiz ders türü.' }).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
 })
 
@@ -40,11 +42,14 @@ const sectionSchema = z.object({
     .max(1000, 'Test sayısı çok yüksek.'),
 })
 
+export const TRACKING_MODES = ['test', 'page'] as const
+
 export const bookSchema = z.object({
   title: z.string().trim().min(2, 'Kitap adı en az 2 karakter olmalı.').max(200),
   subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
   publisher: z.string().trim().max(120).optional().or(z.literal('')),
   examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
+  trackingMode: z.enum(TRACKING_MODES, { message: 'Geçersiz takip türü.' }).default('test'),
   description: z.string().trim().max(2000).optional().or(z.literal('')),
   termId: uuid,
   sections: z.array(sectionSchema).min(1, 'En az bir bölüm ekleyin.').max(100),

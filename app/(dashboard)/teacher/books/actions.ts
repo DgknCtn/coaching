@@ -18,9 +18,10 @@ export async function createBookAction(
   examType: string | undefined,
   description: string | undefined,
   termId: string,
-  sections: SectionInput[]
+  sections: SectionInput[],
+  trackingMode?: string
 ) {
-  const parsed = bookSchema.safeParse({ title, subject, publisher, examType, description, termId, sections })
+  const parsed = bookSchema.safeParse({ title, subject, publisher, examType, trackingMode, description, termId, sections })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { workspaceId } = await getTeacherContext()
@@ -35,6 +36,7 @@ export async function createBookAction(
     p_exam_type: examType || null,
     p_description: description || null,
     p_sections: sections,
+    p_tracking_mode: parsed.data.trackingMode,
   })
 
   if (error) return { error: error.message }

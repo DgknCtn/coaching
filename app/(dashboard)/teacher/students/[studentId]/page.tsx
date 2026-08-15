@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2, FileText } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2, FileText, Target } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
 import { InviteDialog } from './invite-dialog'
+import { PendingApprovalList } from './pending-approval-list'
 import { StatCard } from '@/components/shared/stat-card'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -50,6 +51,19 @@ export default async function StudentDetailPage({
     .order('due_date', { ascending: false })
     .limit(20)
 
+  const { data: pendingApprovalItems } = await supabase
+    .from('homework_items')
+    .select(`
+      id,
+      books(title),
+      book_sections(title),
+      book_tests(title),
+      homework_batches!inner(student_id, workspace_id)
+    `)
+    .eq('status', 'pending_approval')
+    .eq('homework_batches.student_id', studentId)
+    .eq('homework_batches.workspace_id', workspaceId)
+
   const { data: parentLinks } = await supabase
     .from('parent_student_links')
     .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
@@ -92,6 +106,11 @@ export default async function StudentDetailPage({
         }
         action={
           <div className="flex items-center gap-2">
+            <Link href={`/teacher/students/${studentId}/goals`}>
+              <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
+                <Target className="size-4" /> Hedef
+              </Button>
+            </Link>
             <Link href={`/teacher/students/${studentId}/report`}>
               <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
                 <FileText className="size-4" /> Rapor
@@ -112,7 +131,7 @@ export default async function StudentDetailPage({
 
       {/* Weekly summary cards */}
       {weeklySummary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
           <StatCard
             icon={ClipboardList}
             label="Verilen"
@@ -130,6 +149,12 @@ export default async function StudentDetailPage({
             label="Bekleyen"
             value={weeklySummary.pending_tests ?? 0}
             colorScheme="neutral"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Onay Bekliyor"
+            value={weeklySummary.pending_approval_tests ?? 0}
+            colorScheme={Number(weeklySummary.pending_approval_tests) > 0 ? 'amber' : 'neutral'}
           />
           <StatCard
             icon={AlertTriangle}
@@ -206,6 +231,15 @@ export default async function StudentDetailPage({
 
         {/* HOMEWORK TAB */}
         <TabsContent value="homework">
+          <PendingApprovalList
+            studentId={studentId}
+            items={(pendingApprovalItems ?? []).map((item) => ({
+              id: item.id,
+              books: item.books as unknown as { title: string } | null,
+              book_sections: item.book_sections as unknown as { title: string } | null,
+              book_tests: item.book_tests as unknown as { title: string } | null,
+            }))}
+          />
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-bold text-sm">Ödevler</h2>
             <Link href={`/teacher/students/${studentId}/homework/new`}>

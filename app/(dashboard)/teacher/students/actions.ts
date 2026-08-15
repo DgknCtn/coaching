@@ -12,9 +12,10 @@ export async function createStudentAction(
   phone: string | undefined,
   gradeLevel: string | undefined,
   examType: string | undefined,
+  lessonType: string | undefined,
   notes: string | undefined
 ) {
-  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, notes })
+  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, lessonType, notes })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { workspaceId, profile } = await getTeacherContext()
@@ -28,6 +29,7 @@ export async function createStudentAction(
     phone: phone || null,
     grade_level: gradeLevel || null,
     exam_type: examType || null,
+    lesson_type: lessonType || null,
     notes: notes || null,
     status: 'active',
   }).select('id').single()
@@ -44,9 +46,10 @@ export async function updateStudentAction(
   phone: string | undefined,
   gradeLevel: string | undefined,
   examType: string | undefined,
+  lessonType: string | undefined,
   notes: string | undefined
 ) {
-  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, notes })
+  const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, lessonType, notes })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { workspaceId } = await getTeacherContext()
@@ -60,6 +63,7 @@ export async function updateStudentAction(
       phone: phone || null,
       grade_level: gradeLevel || null,
       exam_type: examType || null,
+      lesson_type: lessonType || null,
       notes: notes || null,
     })
     .eq('id', studentId)

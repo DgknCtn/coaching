@@ -1,8 +1,8 @@
 'use client'
 
 import { useTransition } from 'react'
-import { CheckCircle2, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react'
-import { markCompletedAction, revertCompletedAction } from './actions'
+import { CheckCircle2, Clock3, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react'
+import { submitHomeworkItemAction, revertCompletedAction } from './actions'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -66,40 +66,47 @@ export function HomeworkList({ batches }: { batches: HomeworkBatch[] }) {
 function HomeworkItemRow({ item }: { item: HomeworkItem }) {
   const [isPending, startTransition] = useTransition()
   const isCompleted = item.status === 'completed'
+  const isPendingApproval = item.status === 'pending_approval'
+  const isDone = isCompleted || isPendingApproval
 
   function toggle() {
     startTransition(async () => {
-      if (isCompleted) {
+      if (isDone) {
         await revertCompletedAction(item.id)
       } else {
-        await markCompletedAction(item.id)
+        await submitHomeworkItemAction(item.id)
       }
     })
   }
 
   return (
-    <div className={cn('flex items-center gap-3 px-4 py-2.5', isCompleted && 'bg-muted/20')}>
+    <div className={cn('flex items-center gap-3 px-4 py-2.5', isDone && 'bg-muted/20')}>
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm', isCompleted && 'line-through text-muted-foreground')}>
+        <p className={cn('text-sm', isDone && 'line-through text-muted-foreground')}>
           {item.book_tests?.title ?? ''}
         </p>
         <p className="text-xs text-muted-foreground truncate">
           {item.books?.title ?? ''} · {item.book_sections?.title ?? ''}
         </p>
+        {isPendingApproval && (
+          <p className="text-[11px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
+            <Clock3 className="size-3" /> Onay bekliyor
+          </p>
+        )}
       </div>
       <Button
         size="xs"
-        variant={isCompleted ? 'outline' : 'default'}
+        variant={isDone ? 'outline' : 'default'}
         disabled={isPending}
         onClick={toggle}
-        className={isCompleted ? 'text-muted-foreground' : ''}
+        className={isDone ? 'text-muted-foreground' : ''}
       >
         {isPending ? (
           <Loader2 className="size-3 animate-spin" />
-        ) : isCompleted ? (
+        ) : isDone ? (
           <><RotateCcw className="size-3" /> Geri Al</>
         ) : (
-          <><CheckCircle2 className="size-3" /> Tamamladım</>
+          <><CheckCircle2 className="size-3" /> Onaya Gönder</>
         )}
       </Button>
     </div>

@@ -5,14 +5,14 @@ import { createClient } from '@/lib/supabase/server'
 import { getStudentContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
 
-export async function markCompletedAction(homeworkItemId: string) {
+export async function submitHomeworkItemAction(homeworkItemId: string) {
   const parsed = uuidSchema.safeParse(homeworkItemId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   await getStudentContext() // auth check
   const supabase = await createClient()
 
-  const { error } = await supabase.rpc('mark_homework_item_completed', {
+  const { error } = await supabase.rpc('submit_homework_item_for_approval', {
     p_homework_item_id: homeworkItemId,
   })
 

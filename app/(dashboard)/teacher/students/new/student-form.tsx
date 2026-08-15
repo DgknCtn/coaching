@@ -19,12 +19,19 @@ const schema = z.object({
   phone: z.string().optional(),
   gradeLevel: z.string().optional(),
   examType: z.string().optional(),
+  lessonType: z.string().optional(),
   notes: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
 const EXAM_TYPES = ['TYT', 'AYT', 'LGS', 'KPSS', 'DGS', 'Other']
 const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer']
+const LESSON_TYPES: { value: string; label: string }[] = [
+  { value: 'yuz_yuze_ozel', label: 'Yüz yüze özel ders' },
+  { value: 'online_birebir', label: 'Online birebir' },
+  { value: 'online_grup', label: 'Online grup' },
+  { value: 'bireysel_kocluk', label: 'Bireysel koçluk' },
+]
 
 interface Props {
   defaultValues?: Partial<FormData>
@@ -51,6 +58,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
         data.phone || undefined,
         data.gradeLevel || undefined,
         data.examType || undefined,
+        data.lessonType || undefined,
         data.notes || undefined
       )
       if (result?.error) setServerError(result.error)
@@ -90,6 +98,18 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
                 {GRADE_LEVELS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="lessonType">Ders Türü</Label>
+            <select
+              id="lessonType"
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              {...register('lessonType')}
+            >
+              <option value="">Seçin</option>
+              {LESSON_TYPES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

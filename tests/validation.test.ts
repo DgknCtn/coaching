@@ -35,6 +35,20 @@ describe('studentSchema', () => {
     const r = studentSchema.safeParse({ fullName: 'Ali Veli', examType: 'ZZZ' })
     expect(r.success).toBe(false)
   })
+
+  it('accepts each valid lesson type', () => {
+    for (const lessonType of ['yuz_yuze_ozel', 'online_birebir', 'online_grup', 'bireysel_kocluk']) {
+      expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType }).success).toBe(true)
+    }
+  })
+
+  it('accepts empty lesson type', () => {
+    expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType: '' }).success).toBe(true)
+  })
+
+  it('rejects invalid lesson type', () => {
+    expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType: 'ZZZ' }).success).toBe(false)
+  })
 })
 
 describe('termSchema', () => {
@@ -59,6 +73,17 @@ describe('bookSchema', () => {
   })
   it('rejects non-uuid termId', () => {
     expect(bookSchema.safeParse({ ...base, termId: 'abc' }).success).toBe(false)
+  })
+  it('defaults tracking mode to test', () => {
+    const r = bookSchema.safeParse(base)
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.trackingMode).toBe('test')
+  })
+  it('accepts page tracking mode', () => {
+    expect(bookSchema.safeParse({ ...base, trackingMode: 'page' }).success).toBe(true)
+  })
+  it('rejects invalid tracking mode', () => {
+    expect(bookSchema.safeParse({ ...base, trackingMode: 'chapters' }).success).toBe(false)
   })
 })
 

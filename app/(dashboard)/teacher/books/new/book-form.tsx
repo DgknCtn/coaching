@@ -24,6 +24,7 @@ const schema = z.object({
   subject: z.string().min(1, 'Ders seçimi gerekli'),
   publisher: z.string().optional(),
   examType: z.string().optional(),
+  trackingMode: z.enum(['test', 'page']),
   description: z.string().optional(),
   termId: z.string().min(1),
   sections: z.array(sectionSchema).min(1, 'En az 1 bölüm ekleyin'),
@@ -48,6 +49,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       termId: defaultTermId,
+      trackingMode: 'test',
       sections: [{ title: '', test_count: 1 }],
     },
   })
@@ -64,7 +66,8 @@ export function BookForm({ terms, defaultTermId }: Props) {
         data.examType,
         data.description,
         data.termId,
-        data.sections
+        data.sections,
+        data.trackingMode
       )
       if (result?.error) {
         setServerError(result.error)
@@ -115,6 +118,18 @@ export function BookForm({ terms, defaultTermId }: Props) {
           <div className="space-y-1.5">
             <Label htmlFor="publisher">Yayın</Label>
             <Input id="publisher" placeholder="Bilgi Sarmal" {...register('publisher')} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="trackingMode">Takip Türü</Label>
+            <select
+              id="trackingMode"
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              {...register('trackingMode')}
+            >
+              <option value="test">Test Sayısı ile Takip</option>
+              <option value="page">Sayfa Aralığı ile Takip</option>
+            </select>
           </div>
 
           <div className="space-y-1.5">
