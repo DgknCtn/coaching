@@ -15,12 +15,12 @@ ALTER TABLE public.homework_items
   CHECK (status IN ('pending', 'pending_approval', 'completed', 'cancelled'));
 
 ALTER TABLE public.homework_items
-  ADD COLUMN submitted_at TIMESTAMPTZ,
-  ADD COLUMN submitted_by_profile_id UUID REFERENCES public.profiles(id),
-  ADD COLUMN approved_at TIMESTAMPTZ,
-  ADD COLUMN approved_by_profile_id UUID REFERENCES public.profiles(id),
-  ADD COLUMN rejected_at TIMESTAMPTZ,
-  ADD COLUMN teacher_note TEXT;
+  ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS submitted_by_profile_id UUID REFERENCES public.profiles(id),
+  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS approved_by_profile_id UUID REFERENCES public.profiles(id),
+  ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS teacher_note TEXT;
 
 -- 2) submit_homework_item_for_approval
 -- Öğrenci (veya öğretmen adına) "yaptım" der → pending_approval.
@@ -305,6 +305,11 @@ $$;
 -- 'completed'-only (pending_approval never counted as completed) — a
 -- student who has submitted everything but isn't yet approved will show
 -- fewer completed tests until the teacher approves. Intentional tradeoff.
+--
+-- NOT: CREATE OR REPLACE VIEW mevcut kolonların sırasını/adını değiştiremez
+-- (Postgres 42P16), sadece SONA yeni kolon eklenebilir. Bu yüzden
+-- pending_approval_tests / current_week_pending_approval_tests en sona
+-- eklendi, orijinal 004_views.sql sırası korundu.
 CREATE OR REPLACE VIEW public.student_weekly_homework_summary_view AS
 SELECT
   hb.workspace_id,
@@ -318,12 +323,12 @@ SELECT
                                                       AS completed_tests,
   COUNT(hi.id) FILTER (WHERE hi.status = 'pending')
                                                       AS pending_tests,
-  COUNT(hi.id) FILTER (WHERE hi.status = 'pending_approval')
-                                                      AS pending_approval_tests,
   COUNT(hi.id) FILTER (
     WHERE hi.status = 'pending'
       AND hb.due_date < CURRENT_DATE
-  )                                                   AS overdue_tests
+  )                                                   AS overdue_tests,
+  COUNT(hi.id) FILTER (WHERE hi.status = 'pending_approval')
+                                                      AS pending_approval_tests
 FROM public.homework_batches hb
 JOIN public.homework_items hi ON hi.homework_batch_id = hb.id
 WHERE hb.status = 'active'
@@ -368,14 +373,14 @@ SELECT
   COALESCE(p.completion_percentage, 0)                  AS completion_percentage,
   COALESCE(w.assigned_tests, 0)                         AS current_week_assigned_tests,
   COALESCE(w.completed_tests, 0)                        AS current_week_completed_tests,
-  COALESCE(w.pending_approval_tests, 0)                 AS current_week_pending_approval_tests,
   COALESCE(w.overdue_tests, 0)                          AS overdue_tests,
   CASE
     WHEN COALESCE(w.overdue_tests, 0) > 0               THEN 'red'
     WHEN COALESCE(w.assigned_tests, 0) = 0              THEN 'neutral'
     WHEN COALESCE(w.completed_tests, 0) >= COALESCE(w.assigned_tests, 0) THEN 'green'
     ELSE 'yellow'
-  END                                                   AS risk_status
+  END                                                   AS risk_status,
+  COALESCE(w.pending_approval_tests, 0)                 AS current_week_pending_approval_tests
 FROM public.students s
 LEFT JOIN progress p ON p.student_id = s.id AND p.workspace_id = s.workspace_id
 LEFT JOIN weekly w   ON w.student_id = s.id AND w.workspace_id = s.workspace_id

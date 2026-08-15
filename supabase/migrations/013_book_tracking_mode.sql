@@ -10,12 +10,23 @@
 -- (e.g. "3/10 sayfa aralığı tamamlandı"), not a true page sum.
 -- ============================================================
 ALTER TABLE public.books
-  ADD COLUMN tracking_mode TEXT NOT NULL DEFAULT 'test'
+  ADD COLUMN IF NOT EXISTS tracking_mode TEXT NOT NULL DEFAULT 'test';
+
+ALTER TABLE public.books
+  DROP CONSTRAINT IF EXISTS books_tracking_mode_check;
+
+ALTER TABLE public.books
+  ADD CONSTRAINT books_tracking_mode_check
   CHECK (tracking_mode IN ('test', 'page'));
 
 ALTER TABLE public.book_tests
-  ADD COLUMN page_start INTEGER,
-  ADD COLUMN page_end INTEGER,
+  ADD COLUMN IF NOT EXISTS page_start INTEGER,
+  ADD COLUMN IF NOT EXISTS page_end INTEGER;
+
+ALTER TABLE public.book_tests
+  DROP CONSTRAINT IF EXISTS book_tests_page_range_chk;
+
+ALTER TABLE public.book_tests
   ADD CONSTRAINT book_tests_page_range_chk
     CHECK (page_end IS NULL OR page_start IS NULL OR page_end >= page_start);
 
@@ -24,6 +35,10 @@ ALTER TABLE public.book_tests
 -- Body is otherwise identical to 004_views.sql's student_book_progress_view,
 -- with b.tracking_mode appended (additive — downstream views/consumers that
 -- SELECT existing columns by name are unaffected).
+-- NOT: CREATE OR REPLACE VIEW mevcut kolonların sırasını/adını değiştiremez,
+-- sadece SONA yeni kolon eklenebilir (Postgres 42P16 hatası verir aksi halde).
+-- Bu yüzden tracking_mode, orijinal 004_views.sql sırasını bozmamak için
+-- en sona (completion_percentage'dan sonra) eklendi.
 CREATE OR REPLACE VIEW public.student_book_progress_view AS
 SELECT
   sba.workspace_id,
@@ -35,7 +50,6 @@ SELECT
   b.subject,
   b.exam_type,
   b.publisher,
-  b.tracking_mode,
   sba.start_date,
   sba.target_end_date,
   sba.status                                        AS assignment_status,
@@ -52,7 +66,8 @@ SELECT
       (COUNT(DISTINCT tc.id) FILTER (WHERE tc.status = 'active')::NUMERIC
        / COUNT(DISTINCT bt.id) FILTER (WHERE bt.status = 'active')::NUMERIC) * 100
     )
-  END                                               AS completion_percentage
+  END                                               AS completion_percentage,
+  b.tracking_mode
 FROM public.student_book_assignments sba
 JOIN public.books b ON b.id = sba.book_id
 JOIN public.book_tests bt ON bt.book_id = sba.book_id
