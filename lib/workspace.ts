@@ -112,13 +112,16 @@ export async function getParentContext() {
     .eq('workspace_id', profile.default_workspace_id)
     .eq('status', 'active')
 
-  if (!linkedStudents?.length) redirect('/login')
+  // Bağlı öğrencisi olmayan veliyi /login'e YÖNLENDİRME: middleware girişli
+  // kullanıcıyı /'a, / da rolü veli görüp /parent'a geri gönderdiği için bu
+  // sonsuz döngüye ve beyaz ekrana yol açıyordu. Bunun yerine boş liste
+  // döndürülür; /parent sayfası "Bağlı öğrenci yok" boş durumunu gösterir.
 
   return {
     supabase,
     profile: profile as { id: string; full_name: string; email: string | null; default_workspace_id: string },
     workspaceId: profile.default_workspace_id as string,
-    linkedStudents: linkedStudents as unknown as Array<{
+    linkedStudents: (linkedStudents ?? []) as unknown as Array<{
       id: string
       student_id: string
       students: { id: string; full_name: string; exam_type: string | null; grade_level: string | null }
