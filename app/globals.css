@@ -7,9 +7,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Ayrı bir başlık fontu yok; card.tsx'in font-heading sınıfı için alias. */
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -27,6 +28,21 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-border: var(--destructive-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-border: var(--info-border);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -39,82 +55,123 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Sabit 4 adım. rounded-full yalnızca avatar ve durum noktası için. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
 }
 
 :root {
-  --background: oklch(0.986 0.003 260);
-  --foreground: oklch(0.10 0.028 265);
+  --background: oklch(0.985 0.002 265);
+  --foreground: oklch(0.20 0.015 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.10 0.028 265);
+  --card-foreground: oklch(0.20 0.015 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.10 0.028 265);
-  --primary: oklch(0.57 0.26 282);
+  --popover-foreground: oklch(0.20 0.015 265);
+  --primary: oklch(0.52 0.16 280);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.94 0.03 270);
-  --secondary-foreground: oklch(0.38 0.18 270);
-  --muted: oklch(0.95 0.005 260);
-  --muted-foreground: oklch(0.53 0.022 260);
-  --accent: oklch(0.93 0.04 270);
-  --accent-foreground: oklch(0.38 0.18 270);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.905 0.012 260);
-  --input: oklch(0.93 0.01 260);
-  --ring: oklch(0.65 0.18 282);
-  --chart-1: oklch(0.57 0.26 282);
-  --chart-2: oklch(0.65 0.18 200);
-  --chart-3: oklch(0.70 0.17 142);
-  --chart-4: oklch(0.73 0.18 55);
-  --chart-5: oklch(0.63 0.23 30);
-  --radius: 0.75rem;
-  --sidebar: oklch(0.065 0.028 255);
-  --sidebar-foreground: oklch(0.88 0.015 260);
-  --sidebar-primary: oklch(0.57 0.26 282);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.16 0.05 255);
-  --sidebar-accent-foreground: oklch(0.92 0.02 260);
-  --sidebar-border: oklch(0.20 0.045 255);
-  --sidebar-ring: oklch(0.65 0.18 282);
+  --secondary: oklch(0.962 0.004 265);
+  --secondary-foreground: oklch(0.20 0.015 265);
+  --muted: oklch(0.968 0.003 265);
+  --muted-foreground: oklch(0.50 0.015 265);
+  --accent: oklch(0.962 0.004 265);
+  --accent-foreground: oklch(0.20 0.015 265);
+  --border: oklch(0.922 0.005 265);
+  --input: oklch(0.922 0.005 265);
+  --ring: oklch(0.52 0.16 280 / 0.45);
+
+  /* Durum token'ları — chroma bilinçli olarak düşük, trafik lambası değil. */
+  --destructive: oklch(0.55 0.19 25);
+  --destructive-foreground: oklch(0.45 0.17 25);
+  --destructive-subtle: oklch(0.972 0.02 25);
+  --destructive-border: oklch(0.90 0.05 25);
+  --success: oklch(0.55 0.13 155);
+  --success-foreground: oklch(0.45 0.11 155);
+  --success-subtle: oklch(0.965 0.02 155);
+  --success-border: oklch(0.89 0.05 155);
+  --warning: oklch(0.58 0.12 75);
+  --warning-foreground: oklch(0.47 0.10 75);
+  --warning-subtle: oklch(0.972 0.03 85);
+  --warning-border: oklch(0.90 0.06 80);
+  --info: oklch(0.55 0.12 240);
+  --info-foreground: oklch(0.45 0.10 240);
+  --info-subtle: oklch(0.968 0.02 240);
+  --info-border: oklch(0.89 0.04 240);
+
+  --chart-1: oklch(0.52 0.16 280);
+  --chart-2: oklch(0.58 0.11 240);
+  --chart-3: oklch(0.58 0.11 155);
+  --chart-4: oklch(0.62 0.11 75);
+  --chart-5: oklch(0.56 0.13 25);
+  --radius: 0.5rem;
+
+  /* Sidebar light temada da koyu kalır — bilinçli tercih. */
+  --sidebar: oklch(0.19 0.008 265);
+  --sidebar-foreground: oklch(0.88 0.006 265);
+  --sidebar-primary: oklch(0.70 0.10 280);
+  --sidebar-primary-foreground: oklch(0.15 0.008 265);
+  --sidebar-accent: oklch(0.25 0.008 265);
+  --sidebar-accent-foreground: oklch(0.96 0.004 265);
+  --sidebar-border: oklch(0.27 0.008 265);
+  --sidebar-ring: oklch(0.70 0.10 280);
 }
 
+/*
+ * Dark tema token'ları eksiksiz tanımlı, ancak .dark sınıfını uygulayan bir
+ * provider/toggle henüz yok — bilinçli tercih. Light mükemmelleştirildikten
+ * sonra tek dosyalık ek işle devreye alınabilsin diye güncel tutuluyor.
+ */
 .dark {
-  --background: oklch(0.12 0.025 265);
-  --foreground: oklch(0.97 0.005 265);
-  --card: oklch(0.17 0.04 265);
-  --card-foreground: oklch(0.97 0.005 265);
-  --popover: oklch(0.17 0.04 265);
-  --popover-foreground: oklch(0.97 0.005 265);
-  --primary: oklch(0.68 0.20 282);
-  --primary-foreground: oklch(0.10 0.025 265);
-  --secondary: oklch(0.27 0.07 265);
-  --secondary-foreground: oklch(0.97 0.005 265);
-  --muted: oklch(0.24 0.055 265);
-  --muted-foreground: oklch(0.68 0.03 264);
-  --accent: oklch(0.27 0.07 265);
-  --accent-foreground: oklch(0.97 0.005 265);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.18 282);
-  --chart-1: oklch(0.68 0.20 282);
-  --chart-2: oklch(0.65 0.18 200);
-  --chart-3: oklch(0.70 0.17 142);
-  --chart-4: oklch(0.73 0.18 55);
-  --chart-5: oklch(0.63 0.23 30);
-  --sidebar: oklch(0.055 0.022 250);
-  --sidebar-foreground: oklch(0.88 0.015 260);
-  --sidebar-primary: oklch(0.68 0.20 282);
-  --sidebar-primary-foreground: oklch(0.10 0.025 265);
-  --sidebar-accent: oklch(0.18 0.055 255);
-  --sidebar-accent-foreground: oklch(0.92 0.02 260);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.65 0.18 282);
+  --background: oklch(0.16 0.006 265);
+  --foreground: oklch(0.96 0.004 265);
+  --card: oklch(0.20 0.007 265);
+  --card-foreground: oklch(0.96 0.004 265);
+  --popover: oklch(0.20 0.007 265);
+  --popover-foreground: oklch(0.96 0.004 265);
+  --primary: oklch(0.70 0.13 280);
+  --primary-foreground: oklch(0.16 0.006 265);
+  --secondary: oklch(0.26 0.007 265);
+  --secondary-foreground: oklch(0.96 0.004 265);
+  --muted: oklch(0.26 0.007 265);
+  --muted-foreground: oklch(0.68 0.010 265);
+  --accent: oklch(0.26 0.007 265);
+  --accent-foreground: oklch(0.96 0.004 265);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.70 0.13 280 / 0.5);
+
+  --destructive: oklch(0.70 0.15 25);
+  --destructive-foreground: oklch(0.80 0.13 25);
+  --destructive-subtle: oklch(0.28 0.06 25);
+  --destructive-border: oklch(0.38 0.08 25);
+  --success: oklch(0.70 0.11 155);
+  --success-foreground: oklch(0.80 0.10 155);
+  --success-subtle: oklch(0.26 0.05 155);
+  --success-border: oklch(0.36 0.06 155);
+  --warning: oklch(0.75 0.11 75);
+  --warning-foreground: oklch(0.84 0.10 78);
+  --warning-subtle: oklch(0.27 0.05 75);
+  --warning-border: oklch(0.37 0.06 75);
+  --info: oklch(0.70 0.10 240);
+  --info-foreground: oklch(0.80 0.09 240);
+  --info-subtle: oklch(0.26 0.05 240);
+  --info-border: oklch(0.36 0.06 240);
+
+  --chart-1: oklch(0.70 0.13 280);
+  --chart-2: oklch(0.70 0.10 240);
+  --chart-3: oklch(0.70 0.11 155);
+  --chart-4: oklch(0.75 0.11 75);
+  --chart-5: oklch(0.70 0.13 25);
+
+  --sidebar: oklch(0.14 0.006 265);
+  --sidebar-foreground: oklch(0.88 0.006 265);
+  --sidebar-primary: oklch(0.70 0.10 280);
+  --sidebar-primary-foreground: oklch(0.14 0.006 265);
+  --sidebar-accent: oklch(0.22 0.007 265);
+  --sidebar-accent-foreground: oklch(0.96 0.004 265);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.70 0.10 280);
 }
 
 @layer base {
@@ -127,44 +184,4 @@
   html {
     @apply font-sans;
   }
-}
-
-/* Auth hero — premium dark */
-.auth-hero {
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 15%, oklch(0.45 0.22 282 / 0.55) 0%, transparent 70%),
-    radial-gradient(ellipse 70% 50% at 85% 85%, oklch(0.35 0.18 260 / 0.45) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 40% at 60% 50%, oklch(0.30 0.12 250 / 0.25) 0%, transparent 70%),
-    oklch(0.07 0.03 255);
-}
-
-/* Dot-grid texture overlay for auth hero */
-.dot-grid {
-  background-image: radial-gradient(oklch(1 0 0 / 0.055) 1px, transparent 1px);
-  background-size: 26px 26px;
-}
-
-/* Sidebar brand gradient */
-.sidebar-brand-gradient {
-  background: linear-gradient(
-    135deg,
-    oklch(0.52 0.25 282 / 0.25) 0%,
-    oklch(0.40 0.20 265 / 0.10) 100%
-  );
-}
-
-/* Active nav indicator */
-.nav-active-indicator {
-  position: relative;
-}
-.nav-active-indicator::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 60%;
-  border-radius: 0 2px 2px 0;
-  background: oklch(0.68 0.22 282);
 }

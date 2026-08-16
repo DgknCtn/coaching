@@ -8,6 +8,7 @@ import { Plus, Loader2 } from 'lucide-react'
 import { assignBookAction } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import {
   Dialog,
@@ -61,9 +62,8 @@ export function AssignBookDialog({ studentId, books }: Props) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
           <div className="space-y-1.5">
             <Label htmlFor="bookId">Kitap</Label>
-            <select
+            <NativeSelect
               id="bookId"
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-invalid={!!errors.bookId}
               {...register('bookId')}
             >
@@ -71,7 +71,7 @@ export function AssignBookDialog({ studentId, books }: Props) {
               {books.map(b => (
                 <option key={b.id} value={b.id}>{b.title} — {b.subject}</option>
               ))}
-            </select>
+            </NativeSelect>
             {errors.bookId && <p className="text-xs text-destructive">{errors.bookId.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">

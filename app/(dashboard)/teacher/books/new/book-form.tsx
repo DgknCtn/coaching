@@ -9,6 +9,7 @@ import { Plus, Trash2, Loader2 } from 'lucide-react'
 import { createBookAction } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
@@ -91,27 +92,25 @@ export function BookForm({ terms, defaultTermId }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="subject">Ders *</Label>
-              <select
+              <NativeSelect
                 id="subject"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('subject')}
               >
                 <option value="">Seçin</option>
                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              </NativeSelect>
               {errors.subject && <p className="text-xs text-destructive">{errors.subject.message}</p>}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="examType">Sınav Türü</Label>
-              <select
+              <NativeSelect
                 id="examType"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('examType')}
               >
                 <option value="">Seçin</option>
                 {EXAM_TYPES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
+              </NativeSelect>
             </div>
           </div>
 
@@ -122,14 +121,13 @@ export function BookForm({ terms, defaultTermId }: Props) {
 
           <div className="space-y-1.5">
             <Label htmlFor="trackingMode">Takip Türü</Label>
-            <select
+            <NativeSelect
               id="trackingMode"
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               {...register('trackingMode')}
             >
               <option value="test">Test Sayısı ile Takip</option>
               <option value="page">Sayfa Aralığı ile Takip</option>
-            </select>
+            </NativeSelect>
           </div>
 
           <div className="space-y-1.5">
@@ -140,13 +138,12 @@ export function BookForm({ terms, defaultTermId }: Props) {
           {terms.length > 1 && (
             <div className="space-y-1.5">
               <Label htmlFor="termId">Dönem</Label>
-              <select
+              <NativeSelect
                 id="termId"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('termId')}
               >
                 {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              </NativeSelect>
             </div>
           )}
         </CardContent>

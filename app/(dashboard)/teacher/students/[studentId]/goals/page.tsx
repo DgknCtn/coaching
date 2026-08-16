@@ -5,9 +5,18 @@ import { calculatePlanPace } from '@/lib/plan-pace'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
-import { cn } from '@/lib/utils'
+import { ProgressBar } from '@/components/shared/progress-bar'
 
 export const dynamic = 'force-dynamic'
+
+// plan-pace çıktısı → badge variant. Mantık lib/plan-pace.ts'te kalır.
+const paceVariant: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = {
+  ahead: 'success',
+  on_track: 'info',
+  behind: 'warning',
+  no_target: 'neutral',
+  not_started: 'neutral',
+}
 
 export default async function StudentGoalsPage({
   params,
@@ -47,21 +56,21 @@ export default async function StudentGoalsPage({
   }))
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
         title={`${student.full_name} — Hedef`}
         subtitle="Her kitap için plan çizgisine göre ilerleme"
         badges={
           <>
-            {student.exam_type && <Badge variant="secondary" className="rounded-lg">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="outline" className="rounded-lg">{student.grade_level}</Badge>}
+            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
+            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
           </>
         }
       />
 
       {!books.length ? (
-        <div className="bg-card rounded-2xl border shadow-xs">
+        <div className="rounded-lg border bg-card">
           <EmptyState
             icon={BookOpen}
             title="Atanmış kitap yok"
@@ -80,60 +89,45 @@ export default async function StudentGoalsPage({
             return (
               <div
                 key={b.student_book_assignment_id}
-                className="bg-card rounded-2xl border px-5 py-4 shadow-xs"
+                className="rounded-lg border bg-card p-4"
               >
-                <div className="flex items-center justify-between gap-4 mb-2.5">
+                <div className="mb-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-bold truncate">{b.book_title}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="truncate text-sm font-medium">{b.book_title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {[b.subject, b.exam_type].filter(Boolean).join(' · ')}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-lg font-black">
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm tabular-nums">
                       {b.completed_tests}
-                      <span className="text-muted-foreground text-sm font-normal">/{b.total_tests}</span>
+                      <span className="text-muted-foreground">/{b.total_tests}</span>
                     </p>
-                    <p className="text-[11px] text-muted-foreground font-medium">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {b.tracking_mode === 'page' ? 'sayfa aralığı' : 'test'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        background:
-                          pct >= 70
-                            ? 'oklch(0.50 0.18 155)'
-                            : 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-muted-foreground w-10 text-right">{pct}%</span>
+                <div className="mb-3 flex items-center gap-3">
+                  <ProgressBar value={pct} label={`${b.book_title} ilerlemesi`} className="flex-1" />
+                  <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+                    {pct}%
+                  </span>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold',
-                      pace.phraseKey === 'ahead' && 'bg-emerald-50 text-emerald-700',
-                      pace.phraseKey === 'on_track' && 'bg-indigo-50 text-indigo-700',
-                      pace.phraseKey === 'behind' && 'bg-amber-50 text-amber-700',
-                      (pace.phraseKey === 'no_target' || pace.phraseKey === 'not_started') && 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {pace.phraseKey === 'ahead' && <TrendingUp className="size-3.5" />}
-                    {pace.phraseKey === 'behind' && <TrendingDown className="size-3.5" />}
-                    {pace.phraseKey === 'on_track' && <Minus className="size-3.5" />}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Badge variant={paceVariant[pace.phraseKey] ?? 'neutral'}>
+                    {pace.phraseKey === 'ahead' && <TrendingUp />}
+                    {pace.phraseKey === 'behind' && <TrendingDown />}
+                    {pace.phraseKey === 'on_track' && <Minus />}
                     {pace.phrase}
-                  </div>
+                  </Badge>
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{remainingUnits} {b.tracking_mode === 'page' ? 'sayfa aralığı' : 'test'} kaldı</span>
+                    <span>
+                      {remainingUnits} {b.tracking_mode === 'page' ? 'sayfa aralığı' : 'test'} kaldı
+                    </span>
                     {remainingDays !== null && (
                       <span className="inline-flex items-center gap-1">
                         <Calendar className="size-3.5" />

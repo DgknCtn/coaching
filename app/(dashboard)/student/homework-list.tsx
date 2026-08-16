@@ -1,9 +1,10 @@
 'use client'
 
 import { useTransition } from 'react'
-import { CheckCircle2, Clock3, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react'
+import { CheckCircle2, RotateCcw, Loader2 } from 'lucide-react'
 import { submitHomeworkItemAction, revertCompletedAction } from './actions'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 interface HomeworkItem {
@@ -35,19 +36,16 @@ export function HomeworkList({ batches }: { batches: HomeworkBatch[] }) {
         return (
           <div
             key={batch.id}
-            className={cn(
-              'rounded-xl border bg-card',
-              isOverdue && !allDone && 'border-red-200'
-            )}
+            className="overflow-hidden rounded-lg border bg-card"
           >
-            <div className={cn('flex items-center justify-between px-4 py-2.5 border-b', isOverdue && !allDone ? 'bg-red-50' : 'bg-muted/40')}>
-              <div className="flex items-center gap-2">
-                {isOverdue && !allDone && <AlertTriangle className="size-3.5 text-red-500" />}
-                <span className="text-sm font-medium">
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-medium">
                   {batch.title ?? new Date(batch.due_date).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </span>
+                {isOverdue && !allDone && <Badge variant="warning">Gecikmiş</Badge>}
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
               </span>
             </div>
@@ -80,33 +78,32 @@ function HomeworkItemRow({ item }: { item: HomeworkItem }) {
   }
 
   return (
-    <div className={cn('flex items-center gap-3 px-4 py-2.5', isDone && 'bg-muted/20')}>
-      <div className="flex-1 min-w-0">
-        <p className={cn('text-sm', isDone && 'line-through text-muted-foreground')}>
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className={cn('text-sm', isDone && 'text-muted-foreground line-through')}>
           {item.book_tests?.title ?? ''}
         </p>
-        <p className="text-xs text-muted-foreground truncate">
+        <p className="mt-1 truncate text-xs text-muted-foreground">
           {item.books?.title ?? ''} · {item.book_sections?.title ?? ''}
         </p>
         {isPendingApproval && (
-          <p className="text-[11px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
-            <Clock3 className="size-3" /> Onay bekliyor
-          </p>
+          <Badge variant="info" className="mt-2">
+            Onay bekliyor
+          </Badge>
         )}
       </div>
       <Button
-        size="xs"
+        size="sm"
         variant={isDone ? 'outline' : 'default'}
         disabled={isPending}
         onClick={toggle}
-        className={isDone ? 'text-muted-foreground' : ''}
       >
         {isPending ? (
-          <Loader2 className="size-3 animate-spin" />
+          <Loader2 className="animate-spin" />
         ) : isDone ? (
-          <><RotateCcw className="size-3" /> Geri Al</>
+          <><RotateCcw /> Geri Al</>
         ) : (
-          <><CheckCircle2 className="size-3" /> Onaya Gönder</>
+          <><CheckCircle2 /> Onaya Gönder</>
         )}
       </Button>
     </div>

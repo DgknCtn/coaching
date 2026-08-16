@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, AlertTriangle, CheckCircle2, FileText, Target } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,11 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
-import { StatCard } from '@/components/shared/stat-card'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
-import { cn } from '@/lib/utils'
+import { MetricRow } from '@/components/shared/metric-row'
+import { Section } from '@/components/shared/section'
+import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
 export const dynamic = 'force-dynamic'
 
@@ -93,301 +94,260 @@ export default async function StudentDetailPage({
   const hasAccount = !!student.profile_id
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
       <PageHeader
         backHref="/teacher/students"
         title={student.full_name}
         subtitle={[student.email, student.phone].filter(Boolean).join(' · ')}
         badges={
           <>
-            {student.exam_type && <Badge variant="secondary" className="rounded-lg">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="outline" className="rounded-lg">{student.grade_level}</Badge>}
+            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
+            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
           </>
         }
         action={
           <div className="flex items-center gap-2">
-            <Link href={`/teacher/students/${studentId}/goals`}>
-              <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
-                <Target className="size-4" /> Hedef
-              </Button>
-            </Link>
-            <Link href={`/teacher/students/${studentId}/report`}>
-              <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
-                <FileText className="size-4" /> Rapor
-              </Button>
-            </Link>
-            <Link href={`/teacher/students/${studentId}/homework/new`}>
-              <Button
-                size="sm"
-                className="gap-2 rounded-xl h-9 font-semibold shadow-sm"
-                style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))' }}
-              >
-                <Plus className="size-4" /> Ödev Ver
-              </Button>
-            </Link>
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/teacher/students/${studentId}/goals`} />}
+            >
+              <Target />
+              Hedef
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/teacher/students/${studentId}/report`} />}
+            >
+              <FileText />
+              Rapor
+            </Button>
+            <Button
+              size="sm"
+              render={<Link href={`/teacher/students/${studentId}/homework/new`} />}
+            >
+              <Plus />
+              Ödev Ver
+            </Button>
           </div>
         }
       />
 
-      {/* Weekly summary cards */}
       {weeklySummary && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
-          <StatCard
-            icon={ClipboardList}
-            label="Verilen"
-            value={weeklySummary.assigned_tests ?? 0}
-            colorScheme="indigo"
-          />
-          <StatCard
-            icon={CheckCircle2}
-            label="Tamamlanan"
-            value={weeklySummary.completed_tests ?? 0}
-            colorScheme="emerald"
-          />
-          <StatCard
-            icon={ClipboardList}
-            label="Bekleyen"
-            value={weeklySummary.pending_tests ?? 0}
-            colorScheme="neutral"
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Onay Bekliyor"
-            value={weeklySummary.pending_approval_tests ?? 0}
-            colorScheme={Number(weeklySummary.pending_approval_tests) > 0 ? 'amber' : 'neutral'}
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Geciken"
-            value={weeklySummary.overdue_tests ?? 0}
-            colorScheme={Number(weeklySummary.overdue_tests) > 0 ? 'red' : 'neutral'}
-          />
-        </div>
+        <MetricRow
+          className="md:grid-cols-5"
+          metrics={[
+            { label: 'Verilen', value: weeklySummary.assigned_tests ?? 0 },
+            { label: 'Tamamlanan', value: weeklySummary.completed_tests ?? 0 },
+            { label: 'Bekleyen', value: weeklySummary.pending_tests ?? 0 },
+            { label: 'Onay bekliyor', value: weeklySummary.pending_approval_tests ?? 0 },
+            { label: 'Geciken', value: weeklySummary.overdue_tests ?? 0 },
+          ]}
+        />
       )}
 
       <Tabs defaultValue="books">
-        <TabsList className="mb-6 h-10 rounded-xl p-1 bg-muted">
-          <TabsTrigger value="books" className="gap-1.5 rounded-lg text-xs font-semibold">
-            <BookOpen className="size-3.5" /> Kitaplar
+        <TabsList className="mb-6">
+          <TabsTrigger value="books">
+            <BookOpen /> Kitaplar
           </TabsTrigger>
-          <TabsTrigger value="homework" className="gap-1.5 rounded-lg text-xs font-semibold">
-            <ClipboardList className="size-3.5" /> Ödevler
+          <TabsTrigger value="homework">
+            <ClipboardList /> Ödevler
           </TabsTrigger>
-          <TabsTrigger value="parents" className="gap-1.5 rounded-lg text-xs font-semibold">
-            <Users className="size-3.5" /> Veliler
+          <TabsTrigger value="parents">
+            <Users /> Veliler
           </TabsTrigger>
           {student.notes && (
-            <TabsTrigger value="notes" className="gap-1.5 rounded-lg text-xs font-semibold">
-              <StickyNote className="size-3.5" /> Notlar
+            <TabsTrigger value="notes">
+              <StickyNote /> Notlar
             </TabsTrigger>
           )}
         </TabsList>
 
-        {/* BOOKS TAB */}
         <TabsContent value="books">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-bold text-sm text-foreground">Atanmış Kitaplar</h2>
-            {activeTerm && availableBooks.length > 0 && (
-              <AssignBookDialog studentId={studentId} books={availableBooks} />
-            )}
-          </div>
-          {!bookProgress?.length ? (
-            <div className="bg-card rounded-2xl border shadow-xs">
-              <EmptyState
-                icon={BookOpen}
-                title="Henüz kitap atanmamış"
-                description={
-                  activeTerm && availableBooks.length > 0
-                    ? 'Kitap eklemek için "Kitap Ata" butonunu kullanın.'
-                    : !activeTerm
-                    ? 'Önce aktif bir dönem oluşturun.'
-                    : 'Bu dönemdeki tüm kitaplar atanmış.'
-                }
-              />
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {bookProgress.map((p) => (
-                <BookCard
-                  key={p.student_book_assignment_id}
-                  book={{
-                    id: p.book_id,
-                    title: p.book_title,
-                    subject: p.subject,
-                    exam_type: p.exam_type,
-                  }}
-                  progress={{
-                    completed: p.completed_tests,
-                    total: p.total_tests,
-                    percentage: Number(p.completion_percentage),
-                    targetDate: p.target_end_date,
-                  }}
-                  href={`/teacher/books/${p.book_id}`}
+          <Section
+            title="Atanmış kitaplar"
+            action={
+              activeTerm && availableBooks.length > 0 ? (
+                <AssignBookDialog studentId={studentId} books={availableBooks} />
+              ) : undefined
+            }
+          >
+            {!bookProgress?.length ? (
+              <div className="rounded-lg border bg-card">
+                <EmptyState
+                  icon={BookOpen}
+                  title="Henüz kitap atanmamış"
+                  description={
+                    activeTerm && availableBooks.length > 0
+                      ? 'Kitap eklemek için "Kitap Ata" butonunu kullanın.'
+                      : !activeTerm
+                      ? 'Önce aktif bir dönem oluşturun.'
+                      : 'Bu dönemdeki tüm kitaplar atanmış.'
+                  }
                 />
-              ))}
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {bookProgress.map((p) => (
+                  <BookCard
+                    key={p.student_book_assignment_id}
+                    book={{
+                      id: p.book_id,
+                      title: p.book_title,
+                      subject: p.subject,
+                      exam_type: p.exam_type,
+                    }}
+                    progress={{
+                      completed: p.completed_tests,
+                      total: p.total_tests,
+                      percentage: Number(p.completion_percentage),
+                      targetDate: p.target_end_date,
+                    }}
+                    href={`/teacher/books/${p.book_id}`}
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
         </TabsContent>
 
-        {/* HOMEWORK TAB */}
         <TabsContent value="homework">
-          <PendingApprovalList
-            studentId={studentId}
-            items={(pendingApprovalItems ?? []).map((item) => ({
-              id: item.id,
-              books: item.books as unknown as { title: string } | null,
-              book_sections: item.book_sections as unknown as { title: string } | null,
-              book_tests: item.book_tests as unknown as { title: string } | null,
-            }))}
-          />
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-bold text-sm">Ödevler</h2>
-            <Link href={`/teacher/students/${studentId}/homework/new`}>
-              <Button size="sm" variant="outline" className="gap-1.5 rounded-xl h-9 font-semibold">
-                <Plus className="size-3" /> Ödev Ver
-              </Button>
-            </Link>
+          <div className="space-y-8">
+            <PendingApprovalList
+              studentId={studentId}
+              items={(pendingApprovalItems ?? []).map((item) => ({
+                id: item.id,
+                books: item.books as unknown as { title: string } | null,
+                book_sections: item.book_sections as unknown as { title: string } | null,
+                book_tests: item.book_tests as unknown as { title: string } | null,
+              }))}
+            />
+
+            <Section
+              title="Ödevler"
+              action={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={`/teacher/students/${studentId}/homework/new`} />}
+                >
+                  <Plus />
+                  Ödev Ver
+                </Button>
+              }
+            >
+              {!homeworkBatches?.length ? (
+                <div className="rounded-lg border bg-card">
+                  <EmptyState
+                    icon={ClipboardList}
+                    title="Henüz ödev yok"
+                    description="Bu öğrenciye ödev vererek takip etmeye başlayın."
+                    action={{
+                      label: 'Ödev Ver',
+                      href: `/teacher/students/${studentId}/homework/new`,
+                    }}
+                  />
+                </div>
+              ) : (
+                <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+                  {homeworkBatches.map((batch) => {
+                    const items = (batch.homework_items as { id: string; status: string }[]) ?? []
+                    const total = items.length
+                    const completed = items.filter((i) => i.status === 'completed').length
+                    const isOverdue =
+                      new Date(batch.due_date) < new Date() &&
+                      items.some((i) => i.status === 'pending')
+                    return (
+                      <li key={batch.id}>
+                        <HomeworkBatchRow
+                          title={batch.title}
+                          dueDate={batch.due_date}
+                          completed={completed}
+                          total={total}
+                          isOverdue={isOverdue}
+                        />
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </Section>
           </div>
-          {!homeworkBatches?.length ? (
-            <div className="bg-card rounded-2xl border shadow-xs">
-              <EmptyState
-                icon={ClipboardList}
-                title="Henüz ödev yok"
-                description="Bu öğrenciye ödev vererek takip etmeye başlayın."
-                action={{ label: 'Ödev Ver', href: `/teacher/students/${studentId}/homework/new` }}
-              />
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {homeworkBatches.map((batch) => {
-                const items = batch.homework_items as { id: string; status: string }[] ?? []
-                const total = items.length
-                const completed = items.filter(i => i.status === 'completed').length
-                const isOverdue = new Date(batch.due_date) < new Date() && items.some(i => i.status === 'pending')
-                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
-                const isComplete = total > 0 && completed === total
-                return (
-                  <div
-                    key={batch.id}
-                    className={cn(
-                      'bg-card rounded-2xl border px-5 py-4 flex items-center justify-between gap-4 shadow-xs transition-all',
-                      isOverdue && 'border-l-[3px] border-l-red-400',
-                      isComplete && 'border-l-[3px] border-l-emerald-400',
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-bold truncate">
-                          {batch.title ?? new Date(batch.due_date).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </p>
-                        {isOverdue && (
-                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-red-600 font-bold">
-                            <AlertTriangle className="size-3" /> Gecikmiş
-                          </span>
-                        )}
-                        {isComplete && (
-                          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-emerald-600 font-bold">
-                            <CheckCircle2 className="size-3" /> Tamamlandı
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
-                      </p>
-                      {total > 0 && (
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[100px]">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${pct}%`,
-                                background: isOverdue
-                                  ? 'oklch(0.54 0.22 20)'
-                                  : isComplete
-                                  ? 'oklch(0.50 0.18 155)'
-                                  : 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground font-semibold">{pct}%</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-lg font-black">
-                        {completed}
-                        <span className="text-muted-foreground text-sm font-normal">/{total}</span>
-                      </p>
-                      <p className="text-[11px] text-muted-foreground font-medium">tamamlandı</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
         </TabsContent>
 
-        {/* PARENTS TAB */}
         <TabsContent value="parents">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-bold text-sm">Veliler</h2>
-            <InviteDialog
-              studentId={studentId}
-              studentName={student.full_name}
-              inviteType="parent"
-            />
-          </div>
-          {!hasAccount && (
-            <div className="mb-4">
-              <InviteDialog
-                studentId={studentId}
-                studentName={student.full_name}
-                inviteType="student"
-              />
-            </div>
-          )}
-          {!parentLinks?.length ? (
-            <div className="bg-card rounded-2xl border shadow-xs">
-              <EmptyState
-                icon={Users}
-                title="Bağlı veli yok"
-                description="Veli davet ederek takip sürecine dahil edin."
-              />
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {parentLinks.map((link) => {
-                const prof = link.profiles as unknown as { full_name: string; email: string } | null
-                return (
-                  <div key={link.id} className="bg-card rounded-2xl border px-5 py-4 flex items-center justify-between shadow-xs">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 ring-1 ring-border">
-                        <span className="text-sm font-black text-muted-foreground">
-                          {(prof?.full_name ?? 'V').charAt(0).toUpperCase()}
-                        </span>
+          <Section
+            title="Veliler"
+            action={
+              <div className="flex items-center gap-2">
+                {!hasAccount && (
+                  <InviteDialog
+                    studentId={studentId}
+                    studentName={student.full_name}
+                    inviteType="student"
+                  />
+                )}
+                <InviteDialog
+                  studentId={studentId}
+                  studentName={student.full_name}
+                  inviteType="parent"
+                />
+              </div>
+            }
+          >
+            {!parentLinks?.length ? (
+              <div className="rounded-lg border bg-card">
+                <EmptyState
+                  icon={Users}
+                  title="Bağlı veli yok"
+                  description="Veli davet ederek takip sürecine dahil edin."
+                />
+              </div>
+            ) : (
+              <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+                {parentLinks.map((link) => {
+                  const prof = link.profiles as unknown as {
+                    full_name: string
+                    email: string
+                  } | null
+                  return (
+                    <li key={link.id} className="flex items-center justify-between gap-4 p-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {(prof?.full_name ?? 'V').charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {prof?.full_name ?? 'Davet bekleniyor'}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {prof?.email ?? ''}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold">{prof?.full_name ?? 'Davet bekleniyor'}</p>
-                        <p className="text-xs text-muted-foreground">{prof?.email ?? ''}</p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={link.status === 'active' ? 'default' : 'secondary'}
-                      className="text-xs rounded-lg"
-                    >
-                      {link.status === 'active' ? 'Aktif' : link.status === 'invited' ? 'Davet edildi' : link.status}
-                    </Badge>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                      <Badge variant={link.status === 'active' ? 'success' : 'neutral'}>
+                        {link.status === 'active'
+                          ? 'Aktif'
+                          : link.status === 'invited'
+                          ? 'Davet edildi'
+                          : link.status}
+                      </Badge>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </Section>
         </TabsContent>
 
         {student.notes && (
           <TabsContent value="notes">
-            <div className="bg-card rounded-2xl border shadow-xs p-6">
-              <p className="text-sm whitespace-pre-wrap text-foreground/80 leading-relaxed">{student.notes}</p>
+            <div className="rounded-lg border bg-card p-6">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{student.notes}</p>
             </div>
           </TabsContent>
         )}

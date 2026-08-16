@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { Check, X, Loader2, Clock3 } from 'lucide-react'
 import { approveHomeworkItemAction, rejectHomeworkItemAction } from './homework-actions'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface PendingItem {
   id: string
@@ -16,12 +17,14 @@ export function PendingApprovalList({ studentId, items }: { studentId: string; i
   if (!items.length) return null
 
   return (
-    <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/60 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200 bg-amber-100/60">
-        <Clock3 className="size-3.5 text-amber-600" />
-        <span className="text-sm font-bold text-amber-900">Onay Bekleyenler ({items.length})</span>
+    <div className="overflow-hidden rounded-lg border border-info-border bg-info-subtle">
+      <div className="flex items-center gap-2 border-b border-info-border px-4 py-3">
+        <Clock3 className="size-3.5 text-info" />
+        <span className="text-sm font-medium text-foreground">
+          Onay bekleyenler ({items.length})
+        </span>
       </div>
-      <div className="divide-y divide-amber-200/70">
+      <div className="divide-y divide-info-border">
         {items.map(item => (
           <PendingItemRow key={item.id} studentId={studentId} item={item} />
         ))}
@@ -58,11 +61,11 @@ function PendingItemRow({ studentId, item }: { studentId: string; item: PendingI
             {item.books?.title ?? ''} · {item.book_sections?.title ?? ''}
           </p>
         </div>
-        <Button size="xs" disabled={isPending} onClick={approve} className="gap-1">
+        <Button size="sm" disabled={isPending} onClick={approve} className="gap-1">
           {isPending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />} Onayla
         </Button>
         <Button
-          size="xs"
+          size="sm"
           variant="outline"
           disabled={isPending}
           onClick={() => setShowReject(v => !v)}
@@ -73,14 +76,14 @@ function PendingItemRow({ studentId, item }: { studentId: string; item: PendingI
       </div>
       {showReject && (
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={note}
             onChange={e => setNote(e.target.value)}
             placeholder="Red gerekçesi (isteğe bağlı)"
-            className="h-8 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="flex-1"
           />
-          <Button size="xs" variant="destructive" disabled={isPending} onClick={reject}>
+          <Button size="sm" variant="destructive" disabled={isPending} onClick={reject}>
             Gönder
           </Button>
         </div>

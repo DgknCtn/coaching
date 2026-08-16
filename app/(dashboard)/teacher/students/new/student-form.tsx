@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react'
 import { createStudentAction } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
@@ -78,38 +79,35 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="examType">Sınav Türü</Label>
-              <select
+              <NativeSelect
                 id="examType"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('examType')}
               >
                 <option value="">Seçin</option>
                 {EXAM_TYPES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="gradeLevel">Sınıf</Label>
-              <select
+              <NativeSelect
                 id="gradeLevel"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 {...register('gradeLevel')}
               >
                 <option value="">Seçin</option>
                 {GRADE_LEVELS.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
+              </NativeSelect>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="lessonType">Ders Türü</Label>
-            <select
+            <NativeSelect
               id="lessonType"
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               {...register('lessonType')}
             >
               <option value="">Seçin</option>
               {LESSON_TYPES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+            </NativeSelect>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

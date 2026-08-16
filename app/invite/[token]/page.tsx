@@ -11,6 +11,18 @@ const roleLabels: Record<string, string> = {
   teacher: 'Öğretmen',
 }
 
+function InviteNotice({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm rounded-lg border bg-card p-6 text-center">
+        <AlertCircle className="mx-auto size-5 text-muted-foreground" />
+        <h2 className="mt-3 text-sm font-medium">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  )
+}
+
 export default async function InvitePage({
   params,
 }: {
@@ -27,15 +39,10 @@ export default async function InvitePage({
 
   if (!invitation || error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 auth-hero">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm text-center">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="size-6 text-red-500" />
-          </div>
-          <h2 className="font-bold text-lg mb-1">Davet bulunamadı</h2>
-          <p className="text-sm text-gray-500">Link geçersiz veya daha önce kullanılmış.</p>
-        </div>
-      </div>
+      <InviteNotice
+        title="Davet bulunamadı"
+        description="Link geçersiz veya daha önce kullanılmış."
+      />
     )
   }
 
@@ -46,59 +53,56 @@ export default async function InvitePage({
       revoked: 'Bu davet iptal edilmiş.',
     }
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 auth-hero">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm text-center">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="size-6 text-red-500" />
-          </div>
-          <h2 className="font-bold text-lg mb-1">{labels[invitation.status] ?? 'Geçersiz davet'}</h2>
-          <p className="text-sm text-gray-500">Öğretmenden yeni bir davet linki isteyin.</p>
-        </div>
-      </div>
+      <InviteNotice
+        title={labels[invitation.status] ?? 'Geçersiz davet'}
+        description="Öğretmenden yeni bir davet linki isteyin."
+      />
     )
   }
 
   if (new Date(invitation.expires_at) < new Date()) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 auth-hero">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm text-center">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="size-6 text-amber-500" />
-          </div>
-          <h2 className="font-bold text-lg mb-1">Davetin süresi dolmuş</h2>
-          <p className="text-sm text-gray-500">Öğretmenden yeni bir davet linki isteyin.</p>
-        </div>
-      </div>
+      <InviteNotice
+        title="Davetin süresi dolmuş"
+        description="Öğretmenden yeni bir davet linki isteyin."
+      />
     )
   }
 
   const roleLabel = roleLabels[invitation.role] ?? invitation.role
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 auth-hero">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-sm">
-        <div className="px-8 pt-8 pb-6 border-b border-gray-100">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <GraduationCap className="size-5 text-primary" />
-            </div>
-            <span className="font-bold text-base tracking-tight">Koçluk Takip</span>
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex items-center gap-3">
+          <div className="flex size-8 items-center justify-center rounded-md bg-muted">
+            <GraduationCap className="size-4 text-muted-foreground" />
           </div>
-          <h1 className="font-bold text-xl mb-1">Daveti kabul et</h1>
-          <p className="text-sm text-gray-500">
+          <span className="text-sm font-semibold">Koçluk Takip</span>
+        </div>
+
+        <div className="mb-8">
+          <h1 className="text-xl font-semibold tracking-tight">Daveti kabul et</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {invitation.student_full_name ? (
               <>
-                <span className="font-medium text-gray-800">{invitation.student_full_name}</span> için{' '}
-                <span className="font-medium text-gray-800">{roleLabel}</span> olarak davet edildiniz.
+                <span className="font-medium text-foreground">
+                  {invitation.student_full_name}
+                </span>{' '}
+                için{' '}
+                <span className="font-medium text-foreground">{roleLabel}</span> olarak davet
+                edildiniz.
               </>
             ) : (
-              <><span className="font-medium text-gray-800">{roleLabel}</span> olarak davet edildiniz.</>
+              <>
+                <span className="font-medium text-foreground">{roleLabel}</span> olarak davet
+                edildiniz.
+              </>
             )}
           </p>
         </div>
-        <div className="px-8 py-6">
-          <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
-        </div>
+
+        <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
       </div>
     </div>
   )

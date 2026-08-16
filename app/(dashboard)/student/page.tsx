@@ -1,6 +1,9 @@
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
-import { BookOpen, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { PageHeader } from '@/components/shared/page-header'
+import { Section } from '@/components/shared/section'
+import { AlertBanner } from '@/components/shared/alert-banner'
+import { ProgressBar } from '@/components/shared/progress-bar'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,88 +40,66 @@ export default async function StudentPage() {
   const upcoming = (batches ?? []).filter(b => b.due_date >= todayStr)
 
   return (
-    <div className="p-6 md:p-8 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="mb-8 pb-6 border-b">
-        <h1 className="text-2xl font-extrabold tracking-tight mb-1">Ödevlerim</h1>
-        <p className="text-sm text-muted-foreground">
-          {overdue.length > 0 && (
-            <span className="text-red-600 font-semibold">{overdue.length} gecikmiş · </span>
-          )}
-          {upcoming.length} yaklaşan ödev
-        </p>
-      </div>
-
-      {/* Overdue alert banner */}
-      {overdue.length > 0 && (
-        <div className="mb-6 flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-red-500 bg-red-50/60 border-red-200">
-          <AlertTriangle className="size-4 text-red-600 shrink-0" />
-          <div>
-            <p className="text-sm font-bold text-red-700">{overdue.length} gecikmiş ödev</p>
-            <p className="text-xs text-red-600/75 mt-0.5">Bunları en kısa sürede tamamlamayı unutma!</p>
-          </div>
-        </div>
-      )}
+    <div className="mx-auto max-w-2xl space-y-8 p-6 md:p-8">
+      <PageHeader
+        title="Ödevlerim"
+        subtitle={
+          overdue.length > 0
+            ? `${overdue.length} gecikmiş · ${upcoming.length} yaklaşan ödev`
+            : `${upcoming.length} yaklaşan ödev`
+        }
+      />
 
       {overdue.length > 0 && (
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="size-4 text-red-500" />
-            <h2 className="text-sm font-bold text-red-600">Geciken Ödevler</h2>
-          </div>
-          <HomeworkList batches={overdue as any} />
-        </section>
+        <>
+          <AlertBanner
+            tone="warning"
+            title={`${overdue.length} gecikmiş ödev`}
+            description="Bunları en kısa sürede tamamlamayı unutma."
+          />
+          <Section title="Geciken ödevler">
+            <HomeworkList batches={overdue as any} />
+          </Section>
+        </>
       )}
 
       {upcoming.length > 0 ? (
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <ClipboardList className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-bold text-foreground">Bu Hafta ve Yaklaşan</h2>
-          </div>
+        <Section title="Bu hafta ve yaklaşan">
           <HomeworkList batches={upcoming as any} />
-        </section>
+        </Section>
       ) : overdue.length === 0 ? (
-        <div className="py-16 flex flex-col items-center justify-center text-center rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40">
-          <CheckCircle2 className="size-10 text-emerald-500 mb-3" />
-          <p className="font-bold text-emerald-700">Tüm ödevler tamamlandı!</p>
-          <p className="text-sm text-emerald-600/70 mt-1">Harika iş çıkardın.</p>
-        </div>
+        <AlertBanner
+          tone="success"
+          title="Tüm ödevler tamamlandı"
+          description="Harika iş çıkardın."
+        />
       ) : null}
 
-      {/* Book progress */}
       {(bookProgress?.length ?? 0) > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b">
-            <BookOpen className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-bold">Kitap İlerlemem</h2>
-          </div>
+        <Section title="Kitap ilerlemem">
           <div className="space-y-3">
             {bookProgress!.map(p => (
-              <div key={p.student_book_assignment_id} className="rounded-2xl border bg-card p-5 shadow-xs">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-bold">{p.book_title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{p.subject}</p>
+              <div key={p.student_book_assignment_id} className="rounded-lg border bg-card p-4">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{p.book_title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{p.subject}</p>
                   </div>
-                  <span className="text-2xl font-black text-foreground">{p.completion_percentage}%</span>
+                  <span className="shrink-0 text-2xl font-semibold tabular-nums tracking-tight">
+                    {p.completion_percentage}%
+                  </span>
                 </div>
-                <div className="h-2.5 rounded-full bg-muted overflow-hidden mb-2">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${Math.min(100, Number(p.completion_percentage))}%`,
-                      background: 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground font-medium">
+                <ProgressBar
+                  value={Number(p.completion_percentage)}
+                  label={`${p.book_title} ilerlemesi`}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
                   {p.completed_tests} / {p.total_tests} test tamamlandı · {p.remaining_tests} kaldı
                 </p>
               </div>
             ))}
           </div>
-        </section>
+        </Section>
       )}
     </div>
   )

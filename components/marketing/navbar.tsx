@@ -21,23 +21,17 @@ export function Navbar() {
       className={cn(
         'fixed top-0 inset-x-0 z-50 transition-all duration-300',
         scrolled
-          ? 'bg-background/90 backdrop-blur-md border-b border-border/50 shadow-sm'
+          ? 'border-b bg-background/90 backdrop-blur-md'
           : 'bg-transparent'
       )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shadow-md"
-              style={{
-                background:
-                  'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))',
-              }}
-            >
-              <GraduationCap className="size-4 text-white" />
+            <div className="flex size-8 items-center justify-center rounded-md bg-primary">
+              <GraduationCap className="size-4 text-primary-foreground" />
             </div>
-            <span className="font-black text-lg tracking-tight">KoçTakip</span>
+            <span className="text-base font-semibold tracking-tight">KoçTakip</span>
           </Link>
 
           <nav className="hidden md:flex items-center">
@@ -71,9 +65,11 @@ export function Navbar() {
           </div>
 
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
+            type="button"
+            className="rounded-md p-2 transition-colors hover:bg-muted md:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Menü"
+            aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
@@ -81,26 +77,26 @@ export function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden bg-background border-b border-border px-4 pb-4 shadow-lg">
+        <div className="border-b bg-background px-4 pb-4 md:hidden">
           <nav className="flex flex-col gap-1 pt-2">
             <a
               href="#ozellikler"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 text-sm font-medium hover:bg-accent rounded-lg transition-colors"
+              className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Özellikler
             </a>
             <a
               href="#nasil-calisir"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 text-sm font-medium hover:bg-accent rounded-lg transition-colors"
+              className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Nasıl Çalışır
             </a>
             <Link
               href="/demo"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 text-sm font-medium hover:bg-accent rounded-lg transition-colors"
+              className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Demo
             </Link>

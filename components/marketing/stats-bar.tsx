@@ -11,19 +11,10 @@ export function StatsBar() {
       <div className="max-w-5xl mx-auto px-4 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-0 md:divide-x md:divide-border">
         {stats.map((stat) => (
           <div key={stat.label} className="text-center px-6">
-            <div
-              className="text-3xl sm:text-4xl font-black tracking-tight mb-1"
-              style={{
-                background:
-                  'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >
+            <div className="text-2xl font-semibold tracking-tight tabular-nums">
               {stat.value}
             </div>
-            <div className="text-sm text-muted-foreground font-medium">{stat.label}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
           </div>
         ))}
       </div>

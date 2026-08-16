@@ -37,61 +37,31 @@ export function DemoTabs() {
   const [active, setActive] = useState<TabId>('teacher')
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      {/* Tab switcher — icon-only pills on mobile, full cards on sm+ */}
-      <div className="flex gap-2 sm:gap-3 sm:flex-row">
+    <div className="space-y-6">
+      <div className="flex gap-2" role="tablist" aria-label="Demo görünümü">
         {tabs.map((tab) => {
           const isActive = active === tab.id
           return (
             <button
               key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActive(tab.id)}
               className={cn(
-                'flex-1 transition-all duration-200',
-                /* Mobile: compact pill */
-                'flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border text-center',
-                /* Desktop: full card with description */
-                'sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3.5 sm:rounded-2xl sm:text-left',
+                'flex flex-1 items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors',
                 isActive
-                  ? 'border-transparent text-white shadow-lg'
-                  : 'bg-card border-border hover:border-primary/30 hover:shadow-md'
+                  ? 'border-foreground/20 bg-muted'
+                  : 'border-border bg-card hover:bg-muted/60'
               )}
-              style={
-                isActive
-                  ? {
-                      background:
-                        'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))',
-                    }
-                  : {}
-              }
             >
-              <div
-                className={cn(
-                  'w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0',
-                  isActive ? 'bg-white/20' : 'bg-muted'
-                )}
-              >
-                <tab.Icon
-                  className={cn('size-4 sm:size-5', isActive ? 'text-white' : 'text-muted-foreground')}
-                />
-              </div>
+              <tab.Icon className="size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
-                {/* Short label on mobile, full label on desktop */}
-                <div
-                  className={cn(
-                    'text-xs sm:text-sm font-bold leading-tight',
-                    isActive ? 'text-white' : ''
-                  )}
-                >
+                <div className="text-sm font-medium leading-tight">
                   <span className="sm:hidden">{tab.label}</span>
                   <span className="hidden sm:inline">{tab.fullLabel}</span>
                 </div>
-                <div
-                  className={cn(
-                    'hidden sm:block text-xs leading-tight mt-0.5',
-                    isActive ? 'text-white/65' : 'text-muted-foreground'
-                  )}
-                >
+                <div className="mt-1 hidden text-xs text-muted-foreground sm:block">
                   {tab.description}
                 </div>
               </div>

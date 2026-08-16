@@ -76,7 +76,7 @@ export function InviteDialog({ studentId, studentName, inviteType }: Props) {
                 <div className="flex gap-2">
                   <Input value={inviteLink} readOnly className="text-xs" />
                   <Button size="icon" variant="outline" onClick={handleCopy}>
-                    {copied ? <Check className="size-4 text-green-600" /> : <Copy className="size-4" />}
+                    {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
                   </Button>
                 </div>
               </div>

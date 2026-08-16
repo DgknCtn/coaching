@@ -70,19 +70,19 @@ export default async function BookDetailPage({
       <div className="grid grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="pt-4 text-center">
-            <p className="text-2xl font-bold">{sections.length}</p>
+            <p className="text-2xl font-semibold tabular-nums tracking-tight">{sections.length}</p>
             <p className="text-xs text-muted-foreground">Bölüm</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <p className="text-2xl font-bold">{totalTests}</p>
+            <p className="text-2xl font-semibold tabular-nums tracking-tight">{totalTests}</p>
             <p className="text-xs text-muted-foreground">Test</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <p className="text-2xl font-bold">{assignments?.length ?? 0}</p>
+            <p className="text-2xl font-semibold tabular-nums tracking-tight">{assignments?.length ?? 0}</p>
             <p className="text-xs text-muted-foreground">Öğrenci</p>
           </CardContent>
         </Card>

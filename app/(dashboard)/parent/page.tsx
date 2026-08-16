@@ -1,10 +1,13 @@
-import { AlertTriangle, BookOpen, ClipboardList, Users, CheckCircle2, TrendingUp } from 'lucide-react'
+import { BookOpen, Users } from 'lucide-react'
 import { getParentContext } from '@/lib/workspace'
 import { Badge } from '@/components/ui/badge'
-import { StatCard } from '@/components/shared/stat-card'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
-import { cn } from '@/lib/utils'
+import { PageHeader } from '@/components/shared/page-header'
+import { Section } from '@/components/shared/section'
+import { MetricRow } from '@/components/shared/metric-row'
+import { AlertBanner } from '@/components/shared/alert-banner'
+import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,25 +52,28 @@ export default async function ParentPage() {
   )
 
   return (
-    <div className="p-6 md:p-8 max-w-3xl mx-auto">
-      <div className="mb-8 pb-6 border-b">
-        <h1 className="text-2xl font-extrabold tracking-tight">Veli Paneli</h1>
-        <p className="text-sm text-muted-foreground mt-1">Öğrencilerinizin gelişimini takip edin</p>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8 p-6 md:p-8">
+      <PageHeader
+        title="Veli Paneli"
+        subtitle="Öğrencilerinizin gelişimini takip edin"
+      />
 
       {studentData.length === 0 && (
-        <div className="bg-card rounded-2xl border shadow-xs">
+        <Section variant="card">
           <EmptyState
             icon={Users}
             title="Bağlı öğrenci yok"
             description="Öğretmeninizden davet bekleniyor."
           />
-        </div>
+        </Section>
       )}
 
       {studentData.map(({ student, bookProgress, batches, weekly }) => {
-        const overdueBatches = batches.filter(b => {
-          return b.due_date < todayStr && (b.homework_items as { status: string }[]).some(i => i.status === 'pending')
+        const overdueBatches = batches.filter((b) => {
+          return (
+            b.due_date < todayStr &&
+            (b.homework_items as { status: string }[]).some((i) => i.status === 'pending')
+          )
         })
 
         // Genel (dönem geneli) ilerleme — atanmış tüm kitaplar üzerinden.
@@ -78,142 +84,63 @@ export default async function ParentPage() {
         const onTrack = hasActivity && overdueBatches.length === 0
 
         return (
-          <div key={student.id} className="mb-12">
-            {/* Student header card */}
-            <div
-              className="rounded-2xl p-5 mb-6 relative overflow-hidden"
-              style={{ background: 'linear-gradient(135deg, oklch(0.52 0.25 282), oklch(0.44 0.22 265))' }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-              <div className="relative flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 backdrop-blur-sm">
-                  <span className="text-xl font-black text-white">
-                    {student.full_name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h2 className="text-xl font-black text-white">{student.full_name}</h2>
-                    {student.exam_type && (
-                      <span className="px-2 py-0.5 rounded-full bg-white/20 text-[11px] font-bold text-white">
-                        {student.exam_type}
-                      </span>
-                    )}
-                    {student.grade_level && (
-                      <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-[11px] font-semibold text-white/80">
-                        {student.grade_level}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-white/60 text-sm font-medium">Bu haftanın özeti</p>
-                </div>
-              </div>
+          <div key={student.id} className="space-y-6 border-t pt-8 first:border-t-0 first:pt-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold tracking-tight">{student.full_name}</h2>
+              {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
+              {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
             </div>
 
-            {/* Genel durum (dönem geneli) */}
-            {hasActivity && (
-              <div className="mb-6">
-                <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-                  <TrendingUp className="size-4 text-muted-foreground" /> Genel Durum
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <StatCard
-                    icon={TrendingUp}
-                    label="Genel İlerleme"
-                    value={`${overallPct}%`}
-                    colorScheme={overallPct >= 70 ? 'emerald' : overallPct >= 40 ? 'indigo' : 'red'}
-                  />
-                  <StatCard
-                    icon={BookOpen}
-                    label="Tamamlanan Test"
-                    value={overallCompleted}
-                    subValue={`/${overallTotal}`}
-                    colorScheme="neutral"
-                  />
-                  <StatCard
-                    icon={BookOpen}
-                    label="Aktif Kitap"
-                    value={bookProgress.length}
-                    colorScheme="neutral"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Bu haftanın özeti */}
-            {weekly && (
-              <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-                <ClipboardList className="size-4 text-muted-foreground" /> Bu Hafta
-              </h3>
-            )}
-            {weekly && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <StatCard
-                  icon={ClipboardList}
-                  label="Verilen"
-                  value={weekly.assigned_tests ?? 0}
-                  colorScheme="indigo"
-                />
-                <StatCard
-                  icon={CheckCircle2}
-                  label="Tamamlanan"
-                  value={weekly.completed_tests ?? 0}
-                  colorScheme="emerald"
-                />
-                <StatCard
-                  icon={TrendingUp}
-                  label="Bekleyen"
-                  value={weekly.pending_tests ?? 0}
-                  colorScheme="neutral"
-                />
-                <StatCard
-                  icon={AlertTriangle}
-                  label="Geciken"
-                  value={weekly.overdue_tests ?? 0}
-                  colorScheme={Number(weekly.overdue_tests) > 0 ? 'red' : 'neutral'}
-                />
-              </div>
-            )}
-
-            {/* Gecikme uyarısı */}
             {overdueBatches.length > 0 && (
-              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-red-500 bg-red-50/60 border-red-200 dark:bg-red-950/30 dark:border-red-900/50 mb-6">
-                <AlertTriangle className="size-4 text-red-600 dark:text-red-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-red-700 dark:text-red-300">
-                    {overdueBatches.length} gecikmiş ödev grubu
-                  </p>
-                  <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-0.5">
-                    Öğretmeninizle iletişime geçin.
-                  </p>
-                </div>
-              </div>
+              <AlertBanner
+                tone="warning"
+                title={`${overdueBatches.length} gecikmiş ödev grubu`}
+                description="Öğretmeninizle iletişime geçin."
+              />
             )}
 
-            {/* Yolunda gidiyor mesajı */}
             {onTrack && (
-              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-l-[3px] border-l-emerald-500 bg-emerald-50/60 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50 mb-6">
-                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                    Her şey yolunda
-                  </p>
-                  <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
-                    Gecikmiş ödev yok, güzel gidiyor.
-                  </p>
-                </div>
-              </div>
+              <AlertBanner
+                tone="success"
+                title="Her şey yolunda"
+                description="Gecikmiş ödev yok, güzel gidiyor."
+              />
             )}
 
-            {/* Book progress */}
+            {weekly && (
+              <Section title="Bu hafta">
+                <MetricRow
+                  metrics={[
+                    { label: 'Verilen', value: weekly.assigned_tests ?? 0 },
+                    { label: 'Tamamlanan', value: weekly.completed_tests ?? 0 },
+                    { label: 'Bekleyen', value: weekly.pending_tests ?? 0 },
+                    { label: 'Geciken', value: weekly.overdue_tests ?? 0 },
+                  ]}
+                />
+              </Section>
+            )}
+
+            {hasActivity && (
+              <Section title="Dönem geneli">
+                <MetricRow
+                  metrics={[
+                    { label: 'Genel ilerleme', value: `${overallPct}%` },
+                    {
+                      label: 'Tamamlanan test',
+                      value: overallCompleted,
+                      subValue: `/${overallTotal}`,
+                    },
+                    { label: 'Aktif kitap', value: bookProgress.length },
+                  ]}
+                  className="md:grid-cols-3"
+                />
+              </Section>
+            )}
+
             {bookProgress.length > 0 && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <BookOpen className="size-4 text-muted-foreground" />
-                  <h3 className="text-sm font-bold">Kitap İlerlemesi</h3>
-                </div>
+              <Section title="Kitap ilerlemesi">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {bookProgress.map(p => (
+                  {bookProgress.map((p) => (
                     <BookCard
                       key={p.student_book_assignment_id}
                       book={{
@@ -230,86 +157,44 @@ export default async function ParentPage() {
                     />
                   ))}
                 </div>
-              </div>
+              </Section>
             )}
 
-            {/* Recent homework */}
             {batches.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <ClipboardList className="size-4 text-muted-foreground" />
-                  <h3 className="text-sm font-bold">Son Ödevler</h3>
-                </div>
-                <div className="space-y-2.5">
-                  {batches.slice(0, 5).map(batch => {
+              <Section title="Son ödevler" variant="card">
+                <ul className="divide-y">
+                  {batches.slice(0, 5).map((batch) => {
                     const items = batch.homework_items as { id: string; status: string }[]
-                    const total = items.filter(i => i.status !== 'cancelled').length
-                    const completed = items.filter(i => i.status === 'completed').length
-                    const isOverdue = batch.due_date < todayStr && items.some(i => i.status === 'pending')
-                    const isComplete = total > 0 && completed === total
-                    const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+                    const total = items.filter((i) => i.status !== 'cancelled').length
+                    const completed = items.filter((i) => i.status === 'completed').length
+                    const isOverdue =
+                      batch.due_date < todayStr && items.some((i) => i.status === 'pending')
+
                     return (
-                      <div
-                        key={batch.id}
-                        className={cn(
-                          'bg-card rounded-2xl border px-5 py-4 flex items-center justify-between gap-4 shadow-xs',
-                          isOverdue && 'border-l-[3px] border-l-red-400',
-                          isComplete && 'border-l-[3px] border-l-emerald-400',
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-bold truncate">
-                              {batch.title ?? new Date(batch.due_date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
-                            </p>
-                            {isOverdue && (
-                              <span className="text-[11px] text-red-600 font-bold shrink-0">· Gecikmiş</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
-                          </p>
-                          {total > 0 && (
-                            <div className="mt-2 flex items-center gap-2">
-                              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[80px]">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{
-                                    width: `${pct}%`,
-                                    background: isOverdue
-                                      ? 'oklch(0.54 0.22 20)'
-                                      : isComplete
-                                      ? 'oklch(0.50 0.18 155)'
-                                      : 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs text-muted-foreground font-semibold">{pct}%</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-lg font-black">
-                            {completed}
-                            <span className="text-muted-foreground text-sm font-normal">/{total}</span>
-                          </p>
-                          <p className="text-[11px] text-muted-foreground font-medium">tamamlandı</p>
-                        </div>
-                      </div>
+                      <li key={batch.id}>
+                        <HomeworkBatchRow
+                          title={batch.title}
+                          dueDate={batch.due_date}
+                          completed={completed}
+                          total={total}
+                          isOverdue={isOverdue}
+                          dateStyle={{ day: 'numeric', month: 'long' }}
+                        />
+                      </li>
                     )
                   })}
-                </div>
-              </div>
+                </ul>
+              </Section>
             )}
 
             {bookProgress.length === 0 && batches.length === 0 && !weekly && (
-              <div className="bg-card rounded-2xl border shadow-xs">
+              <Section variant="card">
                 <EmptyState
                   icon={BookOpen}
                   title="Henüz veri yok"
                   description="Öğretmen henüz kitap veya ödev atamamış."
                 />
-              </div>
+              </Section>
             )}
           </div>
         )

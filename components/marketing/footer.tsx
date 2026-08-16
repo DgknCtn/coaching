@@ -9,16 +9,10 @@ export function Footer() {
           {/* Logo + tagline */}
           <div className="flex flex-col items-center md:items-start gap-2">
             <Link href="/" className="flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shadow-sm"
-                style={{
-                  background:
-                    'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))',
-                }}
-              >
-                <GraduationCap className="size-4 text-white" />
+              <div className="flex size-8 items-center justify-center rounded-md bg-primary">
+                <GraduationCap className="size-4 text-primary-foreground" />
               </div>
-              <span className="font-black text-lg tracking-tight">KoçTakip</span>
+              <span className="text-base font-semibold tracking-tight">KoçTakip</span>
             </Link>
             <p className="text-sm text-muted-foreground">
               Koçluk sürecinizi dijitalleştirin.

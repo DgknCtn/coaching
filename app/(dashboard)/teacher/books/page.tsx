@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { Plus, BookOpen, AlertCircle, Library } from 'lucide-react'
+import { Plus, AlertCircle, Library } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { BookCard } from '@/components/shared/book-card'
+import { Section } from '@/components/shared/section'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,33 +31,27 @@ export default async function BooksPage() {
   const { data: books } = await booksQuery
 
   return (
-    <div className="p-6 md:p-8">
+    <div className="max-w-6xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Kitap Havuzu"
         subtitle={activeTerm?.name}
         action={
           activeTerm ? (
-            <Link href="/teacher/books/new">
-              <Button
-                size="sm"
-                className="gap-2 rounded-xl h-9 font-semibold shadow-sm"
-                style={{ background: 'linear-gradient(135deg, oklch(0.57 0.26 282), oklch(0.50 0.22 265))' }}
-              >
-                <Plus className="size-4" /> Yeni Kitap
-              </Button>
-            </Link>
+            <Button size="sm" render={<Link href="/teacher/books/new" />}>
+              <Plus />
+              Yeni Kitap
+            </Button>
           ) : (
-            <Link href="/teacher/terms">
-              <Button size="sm" variant="outline" className="gap-2 rounded-xl h-9 font-semibold">
-                <AlertCircle className="size-4" /> Önce Dönem Oluştur
-              </Button>
-            </Link>
+            <Button size="sm" variant="outline" render={<Link href="/teacher/terms" />}>
+              <AlertCircle />
+              Önce Dönem Oluştur
+            </Button>
           )
         }
       />
 
       {!books?.length ? (
-        <div className="bg-card rounded-2xl border shadow-xs">
+        <Section variant="card">
           <EmptyState
             icon={Library}
             title="Kitap havuzu boş"
@@ -67,16 +62,10 @@ export default async function BooksPage() {
             }
             action={activeTerm ? { label: 'İlk kitabı ekle', href: '/teacher/books/new' } : undefined}
           />
-        </div>
+        </Section>
       ) : (
-        <>
-          <div className="flex items-center gap-2 mb-5">
-            <BookOpen className="size-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground font-medium">
-              {books.length} kitap
-            </span>
-          </div>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <Section title={`${books.length} kitap`}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {books.map((book) => {
               const testCount = (book.book_tests as unknown as { count: number }[])?.[0]?.count ?? 0
               const sectionCount = (book.book_sections as unknown as { count: number }[])?.[0]?.count ?? 0
@@ -97,7 +86,7 @@ export default async function BooksPage() {
               )
             })}
           </div>
-        </>
+        </Section>
       )}
     </div>
   )

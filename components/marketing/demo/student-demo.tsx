@@ -1,5 +1,7 @@
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react'
 import { BookCard } from '@/components/shared/book-card'
+import { Section } from '@/components/shared/section'
+import { AlertBanner } from '@/components/shared/alert-banner'
+import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
 const mockOverdueHomework = [
   {
@@ -75,103 +77,51 @@ const mockBooks = [
 export function StudentDemo() {
   return (
     <div className="space-y-8">
-      {/* Overdue */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle className="size-5 text-red-500" />
-          <h3 className="font-bold text-base">Geciken Ödevler</h3>
-          <span className="ml-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-            {mockOverdueHomework.length}
-          </span>
-        </div>
-        <div className="space-y-3">
+      <AlertBanner
+        tone="warning"
+        title={`${mockOverdueHomework.length} gecikmiş ödev`}
+        description="Bunları en kısa sürede tamamlamayı unutma."
+      />
+
+      <Section title="Geciken ödevler" variant="card">
+        <ul className="divide-y">
           {mockOverdueHomework.map((hw) => (
-            <div key={hw.id} className="bg-red-50 border border-red-200 rounded-2xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm mb-1">{hw.batchName}</div>
-                  <div className="flex items-center gap-2 text-xs text-red-600">
-                    <Clock className="size-3.5" />
-                    Son teslim: {hw.dueDate}
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-sm font-bold text-red-700">
-                    {hw.testsDone}/{hw.testsTotal}
-                  </div>
-                  <div className="text-xs text-red-500">test tamamlandı</div>
-                </div>
-              </div>
-              <div className="mt-3 h-1.5 rounded-full overflow-hidden bg-red-200">
-                <div
-                  className="h-full rounded-full bg-red-500"
-                  style={{ width: `${(hw.testsDone / hw.testsTotal) * 100}%` }}
-                />
-              </div>
-            </div>
+            <li key={hw.id}>
+              <HomeworkBatchRow
+                title={hw.batchName}
+                dueDate={hw.dueDate}
+                completed={hw.testsDone}
+                total={hw.testsTotal}
+                isOverdue
+              />
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
+      </Section>
 
-      {/* Upcoming */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="size-5" style={{ color: 'oklch(0.57 0.26 282)' }} />
-          <h3 className="font-bold text-base">Bu Hafta ve Yaklaşan</h3>
-        </div>
-        <div className="space-y-3">
-          {mockUpcomingHomework.map((hw) => {
-            const pct = Math.round((hw.testsDone / hw.testsTotal) * 100)
-            const done = hw.testsDone === hw.testsTotal
-            return (
-              <div
-                key={hw.id}
-                className={`bg-card border rounded-2xl p-4 ${done ? 'border-emerald-200 bg-emerald-50' : 'border-border'}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {done && <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />}
-                      <span className={`font-semibold text-sm ${done ? 'text-emerald-700' : ''}`}>
-                        {hw.batchName}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">Son teslim: {hw.dueDate}</div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className={`text-sm font-bold ${done ? 'text-emerald-700' : ''}`}>
-                      {hw.testsDone}/{hw.testsTotal}
-                    </div>
-                    <div className="text-xs text-muted-foreground">test</div>
-                  </div>
-                </div>
-                {!done && (
-                  <div className="mt-3 h-1.5 rounded-full overflow-hidden bg-muted">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${pct}%`,
-                        background:
-                          'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <Section title="Bu hafta ve yaklaşan" variant="card">
+        <ul className="divide-y">
+          {mockUpcomingHomework.map((hw) => (
+            <li key={hw.id}>
+              <HomeworkBatchRow
+                title={hw.batchName}
+                dueDate={hw.dueDate}
+                completed={hw.testsDone}
+                total={hw.testsTotal}
+                isOverdue={false}
+              />
+            </li>
+          ))}
+        </ul>
+      </Section>
 
-      {/* Book progress */}
-      <div>
-        <h3 className="font-bold text-base mb-4">Kitap İlerlemem</h3>
-        <div className="grid sm:grid-cols-3 gap-4">
+      <Section title="Kitap ilerlemem">
+        <div className="grid gap-4 sm:grid-cols-3">
           {mockBooks.map((b) => (
             <BookCard key={b.book.id} book={b.book} progress={b.progress} />
           ))}
         </div>
-      </div>
+      </Section>
     </div>
   )
 }

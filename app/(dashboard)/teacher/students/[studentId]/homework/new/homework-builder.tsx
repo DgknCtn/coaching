@@ -223,10 +223,10 @@ export function HomeworkBuilder({
                                     {test.title}
                                   </span>
                                   {isPendingTest && !isCompleted && (
-                                    <AlertTriangle className="size-3 text-yellow-500 shrink-0" aria-label="Zaten bekleyen ödevde var" />
+                                    <AlertTriangle className="size-3 text-warning shrink-0" aria-label="Zaten bekleyen ödevde var" />
                                   )}
                                   {isCompleted && (
-                                    <CheckCircle2 className="size-3 text-green-500 shrink-0" aria-label="Tamamlanmış" />
+                                    <CheckCircle2 className="size-3 text-success shrink-0" aria-label="Tamamlanmış" />
                                   )}
                                 </label>
                               )
@@ -250,7 +250,7 @@ export function HomeworkBuilder({
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium">{selectedTests.length} test seçildi</p>
               <Button size="xs" variant="outline" onClick={copyShareText}>
-                {copied ? <Check className="size-3 text-green-600" /> : <Copy className="size-3" />}
+                {copied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
                 {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
               </Button>
             </div>

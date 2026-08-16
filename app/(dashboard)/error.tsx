@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { reportError } from '@/lib/observability'
+import { Button } from '@/components/ui/button'
 
 export default function DashboardError({
   error,
@@ -17,22 +18,17 @@ export default function DashboardError({
   }, [error])
 
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-6 text-center">
-      <h2 className="text-lg font-bold tracking-tight">Bir şeyler ters gitti</h2>
-      <p className="text-muted-foreground text-sm max-w-sm">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
+      <h2 className="text-xl font-semibold tracking-tight">Bir şeyler ters gitti</h2>
+      <p className="max-w-sm text-sm text-muted-foreground">
         Bu sayfa yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.
       </p>
       {isDev && (
-        <pre className="max-w-lg overflow-auto rounded-lg bg-muted p-3 text-left text-xs text-muted-foreground">
+        <pre className="max-w-lg overflow-auto rounded-md bg-muted p-3 text-left text-xs text-muted-foreground">
           {error.message}
         </pre>
       )}
-      <button
-        onClick={reset}
-        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold shadow-sm"
-      >
-        Tekrar dene
-      </button>
+      <Button onClick={reset}>Tekrar dene</Button>
     </div>
   )
 }

@@ -1,4 +1,5 @@
-import { TeacherSidebar } from '@/components/teacher/teacher-sidebar'
+import { AppSidebar } from '@/components/shared/app-sidebar'
+import { teacherNav } from '@/components/nav-config'
 import { getTeacherContext } from '@/lib/workspace'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -6,12 +7,14 @@ export default async function TeacherLayout({ children }: { children: React.Reac
 
   return (
     <div className="flex min-h-screen">
-      <TeacherSidebar
-        workspaceName={workspace.name}
+      <AppSidebar
+        title={workspace.name}
+        roleLabel="Öğretmen"
         userName={profile.full_name}
-        activeTerm={activeTerm?.name}
+        items={teacherNav}
+        panel={activeTerm ? { label: 'Aktif dönem', items: [activeTerm.name] } : undefined}
       />
-      <main className="flex-1 overflow-auto md:pt-0 pt-14">
+      <main className="flex-1 overflow-auto pt-14 md:pt-0">
         {children}
       </main>
     </div>

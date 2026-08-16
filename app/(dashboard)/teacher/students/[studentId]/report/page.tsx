@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
-import { BookOpen, ClipboardList, CheckCircle2, AlertTriangle, TrendingUp } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Badge } from '@/components/ui/badge'
-import { StatCard } from '@/components/shared/stat-card'
+import { MetricRow } from '@/components/shared/metric-row'
+import { Section } from '@/components/shared/section'
+import { ProgressBar } from '@/components/shared/progress-bar'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { PrintButton } from './print-button'
@@ -78,54 +80,32 @@ export default async function StudentReportPage({
   })
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto print:p-0">
+    <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8 print:p-0">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
         title={`${student.full_name} — İlerleme Raporu`}
         subtitle={`Oluşturulma: ${generatedAt}`}
         badges={
           <>
-            {student.exam_type && <Badge variant="secondary" className="rounded-lg">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="outline" className="rounded-lg">{student.grade_level}</Badge>}
+            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
+            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
           </>
         }
         action={<PrintButton />}
       />
 
-      {/* Genel özet */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          icon={TrendingUp}
-          label="Genel İlerleme"
-          value={`${overallPct}%`}
-          colorScheme={overallPct >= 70 ? 'emerald' : overallPct >= 40 ? 'indigo' : 'red'}
-        />
-        <StatCard
-          icon={BookOpen}
-          label="Test (tamamlanan)"
-          value={completedTests}
-          subValue={`/${totalTests}`}
-          colorScheme="neutral"
-        />
-        <StatCard
-          icon={CheckCircle2}
-          label="Ödev Tamamlama"
-          value={`${hwRate}%`}
-          subValue={`${hwCompleted}/${hwTotal}`}
-          colorScheme={hwRate >= 70 ? 'emerald' : 'neutral'}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Geciken Test"
-          value={hwOverdue}
-          colorScheme={hwOverdue > 0 ? 'red' : 'neutral'}
-        />
-      </div>
+      <MetricRow
+        metrics={[
+          { label: 'Genel ilerleme', value: `${overallPct}%` },
+          { label: 'Tamamlanan test', value: completedTests, subValue: `/${totalTests}` },
+          { label: 'Ödev tamamlama', value: `${hwRate}%`, hint: `${hwCompleted}/${hwTotal}` },
+          { label: 'Geciken test', value: hwOverdue },
+        ]}
+      />
 
-      {/* Kitap bazlı ilerleme */}
-      <h2 className="font-bold text-sm text-foreground mb-4">Kitap Bazlı İlerleme</h2>
+      <Section title="Kitap bazlı ilerleme">
       {!books.length ? (
-        <div className="bg-card rounded-2xl border shadow-xs">
+        <div className="rounded-lg border bg-card">
           <EmptyState
             icon={BookOpen}
             title="Atanmış kitap yok"
@@ -139,43 +119,35 @@ export default async function StudentReportPage({
             return (
               <div
                 key={b.student_book_assignment_id}
-                className="bg-card rounded-2xl border px-5 py-4 shadow-xs print:shadow-none print:break-inside-avoid"
+                className="rounded-lg border bg-card p-4 print:break-inside-avoid"
               >
-                <div className="flex items-center justify-between gap-4 mb-2.5">
+                <div className="mb-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-bold truncate">{b.book_title}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="truncate text-sm font-medium">{b.book_title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {[b.subject, b.exam_type].filter(Boolean).join(' · ')}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-lg font-black">
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm tabular-nums">
                       {b.completed_tests}
-                      <span className="text-muted-foreground text-sm font-normal">/{b.total_tests}</span>
+                      <span className="text-muted-foreground">/{b.total_tests}</span>
                     </p>
-                    <p className="text-[11px] text-muted-foreground font-medium">test</p>
+                    <p className="mt-1 text-xs text-muted-foreground">test</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        background:
-                          pct >= 70
-                            ? 'oklch(0.50 0.18 155)'
-                            : 'linear-gradient(90deg, oklch(0.57 0.26 282), oklch(0.65 0.22 300))',
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-muted-foreground w-10 text-right">{pct}%</span>
+                  <ProgressBar value={pct} label={`${b.book_title} ilerlemesi`} className="flex-1" />
+                  <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+                    {pct}%
+                  </span>
                 </div>
               </div>
             )
           })}
         </div>
       )}
+      </Section>
     </div>
   )
 }
