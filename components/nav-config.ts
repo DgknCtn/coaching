@@ -7,6 +7,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+export type Role = 'teacher' | 'student' | 'parent'
+
 export interface NavItem {
   href: string
   label: string
@@ -28,3 +30,14 @@ export const studentNav: NavItem[] = [
 
 // Veli panelinde tek ekran var; gezinme listesi bilinçli olarak boş.
 export const parentNav: NavItem[] = []
+
+/**
+ * Rol -> nav eşlemesi. AppSidebar bunu KENDİSİ çözer; nav dizisi Server
+ * Component'ten prop olarak geçirilemez, çünkü `icon` bir bileşen
+ * fonksiyonudur ve fonksiyonlar RSC sınırından geçemez.
+ */
+export const navByRole: Record<Role, NavItem[]> = {
+  teacher: teacherNav,
+  student: studentNav,
+  parent: parentNav,
+}

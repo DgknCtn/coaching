@@ -6,7 +6,7 @@ import { GraduationCap, LogOut, Menu, X } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
-import type { NavItem } from '@/components/nav-config'
+import { navByRole, type NavItem, type Role } from '@/components/nav-config'
 
 interface Panel {
   label: string
@@ -16,15 +16,21 @@ interface Panel {
 interface AppSidebarProps {
   /** Sidebar başlığında görünen ad (workspace veya kullanıcı adı). */
   title: string
+  /**
+   * Nav listesi bu roldan türetilir. Dizinin kendisi prop olarak alınamaz:
+   * NavItem.icon bir bileşen fonksiyonu ve Server Component -> Client
+   * Component sınırından fonksiyon geçirilemez.
+   */
+  role: Role
   /** Rol etiketi — alt kullanıcı satırında gösterilir. */
   roleLabel: string
   userName: string
-  items: NavItem[]
   /** Nav altındaki bilgi kutusu (aktif dönem, takip edilen öğrenciler vb.). */
   panel?: Panel
 }
 
-export function AppSidebar({ title, roleLabel, userName, items, panel }: AppSidebarProps) {
+export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSidebarProps) {
+  const items = navByRole[role]
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
