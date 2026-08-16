@@ -110,9 +110,15 @@ $$;
 -- ------------------------------------------------------------
 -- Geriye dönük onarım: bu hata yüzünden bağlantısı oluşmamış,
 -- daveti kabul edilmiş velilerin kaydını tamamla.
+--
+-- DISTINCT şart: aynı veli/öğrenci çifti için birden fazla kabul
+-- edilmiş davet olabilir (davet tekrar gönderilmişse). Tekilleştirme
+-- olmadan tek INSERT aynı satırı iki kez güncellemeye çalışır ve
+-- "ON CONFLICT DO UPDATE command cannot affect row a second time"
+-- hatası verir.
 -- ------------------------------------------------------------
 INSERT INTO public.parent_student_links (workspace_id, parent_profile_id, student_id, status)
-SELECT i.workspace_id, i.accepted_by_profile_id, i.student_id, 'active'
+SELECT DISTINCT i.workspace_id, i.accepted_by_profile_id, i.student_id, 'active'
 FROM public.invitations i
 WHERE i.role = 'parent'
   AND i.status = 'accepted'
