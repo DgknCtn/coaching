@@ -38,7 +38,11 @@ export async function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/demo' ||
+    pathname === '/forgot-password' ||
     pathname === '/api/health' ||
+    // Supabase auth e-posta bağlantılarının döndüğü callback; oturumu burada
+    // kuruyoruz, dolayısıyla giriş kontrolünden muaf olmalı.
+    pathname.startsWith('/auth/') ||
     pathname.startsWith('/invite/')
 
   // Giriş yapmamış kullanıcı korumalı rotaya girmeye çalışıyor

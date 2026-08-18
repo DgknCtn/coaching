@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  passwordResetSchema,
+  bookUpdateSchema,
+  EXAM_TYPE_OPTIONS,
+  LESSON_TYPE_OPTIONS,
   studentSchema,
   termSchema,
   bookSchema,
@@ -124,4 +128,50 @@ describe('auth schemas', () => {
 describe('uuidSchema', () => {
   it('accepts a uuid', () => expect(uuidSchema.safeParse(UUID).success).toBe(true))
   it('rejects non-uuid', () => expect(uuidSchema.safeParse('nope').success).toBe(false))
+})
+
+describe('sınav türü daraltması', () => {
+  it('studentSchema yalnızca TYT/AYT kabul eder', () => {
+    const base = { fullName: 'Ali Veli' }
+    expect(studentSchema.safeParse({ ...base, examType: 'TYT' }).success).toBe(true)
+    expect(studentSchema.safeParse({ ...base, examType: 'AYT' }).success).toBe(true)
+    expect(studentSchema.safeParse({ ...base, examType: 'LGS' }).success).toBe(false)
+    expect(studentSchema.safeParse({ ...base, examType: 'Other' }).success).toBe(false)
+  })
+
+  it('bookUpdateSchema aynı listeyi kullanır', () => {
+    const base = { bookId: UUID, title: 'Kimya Soru Bankası', subject: 'Kimya' }
+    expect(bookUpdateSchema.safeParse({ ...base, examType: 'AYT' }).success).toBe(true)
+    expect(bookUpdateSchema.safeParse({ ...base, examType: 'KPSS' }).success).toBe(false)
+  })
+
+  it('seçenek listeleri şemayla aynı değerleri sunar', () => {
+    expect(EXAM_TYPE_OPTIONS.map((o) => o.value)).toEqual(['TYT', 'AYT'])
+    expect(LESSON_TYPE_OPTIONS.map((o) => o.value)).toEqual([
+      'yuz_yuze_ozel',
+      'online_birebir',
+      'online_grup',
+      'bireysel_kocluk',
+    ])
+    expect(LESSON_TYPE_OPTIONS.map((o) => o.label)).toEqual([
+      'Yüzyüze Özel Ders',
+      'Online Birebir',
+      'Online Grup',
+      'Bireysel Koçluk',
+    ])
+  })
+})
+
+describe('passwordResetSchema', () => {
+  it('eşleşen şifreleri kabul eder', () => {
+    expect(passwordResetSchema.safeParse({ password: '123456', passwordConfirm: '123456' }).success).toBe(true)
+  })
+  it('eşleşmeyen şifreleri reddeder', () => {
+    const result = passwordResetSchema.safeParse({ password: '123456', passwordConfirm: '654321' })
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error.issues[0].message).toBe('Şifreler eşleşmiyor.')
+  })
+  it('kısa şifreyi reddeder', () => {
+    expect(passwordResetSchema.safeParse({ password: '123', passwordConfirm: '123' }).success).toBe(false)
+  })
 })

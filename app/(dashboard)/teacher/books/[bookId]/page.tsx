@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, BookOpen, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Pencil, Users } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,14 @@ export default async function BookDetailPage({
           </div>
           <p className="text-sm text-muted-foreground">{book.subject}{book.publisher ? ` · ${book.publisher}` : ''}</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          render={<Link href={`/teacher/books/${bookId}/edit`} />}
+        >
+          <Pencil className="size-4" />
+          Düzenle
+        </Button>
       </div>
 
       {book.description && (

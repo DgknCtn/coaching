@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { EXAM_TYPE_OPTIONS, SUBJECTS } from '@/lib/validation'
 
 const sectionSchema = z.object({
   title: z.string().min(1, 'Bölüm adı gerekli'),
@@ -33,8 +34,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-const SUBJECTS = ['Matematik', 'Türkçe', 'Fizik', 'Kimya', 'Biyoloji', 'Geometri', 'Tarih', 'Coğrafya', 'Edebiyat', 'İngilizce', 'Diğer']
-const EXAM_TYPES = ['TYT', 'AYT', 'LGS', 'Other']
 
 interface Props {
   terms: { id: string; name: string }[]
@@ -109,7 +108,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
                 {...register('examType')}
               >
                 <option value="">Seçin</option>
-                {EXAM_TYPES.map(e => <option key={e} value={e}>{e}</option>)}
+                {EXAM_TYPE_OPTIONS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
               </NativeSelect>
             </div>
           </div>

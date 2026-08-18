@@ -4,8 +4,9 @@ import { useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, CheckCircle, Archive, Loader2 } from 'lucide-react'
-import { createTermAction, setTermActiveAction, archiveTermAction } from './actions'
+import { Plus, CheckCircle, Archive, Loader2, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
+import { createTermAction, updateTermAction, setTermActiveAction, archiveTermAction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,6 +44,7 @@ interface Term {
 
 export function TermsClient({ terms }: { terms: Term[] }) {
   const [showForm, setShowForm] = useState(terms.length === 0)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [actionId, setActionId] = useState<string | null>(null)
 
@@ -78,6 +80,14 @@ export function TermsClient({ terms }: { terms: Term[] }) {
     <div className="space-y-4">
       {terms.map(term => (
         <Card key={term.id}>
+          {editingId === term.id ? (
+            <CardContent className="py-4">
+              <TermEditForm
+                term={term}
+                onDone={() => setEditingId(null)}
+              />
+            </CardContent>
+          ) : (
           <CardContent className="flex items-center justify-between py-4">
             <div>
               <div className="flex items-center gap-2">
@@ -93,6 +103,14 @@ export function TermsClient({ terms }: { terms: Term[] }) {
               )}
             </div>
             <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditingId(term.id)}
+              >
+                <Pencil className="size-3" />
+                Düzenle
+              </Button>
               {term.status !== 'active' && term.status !== 'archived' && (
                 <Button
                   size="sm"
@@ -120,6 +138,7 @@ export function TermsClient({ terms }: { terms: Term[] }) {
               )}
             </div>
           </CardContent>
+          )}
         </Card>
       ))}
 
@@ -165,5 +184,63 @@ export function TermsClient({ terms }: { terms: Term[] }) {
         </Button>
       )}
     </div>
+  )
+}
+
+/**
+ * Dönem düzenleme: kart, kendi RHF instance'ıyla yerinde forma dönüşür.
+ * Durum (aktif/arşiv) burada değişmez — o iş kartın kendi butonlarında.
+ */
+function TermEditForm({ term, onDone }: { term: Term; onDone: () => void }) {
+  const [isPending, startTransition] = useTransition()
+
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: term.name,
+      startDate: term.start_date ?? '',
+      endDate: term.end_date ?? '',
+    },
+  })
+
+  const onSubmit = (data: FormData) => {
+    startTransition(async () => {
+      const result = await updateTermAction(term.id, data.name, data.startDate, data.endDate)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Dönem güncellendi.')
+      onDone()
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor={`name-${term.id}`}>Dönem Adı</Label>
+        <Input id={`name-${term.id}`} {...register('name')} aria-invalid={!!errors.name} />
+        {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor={`start-${term.id}`}>Başlangıç</Label>
+          <Input id={`start-${term.id}`} type="date" {...register('startDate')} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`end-${term.id}`}>Bitiş</Label>
+          <Input id={`end-${term.id}`} type="date" {...register('endDate')} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending && <Loader2 className="size-4 animate-spin" />}
+          Kaydet
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          İptal
+        </Button>
+      </div>
+    </form>
   )
 }

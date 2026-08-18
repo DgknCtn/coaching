@@ -26,6 +26,36 @@ export async function createTermAction(name: string, startDate?: string, endDate
   return { success: true }
 }
 
+export async function updateTermAction(
+  termId: string,
+  name: string,
+  startDate?: string,
+  endDate?: string
+) {
+  const parsed = termSchema.safeParse({ name, startDate, endDate })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  // Durum (draft/active/archived) bilinçli olarak dokunulmuyor; onu
+  // setTermActiveAction / archiveTermAction yönetiyor.
+  const { error } = await supabase
+    .from('academic_terms')
+    .update({
+      name: parsed.data.name,
+      start_date: parsed.data.startDate || null,
+      end_date: parsed.data.endDate || null,
+    })
+    .eq('id', termId)
+    .eq('workspace_id', workspaceId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/teacher/terms')
+  revalidatePath('/teacher')
+  return { success: true }
+}
+
 export async function setTermActiveAction(termId: string) {
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()

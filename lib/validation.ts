@@ -5,8 +5,34 @@ import { z } from 'zod'
 // bu şemalar sunucuda son savunma hattıdır (DB constraint'lerinden önce
 // anlamlı, Türkçe hata mesajları üretmek için).
 
-const EXAM_TYPES = ['TYT', 'AYT', 'LGS', 'KPSS', 'DGS', 'Other'] as const
+// Seçenek listelerinin TEK kaynağı. Daha önce her form kendi kopyasını
+// tutuyordu ve listeler birbirinden ayrışmıştı (öğrenci formunda 6, kitap
+// formunda 4 sınav türü vardı). Formlar artık buradan import ediyor.
+//
+// NOT: DB'deki CHECK kısıtı hâlâ TYT/AYT/LGS/KPSS/DGS/Other kabul ediyor
+// (001 ve 009). Daraltma bilinçli olarak yalnızca form katmanında: geçmişte
+// başka bir türle kaydedilmiş satırlar okunmaya devam etsin.
+export const EXAM_TYPES = ['TYT', 'AYT'] as const
 export const LESSON_TYPES = ['yuz_yuze_ozel', 'online_birebir', 'online_grup', 'bireysel_kocluk'] as const
+
+export const EXAM_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'TYT', label: 'TYT' },
+  { value: 'AYT', label: 'AYT' },
+]
+
+export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'yuz_yuze_ozel', label: 'Yüzyüze Özel Ders' },
+  { value: 'online_birebir', label: 'Online Birebir' },
+  { value: 'online_grup', label: 'Online Grup' },
+  { value: 'bireysel_kocluk', label: 'Bireysel Koçluk' },
+]
+
+export const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer'] as const
+
+export const SUBJECTS = [
+  'Matematik', 'Türkçe', 'Fizik', 'Kimya', 'Biyoloji',
+  'Geometri', 'Tarih', 'Coğrafya', 'Edebiyat', 'İngilizce', 'Diğer',
+] as const
 
 export const studentSchema = z.object({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
@@ -55,6 +81,41 @@ export const bookSchema = z.object({
   sections: z.array(sectionSchema).min(1, 'En az bir bölüm ekleyin.').max(100),
 })
 
+// Kitap düzenleme (018). Oluşturma şemasından farkı: bölüm listesi ve
+// takip türü yok — onlar ayrı RPC'lerle, tek tek yönetiliyor.
+export const bookUpdateSchema = z.object({
+  bookId: uuid,
+  title: z.string().trim().min(2, 'Kitap adı en az 2 karakter olmalı.').max(200),
+  subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
+  publisher: z.string().trim().max(120).optional().or(z.literal('')),
+  examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
+  description: z.string().trim().max(2000).optional().or(z.literal('')),
+})
+
+export const sectionTitleSchema = z.object({
+  sectionId: uuid,
+  title: z.string().trim().min(1, 'Bölüm adı boş olamaz.').max(200),
+})
+
+export const sectionTestCountSchema = z.object({
+  sectionId: uuid,
+  testCount: z
+    .number({ message: 'Test sayısı sayı olmalı.' })
+    .int('Test sayısı tam sayı olmalı.')
+    .min(1, 'Bölümde en az 1 test olmalı.')
+    .max(200, 'Test sayısı çok yüksek.'),
+})
+
+export const newSectionSchema = z.object({
+  bookId: uuid,
+  title: z.string().trim().min(1, 'Bölüm adı boş olamaz.').max(200),
+  testCount: z
+    .number({ message: 'Test sayısı sayı olmalı.' })
+    .int('Test sayısı tam sayı olmalı.')
+    .min(1, 'Bölümde en az 1 test olmalı.')
+    .max(200, 'Test sayısı çok yüksek.'),
+})
+
 export const assignBookSchema = z.object({
   studentId: uuid,
   bookId: uuid,
@@ -98,6 +159,22 @@ export const loginSchema = z.object({
   email: z.string().trim().email('Geçerli bir e-posta girin.'),
   password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
 })
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email('Geçerli bir e-posta girin.'),
+})
+
+// Yeni şifre belirleme. Kurallar loginSchema ile aynı; ek olarak iki alan
+// birbiriyle eşleşmeli.
+export const passwordResetSchema = z
+  .object({
+    password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+    passwordConfirm: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: 'Şifreler eşleşmiyor.',
+    path: ['passwordConfirm'],
+  })
 
 export const registerSchema = loginSchema.extend({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),

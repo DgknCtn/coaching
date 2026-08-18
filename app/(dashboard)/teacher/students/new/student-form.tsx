@@ -13,6 +13,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
+import { EXAM_TYPE_OPTIONS, GRADE_LEVELS, LESSON_TYPE_OPTIONS } from '@/lib/validation'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Ad en az 2 karakter'),
@@ -25,14 +26,6 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-const EXAM_TYPES = ['TYT', 'AYT', 'LGS', 'KPSS', 'DGS', 'Other']
-const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer']
-const LESSON_TYPES: { value: string; label: string }[] = [
-  { value: 'yuz_yuze_ozel', label: 'Yüz yüze özel ders' },
-  { value: 'online_birebir', label: 'Online birebir' },
-  { value: 'online_grup', label: 'Online grup' },
-  { value: 'bireysel_kocluk', label: 'Bireysel koçluk' },
-]
 
 interface Props {
   defaultValues?: Partial<FormData>
@@ -84,7 +77,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
                 {...register('examType')}
               >
                 <option value="">Seçin</option>
-                {EXAM_TYPES.map(e => <option key={e} value={e}>{e}</option>)}
+                {EXAM_TYPE_OPTIONS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
               </NativeSelect>
             </div>
             <div className="space-y-1.5">
@@ -106,7 +99,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
               {...register('lessonType')}
             >
               <option value="">Seçin</option>
-              {LESSON_TYPES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {LESSON_TYPE_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </NativeSelect>
           </div>
 
