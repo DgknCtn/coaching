@@ -18,7 +18,7 @@ type StudentRow = {
   exam_type: string | null
   current_week_assigned_tests: number | null
   current_week_completed_tests: number | null
-  current_week_pending_approval_tests: number | null
+  total_pending_approval_items: number | null
   total_overdue_items: number | null
   last_check_in_at: string | null
   pending_check_in_since: string | null
@@ -44,14 +44,14 @@ export default async function TeacherDashboard() {
     const score = (s: StudentRow) =>
       (s.is_check_in_overdue ? 1_000_000 : 0) +
       Number(s.total_overdue_items ?? 0) * 1_000 +
-      Number(s.current_week_pending_approval_tests ?? 0)
+      Number(s.total_pending_approval_items ?? 0)
     return score(b) - score(a)
   })
 
   const weekAssigned = rows.reduce((sum, s) => sum + Number(s.current_week_assigned_tests ?? 0), 0)
   const weekCompleted = rows.reduce((sum, s) => sum + Number(s.current_week_completed_tests ?? 0), 0)
   const totalPendingApproval = rows.reduce(
-    (sum, s) => sum + Number(s.current_week_pending_approval_tests ?? 0),
+    (sum, s) => sum + Number(s.total_pending_approval_items ?? 0),
     0
   )
   const totalOverdue = rows.reduce((sum, s) => sum + Number(s.total_overdue_items ?? 0), 0)
@@ -90,9 +90,9 @@ export default async function TeacherDashboard() {
       align: 'center',
       hideBelow: 'sm',
       render: (s) =>
-        Number(s.current_week_pending_approval_tests) > 0 ? (
+        Number(s.total_pending_approval_items) > 0 ? (
           <span className="tabular-nums font-medium">
-            {s.current_week_pending_approval_tests}
+            {s.total_pending_approval_items}
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -131,7 +131,7 @@ export default async function TeacherDashboard() {
       render: (s) => {
         const attention = describeStudentAttention({
           pending_check_in_since: s.pending_check_in_since,
-          pending_approval: s.current_week_pending_approval_tests,
+          pending_approval: s.total_pending_approval_items,
           overdue: s.total_overdue_items,
         })
         return (
