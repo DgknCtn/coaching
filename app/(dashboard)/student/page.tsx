@@ -1,5 +1,6 @@
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
+import { CheckInCard } from './check-in-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { AlertBanner } from '@/components/shared/alert-banner'
@@ -26,6 +27,18 @@ export default async function StudentPage() {
     .eq('status', 'active')
     .order('due_date', { ascending: true })
 
+  // Açık durum bildirimi (varsa) — süresi gelen tek kayıt.
+  await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
+  const { data: openCheckIn } = await supabase
+    .from('student_check_ins')
+    .select('id, due_at')
+    .eq('student_id', student.id)
+    .eq('status', 'pending')
+    .lte('due_at', new Date().toISOString())
+    .order('due_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
   const { data: bookProgress } = await supabase
     .from('student_book_progress_view')
     .select('*')
@@ -49,6 +62,8 @@ export default async function StudentPage() {
             : `${upcoming.length} yaklaşan ödev`
         }
       />
+
+      {openCheckIn && <CheckInCard checkInId={openCheckIn.id} />}
 
       {overdue.length > 0 && (
         <>

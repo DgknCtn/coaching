@@ -76,6 +76,24 @@ export const homeworkBatchSchema = z.object({
   items: z.array(homeworkItemSchema).min(1, 'En az bir test seçin.').max(500),
 })
 
+export const CHECK_IN_MOODS = ['iyi', 'idare_eder', 'zorlaniyorum'] as const
+
+export const checkInSchema = z.object({
+  checkInId: uuid,
+  mood: z.enum(CHECK_IN_MOODS, { message: 'Geçersiz durum seçimi.' }),
+  message: z.string().trim().max(500, 'Mesaj en fazla 500 karakter olabilir.').optional().or(z.literal('')),
+})
+
+export const checkInScheduleSchema = z.object({
+  studentId: uuid,
+  intervalDays: z
+    .number({ message: 'Periyot sayı olmalı.' })
+    .int('Periyot tam sayı olmalı.')
+    .min(1, 'Periyot en az 1 gün olmalı.')
+    .max(30, 'Periyot en fazla 30 gün olabilir.'),
+  isActive: z.boolean(),
+})
+
 export const loginSchema = z.object({
   email: z.string().trim().email('Geçerli bir e-posta girin.'),
   password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),

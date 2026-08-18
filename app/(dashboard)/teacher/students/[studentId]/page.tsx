@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
+import { CheckInScheduleForm } from './check-in-panel'
+import { formatRelativeTime, moodLabel } from '@/lib/student-attention'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
@@ -39,6 +41,19 @@ export default async function StudentDetailPage({
     .select('*')
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
+
+  const { data: checkInSchedule } = await supabase
+    .from('student_check_in_schedules')
+    .select('interval_days, is_active')
+    .eq('student_id', studentId)
+    .maybeSingle()
+
+  const { data: checkIns } = await supabase
+    .from('student_check_ins')
+    .select('id, due_at, submitted_at, status, mood, message')
+    .eq('student_id', studentId)
+    .order('due_at', { ascending: false })
+    .limit(10)
 
   const { data: homeworkBatches } = await supabase
     .from('homework_batches')
@@ -154,6 +169,9 @@ export default async function StudentDetailPage({
           </TabsTrigger>
           <TabsTrigger value="homework">
             <ClipboardList /> Ödevler
+          </TabsTrigger>
+          <TabsTrigger value="checkin">
+            <MessageSquareDashed /> Durum
           </TabsTrigger>
           <TabsTrigger value="parents">
             <Users /> Veliler
@@ -275,6 +293,49 @@ export default async function StudentDetailPage({
               )}
             </Section>
           </div>
+        </TabsContent>
+
+        <TabsContent value="checkin">
+          <Section
+            title="Durum bildirimi"
+            description="Öğrencinin planlı bildirimleri ve son temas geçmişi."
+          >
+            <div className="space-y-4">
+              <CheckInScheduleForm
+                studentId={studentId}
+                intervalDays={checkInSchedule?.interval_days ?? 3}
+                isActive={checkInSchedule?.is_active ?? false}
+              />
+
+              {(checkIns?.length ?? 0) > 0 ? (
+                <div className="divide-y rounded-lg border bg-card">
+                  {checkIns!.map((c) => (
+                    <div key={c.id} className="flex items-start justify-between gap-4 p-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {c.status === 'submitted' ? moodLabel(c.mood) : 'Cevap bekleniyor'}
+                        </p>
+                        {c.message && (
+                          <p className="mt-1 text-sm text-muted-foreground">{c.message}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {c.status === 'submitted'
+                          ? formatRelativeTime(c.submitted_at)
+                          : `Beklenen: ${new Date(c.due_at).toLocaleDateString('tr-TR')}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={MessageSquareDashed}
+                  title="Henüz durum bildirimi yok"
+                  description="Bir periyot belirlediğinde ilk bildirim otomatik planlanır."
+                />
+              )}
+            </div>
+          </Section>
         </TabsContent>
 
         <TabsContent value="parents">

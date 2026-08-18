@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { type LucideIcon } from 'lucide-react'
 import {
   Table,
@@ -24,6 +25,14 @@ interface DataTableProps<T> {
   columns: Column<T>[]
   rows: T[]
   rowKey: (row: T) => string
+  /**
+   * Verilirse satırın tamamı tıklanabilir olur. Satıra `relative` verilip
+   * ilk hücreye `absolute inset-0` bir Link serilir; `<tr>` içine `<a>`
+   * koymak geçersiz HTML olacağı için sarmalama yerine bu desen kullanılır.
+   * Erişilebilirlik için Link'e satırı tanımlayan bir etiket gerekir.
+   */
+  rowHref?: (row: T) => string
+  rowLabel?: (row: T) => string
   empty?: {
     icon: LucideIcon
     title: string
@@ -49,6 +58,8 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
+  rowHref,
+  rowLabel,
   empty,
   className,
 }: DataTableProps<T>) {
@@ -82,22 +93,35 @@ export function DataTable<T>({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((row) => (
-          <TableRow key={rowKey(row)} className="group/row">
-            {columns.map((c) => (
-              <TableCell
-                key={c.key}
-                className={cn(
-                  alignClass[c.align ?? 'left'],
-                  c.hideBelow && hideClass[c.hideBelow],
-                  c.className
-                )}
-              >
-                {c.render(row)}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
+        {rows.map((row) => {
+          const href = rowHref?.(row)
+          return (
+            <TableRow
+              key={rowKey(row)}
+              className={cn('group/row', href && 'relative cursor-pointer')}
+            >
+              {columns.map((c, i) => (
+                <TableCell
+                  key={c.key}
+                  className={cn(
+                    alignClass[c.align ?? 'left'],
+                    c.hideBelow && hideClass[c.hideBelow],
+                    c.className
+                  )}
+                >
+                  {href && i === 0 && (
+                    <Link
+                      href={href}
+                      aria-label={rowLabel?.(row)}
+                      className="absolute inset-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    />
+                  )}
+                  {c.render(row)}
+                </TableCell>
+              ))}
+            </TableRow>
+          )
+        })}
       </TableBody>
     </Table>
   )

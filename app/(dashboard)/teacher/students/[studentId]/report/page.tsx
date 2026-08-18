@@ -99,7 +99,7 @@ export default async function StudentReportPage({
           { label: 'Genel ilerleme', value: `${overallPct}%` },
           { label: 'Tamamlanan test', value: completedTests, subValue: `/${totalTests}` },
           { label: 'Ödev tamamlama', value: `${hwRate}%`, hint: `${hwCompleted}/${hwTotal}` },
-          { label: 'Geciken test', value: hwOverdue },
+          { label: 'Geciken çalışma', value: hwOverdue },
         ]}
       />
 
