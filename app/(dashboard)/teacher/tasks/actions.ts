@@ -48,3 +48,30 @@ export async function rejectFromTasksAction(homeworkItemId: string, note?: strin
   revalidatePath('/teacher')
   return { success: true }
 }
+
+// Toplu onay (R3 v2 §E): 100 test için 100 ayrı onay tıklaması beklenemez.
+// Alttaki homework_items ve test_completions kayıtları tek tek korunur.
+export async function approveHomeworkBatchAction(homeworkBatchId: string, bookId?: string) {
+  const parsedBatch = uuidSchema.safeParse(homeworkBatchId)
+  if (!parsedBatch.success) return { error: firstIssue(parsedBatch.error) }
+
+  let parsedBookId: string | null = null
+  if (bookId) {
+    const parsedBook = uuidSchema.safeParse(bookId)
+    if (!parsedBook.success) return { error: firstIssue(parsedBook.error) }
+    parsedBookId = parsedBook.data
+  }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('approve_homework_items_bulk', {
+    p_homework_batch_id: parsedBatch.data,
+    p_book_id: parsedBookId,
+  })
+
+  if (error) return { error: error.message }
+  revalidatePath('/teacher/tasks')
+  revalidatePath('/teacher')
+  return { success: true }
+}

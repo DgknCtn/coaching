@@ -71,11 +71,11 @@ export default async function StudentDetailPage({
   const { data: pendingApprovalItems } = await supabase
     .from('homework_items')
     .select(`
-      id,
+      id, book_id, homework_batch_id,
       books(title),
       book_sections(title),
       book_tests(title),
-      homework_batches!inner(student_id, workspace_id)
+      homework_batches!inner(student_id, workspace_id, title, due_date)
     `)
     .eq('status', 'pending_approval')
     .eq('homework_batches.student_id', studentId)
@@ -265,6 +265,8 @@ export default async function StudentDetailPage({
               studentId={studentId}
               items={(pendingApprovalItems ?? []).map((item) => ({
                 id: item.id,
+                book_id: item.book_id ?? null,
+                homework_batch_id: item.homework_batch_id,
                 books: item.books as unknown as { title: string } | null,
                 book_sections: item.book_sections as unknown as { title: string } | null,
                 book_tests: item.book_tests as unknown as { title: string } | null,

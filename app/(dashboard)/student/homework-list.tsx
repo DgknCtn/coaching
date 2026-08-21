@@ -1,8 +1,12 @@
 'use client'
 
-import { useTransition } from 'react'
-import { CheckCircle2, RotateCcw, Loader2, Undo2 } from 'lucide-react'
-import { submitHomeworkItemAction, revertCompletedAction } from './actions'
+import { useState, useTransition } from 'react'
+import { CheckCircle2, RotateCcw, Loader2, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  submitHomeworkItemAction,
+  revertCompletedAction,
+  submitHomeworkBatchAction,
+} from './actions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -20,6 +24,7 @@ interface HomeworkItem {
   teacher_note: string | null
   rejected_at: string | null
   submitted_at: string | null
+  book_id: string | null
   books: { title: string; subject: string } | null
   book_sections: { title: string } | null
   book_tests: { title: string } | null
@@ -46,51 +51,161 @@ function stateOf(item: HomeworkItem, dueDate: string): HomeworkTestState {
 export function HomeworkList({ batches }: { batches: HomeworkBatch[] }) {
   return (
     <div className="space-y-3">
-      {batches.map(batch => {
-        const items = (batch.homework_items ?? []).filter(i => i.status !== 'cancelled')
-        const states = items.map(i => stateOf(i, batch.due_date))
+      {batches.map(batch => (
+        <BatchCard key={batch.id} batch={batch} />
+      ))}
+    </div>
+  )
+}
 
-        // Grup rozeti tek aktif durumdan türetilir. Öğrenci gecikmiş bir
-        // çalışmayı onaya gönderdiğinde grup artık "Süresi Geçen" değil
-        // "Onay Bekliyor" gösterir (R2 Ek Revizyon §2).
-        const batchState: HomeworkTestState | null = states.includes('overdue')
-          ? 'overdue'
-          : states.includes('returned')
-            ? 'returned'
-            : states.includes('pending_approval')
-              ? 'pending_approval'
-              : null
+function BatchCard({ batch }: { batch: HomeworkBatch }) {
+  const [isPending, startTransition] = useTransition()
+  const items = (batch.homework_items ?? []).filter(i => i.status !== 'cancelled')
+  const states = items.map(i => stateOf(i, batch.due_date))
 
-        return (
-          <div key={batch.id} className="overflow-hidden rounded-lg border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium">
-                  {batch.title ??
-                    new Date(batch.due_date).toLocaleDateString('tr-TR', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                    })}
-                </span>
-                {batchState && (
-                  <Badge variant={TEST_STATE_VARIANT[batchState]}>
-                    {testStateLabel(batchState, 'student')}
-                  </Badge>
-                )}
-              </div>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
-              </span>
-            </div>
-            <div className="divide-y">
-              {items.map(item => (
-                <HomeworkItemRow key={item.id} item={item} dueDate={batch.due_date} />
-              ))}
-            </div>
-          </div>
-        )
-      })}
+  // Grup rozeti tek aktif durumdan türetilir. Öğrenci gecikmiş bir çalışmayı
+  // onaya gönderdiğinde grup artık "Süresi Geçen" değil "Onay Bekliyor"
+  // gösterir (R2 Ek Revizyon §2).
+  const batchState: HomeworkTestState | null = states.includes('overdue')
+    ? 'overdue'
+    : states.includes('returned')
+      ? 'returned'
+      : states.includes('pending_approval')
+        ? 'pending_approval'
+        : null
+
+  const pendingCount = items.filter(i => i.status === 'pending').length
+
+  // Kitap grupları: 100 testlik haftada öğrenci grup bazında gönderir,
+  // gerekirse grubu açıp tek tek düzeltir (R3 v2 §3).
+  const bookGroups = new Map<
+    string,
+    { bookId: string | null; title: string; items: HomeworkItem[] }
+  >()
+  for (const item of items) {
+    const key = item.book_id ?? item.books?.title ?? '—'
+    const group = bookGroups.get(key) ?? {
+      bookId: item.book_id,
+      title: item.books?.title ?? 'Kitap',
+      items: [],
+    }
+    group.items.push(item)
+    bookGroups.set(key, group)
+  }
+  const groups = [...bookGroups.values()]
+
+  function submitAll(bookId?: string) {
+    startTransition(async () => {
+      await submitHomeworkBatchAction(batch.id, bookId)
+    })
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-medium">
+            {batch.title ??
+              new Date(batch.due_date).toLocaleDateString('tr-TR', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
+          </span>
+          {batchState && (
+            <Badge variant={TEST_STATE_VARIANT[batchState]}>
+              {testStateLabel(batchState, 'student')}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
+          </span>
+          {pendingCount > 1 && (
+            <Button size="xs" disabled={isPending} onClick={() => submitAll()}>
+              {isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+              Tümünü gönder ({pendingCount})
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="divide-y">
+        {groups.map(group => (
+          <BookGroup
+            key={group.bookId ?? group.title}
+            group={group}
+            dueDate={batch.due_date}
+            multipleBooks={groups.length > 1}
+            onSubmitGroup={() => submitAll(group.bookId ?? undefined)}
+            groupPending={isPending}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BookGroup({
+  group,
+  dueDate,
+  multipleBooks,
+  onSubmitGroup,
+  groupPending,
+}: {
+  group: { bookId: string | null; title: string; items: HomeworkItem[] }
+  dueDate: string
+  multipleBooks: boolean
+  onSubmitGroup: () => void
+  groupPending: boolean
+}) {
+  // Tek kitaplı ödevde ekstra bir katman göstermenin anlamı yok.
+  const [expanded, setExpanded] = useState(!multipleBooks)
+  const pendingCount = group.items.filter(i => i.status === 'pending').length
+
+  if (!multipleBooks) {
+    return (
+      <div className="divide-y">
+        {group.items.map(item => (
+          <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 bg-muted/30 px-4 py-2">
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {expanded ? (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate text-xs font-medium">{group.title}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {group.items.length} test
+          </span>
+        </button>
+        {pendingCount > 0 && (
+          <Button size="xs" variant="outline" disabled={groupPending} onClick={onSubmitGroup}>
+            {groupPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+            Tümünü gönder
+          </Button>
+        )}
+      </div>
+      {expanded && (
+        <div className="divide-y">
+          {group.items.map(item => (
+            <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

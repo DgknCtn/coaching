@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { ApprovalActions } from './approval-actions'
+import { BulkApprovalBar, type ApprovalGroup } from './bulk-approval-bar'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -29,6 +30,8 @@ function one<T>(value: Nested<T>): T | null {
 type ItemRow = {
   id: string
   submitted_at: string | null
+  homework_batch_id: string
+  book_id: string | null
   homework_batches: Nested<{
     due_date: string
     student_id: string
@@ -47,7 +50,7 @@ type CheckInRow = {
 }
 
 const ITEM_SELECT = `
-  id, submitted_at,
+  id, submitted_at, homework_batch_id, book_id,
   homework_batches!inner(due_date, student_id, status, students(full_name)),
   books(title),
   book_sections(title),
@@ -108,6 +111,30 @@ export default async function TeacherTasksPage({
     checkInRows = ((data ?? []) as CheckInRow[]).sort((a, b) =>
       (a.pending_check_in_since ?? '').localeCompare(b.pending_check_in_since ?? '')
     )
+  }
+
+  // Onay kuyruğunu öğrenci + ödev + kitap bazında grupla; birden fazla test
+  // içeren gruplar toplu onaylanabilir hale gelsin (R3 v2 §E).
+  const approvalGroups: ApprovalGroup[] = []
+  if (filter === 'approval') {
+    const map = new Map<string, ApprovalGroup>()
+    for (const row of itemRows) {
+      const key = `${row.homework_batch_id}:${row.book_id ?? '-'}`
+      const existing = map.get(key)
+      if (existing) {
+        existing.count++
+        continue
+      }
+      map.set(key, {
+        key,
+        batchId: row.homework_batch_id,
+        bookId: row.book_id,
+        studentName: one(one(row.homework_batches)?.students)?.full_name ?? '—',
+        bookTitle: one(row.books)?.title ?? 'Kitap',
+        count: 1,
+      })
+    }
+    approvalGroups.push(...map.values())
   }
 
   const studentColumn: Column<ItemRow> = {
@@ -258,7 +285,9 @@ export default async function TeacherTasksPage({
             }}
           />
         ) : filter === 'approval' ? (
-          <DataTable
+          <div className="space-y-3">
+            <BulkApprovalBar groups={approvalGroups} />
+            <DataTable
             columns={approvalColumns}
             rows={itemRows}
             rowKey={(r) => r.id}
@@ -267,7 +296,8 @@ export default async function TeacherTasksPage({
               title: 'Onay kuyruğu boş',
               description: 'Öğretmen onayı bekleyen çalışma yok.',
             }}
-          />
+            />
+          </div>
         ) : (
           <DataTable
             columns={overdueColumns}
