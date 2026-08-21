@@ -14,6 +14,7 @@ import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricRow } from '@/components/shared/metric-row'
+import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
@@ -106,6 +107,25 @@ export default async function StudentDetailPage({
     .eq('workspace_id', workspaceId)
     .maybeSingle()
 
+  // "Onay Bekleyen" ve "Süresi Geçen" hafta penceresinden BAĞIMSIZ sayılır.
+  // weeklySummary yalnız bu haftaya düşen batch'leri görür; oysa yukarıdaki
+  // pendingApprovalItems listesi (ve /teacher/tasks) tüm haftaları kapsıyor.
+  // 017 bu düzeltmeyi dashboard'a uygulamıştı, bu sayfa atlanmıştı — sayaç
+  // "2" derken altındaki liste 5 satır gösterebiliyordu.
+  const { data: pendingApprovalSummary } = await supabase
+    .from('student_pending_approval_view')
+    .select('pending_approval_items')
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  const { data: overdueSummary } = await supabase
+    .from('student_overdue_homework_view')
+    .select('overdue_items')
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
   const hasAccount = !!student.profile_id
 
   return (
@@ -154,11 +174,18 @@ export default async function StudentDetailPage({
         <MetricRow
           className="md:grid-cols-5"
           metrics={[
-            { label: 'Verilen', value: weeklySummary.assigned_tests ?? 0 },
-            { label: 'Tamamlanan', value: weeklySummary.completed_tests ?? 0 },
-            { label: 'Bekleyen', value: weeklySummary.pending_tests ?? 0 },
-            { label: 'Onay bekliyor', value: weeklySummary.pending_approval_tests ?? 0 },
-            { label: 'Geciken', value: weeklySummary.overdue_tests ?? 0 },
+            { label: COUNTER_LABEL.assigned, value: weeklySummary.assigned_tests ?? 0 },
+            { label: COUNTER_LABEL.completed, value: weeklySummary.completed_tests ?? 0 },
+            { label: COUNTER_LABEL.pending, value: weeklySummary.pending_tests ?? 0 },
+            {
+              label: COUNTER_LABEL.pendingApproval,
+              value: pendingApprovalSummary?.pending_approval_items ?? 0,
+            },
+            {
+              label: COUNTER_LABEL.overdue,
+              value: overdueSummary?.overdue_items ?? 0,
+              hint: OVERDUE_HINT,
+            },
           ]}
         />
       )}

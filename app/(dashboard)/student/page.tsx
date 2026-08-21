@@ -16,7 +16,7 @@ export default async function StudentPage() {
     .select(`
       id, title, due_date, status,
       homework_items(
-        id, status, completed_at,
+        id, status, completed_at, teacher_note, rejected_at, submitted_at,
         books(title, subject),
         book_sections(title),
         book_tests(title)

@@ -5,6 +5,7 @@ import { describeStudentAttention, formatRelativeTime } from '@/lib/student-atte
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricRow } from '@/components/shared/metric-row'
+import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { AlertBanner } from '@/components/shared/alert-banner'
@@ -86,7 +87,7 @@ export default async function TeacherDashboard() {
     },
     {
       key: 'approval',
-      header: 'Onay bekleyen',
+      header: COUNTER_LABEL.pendingApproval,
       align: 'center',
       hideBelow: 'sm',
       render: (s) =>
@@ -100,7 +101,7 @@ export default async function TeacherDashboard() {
     },
     {
       key: 'overdue',
-      header: 'Geciken',
+      header: COUNTER_LABEL.overdue,
       align: 'center',
       render: (s) =>
         Number(s.total_overdue_items) > 0 ? (
@@ -179,13 +180,14 @@ export default async function TeacherDashboard() {
       <MetricRow
         metrics={[
           {
-            label: 'Onay bekleyen',
+            label: COUNTER_LABEL.pendingApproval,
             value: totalPendingApproval,
             href: '/teacher/tasks?filter=approval',
           },
           {
-            label: 'Geciken çalışma',
+            label: COUNTER_LABEL.overdue,
             value: totalOverdue,
+            hint: OVERDUE_HINT,
             href: '/teacher/tasks?filter=overdue',
           },
           {

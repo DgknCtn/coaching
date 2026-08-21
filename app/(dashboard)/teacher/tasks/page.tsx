@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CheckCircle2, Clock, MessageSquareDashed } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { formatRelativeTime } from '@/lib/student-attention'
+import { COUNTER_LABEL } from '@/lib/homework-status'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
@@ -14,8 +15,8 @@ const FILTERS = ['approval', 'overdue', 'checkin'] as const
 type Filter = (typeof FILTERS)[number]
 
 const TABS: { key: Filter; label: string }[] = [
-  { key: 'approval', label: 'Onay bekleyen' },
-  { key: 'overdue', label: 'Geciken çalışma' },
+  { key: 'approval', label: COUNTER_LABEL.pendingApproval },
+  { key: 'overdue', label: COUNTER_LABEL.overdue },
   { key: 'checkin', label: 'Durum bildirimi bekleyen' },
 ]
 

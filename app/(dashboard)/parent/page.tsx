@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { MetricRow } from '@/components/shared/metric-row'
+import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
@@ -110,11 +111,20 @@ export default async function ParentPage() {
             {weekly && (
               <Section title="Bu hafta">
                 <MetricRow
+                  className="md:grid-cols-5"
                   metrics={[
-                    { label: 'Verilen', value: weekly.assigned_tests ?? 0 },
-                    { label: 'Tamamlanan', value: weekly.completed_tests ?? 0 },
-                    { label: 'Bekleyen', value: weekly.pending_tests ?? 0 },
-                    { label: 'Geciken', value: weekly.overdue_tests ?? 0 },
+                    { label: COUNTER_LABEL.assigned, value: weekly.assigned_tests ?? 0 },
+                    { label: COUNTER_LABEL.completed, value: weekly.completed_tests ?? 0 },
+                    { label: COUNTER_LABEL.pending, value: weekly.pending_tests ?? 0 },
+                    {
+                      label: COUNTER_LABEL.pendingApproval,
+                      value: weekly.pending_approval_tests ?? 0,
+                    },
+                    {
+                      label: COUNTER_LABEL.overdue,
+                      value: weekly.overdue_tests ?? 0,
+                      hint: OVERDUE_HINT,
+                    },
                   ]}
                 />
               </Section>
