@@ -1,0 +1,68 @@
+'use server'
+
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
+import { getTeacherContext } from '@/lib/workspace'
+import { uuidSchema, firstIssue } from '@/lib/validation'
+
+// Haftalık plan taslağı: seçimler sayfa yenilemede kaybolmasın diye
+// Supabase'de tutulur (019_weekly_plan_drafts). Taslak yayınlanmış ödev
+// DEĞİLDİR — ilerlemeye sayılmaz, öğrenciye görünmez.
+
+const draftSchema = z.object({
+  workspaceId: uuidSchema,
+  studentId: uuidSchema,
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+  title: z.string().trim().max(200).optional().or(z.literal('')),
+  items: z
+    .array(
+      z.object({
+        student_book_assignment_id: uuidSchema,
+        book_test_id: uuidSchema,
+      })
+    )
+    .max(1000),
+})
+
+export async function saveWeeklyPlanDraftAction(
+  workspaceId: string,
+  studentId: string,
+  dueDate: string | undefined,
+  title: string | undefined,
+  items: { student_book_assignment_id: string; book_test_id: string }[]
+) {
+  const parsed = draftSchema.safeParse({ workspaceId, studentId, dueDate, title, items })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('upsert_weekly_plan_draft', {
+    p_workspace_id: parsed.data.workspaceId,
+    p_student_id: parsed.data.studentId,
+    p_due_date: parsed.data.dueDate || null,
+    p_title: parsed.data.title || null,
+    p_items: parsed.data.items,
+  })
+
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function clearWeeklyPlanDraftAction(workspaceId: string, studentId: string) {
+  const parsedWorkspace = uuidSchema.safeParse(workspaceId)
+  const parsedStudent = uuidSchema.safeParse(studentId)
+  if (!parsedWorkspace.success) return { error: firstIssue(parsedWorkspace.error) }
+  if (!parsedStudent.success) return { error: firstIssue(parsedStudent.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('clear_weekly_plan_draft', {
+    p_workspace_id: parsedWorkspace.data,
+    p_student_id: parsedStudent.data,
+  })
+
+  if (error) return { error: error.message }
+  return { success: true }
+}

@@ -1,44 +1,24 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Loader2, Copy, Check } from 'lucide-react'
+import { Loader2, Copy, Check, Trash2 } from 'lucide-react'
 import { createHomeworkBatchAction } from './actions'
+import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
+import { BookMapGrid, BookMapLegend } from './book-map-grid'
+import type { BookMapBook } from '@/lib/book-map'
+import { isSelectableState } from '@/lib/book-map'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-
-interface BookTest {
-  id: string
-  title: string
-  order_index: number
-  status: string
-}
-interface BookSection {
-  id: string
-  title: string
-  order_index: number
-  book_tests: BookTest[]
-}
-interface Book {
-  id: string
-  title: string
-  subject: string
-  exam_type: string | null
-  book_sections: BookSection[]
-}
-interface Assignment {
-  id: string
-  book_id: string
-  books: Book
-}
+import { cn } from '@/lib/utils'
 
 interface SelectedTest {
   student_book_assignment_id: string
   book_test_id: string
+  bookId: string
   bookTitle: string
   sectionTitle: string
   testTitle: string
@@ -49,9 +29,11 @@ interface Props {
   termId: string
   workspaceId: string
   studentName: string
-  assignments: Assignment[]
-  pendingTestIds: string[]
-  completedTestIds: string[]
+  books: BookMapBook[]
+  /** 019 taslağından hidrate edilen seçimler (sayfa yenilemede korunur). */
+  initialSelectedTestIds: string[]
+  initialDueDate: string
+  initialTitle: string
 }
 
 export function HomeworkBuilder({
@@ -59,51 +41,125 @@ export function HomeworkBuilder({
   termId,
   workspaceId,
   studentName,
-  assignments,
-  pendingTestIds,
-  completedTestIds,
+  books,
+  initialSelectedTestIds,
+  initialDueDate,
+  initialTitle,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [selectedTests, setSelectedTests] = useState<SelectedTest[]>([])
-  const [dueDate, setDueDate] = useState('')
-  const [title, setTitle] = useState('')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const [activeBookId, setActiveBookId] = useState(books[0]?.bookId ?? '')
+  const [dueDate, setDueDate] = useState(initialDueDate)
+  const [title, setTitle] = useState(initialTitle)
   const [serverError, setServerError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const pendingSet = new Set(pendingTestIds)
-  const completedSet = new Set(completedTestIds)
-  const selectedSet = new Set(selectedTests.map(t => t.book_test_id))
+  // Seçimler kitap bileşeninin İÇİNDE değil, bu üst katmanda tutulur —
+  // eğitmen kitaplar arasında dolaşırken seçim kaybolmaz (R3 v2 §B).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(initialSelectedTestIds)
+  )
 
-  function toggleSection(sectionId: string) {
-    setExpandedSections(prev => {
+  // Test id → kitap/bölüm bağlamı. Sepet ve "metni kopyala" bunu kullanır.
+  const testIndex = useMemo(() => {
+    const index = new Map<string, SelectedTest>()
+    for (const book of books) {
+      for (const section of book.sections) {
+        for (const test of section.tests) {
+          index.set(test.id, {
+            student_book_assignment_id: book.assignmentId,
+            book_test_id: test.id,
+            bookId: book.bookId,
+            bookTitle: book.title,
+            sectionTitle: section.title,
+            testTitle: test.title,
+          })
+        }
+      }
+    }
+    return index
+  }, [books])
+
+  const selectedTests = useMemo(
+    () =>
+      [...selectedIds]
+        .map(id => testIndex.get(id))
+        .filter((t): t is SelectedTest => Boolean(t)),
+    [selectedIds, testIndex]
+  )
+
+  // Kitap başlığı altında gruplanmış sepet ("Bu Haftanın Planı").
+  const groupedSelection = useMemo(() => {
+    const groups = new Map<string, SelectedTest[]>()
+    for (const t of selectedTests) {
+      const list = groups.get(t.bookTitle) ?? []
+      list.push(t)
+      groups.set(t.bookTitle, list)
+    }
+    return [...groups.entries()]
+  }, [selectedTests])
+
+  // Taslağı debounce'lu kaydet. upsert_weekly_plan_draft idempotent olduğu
+  // için aynı payload'ın iki kez gitmesi zararsızdır.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    const handle = setTimeout(() => {
+      void saveWeeklyPlanDraftAction(
+        workspaceId,
+        studentId,
+        dueDate || undefined,
+        title || undefined,
+        selectedTests.map(t => ({
+          student_book_assignment_id: t.student_book_assignment_id,
+          book_test_id: t.book_test_id,
+        }))
+      )
+    }, 500)
+    return () => clearTimeout(handle)
+  }, [selectedTests, dueDate, title, workspaceId, studentId])
+
+  const toggleTest = useCallback((_bookId: string, testId: string) => {
+    setSelectedIds(prev => {
       const next = new Set(prev)
-      if (next.has(sectionId)) next.delete(sectionId)
-      else next.add(sectionId)
+      if (next.has(testId)) next.delete(testId)
+      else next.add(testId)
       return next
     })
+  }, [])
+
+  const toggleSection = useCallback((_bookId: string, testIds: string[]) => {
+    if (testIds.length === 0) return
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      const allSelected = testIds.every(id => next.has(id))
+      for (const id of testIds) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  function selectedCountForBook(book: BookMapBook) {
+    let count = 0
+    for (const section of book.sections) {
+      for (const test of section.tests) {
+        if (selectedIds.has(test.id)) count++
+      }
+    }
+    return count
   }
 
-  function toggleTest(assignment: Assignment, section: BookSection, test: BookTest) {
-    if (test.status !== 'active') return
-    const key = test.id
-    if (selectedSet.has(key)) {
-      setSelectedTests(prev => prev.filter(t => t.book_test_id !== key))
-    } else {
-      setSelectedTests(prev => [...prev, {
-        student_book_assignment_id: assignment.id,
-        book_test_id: test.id,
-        bookTitle: assignment.books.title,
-        sectionTitle: section.title,
-        testTitle: test.title,
-      }])
-    }
+  function clearSelection() {
+    setSelectedIds(new Set())
   }
 
   function handleSubmit() {
-    if (!dueDate) return
-    if (selectedTests.length === 0) return
+    if (!dueDate || selectedTests.length === 0) return
     setServerError(null)
     startTransition(async () => {
       const result = await createHomeworkBatchAction(
@@ -119,24 +175,26 @@ export function HomeworkBuilder({
       )
       if (result?.error) {
         setServerError(result.error)
-      } else {
-        router.push(`/teacher/students/${studentId}`)
+        return
       }
+      // Yayınlanan plan taslakta durmamalı.
+      await clearWeeklyPlanDraftAction(workspaceId, studentId)
+      router.push(`/teacher/students/${studentId}`)
     })
   }
 
   function copyShareText() {
     if (selectedTests.length === 0) return
-    const grouped: Record<string, string[]> = {}
-    for (const t of selectedTests) {
-      const key = t.bookTitle
-      if (!grouped[key]) grouped[key] = []
-      grouped[key].push(`• ${t.sectionTitle} / ${t.testTitle}`)
-    }
-    const lines = [`Merhaba ${studentName},`, '', `Bu haftaki ödevlerin:`, `Teslim tarihi: ${dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : '—'}`, '']
-    for (const [book, tests] of Object.entries(grouped)) {
+    const lines = [
+      `Merhaba ${studentName},`,
+      '',
+      'Bu haftaki ödevlerin:',
+      `Teslim tarihi: ${dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : '—'}`,
+      '',
+    ]
+    for (const [book, tests] of groupedSelection) {
       lines.push(book + ':')
-      lines.push(...tests)
+      for (const t of tests) lines.push(`• ${t.sectionTitle} / ${t.testTitle}`)
       lines.push('')
     }
     lines.push('Tamamladığında panelden işaretlemeyi unutma.')
@@ -145,12 +203,13 @@ export function HomeworkBuilder({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const activeBook = books.find(b => b.bookId === activeBookId) ?? books[0]
+
   return (
     <div className="space-y-6">
-      {/* Date + Title */}
       <Card>
-        <CardContent className="pt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <CardContent className="space-y-4 pt-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="dueDate">Teslim Tarihi *</Label>
               <Input
@@ -160,6 +219,9 @@ export function HomeworkBuilder({
                 onChange={e => setDueDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
               />
+              <p className="text-xs text-muted-foreground">
+                Planın tamamı için bir kez girilir.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="title">Başlık (isteğe bağlı)</Label>
@@ -174,112 +236,161 @@ export function HomeworkBuilder({
         </CardContent>
       </Card>
 
-      {/* Test selection */}
-      <div className="space-y-3">
-        {assignments.map(assignment => {
-          const book = assignment.books
-          const sections = [...(book.book_sections ?? [])].sort((a, b) => a.order_index - b.order_index)
-          return (
-            <Card key={assignment.id}>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="font-medium text-sm">{book.title}</h3>
-                  {book.exam_type && <Badge variant="secondary" className="text-xs">{book.exam_type}</Badge>}
-                  <span className="text-xs text-muted-foreground">{book.subject}</span>
-                </div>
-                <div className="space-y-1">
-                  {sections.map(section => {
-                    const activeTests = section.book_tests.filter(t => t.status === 'active').sort((a, b) => a.order_index - b.order_index)
-                    const expanded = expandedSections.has(section.id)
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Harita — masaüstü. Dar ekranda gizlenir (R3 v2 "Mobil karar"). */}
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {books.map(book => {
+              const count = selectedCountForBook(book)
+              return (
+                <button
+                  key={book.bookId}
+                  type="button"
+                  onClick={() => setActiveBookId(book.bookId)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
+                    book.bookId === activeBook?.bookId
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'bg-card text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  <span className="truncate max-w-48">{book.title}</span>
+                  {count > 0 && (
+                    <Badge variant="default" className="tabular-nums">
+                      {count}
+                    </Badge>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="hidden space-y-3 lg:block">
+            <BookMapLegend />
+            {activeBook && (
+              <>
+                <BookMapGrid
+                  book={activeBook}
+                  selectedTestIds={selectedIds}
+                  onToggleTest={toggleTest}
+                  onToggleSection={toggleSection}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {activeBook.completedTests} / {activeBook.totalTests} test tamamlandı ·
+                  Bölüm adına tıklayarak o bölümün seçilebilir testlerini toplu seçebilirsiniz.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Dar ekran: 18 sütunluk matris yerine sade liste. */}
+          <div className="space-y-2 lg:hidden">
+            <p className="text-xs text-muted-foreground">
+              Kitap Haritası masaüstü içindir. Bu ekranda testler liste olarak seçilir.
+            </p>
+            {activeBook?.sections.map(section => (
+              <div key={section.id} className="rounded-lg border bg-card p-3">
+                <p className="mb-2 text-xs font-medium">{section.title}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {section.tests.map(test => {
+                    const selectable = isSelectableState(test.state)
+                    const selected = selectedIds.has(test.id)
                     return (
-                      <div key={section.id}>
-                        <button
-                          type="button"
-                          onClick={() => toggleSection(section.id)}
-                          className="flex items-center gap-2 w-full text-left py-1.5 px-2 rounded hover:bg-muted transition-colors text-sm"
-                        >
-                          {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
-                          <span>{section.title}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">{activeTests.length} test</span>
-                        </button>
-                        {expanded && (
-                          <div className="ml-5 mt-1 space-y-0.5">
-                            {activeTests.map(test => {
-                              const isSelected = selectedSet.has(test.id)
-                              const isPendingTest = pendingSet.has(test.id)
-                              const isCompleted = completedSet.has(test.id)
-                              return (
-                                <label
-                                  key={test.id}
-                                  className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-muted transition-colors text-sm"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleTest(assignment, section, test)}
-                                    className="size-3.5 rounded"
-                                  />
-                                  <span className={isCompleted ? 'line-through text-muted-foreground' : ''}>
-                                    {test.title}
-                                  </span>
-                                  {isPendingTest && !isCompleted && (
-                                    <AlertTriangle className="size-3 text-warning shrink-0" aria-label="Zaten bekleyen ödevde var" />
-                                  )}
-                                  {isCompleted && (
-                                    <CheckCircle2 className="size-3 text-success shrink-0" aria-label="Tamamlanmış" />
-                                  )}
-                                </label>
-                              )
-                            })}
-                          </div>
+                      <button
+                        key={test.id}
+                        type="button"
+                        disabled={!selectable}
+                        onClick={() => toggleTest(activeBook.bookId, test.id)}
+                        className={cn(
+                          'rounded border px-2 py-1 text-xs',
+                          selected
+                            ? 'border-primary bg-primary/10'
+                            : 'bg-card text-muted-foreground',
+                          !selectable && 'cursor-not-allowed opacity-50'
                         )}
-                      </div>
+                      >
+                        {test.title}
+                      </button>
                     )
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-      {/* Selected summary */}
-      {selectedTests.length > 0 && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">{selectedTests.length} test seçildi</p>
-              <Button size="xs" variant="outline" onClick={copyShareText}>
-                {copied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
-                {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
-              </Button>
-            </div>
-            <div className="space-y-0.5 max-h-32 overflow-y-auto">
-              {selectedTests.map(t => (
-                <p key={t.book_test_id} className="text-xs text-muted-foreground">
-                  {t.bookTitle} / {t.sectionTitle} / {t.testTitle}
+        {/* Bu Haftanın Planı — tüm kaynaklar tek sepette. */}
+        <aside className="xl:sticky xl:top-6 xl:self-start">
+          <Card className={cn(selectedTests.length > 0 && 'border-primary/30')}>
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-medium">Bu Haftanın Planı</h2>
+                <span className="text-sm font-semibold tabular-nums">
+                  {selectedTests.length} test
+                </span>
+              </div>
+
+              {selectedTests.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Haritadan test seçin. Kitap değiştirdiğinizde ve sayfayı yenilediğinizde
+                  seçimleriniz korunur.
                 </p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              ) : (
+                <>
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {groupedSelection.map(([bookTitle, tests]) => (
+                      <div key={bookTitle}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-xs font-medium">{bookTitle}</p>
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {tests.length} test
+                          </span>
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                          {tests.map(t => (
+                            <p
+                              key={t.book_test_id}
+                              className="truncate text-[11px] text-muted-foreground"
+                            >
+                              {t.sectionTitle} / {t.testTitle}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-      <Separator />
+                  <div className="flex gap-2">
+                    <Button size="xs" variant="outline" onClick={copyShareText}>
+                      {copied ? <Check className="text-success" /> : <Copy />}
+                      {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={clearSelection}>
+                      <Trash2 />
+                      Temizle
+                    </Button>
+                  </div>
+                </>
+              )}
 
-      {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+              {serverError && <p className="text-sm text-destructive">{serverError}</p>}
 
-      <div className="flex gap-3">
-        <Button
-          onClick={handleSubmit}
-          disabled={isPending || selectedTests.length === 0 || !dueDate}
-        >
-          {isPending && <Loader2 className="size-4 animate-spin" />}
-          Ödevi Kaydet ({selectedTests.length} test)
-        </Button>
-        <Button variant="ghost" onClick={() => router.push(`/teacher/students/${studentId}`)}>
-          İptal
-        </Button>
+              <Button
+                className="w-full"
+                onClick={handleSubmit}
+                disabled={isPending || selectedTests.length === 0 || !dueDate}
+              >
+                {isPending && <Loader2 className="animate-spin" />}
+                Planı Yayınla ({selectedTests.length} test)
+              </Button>
+              {!dueDate && selectedTests.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Yayınlamak için teslim tarihi girin.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
       </div>
     </div>
   )
