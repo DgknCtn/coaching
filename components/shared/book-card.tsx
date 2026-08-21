@@ -66,7 +66,7 @@ export function BookCard({ book, progress, href, className }: BookCardProps) {
         <div className="mt-auto space-y-2 border-t pt-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
-              {progress.completed} / {progress.total} test
+              {progress.completed} / {progress.total} test tamamlandı
             </span>
             <span className="font-medium tabular-nums">{progress.percentage}%</span>
           </div>

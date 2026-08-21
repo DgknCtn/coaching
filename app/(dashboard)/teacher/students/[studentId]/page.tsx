@@ -113,12 +113,13 @@ export default async function StudentDetailPage({
       <PageHeader
         backHref="/teacher/students"
         title={student.full_name}
-        subtitle={[student.email, student.phone].filter(Boolean).join(' · ')}
+        subtitle={
+          [student.grade_level, student.email, student.phone]
+            .filter(Boolean)
+            .join(' · ') || undefined
+        }
         badges={
-          <>
-            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
-          </>
+          student.exam_type ? <Badge variant="neutral">{student.exam_type}</Badge> : undefined
         }
         action={
           <div className="flex items-center gap-2">
@@ -223,7 +224,7 @@ export default async function StudentDetailPage({
                       percentage: Number(p.completion_percentage),
                       targetDate: p.target_end_date,
                     }}
-                    href={`/teacher/books/${p.book_id}`}
+                    href={`/teacher/students/${studentId}/books/${p.book_id}`}
                   />
                 ))}
               </div>
