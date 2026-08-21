@@ -31,6 +31,7 @@ export interface BookMapBook {
   title: string
   subject: string | null
   examType: string | null
+  publisher: string | null
   trackingMode: string
   startDate: string | null
   targetEndDate: string | null
@@ -70,7 +71,7 @@ export async function loadBookMap(
     .select(`
       id, book_id, start_date, target_end_date,
       books(
-        id, title, subject, exam_type, tracking_mode,
+        id, title, subject, exam_type, publisher, tracking_mode,
         book_sections(
           id, title, order_index, status,
           book_tests(id, title, order_index, status)
@@ -162,6 +163,7 @@ export async function loadBookMap(
       title: book?.title ?? '',
       subject: book?.subject ?? null,
       examType: book?.exam_type ?? null,
+      publisher: book?.publisher ?? null,
       trackingMode: book?.tracking_mode ?? 'test',
       startDate: assignment.start_date ?? null,
       targetEndDate: assignment.target_end_date ?? null,
@@ -177,4 +179,44 @@ export async function loadBookMap(
  *  bir test yeniden atanamaz — create_homework_batch bunu zaten reddeder. */
 export function isSelectableState(state: HomeworkTestState): boolean {
   return state === 'not_assigned'
+}
+
+/**
+ * Haftalık plan panelinde bir bölümden seçilen testleri okunur tek satıra çevirir.
+ *
+ *   [1,2,3]   -> "1, 2, 3. Test"
+ *   [5,7,9]   -> "5, 7, 9. Test"
+ *   [4,5,6] + tracking_mode='page' -> "4-6. Sayfa Aralığı"
+ *
+ * Sayfa takipli kitapta birim "test" değil sayfa aralığıdır (013_book_tracking_mode);
+ * ardışık seçimler tek aralık olarak kısaltılır, çünkü zaten aralık ifade ederler.
+ */
+export function formatSelectedUnits(
+  orderIndexes: number[],
+  trackingMode: string
+): string {
+  const sorted = [...orderIndexes].sort((a, b) => a - b)
+  if (sorted.length === 0) return ''
+
+  const unitLabel = trackingMode === 'page' ? 'Sayfa Aralığı' : 'Test'
+
+  // Sayfa modunda ardışık blokları "4-6" biçiminde topla.
+  if (trackingMode === 'page') {
+    const parts: string[] = []
+    let start = sorted[0]
+    let prev = sorted[0]
+    for (const n of sorted.slice(1)) {
+      if (n === prev + 1) {
+        prev = n
+        continue
+      }
+      parts.push(start === prev ? `${start}` : `${start}-${prev}`)
+      start = n
+      prev = n
+    }
+    parts.push(start === prev ? `${start}` : `${start}-${prev}`)
+    return `${parts.join(', ')}. ${unitLabel}`
+  }
+
+  return `${sorted.join(', ')}. ${unitLabel}`
 }

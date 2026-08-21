@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Clock3, AlertTriangle, Undo2, Circle } from 'lucide-react'
+import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState } from '@/lib/book-map'
 import { testStateLabel, type HomeworkTestState } from '@/lib/homework-status'
@@ -16,49 +16,46 @@ const STATE_STYLE: Record<HomeworkTestState, string> = {
   assigned: 'bg-warning-subtle text-warning-foreground border-warning-border',
   returned: 'bg-warning-subtle text-warning-foreground border-warning-border',
   overdue: 'bg-destructive-subtle text-destructive-foreground border-destructive-border',
-  not_assigned: 'bg-card text-muted-foreground border-border',
-  no_test: 'bg-muted/60 text-muted-foreground/50 border-transparent',
+  not_assigned: 'bg-card text-muted-foreground/60 border-border',
+  no_test: 'bg-muted/50 text-muted-foreground/40 border-transparent',
 }
 
 const STATE_ICON: Record<HomeworkTestState, typeof Check | null> = {
   completed: Check,
-  pending_approval: Clock3,
-  assigned: Circle,
+  pending_approval: Hourglass,
+  assigned: Clock3,
   returned: Undo2,
   overdue: AlertTriangle,
   not_assigned: null,
   no_test: null,
 }
 
-/** Harita lejantı — renk tek başına anlam taşımadığı için her zaman gösterilir. */
+/** Lejant — renk tek başına anlam taşımadığı için her zaman gösterilir. */
 const LEGEND: HomeworkTestState[] = [
   'completed',
-  'pending_approval',
   'assigned',
+  'pending_approval',
   'overdue',
   'not_assigned',
   'no_test',
 ]
 
-export function BookMapLegend() {
+const LEGEND_LABEL: Partial<Record<HomeworkTestState, string>> = {
+  no_test: 'Bu konumda test yok',
+}
+
+export function BookMapLegend({ className }: { className?: string }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {LEGEND.map(state => {
-        const Icon = STATE_ICON[state]
-        return (
-          <span key={state} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                'flex size-4 items-center justify-center rounded border',
-                STATE_STYLE[state]
-              )}
-            >
-              {Icon && <Icon className="size-2.5" />}
-            </span>
-            {testStateLabel(state, 'teacher')}
-          </span>
-        )
-      })}
+    <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1.5', className)}>
+      {LEGEND.map(state => (
+        <span key={state} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            aria-hidden
+            className={cn('size-3 shrink-0 rounded-sm border', STATE_STYLE[state])}
+          />
+          {LEGEND_LABEL[state] ?? testStateLabel(state, 'teacher')}
+        </span>
+      ))}
     </div>
   )
 }
@@ -68,123 +65,154 @@ interface Props {
   selectedTestIds: Set<string>
   onToggleTest: (bookId: string, testId: string) => void
   onToggleSection: (bookId: string, testIds: string[]) => void
+  /** Shift+tık: son tıklanan hücreden buraya kadar seçilebilir testleri seçer. */
+  onSelectRange: (bookId: string, testId: string) => void
 }
 
-export function BookMapGrid({ book, selectedTestIds, onToggleTest, onToggleSection }: Props) {
+export function BookMapGrid({
+  book,
+  selectedTestIds,
+  onToggleTest,
+  onToggleSection,
+  onSelectRange,
+}: Props) {
   const columns = Array.from({ length: book.maxTestsPerSection }, (_, i) => i)
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
-      <table className="w-max border-separate border-spacing-0 text-sm">
-        <thead>
-          <tr>
-            <th
-              scope="col"
-              className="sticky left-0 z-20 min-w-56 border-b border-r bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground"
-            >
-              Bölüm
-            </th>
-            {columns.map(i => (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b px-4 py-3">
+        <h2 className="text-sm font-semibold">Kitap Haritası</h2>
+        <BookMapLegend />
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-max border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr>
               <th
-                key={i}
                 scope="col"
-                className="border-b bg-card px-1 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground"
+                className="sticky left-0 z-20 min-w-56 border-b border-r bg-card px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
               >
-                {i + 1}
+                Bölümler
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {book.sections.map(section => {
-            const selectableIds = section.tests
-              .filter(t => isSelectableState(t.state))
-              .map(t => t.id)
-            const allSelected =
-              selectableIds.length > 0 && selectableIds.every(id => selectedTestIds.has(id))
-
-            return (
-              <tr key={section.id} className="group">
+              {columns.map(i => (
                 <th
-                  scope="row"
-                  className="sticky left-0 z-10 min-w-56 max-w-72 border-b border-r bg-card px-3 py-1.5 text-left font-normal group-hover:bg-muted/40"
+                  key={i}
+                  scope="col"
+                  className="border-b bg-card px-1 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onToggleSection(book.bookId, selectableIds)}
-                    disabled={selectableIds.length === 0}
-                    className="flex w-full items-center justify-between gap-2 rounded text-left disabled:cursor-default"
-                    title={
-                      selectableIds.length === 0
-                        ? 'Bu bölümde seçilebilir test yok'
-                        : allSelected
-                          ? 'Bölüm seçimini kaldır'
-                          : 'Bölümdeki seçilebilir testleri seç'
-                    }
-                  >
-                    <span className="truncate text-xs">{section.title}</span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                      {section.completedCount}/{section.tests.length}
-                    </span>
-                  </button>
+                  {i + 1}.Test
                 </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {book.sections.map(section => {
+              const selectableIds = section.tests
+                .filter(t => isSelectableState(t.state))
+                .map(t => t.id)
+              const allSelected =
+                selectableIds.length > 0 && selectableIds.every(id => selectedTestIds.has(id))
 
-                {columns.map(i => {
-                  const test = section.tests[i]
+              return (
+                <tr key={section.id} className="group">
+                  <th
+                    scope="row"
+                    className="sticky left-0 z-10 min-w-56 max-w-72 border-b border-r bg-card px-4 py-1.5 text-left font-normal group-hover:bg-muted/40"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onToggleSection(book.bookId, selectableIds)}
+                      disabled={selectableIds.length === 0}
+                      className="flex w-full items-center justify-between gap-2 rounded text-left disabled:cursor-default"
+                      title={
+                        selectableIds.length === 0
+                          ? 'Bu bölümde seçilebilir test yok'
+                          : allSelected
+                            ? 'Bölüm seçimini kaldır'
+                            : 'Bölümdeki seçilebilir testleri seç'
+                      }
+                    >
+                      <span className="truncate text-xs">{section.title}</span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                        {section.completedCount}/{section.tests.length}
+                      </span>
+                    </button>
+                  </th>
 
-                  if (!test) {
+                  {columns.map(i => {
+                    const test = section.tests[i]
+
+                    if (!test) {
+                      return (
+                        <td key={i} className="border-b px-0.5 py-1">
+                          <span
+                            className={cn(
+                              'flex size-7 items-center justify-center rounded-md border',
+                              STATE_STYLE.no_test
+                            )}
+                          >
+                            <span aria-hidden>–</span>
+                            <span className="sr-only">
+                              {LEGEND_LABEL.no_test}
+                            </span>
+                          </span>
+                        </td>
+                      )
+                    }
+
+                    const Icon = STATE_ICON[test.state]
+                    const selectable = isSelectableState(test.state)
+                    const selected = selectedTestIds.has(test.id)
+                    const label =
+                      section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, 'teacher')
+
                     return (
-                      <td key={i} className="border-b p-0.5">
-                        <span
+                      <td key={test.id} className="border-b px-0.5 py-1">
+                        <button
+                          type="button"
+                          disabled={!selectable}
+                          aria-pressed={selectable ? selected : undefined}
+                          onClick={event => {
+                            if (event.shiftKey) onSelectRange(book.bookId, test.id)
+                            else onToggleTest(book.bookId, test.id)
+                          }}
+                          title={label}
+                          aria-label={label}
                           className={cn(
-                            'flex size-7 items-center justify-center rounded border',
-                            STATE_STYLE.no_test
+                            'flex size-7 items-center justify-center rounded-md border transition-colors',
+                            STATE_STYLE[test.state],
+                            selectable && 'cursor-pointer hover:brightness-95',
+                            !selectable && 'cursor-not-allowed',
+                            selected &&
+                              'border-primary bg-primary/10 text-primary ring-1 ring-primary'
                           )}
                         >
-                          <span className="sr-only">{testStateLabel('no_test', 'teacher')}</span>
-                        </span>
+                          {selected ? (
+                            <Check className="size-3.5" />
+                          ) : Icon ? (
+                            <Icon className="size-3" />
+                          ) : (
+                            <span aria-hidden>–</span>
+                          )}
+                        </button>
                       </td>
                     )
-                  }
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
 
-                  const Icon = STATE_ICON[test.state]
-                  const selectable = isSelectableState(test.state)
-                  const selected = selectedTestIds.has(test.id)
-                  const label = section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, 'teacher')
-
-                  return (
-                    <td key={test.id} className="border-b p-0.5">
-                      <button
-                        type="button"
-                        disabled={!selectable}
-                        aria-pressed={selectable ? selected : undefined}
-                        onClick={() => onToggleTest(book.bookId, test.id)}
-                        title={label}
-                        aria-label={label}
-                        className={cn(
-                          'flex size-7 items-center justify-center rounded border transition-colors',
-                          STATE_STYLE[test.state],
-                          selectable && 'cursor-pointer hover:brightness-95',
-                          !selectable && 'cursor-not-allowed',
-                          selected && 'ring-2 ring-primary ring-offset-1 ring-offset-card'
-                        )}
-                      >
-                        {selected ? (
-                          <Check className="size-3.5 text-primary" />
-                        ) : Icon ? (
-                          <Icon className="size-3" />
-                        ) : (
-                          <span className="text-[10px] tabular-nums">{i + 1}</span>
-                        )}
-                      </button>
-                    </td>
-                  )
-                })}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="flex items-start gap-2 border-t bg-muted/40 px-4 py-2.5">
+        <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground">
+          İpucu: Haritada bir teste tıklayarak o testi planınıza ekleyebilirsiniz. Aralık seçmek
+          için Shift tuşuyla tıklayın, tüm bölümü seçmek için bölüm adına tıklayın.
+        </p>
+      </div>
     </div>
   )
 }

@@ -65,37 +65,39 @@ export default async function NewHomeworkPage({
     draftTestIds = (draftItems ?? []).map(i => i.book_test_id)
   }
 
-  return (
-    <div className="mx-auto max-w-7xl p-6">
-      <div className="mb-6 flex items-center gap-2">
-        <Link href={`/teacher/students/${studentId}`}>
-          <Button variant="ghost" size="icon-sm"><ArrowLeft className="size-4" /></Button>
-        </Link>
-        <div>
+  if (books.length === 0) {
+    return (
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Link href={`/teacher/students/${studentId}`}>
+            <Button variant="ghost" size="icon-sm"><ArrowLeft className="size-4" /></Button>
+          </Link>
           <h1 className="text-xl font-semibold">Haftalık Plan</h1>
-          <p className="text-sm text-muted-foreground">{student.full_name}</p>
         </div>
-      </div>
-
-      {books.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">
           <p>Bu öğrenciye atanmış kitap yok.</p>
           <Link href={`/teacher/students/${studentId}`} className="mt-3 inline-block">
             <Button variant="outline" size="sm">Kitap Ata</Button>
           </Link>
         </div>
-      ) : (
-        <HomeworkBuilder
-          studentId={studentId}
-          termId={activeTerm.id}
-          workspaceId={workspaceId}
-          studentName={student.full_name}
-          books={books}
-          initialSelectedTestIds={draftTestIds}
-          initialDueDate={draft?.due_date ?? ''}
-          initialTitle={draft?.title ?? ''}
-        />
-      )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      {/* Başlık HomeworkBuilder içinde: aktif kitaba göre değiştiği için
+          server component'te sabitlenemez. */}
+      <HomeworkBuilder
+        studentId={studentId}
+        termId={activeTerm.id}
+        workspaceId={workspaceId}
+        studentName={student.full_name}
+        books={books}
+        initialSelectedTestIds={draftTestIds}
+        initialDueDate={draft?.due_date ?? ''}
+        initialTitle={draft?.title ?? ''}
+      />
     </div>
   )
 }

@@ -21,7 +21,7 @@ export const teacherNav: NavItem[] = [
   { href: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
   { href: '/teacher/students', label: 'Öğrenciler', icon: Users },
-  { href: '/teacher/books', label: 'Kitap Havuzu', icon: BookOpen },
+  { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
 ]
 

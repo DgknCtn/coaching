@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { deriveTestState, testStateLabel, COUNTER_LABEL } from '@/lib/homework-status'
+import { formatSelectedUnits } from '@/lib/book-map'
 
 const today = new Date('2026-03-10')
 
@@ -66,5 +67,21 @@ describe('COUNTER_LABEL', () => {
     expect(COUNTER_LABEL.assigned).toBe('Öğrenciye Verilen')
     expect(COUNTER_LABEL.pending).toBe('Öğrenciden Beklenen')
     expect(COUNTER_LABEL.overdue).toBe('Süresi Geçen')
+  })
+})
+
+describe('formatSelectedUnits', () => {
+  it('lists test numbers in order', () => {
+    expect(formatSelectedUnits([3, 1, 2], 'test')).toBe('1, 2, 3. Test')
+    expect(formatSelectedUnits([5, 9, 7], 'test')).toBe('5, 7, 9. Test')
+  })
+
+  it('collapses consecutive page ranges and labels them as page ranges', () => {
+    expect(formatSelectedUnits([4, 5, 6], 'page')).toBe('4-6. Sayfa Aralığı')
+    expect(formatSelectedUnits([1, 4, 5, 6, 9], 'page')).toBe('1, 4-6, 9. Sayfa Aralığı')
+  })
+
+  it('returns an empty string when nothing is selected', () => {
+    expect(formatSelectedUnits([], 'test')).toBe('')
   })
 })

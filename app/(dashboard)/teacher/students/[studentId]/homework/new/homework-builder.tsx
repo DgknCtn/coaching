@@ -2,17 +2,37 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Copy, Check, Trash2 } from 'lucide-react'
+import {
+  Loader2,
+  Copy,
+  Check,
+  Trash2,
+  Send,
+  CalendarDays,
+  BookOpen,
+  CircleCheck,
+  UserRound,
+  Hourglass,
+  CircleAlert,
+  CircleDashed,
+  ChevronDown,
+  ChevronUp,
+  Info,
+} from 'lucide-react'
 import { createHomeworkBatchAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
-import { BookMapGrid, BookMapLegend } from './book-map-grid'
+import { BookMapGrid } from './book-map-grid'
 import type { BookMapBook } from '@/lib/book-map'
-import { isSelectableState } from '@/lib/book-map'
+import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
+import { COUNTER_LABEL } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { NativeSelect } from '@/components/ui/native-select'
+import { MetricTiles } from '@/components/shared/metric-tiles'
+import { TempoStrip } from '@/components/shared/tempo-strip'
+import { ProgressSummary } from '@/components/shared/progress-summary'
 import { cn } from '@/lib/utils'
 
 interface SelectedTest {
@@ -20,8 +40,11 @@ interface SelectedTest {
   book_test_id: string
   bookId: string
   bookTitle: string
+  sectionId: string
   sectionTitle: string
   testTitle: string
+  orderIndex: number
+  trackingMode: string
 }
 
 interface Props {
@@ -53,6 +76,8 @@ export function HomeworkBuilder({
   const [title, setTitle] = useState(initialTitle)
   const [serverError, setServerError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
+  const dueDateRef = useRef<HTMLInputElement>(null)
 
   // Seçimler kitap bileşeninin İÇİNDE değil, bu üst katmanda tutulur —
   // eğitmen kitaplar arasında dolaşırken seçim kaybolmaz (R3 v2 §B).
@@ -65,16 +90,20 @@ export function HomeworkBuilder({
     const index = new Map<string, SelectedTest>()
     for (const book of books) {
       for (const section of book.sections) {
-        for (const test of section.tests) {
+        section.tests.forEach((test, position) => {
           index.set(test.id, {
             student_book_assignment_id: book.assignmentId,
             book_test_id: test.id,
             bookId: book.bookId,
             bookTitle: book.title,
+            sectionId: section.id,
             sectionTitle: section.title,
             testTitle: test.title,
+            // Matristeki sütun numarası (1 tabanlı) — panelde gösterilen numara.
+            orderIndex: position + 1,
+            trackingMode: book.trackingMode,
           })
-        }
+        })
       }
     }
     return index
@@ -88,15 +117,60 @@ export function HomeworkBuilder({
     [selectedIds, testIndex]
   )
 
+  const activeBook = books.find(b => b.bookId === activeBookId) ?? books[0]
+
+  // Aktif kitabın metrikleri — hepsi mevcut harita verisinden sayılır, ek istek yok.
+  const activeMetrics = useMemo(() => {
+    if (!activeBook) return null
+    let completed = 0
+    let assigned = 0
+    let pendingApproval = 0
+    let overdue = 0
+    for (const section of activeBook.sections) {
+      for (const test of section.tests) {
+        if (test.state === 'completed') completed++
+        else if (test.state === 'pending_approval') pendingApproval++
+        else if (test.state === 'overdue') overdue++
+        else if (test.state === 'assigned' || test.state === 'returned') assigned++
+      }
+    }
+    return {
+      total: activeBook.totalTests,
+      completed,
+      assigned,
+      pendingApproval,
+      overdue,
+      remaining: Math.max(0, activeBook.totalTests - completed),
+    }
+  }, [activeBook])
+
   // Kitap başlığı altında gruplanmış sepet ("Bu Haftanın Planı").
   const groupedSelection = useMemo(() => {
-    const groups = new Map<string, SelectedTest[]>()
+    const byBook = new Map<
+      string,
+      {
+        bookId: string
+        bookTitle: string
+        trackingMode: string
+        count: number
+        sections: Map<string, { title: string; units: number[] }>
+      }
+    >()
     for (const t of selectedTests) {
-      const list = groups.get(t.bookTitle) ?? []
-      list.push(t)
-      groups.set(t.bookTitle, list)
+      const group = byBook.get(t.bookId) ?? {
+        bookId: t.bookId,
+        bookTitle: t.bookTitle,
+        trackingMode: t.trackingMode,
+        count: 0,
+        sections: new Map<string, { title: string; units: number[] }>(),
+      }
+      group.count++
+      const section = group.sections.get(t.sectionId) ?? { title: t.sectionTitle, units: [] }
+      section.units.push(t.orderIndex)
+      group.sections.set(t.sectionId, section)
+      byBook.set(t.bookId, group)
     }
-    return [...groups.entries()]
+    return [...byBook.values()]
   }, [selectedTests])
 
   // Taslağı debounce'lu kaydet. upsert_weekly_plan_draft idempotent olduğu
@@ -122,7 +196,11 @@ export function HomeworkBuilder({
     return () => clearTimeout(handle)
   }, [selectedTests, dueDate, title, workspaceId, studentId])
 
+  // Shift+tık aralık seçiminin çıpası: en son tıklanan hücre.
+  const lastClickedRef = useRef<string | null>(null)
+
   const toggleTest = useCallback((_bookId: string, testId: string) => {
+    lastClickedRef.current = testId
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(testId)) next.delete(testId)
@@ -144,15 +222,40 @@ export function HomeworkBuilder({
     })
   }, [])
 
-  function selectedCountForBook(book: BookMapBook) {
-    let count = 0
-    for (const section of book.sections) {
-      for (const test of section.tests) {
-        if (selectedIds.has(test.id)) count++
+  // Shift+tık aralık seçimi: son tıklanan hücre ile hedef arasındaki
+  // SEÇİLEBİLİR testler seçilir. Kitap sınırı aşılmaz.
+  const selectRange = useCallback(
+    (bookId: string, testId: string) => {
+      const book = books.find(b => b.bookId === bookId)
+      const anchor = lastClickedRef.current
+      if (!book || !anchor) {
+        toggleTest(bookId, testId)
+        return
       }
-    }
-    return count
-  }
+
+      const flat = book.sections.flatMap(section => section.tests)
+      const from = flat.findIndex(t => t.id === anchor)
+      const to = flat.findIndex(t => t.id === testId)
+      if (from === -1 || to === -1) {
+        toggleTest(bookId, testId)
+        return
+      }
+
+      const [start, end] = from <= to ? [from, to] : [to, from]
+      const ids = flat
+        .slice(start, end + 1)
+        .filter(t => isSelectableState(t.state))
+        .map(t => t.id)
+
+      lastClickedRef.current = testId
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        for (const id of ids) next.add(id)
+        return next
+      })
+    },
+    [books, toggleTest]
+  )
 
   function clearSelection() {
     setSelectedIds(new Set())
@@ -192,9 +295,11 @@ export function HomeworkBuilder({
       `Teslim tarihi: ${dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : '—'}`,
       '',
     ]
-    for (const [book, tests] of groupedSelection) {
-      lines.push(book + ':')
-      for (const t of tests) lines.push(`• ${t.sectionTitle} / ${t.testTitle}`)
+    for (const group of groupedSelection) {
+      lines.push(group.bookTitle + ':')
+      for (const section of group.sections.values()) {
+        lines.push(`• ${section.title} — ${formatSelectedUnits(section.units, group.trackingMode)}`)
+      }
       lines.push('')
     }
     lines.push('Tamamladığında panelden işaretlemeyi unutma.')
@@ -203,83 +308,138 @@ export function HomeworkBuilder({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const activeBook = books.find(b => b.bookId === activeBookId) ?? books[0]
+  function focusDueDate() {
+    dueDateRef.current?.focus()
+    dueDateRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="space-y-4 pt-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="dueDate">Teslim Tarihi *</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-              />
-              <p className="text-xs text-muted-foreground">
-                Planın tamamı için bir kez girilir.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="title">Başlık (isteğe bağlı)</Label>
-              <Input
-                id="title"
-                placeholder="Örn: 14–20 Ekim Haftası"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-              />
-            </div>
+    <div className="space-y-5">
+      {/* Başlık + aksiyonlar */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">{studentName}</span>
+            <span className="text-muted-foreground/50">›</span>
+            <h1 className="truncate text-xl font-semibold tracking-tight">
+              {activeBook?.title ?? 'Haftalık Plan'}
+            </h1>
+            {activeBook?.examType && <Badge variant="info">{activeBook.examType}</Badge>}
           </div>
-        </CardContent>
-      </Card>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {[activeBook?.subject, activeBook?.publisher].filter(Boolean).join(' · ') ||
+              'Haftalık plan hazırlanıyor'}
+          </p>
+        </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Harita — masaüstü. Dar ekranda gizlenir (R3 v2 "Mobil karar"). */}
-        <div className="min-w-0 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {books.map(book => {
-              const count = selectedCountForBook(book)
-              return (
-                <button
-                  key={book.bookId}
-                  type="button"
-                  onClick={() => setActiveBookId(book.bookId)}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors',
-                    book.bookId === activeBook?.bookId
-                      ? 'border-primary bg-primary/10 text-foreground'
-                      : 'bg-card text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  <span className="truncate max-w-48">{book.title}</span>
-                  {count > 0 && (
-                    <Badge variant="default" className="tabular-nums">
-                      {count}
-                    </Badge>
-                  )}
-                </button>
-              )
-            })}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={focusDueDate}>
+            <CalendarDays />
+            {dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : 'Teslim tarihi'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={copyShareText}
+            disabled={selectedTests.length === 0}
+          >
+            {copied ? <Check className="text-success" /> : <Copy />}
+            {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isPending || selectedTests.length === 0 || !dueDate}
+          >
+            {isPending ? <Loader2 className="animate-spin" /> : <Send />}
+            Planı Yayınla
+          </Button>
+        </div>
+      </div>
 
-          <div className="hidden space-y-3 lg:block">
-            <BookMapLegend />
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-4">
+          {activeMetrics && (
+            <MetricTiles
+              metrics={[
+                { label: 'Toplam test', value: activeMetrics.total, icon: BookOpen },
+                {
+                  label: COUNTER_LABEL.completed,
+                  value: activeMetrics.completed,
+                  tone: 'success',
+                  icon: CircleCheck,
+                },
+                {
+                  label: COUNTER_LABEL.pending,
+                  value: activeMetrics.assigned,
+                  tone: 'warning',
+                  icon: UserRound,
+                },
+                {
+                  label: COUNTER_LABEL.pendingApproval,
+                  value: activeMetrics.pendingApproval,
+                  tone: 'info',
+                  icon: Hourglass,
+                },
+                {
+                  label: COUNTER_LABEL.overdue,
+                  value: activeMetrics.overdue,
+                  tone: 'destructive',
+                  icon: CircleAlert,
+                },
+                { label: 'Kalan', value: activeMetrics.remaining, icon: CircleDashed },
+              ]}
+            />
+          )}
+
+          {activeBook && (
+            <>
+              <TempoStrip
+                startDate={activeBook.startDate}
+                targetEndDate={activeBook.targetEndDate}
+                totalUnits={activeBook.totalTests}
+                completedUnits={activeBook.completedTests}
+              />
+              <ProgressSummary
+                startDate={activeBook.startDate}
+                targetEndDate={activeBook.targetEndDate}
+                totalUnits={activeBook.totalTests}
+                completedUnits={activeBook.completedTests}
+                label={`${activeBook.title} ilerlemesi`}
+              />
+            </>
+          )}
+
+          {books.length > 1 && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="activeBook" className="shrink-0 text-xs text-muted-foreground">
+                Görüntülenen kitap
+              </Label>
+              <NativeSelect
+                id="activeBook"
+                value={activeBook?.bookId ?? ''}
+                onChange={e => setActiveBookId(e.target.value)}
+                className="max-w-xs"
+              >
+                {books.map(book => (
+                  <option key={book.bookId} value={book.bookId}>
+                    {book.title}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
+
+          {/* Harita — masaüstü. Dar ekranda gizlenir (R3 v2 "Mobil karar"). */}
+          <div className="hidden lg:block">
             {activeBook && (
-              <>
-                <BookMapGrid
-                  book={activeBook}
-                  selectedTestIds={selectedIds}
-                  onToggleTest={toggleTest}
-                  onToggleSection={toggleSection}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {activeBook.completedTests} / {activeBook.totalTests} test tamamlandı ·
-                  Bölüm adına tıklayarak o bölümün seçilebilir testlerini toplu seçebilirsiniz.
-                </p>
-              </>
+              <BookMapGrid
+                book={activeBook}
+                selectedTestIds={selectedIds}
+                onToggleTest={toggleTest}
+                onToggleSection={toggleSection}
+                onSelectRange={selectRange}
+              />
             )}
           </div>
 
@@ -289,7 +449,7 @@ export function HomeworkBuilder({
               Kitap Haritası masaüstü içindir. Bu ekranda testler liste olarak seçilir.
             </p>
             {activeBook?.sections.map(section => (
-              <div key={section.id} className="rounded-lg border bg-card p-3">
+              <div key={section.id} className="rounded-xl border bg-card p-3">
                 <p className="mb-2 text-xs font-medium">{section.title}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {section.tests.map(test => {
@@ -302,9 +462,9 @@ export function HomeworkBuilder({
                         disabled={!selectable}
                         onClick={() => toggleTest(activeBook.bookId, test.id)}
                         className={cn(
-                          'rounded border px-2 py-1 text-xs',
+                          'rounded-md border px-2 py-1 text-xs',
                           selected
-                            ? 'border-primary bg-primary/10'
+                            ? 'border-primary bg-primary/10 text-primary'
                             : 'bg-card text-muted-foreground',
                           !selectable && 'cursor-not-allowed opacity-50'
                         )}
@@ -320,76 +480,131 @@ export function HomeworkBuilder({
         </div>
 
         {/* Bu Haftanın Planı — tüm kaynaklar tek sepette. */}
-        <aside className="xl:sticky xl:top-6 xl:self-start">
-          <Card className={cn(selectedTests.length > 0 && 'border-primary/30')}>
-            <CardContent className="space-y-3 pt-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium">Bu Haftanın Planı</h2>
-                <span className="text-sm font-semibold tabular-nums">
-                  {selectedTests.length} test
-                </span>
+        <aside className="2xl:sticky 2xl:top-6 2xl:self-start">
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <h2 className="truncate text-sm font-semibold">Bu Haftanın Planı</h2>
+                <Info className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               </div>
+              <button
+                type="button"
+                onClick={() => setPanelOpen(v => !v)}
+                aria-expanded={panelOpen}
+                aria-label={panelOpen ? 'Planı daralt' : 'Planı genişlet'}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {panelOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              </button>
+            </div>
 
-              {selectedTests.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Haritadan test seçin. Kitap değiştirdiğinizde ve sayfayı yenilediğinizde
-                  seçimleriniz korunur.
-                </p>
-              ) : (
-                <>
-                  <div className="max-h-72 space-y-2 overflow-y-auto">
-                    {groupedSelection.map(([bookTitle, tests]) => (
-                      <div key={bookTitle}>
+            <p className="px-4 pt-3 text-xs text-muted-foreground">
+              {groupedSelection.length} kitap · {selectedTests.length} test seçildi
+            </p>
+
+            {panelOpen && (
+              <>
+                {selectedTests.length === 0 ? (
+                  <p className="px-4 py-4 text-xs text-muted-foreground">
+                    Haritadan test seçin. Kitap değiştirdiğinizde ve sayfayı yenilediğinizde
+                    seçimleriniz korunur.
+                  </p>
+                ) : (
+                  <div className="max-h-[26rem] divide-y overflow-y-auto">
+                    {groupedSelection.map(group => (
+                      <div key={group.bookId} className="px-4 py-3">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs font-medium">{bookTitle}</p>
-                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                            {tests.length} test
-                          </span>
-                        </div>
-                        <div className="mt-1 space-y-0.5">
-                          {tests.map(t => (
-                            <p
-                              key={t.book_test_id}
-                              className="truncate text-[11px] text-muted-foreground"
+                          <button
+                            type="button"
+                            onClick={() => setActiveBookId(group.bookId)}
+                            className="min-w-0 flex-1 text-left"
+                            title="Bu kitabın haritasını göster"
+                          >
+                            <span
+                              className={cn(
+                                'truncate text-xs font-medium',
+                                group.bookId === activeBook?.bookId && 'text-primary'
+                              )}
                             >
-                              {t.sectionTitle} / {t.testTitle}
-                            </p>
-                          ))}
+                              {group.bookTitle}
+                            </span>
+                          </button>
+                          <Badge variant="info" className="shrink-0 tabular-nums">
+                            {group.count} test
+                          </Badge>
                         </div>
+                        <ul className="mt-2 space-y-1">
+                          {[...group.sections.values()].map(section => (
+                            <li
+                              key={section.title}
+                              className="flex items-start justify-between gap-2 text-[11px]"
+                            >
+                              <span className="flex min-w-0 gap-1.5 text-muted-foreground">
+                                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" />
+                                <span className="truncate">{section.title}</span>
+                              </span>
+                              <span className="shrink-0 tabular-nums text-muted-foreground">
+                                {formatSelectedUnits(section.units, group.trackingMode)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ))}
                   </div>
+                )}
 
-                  <div className="flex gap-2">
-                    <Button size="xs" variant="outline" onClick={copyShareText}>
-                      {copied ? <Check className="text-success" /> : <Copy />}
-                      {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
-                    </Button>
-                    <Button size="xs" variant="ghost" onClick={clearSelection}>
-                      <Trash2 />
-                      Temizle
-                    </Button>
+                <div className="space-y-3 border-t px-4 py-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="title" className="text-xs">
+                      Başlık
+                    </Label>
+                    <Input
+                      id="title"
+                      placeholder="Örn: Haftalık Plan - 12. Hafta"
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                    />
                   </div>
-                </>
-              )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dueDate" className="text-xs">
+                      Teslim Tarihi
+                    </Label>
+                    <Input
+                      id="dueDate"
+                      ref={dueDateRef}
+                      type="date"
+                      value={dueDate}
+                      onChange={e => setDueDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
 
-              {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+                  {serverError && <p className="text-sm text-destructive">{serverError}</p>}
 
-              <Button
-                className="w-full"
-                onClick={handleSubmit}
-                disabled={isPending || selectedTests.length === 0 || !dueDate}
-              >
-                {isPending && <Loader2 className="animate-spin" />}
-                Planı Yayınla ({selectedTests.length} test)
-              </Button>
-              {!dueDate && selectedTests.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Yayınlamak için teslim tarihi girin.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  <Button
+                    className="w-full"
+                    onClick={handleSubmit}
+                    disabled={isPending || selectedTests.length === 0 || !dueDate}
+                  >
+                    {isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                    Planı Yayınla
+                  </Button>
+                  {!dueDate && selectedTests.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Yayınlamak için teslim tarihi girin.
+                    </p>
+                  )}
+                  {selectedTests.length > 0 && (
+                    <Button size="xs" variant="ghost" onClick={clearSelection} className="w-full">
+                      <Trash2 />
+                      Seçimi temizle
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </aside>
       </div>
     </div>

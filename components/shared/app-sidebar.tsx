@@ -7,6 +7,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 import { navByRole, type NavItem, type Role } from '@/components/nav-config'
+import { StudentSwitcher, type SwitcherStudent } from '@/components/shared/student-switcher'
 
 interface Panel {
   label: string
@@ -27,13 +28,29 @@ interface AppSidebarProps {
   userName: string
   /** Nav altındaki bilgi kutusu (aktif dönem, takip edilen öğrenciler vb.). */
   panel?: Panel
+  /**
+   * Öğretmenin öğrencileri. Verilirse ve geçerli rota bir öğrenci bağlamındaysa
+   * markanın altında aktif öğrenci seçici gösterilir.
+   */
+  students?: SwitcherStudent[]
 }
 
-export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSidebarProps) {
+export function AppSidebar({
+  title,
+  role,
+  roleLabel,
+  userName,
+  panel,
+  students,
+}: AppSidebarProps) {
   const items = navByRole[role]
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  // Seçici yalnız öğrenci bağlamındaki rotalarda görünür. Layout bir server
+  // component olduğu için pathname'i okuyamaz; türetme burada yapılır.
+  const activeStudentId = pathname.match(/^\/teacher\/students\/([0-9a-fA-F-]{36})/)?.[1]
 
   function isActive(item: NavItem) {
     return item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -56,11 +73,19 @@ export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSideb
   }, [mobileOpen])
 
   const brand = (
-    <div className="mb-6 flex items-center gap-3 px-6">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent">
-        <GraduationCap className="size-4 text-sidebar-foreground" />
+    <div className="mb-4 flex items-center gap-2.5 px-5">
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sidebar-primary to-primary">
+        <GraduationCap className="size-4 text-sidebar-primary-foreground" />
       </div>
-      <p className="truncate text-sm font-semibold text-sidebar-foreground">{title}</p>
+      <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">
+        {title}
+      </p>
+    </div>
+  )
+
+  const switcher = students && students.length > 0 && activeStudentId && (
+    <div className="mb-4">
+      <StudentSwitcher students={students} activeStudentId={activeStudentId} />
     </div>
   )
 
@@ -75,10 +100,10 @@ export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSideb
             aria-current={active ? 'page' : undefined}
             onClick={() => setMobileOpen(false)}
             className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
               active
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
             )}
           >
             <item.icon className="size-4 shrink-0" />
@@ -130,6 +155,7 @@ export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSideb
   const inner = (
     <>
       {brand}
+      {switcher}
       {nav}
       {panelBlock}
       {footer}
@@ -139,7 +165,7 @@ export function AppSidebar({ title, role, roleLabel, userName, panel }: AppSideb
   return (
     <>
       {/* Masaüstü */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar py-6 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar py-5 md:flex">
         {inner}
       </aside>
 

@@ -5,9 +5,11 @@ interface ProgressBarProps {
   value: number
   className?: string
   label?: string
+  /** Dolgu rengi. Varsayılan 'primary' — mevcut kullanımlar değişmez. */
+  tone?: 'primary' | 'success'
 }
 
-export function ProgressBar({ value, className, label }: ProgressBarProps) {
+export function ProgressBar({ value, className, label, tone = 'primary' }: ProgressBarProps) {
   const pct = Math.max(0, Math.min(100, Math.round(value || 0)))
 
   return (
@@ -19,7 +21,13 @@ export function ProgressBar({ value, className, label }: ProgressBarProps) {
       aria-valuemax={100}
       aria-label={label}
     >
-      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+      <div
+        className={cn(
+          'h-full rounded-full transition-all',
+          tone === 'success' ? 'bg-success' : 'bg-primary'
+        )}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   )
 }
