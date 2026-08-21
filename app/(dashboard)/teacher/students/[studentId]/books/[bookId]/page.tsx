@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { MetricRow } from '@/components/shared/metric-row'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
 import { Section } from '@/components/shared/section'
 
 export const dynamic = 'force-dynamic'
@@ -103,6 +104,19 @@ export default async function StudentBookDetailPage({
           </p>
         )}
       </div>
+
+      <Section
+        title="Plan ve tempo"
+        description="Hedef tarihe göre konum ve bugün gereken ortalama tempo."
+      >
+        <PlanTempoCard
+          bookTitle={progress.book_title}
+          startDate={progress.start_date}
+          targetEndDate={progress.target_end_date}
+          totalUnits={totalTests}
+          completedUnits={completedTests}
+        />
+      </Section>
 
       <Section title="Bölümler" description="Bu öğrencinin bu kitaptaki test durumu.">
         {book.sections.length === 0 ? (

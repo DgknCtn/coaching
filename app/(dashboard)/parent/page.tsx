@@ -9,6 +9,7 @@ import { MetricRow } from '@/components/shared/metric-row'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
+import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -144,6 +145,26 @@ export default async function ParentPage() {
                   ]}
                   className="md:grid-cols-3"
                 />
+              </Section>
+            )}
+
+            {bookProgress.length > 0 && (
+              <Section
+                title="Plan ve tempo"
+                description="Hedef tarihe göre nerede olunduğu ve bugün gereken ortalama tempo."
+              >
+                <div className="space-y-3">
+                  {bookProgress.map((p) => (
+                    <PlanTempoCard
+                      key={p.student_book_assignment_id}
+                      bookTitle={p.book_title}
+                      startDate={p.start_date}
+                      targetEndDate={p.target_end_date}
+                      totalUnits={Number(p.total_tests ?? 0)}
+                      completedUnits={Number(p.completed_tests ?? 0)}
+                    />
+                  ))}
+                </div>
               </Section>
             )}
 
