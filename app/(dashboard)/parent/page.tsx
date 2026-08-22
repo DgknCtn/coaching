@@ -174,6 +174,7 @@ export default async function ParentPage() {
                   {bookProgress.map((p) => (
                     <BookCard
                       key={p.student_book_assignment_id}
+                      href={`/parent/students/${student.id}/books/${p.book_id}`}
                       book={{
                         id: p.book_id,
                         title: p.book_title,

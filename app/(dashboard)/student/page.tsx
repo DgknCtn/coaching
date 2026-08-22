@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
 import { CheckInCard } from './check-in-card'
@@ -94,7 +95,11 @@ export default async function StudentPage() {
         <Section title="Kitap ilerlemem">
           <div className="space-y-3">
             {bookProgress!.map(p => (
-              <div key={p.student_book_assignment_id} className="rounded-lg border bg-card p-4">
+              <Link
+                key={p.student_book_assignment_id}
+                href={`/student/books/${p.book_id}`}
+                className="block rounded-lg border bg-card p-4 transition-colors hover:border-foreground/20"
+              >
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{p.book_title}</p>
@@ -111,7 +116,8 @@ export default async function StudentPage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   {p.completed_tests} / {p.total_tests} test tamamlandı · {p.remaining_tests} kaldı
                 </p>
-              </div>
+                <p className="mt-1 text-xs text-primary">Kitap haritasını gör →</p>
+              </Link>
             ))}
           </div>
         </Section>

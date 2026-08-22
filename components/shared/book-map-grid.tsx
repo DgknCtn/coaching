@@ -3,7 +3,11 @@
 import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState } from '@/lib/book-map'
-import { testStateLabel, type HomeworkTestState } from '@/lib/homework-status'
+import {
+  testStateLabel,
+  type HomeworkTestState,
+  type StatusAudience,
+} from '@/lib/homework-status'
 import { cn } from '@/lib/utils'
 
 // Masaüstü Kitap Haritası (R3 v2 §1). Bölüm satır, test sütun.
@@ -44,7 +48,13 @@ const LEGEND_LABEL: Partial<Record<HomeworkTestState, string>> = {
   no_test: 'Bu konumda test yok',
 }
 
-export function BookMapLegend({ className }: { className?: string }) {
+export function BookMapLegend({
+  className,
+  audience = 'teacher',
+}: {
+  className?: string
+  audience?: StatusAudience
+}) {
   return (
     <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1.5', className)}>
       {LEGEND.map(state => (
@@ -53,7 +63,7 @@ export function BookMapLegend({ className }: { className?: string }) {
             aria-hidden
             className={cn('size-3 shrink-0 rounded-sm border', STATE_STYLE[state])}
           />
-          {LEGEND_LABEL[state] ?? testStateLabel(state, 'teacher')}
+          {LEGEND_LABEL[state] ?? testStateLabel(state, audience)}
         </span>
       ))}
     </div>
@@ -62,19 +72,31 @@ export function BookMapLegend({ className }: { className?: string }) {
 
 interface Props {
   book: BookMapBook
-  selectedTestIds: Set<string>
-  onToggleTest: (bookId: string, testId: string) => void
-  onToggleSection: (bookId: string, testIds: string[]) => void
+  /** Salt okunur modda boş geçilebilir. */
+  selectedTestIds?: Set<string>
+  onToggleTest?: (bookId: string, testId: string) => void
+  onToggleSection?: (bookId: string, testIds: string[]) => void
   /** Shift+tık: son tıklanan hücreden buraya kadar seçilebilir testleri seçer. */
-  onSelectRange: (bookId: string, testId: string) => void
+  onSelectRange?: (bookId: string, testId: string) => void
+  /**
+   * Öğrenci ve veli haritayı yalnız okur: hücreler tıklanamaz, seçim ve
+   * ipucu çubuğu gösterilmez. Ödev atama tek yerde kalır (öğretmen ekranı).
+   */
+  readOnly?: boolean
+  /** Etiket dili: öğretmende "Reddedildi", öğrenci/velide "İade Edildi". */
+  audience?: StatusAudience
 }
+
+const EMPTY_SELECTION: Set<string> = new Set()
 
 export function BookMapGrid({
   book,
-  selectedTestIds,
+  selectedTestIds = EMPTY_SELECTION,
   onToggleTest,
   onToggleSection,
   onSelectRange,
+  readOnly = false,
+  audience = 'teacher',
 }: Props) {
   const columns = Array.from({ length: book.maxTestsPerSection }, (_, i) => i)
 
@@ -82,7 +104,7 @@ export function BookMapGrid({
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Kitap Haritası</h2>
-        <BookMapLegend />
+        <BookMapLegend audience={audience} />
       </div>
 
       <div className="overflow-x-auto">
@@ -120,24 +142,33 @@ export function BookMapGrid({
                     scope="row"
                     className="sticky left-0 z-10 min-w-56 max-w-72 border-b border-r bg-card px-4 py-1.5 text-left font-normal group-hover:bg-muted/40"
                   >
-                    <button
-                      type="button"
-                      onClick={() => onToggleSection(book.bookId, selectableIds)}
-                      disabled={selectableIds.length === 0}
-                      className="flex w-full items-center justify-between gap-2 rounded text-left disabled:cursor-default"
-                      title={
-                        selectableIds.length === 0
-                          ? 'Bu bölümde seçilebilir test yok'
-                          : allSelected
-                            ? 'Bölüm seçimini kaldır'
-                            : 'Bölümdeki seçilebilir testleri seç'
-                      }
-                    >
-                      <span className="truncate text-xs">{section.title}</span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                        {section.completedCount}/{section.tests.length}
+                    {readOnly ? (
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="truncate text-xs">{section.title}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                          {section.completedCount}/{section.tests.length}
+                        </span>
                       </span>
-                    </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onToggleSection?.(book.bookId, selectableIds)}
+                        disabled={selectableIds.length === 0}
+                        className="flex w-full items-center justify-between gap-2 rounded text-left disabled:cursor-default"
+                        title={
+                          selectableIds.length === 0
+                            ? 'Bu bölümde seçilebilir test yok'
+                            : allSelected
+                              ? 'Bölüm seçimini kaldır'
+                              : 'Bölümdeki seçilebilir testleri seç'
+                        }
+                      >
+                        <span className="truncate text-xs">{section.title}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                          {section.completedCount}/{section.tests.length}
+                        </span>
+                      </button>
+                    )}
                   </th>
 
                   {columns.map(i => {
@@ -165,7 +196,24 @@ export function BookMapGrid({
                     const selectable = isSelectableState(test.state)
                     const selected = selectedTestIds.has(test.id)
                     const label =
-                      section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, 'teacher')
+                      section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, audience)
+
+                    if (readOnly) {
+                      return (
+                        <td key={test.id} className="border-b px-0.5 py-1">
+                          <span
+                            title={label}
+                            aria-label={label}
+                            className={cn(
+                              'flex size-7 items-center justify-center rounded-md border',
+                              STATE_STYLE[test.state]
+                            )}
+                          >
+                            {Icon ? <Icon className="size-3" /> : <span aria-hidden>–</span>}
+                          </span>
+                        </td>
+                      )
+                    }
 
                     return (
                       <td key={test.id} className="border-b px-0.5 py-1">
@@ -174,8 +222,8 @@ export function BookMapGrid({
                           disabled={!selectable}
                           aria-pressed={selectable ? selected : undefined}
                           onClick={event => {
-                            if (event.shiftKey) onSelectRange(book.bookId, test.id)
-                            else onToggleTest(book.bookId, test.id)
+                            if (event.shiftKey) onSelectRange?.(book.bookId, test.id)
+                            else onToggleTest?.(book.bookId, test.id)
                           }}
                           title={label}
                           aria-label={label}
@@ -206,6 +254,7 @@ export function BookMapGrid({
         </table>
       </div>
 
+      {!readOnly && (
       <div className="flex items-start gap-2 border-t bg-muted/40 px-4 py-2.5">
         <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <p className="text-xs text-muted-foreground">
@@ -213,6 +262,7 @@ export function BookMapGrid({
           için Shift tuşuyla tıklayın, tüm bölümü seçmek için bölüm adına tıklayın.
         </p>
       </div>
+      )}
     </div>
   )
 }

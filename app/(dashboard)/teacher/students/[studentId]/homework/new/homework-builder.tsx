@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { createHomeworkBatchAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
-import { BookMapGrid } from './book-map-grid'
+import { BookMapGrid } from '@/components/shared/book-map-grid'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
 import { COUNTER_LABEL } from '@/lib/homework-status'
