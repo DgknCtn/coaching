@@ -71,14 +71,22 @@ describe('COUNTER_LABEL', () => {
 })
 
 describe('formatSelectedUnits', () => {
-  it('lists test numbers in order', () => {
-    expect(formatSelectedUnits([3, 1, 2], 'test')).toBe('1, 2, 3. Test')
+  // R4 §7: ardışık test numaraları da sıkıştırılır — 70-100 testlik
+  // planlarda tek tek satır dökmek okunmaz bir mesaj üretiyordu.
+  it('compresses consecutive test numbers', () => {
+    expect(formatSelectedUnits([3, 1, 2], 'test')).toBe('1-3. Test')
+    expect(formatSelectedUnits([1, 2, 3, 4, 5], 'test')).toBe('1-5. Test')
+  })
+
+  it('keeps non-consecutive test numbers separate', () => {
     expect(formatSelectedUnits([5, 9, 7], 'test')).toBe('5, 7, 9. Test')
   })
 
-  it('collapses consecutive page ranges and labels them as page ranges', () => {
-    expect(formatSelectedUnits([4, 5, 6], 'page')).toBe('4-6. Sayfa Aralığı')
-    expect(formatSelectedUnits([1, 4, 5, 6, 9], 'page')).toBe('1, 4-6, 9. Sayfa Aralığı')
+  // Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022), bu yüzden
+  // numaralar sayfa numarasıdır ve "sf." etiketiyle yazılır.
+  it('labels page books as page ranges', () => {
+    expect(formatSelectedUnits([4, 5, 6], 'page')).toBe('sf. 4-6')
+    expect(formatSelectedUnits([1, 4, 5, 6, 9], 'page')).toBe('sf. 1, 4-6, 9')
   })
 
   it('returns an empty string when nothing is selected', () => {

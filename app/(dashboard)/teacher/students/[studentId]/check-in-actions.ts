@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { checkInScheduleSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 export async function saveCheckInScheduleAction(
   studentId: string,
@@ -22,7 +23,7 @@ export async function saveCheckInScheduleAction(
     p_is_active: parsed.data.isActive,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${parsed.data.studentId}`)
   revalidatePath('/teacher')
   return { success: true }

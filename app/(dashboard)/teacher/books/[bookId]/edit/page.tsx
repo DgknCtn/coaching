@@ -18,7 +18,8 @@ export default async function BookEditPage({
   const { data: book } = await supabase
     .from('books')
     .select(`
-      id, title, subject, publisher, exam_type, description, status, tracking_mode,
+      id, title, subject, publisher, exam_type, level_exam, edition_year,
+      description, status, tracking_mode, video_mode, video_url,
       book_sections(
         id, title, order_index,
         book_tests(id)
@@ -56,8 +57,11 @@ export default async function BookEditPage({
           title: book.title,
           subject: book.subject,
           publisher: book.publisher ?? '',
-          examType: book.exam_type ?? '',
+          levelExam: book.level_exam ?? '',
+          editionYear: book.edition_year ?? undefined,
           description: book.description ?? '',
+          videoMode: (book.video_mode ?? 'none') as 'none' | 'book' | 'section',
+          videoUrl: book.video_url ?? '',
         }}
         sections={sections}
         trackingMode={book.tracking_mode ?? 'test'}

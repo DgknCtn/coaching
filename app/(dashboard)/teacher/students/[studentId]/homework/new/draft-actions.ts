@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 // Haftalık plan taslağı: seçimler sayfa yenilemede kaybolmasın diye
 // Supabase'de tutulur (019_weekly_plan_drafts). Taslak yayınlanmış ödev
@@ -34,18 +35,19 @@ export async function saveWeeklyPlanDraftAction(
   const parsed = draftSchema.safeParse({ workspaceId, studentId, dueDate, title, items })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
-  await getTeacherContext()
+  // RPC'ye oturumun workspace'i gider; istemcinin gönderdiği değer değil.
+  const { workspaceId: sessionWorkspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('upsert_weekly_plan_draft', {
-    p_workspace_id: parsed.data.workspaceId,
+    p_workspace_id: sessionWorkspaceId,
     p_student_id: parsed.data.studentId,
     p_due_date: parsed.data.dueDate || null,
     p_title: parsed.data.title || null,
     p_items: parsed.data.items,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   return { success: true }
 }
 
@@ -55,14 +57,14 @@ export async function clearWeeklyPlanDraftAction(workspaceId: string, studentId:
   if (!parsedWorkspace.success) return { error: firstIssue(parsedWorkspace.error) }
   if (!parsedStudent.success) return { error: firstIssue(parsedStudent.error) }
 
-  await getTeacherContext()
+  const { workspaceId: sessionWorkspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('clear_weekly_plan_draft', {
-    p_workspace_id: parsedWorkspace.data,
+    p_workspace_id: sessionWorkspaceId,
     p_student_id: parsedStudent.data,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   return { success: true }
 }

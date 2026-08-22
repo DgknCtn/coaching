@@ -51,13 +51,17 @@ Workspace (çalışma alanı)
 ```
 
 ### Kilit tablolar
-- **books → book_sections → book_tests**: Bir kitap ünitelere, üniteler tekil testlere ayrılır. İlerleme takibinin en küçük birimi bir "test"tir.
+- **books → book_sections → book_tests**: Bir kitap ünitelere, üniteler tekil birimlere ayrılır. İlerleme takibinin en küçük birimi bir "birim"dir: test takipli kitapta bir test, **sayfa takipli kitapta tek bir fiziksel sayfa** (R4/022). Sayfa = satır olduğu için aynı sayfa iki kez sayılamaz ve bölüm yüzdesi (43/56 = %77) doğrudan satır sayımından çıkar.
+- **student_book_targets**: Bir kitap atamasının tek aktif hedefi — başlangıç/bitiş tarihi + kapsam (`whole_book` / `sections` / `units`). Plan matematiği kitabın tamamı yerine bu kapsamdan beslenir.
+- **video_watch_marks**: Kitap veya bölüm videosunun "izledim" işareti. Video plan temposuna **dahil değildir** ve öğretmen onayı gerektirmez.
 - **student_book_assignments**: Bir kitabı bir öğrenciye, bir döneme bağlar (başlangıç/hedef bitiş tarihiyle).
 - **homework_batches / homework_items**: Öğretmen bir "ödev paketi" oluşturur (son teslim tarihli), içine birden çok test koyar. Öğrenci her testi tek tek tamamlar.
 - **test_completions**: Bir testin tamamlanmasının kalıcı kaydı. `source` alanı ödevden mi manuel mi geldiğini tutar. Kısmi benzersiz indeks sayesinde bir (atama, test) çiftinin yalnızca **tek bir aktif tamamlaması** olabilir; geri alma (`reverted`) desteklenir.
 
-### Sınav türleri
-Öğrenci ve kitaplar `TYT / AYT / LGS / KPSS / DGS / Other` sınav türleriyle etiketlenir.
+### Sınav türleri ve kitap havuzu
+Öğrenciler `TYT / AYT` ile etiketlenir. Kitaplar R4'ten itibaren **seviye / sınav türü** (`9-12. Sınıf, TYT, AYT, TYT+AYT, LGS, ALES, DGS`) taşır; eski `exam_type` kolonu geriye dönük uyum için korunur ve `derive_exam_type` ile bundan türetilir.
+
+Kitap havuzu **dönemden bağımsızdır** (021): `books.academic_term_id` opsiyoneldir, dönem bağı yalnızca öğrenciye atama anında (`student_book_assignments`) anlamlıdır. Aynı kitabın 2025 ve 2026 baskısı ayrı kayıtlardır (`edition_year`); `duplicate_book_as_edition` eski kaydı ezmeden yeni baskı üretir.
 
 ---
 
@@ -66,18 +70,21 @@ Workspace (çalışma alanı)
 ### Öğretmen Paneli
 - **Dashboard** — Tüm öğrencilerin genel bakış tablosu, risk durumu göstergesiyle.
 - **Eğitim dönemleri (Terms)** — Dönem oluşturma/yönetme (taslak / aktif / tamamlandı / arşiv).
-- **Kitap havuzu** — Kitap listesi ve tek işlemde ünite + test yapısıyla kitap oluşturma (`create_book_with_sections_and_tests` RPC).
-- **Kitap detay** — Kitabın ünite/test ağacı.
+- **Kitap havuzu** — Arama + ders / seviye-sınav / yayın / baskı yılı / takip türü filtreleriyle 100+ kaynağı taşıyan kalıcı kütüphane; tek işlemde bölüm + birim yapısıyla kitap oluşturma (`create_book_with_sections_and_tests` RPC). `/teacher/books/export` ile CSV/JSON yedek.
+- **Kitap detay / düzenleme** — Kitabın bölüm/birim ağacı, meta veri düzenleme, sayfa kitaplarında "Bölüm + sf. 1-56" girişi (`create_page_section`), yeni baskı oluşturma.
+- **Kitap Haritası** — Test kitaplarında bölüm × test matrisi; sayfa kitaplarında bölüm bazlı tablo (Kapsam / Tamamlanan / Ödevde-Onay / Kalan / %). Kalan aralıklar onaylı sayfalardan otomatik türetilir.
+- **Hedef** — Öğrenci-kitap başına tek aktif hedef: tarih aralığı + kapsam (tüm kitap / seçili bölümler). Kapsam değişince plan matematiği yeniden hesaplanır.
 - **Öğrenci listesi** — Risk durumu rozetleriyle öğrenciler.
 - **Öğrenci oluşturma / detay** — Sekmeli görünüm: Kitaplar / Ödevler / Veliler.
 - **Kitap atama** — Öğrenciye dönem bazlı kitap atama dialoğu.
-- **Ödev oluşturma (HomeworkBuilder)** — Atanmış kitaplardan testleri seçip son teslim tarihli ödev paketi kurma.
+- **Haftalık Plan / Ödev oluşturma (HomeworkBuilder)** — Atanmış kitaplardan test veya sayfa aralığı (`1-36, 42-48`) seçip son teslim tarihli ödev paketi kurma; taslak otomatik kaydedilir. "Ödev metnini kopyala" test + sayfa + video görevlerini tek, sıkıştırılmış WhatsApp mesajına çevirir (`1,2,3,4,5. Test → 1-5. Test`).
 - **Davet oluşturma** — Öğrenci veya veli için tek kullanımlık, süreli, e-postaya bağlı davet linki.
 - **Öğrenci ilerleme raporu** — `/teacher/students/[id]/report`, mevcut görünümlerden üretilen yazdırılabilir/PDF rapor.
 
 ### Öğrenci Paneli
 - Kişisel ödev listesi; her test için **"Tamamladım / Geri Al"** aksiyonu.
-- Atanmış kitaplarda ilerleme görünümü.
+- Atanmış kitaplarda salt okunur Kitap Haritası, tempo şeridi ve ilerleme görünümü.
+- Video kaynakları: bağlantı + öğretmen onayı gerektirmeyen **"İzledim"** işareti.
 
 ### Veli Paneli
 - Çocuğun ilerleme ve ödev durumunun salt-okunur zengin özeti.
@@ -117,7 +124,8 @@ Ağır sorgular veritabanı görünümlerine taşınmıştır:
 
 ### Mimari ilkeler
 - **Server Actions** ile mutasyonlar (`actions.ts` dosyaları); tüm girdiler sunucuda **Zod ile** doğrulanır (`lib/validation.ts`).
-- **Row Level Security (RLS)** her tabloda; veri izolasyonu `workspace_id` üzerinden.
+- **Row Level Security (RLS)** her tabloda; veri izolasyonu `workspace_id` üzerinden. Öğrenci/veli okuma izni `is_student_self` ve `is_parent_of_student` yardımcılarıyla verilir.
+- **Saf mantık modülleri** (`lib/`): `plan-pace` (tempo/plan çizgisi), `plan-scope` (hedef kapsamı), `page-ranges` (aralık birleşimi/farkı), `share-text` (WhatsApp metni), `homework-status` (durum türetme), `book-map` (harita yükleyici). Her biri tek sorumluluk taşır ve birim testlidir; UI katmanı kendi kopyasını üretmez.
 - **Middleware** (`middleware.ts`) ile rota koruması; `/api/health` gibi public rotalar hariç.
 - Ham veritabanı hataları kullanıcıya sızmaz — Türkçe'ye çevrilir (`lib/auth-errors.ts`).
 - Hata gözlemlenebilirliği: `lib/observability.ts` `reportError` dikişi + error boundary'ler.
@@ -134,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–010
+supabase/migrations/ 001–023
 ```
 
 ---
@@ -159,4 +167,8 @@ npm run e2e        # playwright
 
 ## 8. Mevcut Durum
 
-MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur. 10 veritabanı migration'ı çalıştırılmıştır (001–010).
+MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
+
+R2–R4 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4). 23 veritabanı migration'ı çalıştırılmıştır (001–023).
+
+**R4 sonrası bekleme listesi:** haritada toplu onay akışı; reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma.

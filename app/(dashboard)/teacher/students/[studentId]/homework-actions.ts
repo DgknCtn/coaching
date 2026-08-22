@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 export async function approveHomeworkItemAction(homeworkItemId: string, studentId: string) {
   const parsed = uuidSchema.safeParse(homeworkItemId)
@@ -17,7 +18,7 @@ export async function approveHomeworkItemAction(homeworkItemId: string, studentI
     p_homework_item_id: homeworkItemId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
@@ -39,7 +40,7 @@ export async function rejectHomeworkItemAction(homeworkItemId: string, studentId
     p_note: parsed.data.note || null,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
@@ -65,7 +66,7 @@ export async function approveHomeworkBatchAction(homeworkBatchId: string, studen
     p_book_id: parsedBookId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }

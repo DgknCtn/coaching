@@ -7,6 +7,7 @@
 // karşılığıdır.
 
 import { deriveTestState, type HomeworkTestState } from '@/lib/homework-status'
+import { formatPageRangeLabel, formatRanges, rangesFromPages } from '@/lib/page-ranges'
 
 export interface BookMapTest {
   id: string
@@ -15,6 +16,10 @@ export interface BookMapTest {
   state: HomeworkTestState
   /** Açık ödev kaydı varsa id'si — tekil onay/red işlemleri için. */
   homeworkItemId: string | null
+  /** Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022):
+   *  pageStart === pageEnd === sayfa no. Test kitabında null. */
+  pageStart: number | null
+  pageEnd: number | null
 }
 
 export interface BookMapSection {
@@ -23,6 +28,22 @@ export interface BookMapSection {
   orderIndex: number
   tests: BookMapTest[]
   completedCount: number
+  /** R4 §3: bölümün fiziksel kapsamı ve kısa insan notu. */
+  pageStart: number | null
+  pageEnd: number | null
+  note: string | null
+  videoUrl: string | null
+}
+
+/** Öğrenci-kitap ilişkisindeki tek aktif hedef (022). Kapsam daraltıldığında
+ *  plan matematiği yalnız bu kümeden beslenir — bkz. lib/plan-scope.ts. */
+export interface BookMapTarget {
+  id: string
+  startDate: string | null
+  targetDate: string | null
+  scopeType: 'whole_book' | 'sections' | 'units'
+  sectionIds: string[]
+  unitIds: string[]
 }
 
 export interface BookMapBook {
@@ -40,6 +61,13 @@ export interface BookMapBook {
   completedTests: number
   /** Bir bölümdeki en yüksek test sayısı — matrisin sütun genişliği. */
   maxTestsPerSection: number
+  videoMode: string
+  videoUrl: string | null
+  /** 'resource': yalnız kaynak olarak göster. 'weekly_reminder': haftalık
+   *  plan mesajında da hatırlat (R4 §6). */
+  videoDisplay: string
+  /** Tek aktif hedef; yoksa null (o zaman kapsam tüm kitaptır). */
+  target: BookMapTarget | null
 }
 
 interface LoadBookMapArgs {
@@ -69,12 +97,12 @@ export async function loadBookMap(
   let assignmentQuery = supabase
     .from('student_book_assignments')
     .select(`
-      id, book_id, start_date, target_end_date,
+      id, book_id, start_date, target_end_date, video_display,
       books(
-        id, title, subject, exam_type, publisher, tracking_mode,
+        id, title, subject, exam_type, publisher, tracking_mode, video_mode, video_url,
         book_sections(
-          id, title, order_index, status,
-          book_tests(id, title, order_index, status)
+          id, title, order_index, status, note, video_url, page_start, page_end,
+          book_tests(id, title, order_index, status, page_start, page_end)
         )
       )
     `)
@@ -92,26 +120,47 @@ export async function loadBookMap(
 
   const assignmentIds = rows.map((a) => a.id)
 
-  // Açık ödev kayıtları + ait oldukları batch'in teslim tarihi.
-  const { data: openItems } = await supabase
-    .from('homework_items')
-    .select(
-      'id, book_test_id, status, rejected_at, homework_batches!inner(due_date, status)'
-    )
-    .in('student_book_assignment_id', assignmentIds)
-    .in('status', ['pending', 'pending_approval'])
-    .eq('homework_batches.status', 'active')
-
-  // Onaylanmış ilerleme (resmi kayıt).
-  const { data: completions } = await supabase
-    .from('test_completions')
-    .select('book_test_id')
-    .in('student_book_assignment_id', assignmentIds)
-    .eq('status', 'active')
+  // Üç sorgu da assignmentIds'e bağlı ama BİRBİRİNDEN bağımsız; sıralı
+  // beklemek için sebep yok. Tek dalgada çalışırlar, sonuçlar aynıdır.
+  const [{ data: openItems }, { data: completions }, { data: targets }] = await Promise.all([
+    // Açık ödev kayıtları + ait oldukları batch'in teslim tarihi.
+    supabase
+      .from('homework_items')
+      .select(
+        'id, book_test_id, status, rejected_at, homework_batches!inner(due_date, status)'
+      )
+      .in('student_book_assignment_id', assignmentIds)
+      .in('status', ['pending', 'pending_approval'])
+      .eq('homework_batches.status', 'active'),
+    // Onaylanmış ilerleme (resmi kayıt).
+    supabase
+      .from('test_completions')
+      .select('book_test_id')
+      .in('student_book_assignment_id', assignmentIds)
+      .eq('status', 'active'),
+    // Tek aktif hedef (022). Hedef yoksa kapsam tüm kitaptır.
+    supabase
+      .from('student_book_targets')
+      .select('id, student_book_assignment_id, start_date, target_date, scope_type, scope_data')
+      .in('student_book_assignment_id', assignmentIds)
+      .eq('active', true),
+  ])
 
   const completedIds = new Set<string>(
     ((completions ?? []) as any[]).map((c) => c.book_test_id)
   )
+
+  const targetByAssignment = new Map<string, BookMapTarget>()
+  for (const row of (targets ?? []) as any[]) {
+    targetByAssignment.set(row.student_book_assignment_id, {
+      id: row.id,
+      startDate: row.start_date ?? null,
+      targetDate: row.target_date ?? null,
+      scopeType: row.scope_type ?? 'whole_book',
+      sectionIds: row.scope_data?.section_ids ?? [],
+      unitIds: row.scope_data?.unit_ids ?? [],
+    })
+  }
 
   const itemByTestId = new Map<string, any>()
   for (const item of (openItems ?? []) as any[]) {
@@ -136,6 +185,8 @@ export async function loadBookMap(
               title: t.title,
               orderIndex: t.order_index,
               homeworkItemId: item?.id ?? null,
+              pageStart: t.page_start ?? null,
+              pageEnd: t.page_end ?? null,
               state: deriveTestState({
                 hasActiveCompletion: completedIds.has(t.id),
                 itemStatus: item?.status ?? null,
@@ -151,6 +202,10 @@ export async function loadBookMap(
           orderIndex: s.order_index,
           tests,
           completedCount: tests.filter((t) => t.state === 'completed').length,
+          pageStart: s.page_start ?? null,
+          pageEnd: s.page_end ?? null,
+          note: s.note ?? null,
+          videoUrl: s.video_url ?? null,
         }
       })
       .filter((s: BookMapSection) => s.tests.length > 0)
@@ -171,6 +226,10 @@ export async function loadBookMap(
       totalTests,
       completedTests: sections.reduce((sum, s) => sum + s.completedCount, 0),
       maxTestsPerSection: sections.reduce((max, s) => Math.max(max, s.tests.length), 0),
+      videoMode: book?.video_mode ?? 'none',
+      videoUrl: book?.video_url ?? null,
+      videoDisplay: assignment.video_display ?? 'resource',
+      target: targetByAssignment.get(assignment.id) ?? null,
     }
   })
 }
@@ -182,41 +241,25 @@ export function isSelectableState(state: HomeworkTestState): boolean {
 }
 
 /**
- * Haftalık plan panelinde bir bölümden seçilen testleri okunur tek satıra çevirir.
+ * Bir bölümden seçilen birimleri okunur tek satıra çevirir.
  *
- *   [1,2,3]   -> "1, 2, 3. Test"
- *   [5,7,9]   -> "5, 7, 9. Test"
- *   [4,5,6] + tracking_mode='page' -> "4-6. Sayfa Aralığı"
+ *   [1,2,3]                        -> "1-3. Test"
+ *   [5,7,9]                        -> "5, 7, 9. Test"
+ *   [1..36, 42..48] + 'page'       -> "sf. 1-36, 42-48"
  *
- * Sayfa takipli kitapta birim "test" değil sayfa aralığıdır (013_book_tracking_mode);
- * ardışık seçimler tek aralık olarak kısaltılır, çünkü zaten aralık ifade ederler.
+ * Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022), bu yüzden
+ * numaralar sayfa numarasıdır ve aralığa toplanır. Test kitabında da
+ * ardışık numaralar sıkıştırılır (R4 §7: "1,2,3,4,5. Test" -> "1-5. Test").
+ * Sıkıştırma ve biçimleme lib/page-ranges.ts'te tek yerde durur.
  */
 export function formatSelectedUnits(
   orderIndexes: number[],
   trackingMode: string
 ): string {
-  const sorted = [...orderIndexes].sort((a, b) => a - b)
-  if (sorted.length === 0) return ''
+  const ranges = rangesFromPages(orderIndexes)
+  if (ranges.length === 0) return ''
 
-  const unitLabel = trackingMode === 'page' ? 'Sayfa Aralığı' : 'Test'
+  if (trackingMode === 'page') return formatPageRangeLabel(ranges)
 
-  // Sayfa modunda ardışık blokları "4-6" biçiminde topla.
-  if (trackingMode === 'page') {
-    const parts: string[] = []
-    let start = sorted[0]
-    let prev = sorted[0]
-    for (const n of sorted.slice(1)) {
-      if (n === prev + 1) {
-        prev = n
-        continue
-      }
-      parts.push(start === prev ? `${start}` : `${start}-${prev}`)
-      start = n
-      prev = n
-    }
-    parts.push(start === prev ? `${start}` : `${start}-${prev}`)
-    return `${parts.join(', ')}. ${unitLabel}`
-  }
-
-  return `${sorted.join(', ')}. ${unitLabel}`
+  return `${formatRanges(ranges)}. Test`
 }

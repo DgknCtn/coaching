@@ -44,17 +44,21 @@ export default async function NewHomeworkPage({
 
   // Harita ve durumlar tek ortak yükleyiciden gelir — öğrenci-kitap sayfası da
   // aynı kaynağı kullanır, ikinci bir "harita durumu" veri seti yok.
-  const books = await loadBookMap(supabase, { workspaceId, studentId })
-
-  // Kaydedilmiş taslak (019): kitap değişiminde ve sayfa yenilemesinde
-  // seçimlerin korunmasını sağlar.
-  const { data: draft } = await supabase
-    .from('weekly_plan_drafts')
-    .select('id, due_date, title')
-    .eq('workspace_id', workspaceId)
-    .eq('student_id', studentId)
-    .eq('teacher_profile_id', profile.id)
-    .maybeSingle()
+  //
+  // Taslak sorgusu haritadan bağımsız; ikisi tek dalgada çalışır. (Taslak
+  // KALEMLERİ taslağın id'sine bağlı olduğu için o aşağıda sıralı kalır.)
+  const [books, { data: draft }] = await Promise.all([
+    loadBookMap(supabase, { workspaceId, studentId }),
+    // Kaydedilmiş taslak (019): kitap değişiminde ve sayfa yenilemesinde
+    // seçimlerin korunmasını sağlar.
+    supabase
+      .from('weekly_plan_drafts')
+      .select('id, due_date, title')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId)
+      .eq('teacher_profile_id', profile.id)
+      .maybeSingle(),
+  ])
 
   let draftTestIds: string[] = []
   if (draft?.id) {

@@ -1,7 +1,18 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
-export async function getTeacherContext() {
+// Bu üç fonksiyon React.cache() ile sarılıdır: layout ve sayfa AYNI istek
+// içinde aynı context'i çağırdığında sorgular yalnız bir kez çalışır.
+// Önceden öğretmen sayfası başına ~10 gidiş-dönüş ödeniyordu (layout 5 +
+// sayfa 5); dedupe ile bu tek sefere iner.
+//
+// İkinci kazanç: profil alındıktan sonra birbirinden bağımsız olan üyelik,
+// workspace ve aktif dönem sorguları Promise.all ile tek dalgada çalışır.
+// Dönen nesne ve redirect koşulları AYNEN korunur — çağıran hiçbir ekran
+// farkı görmez.
+
+export const getTeacherContext = cache(async function getTeacherContext() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -14,33 +25,35 @@ export async function getTeacherContext() {
 
   if (!profile?.default_workspace_id) redirect('/login')
 
-  const { data: member } = await supabase
-    .from('workspace_members')
-    .select('role')
-    .eq('profile_id', profile.id)
-    .eq('workspace_id', profile.default_workspace_id)
-    .eq('status', 'active')
-    .in('role', ['owner', 'teacher'])
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const [{ data: member }, { data: workspace }, { data: activeTerm }] = await Promise.all([
+    supabase
+      .from('workspace_members')
+      .select('role')
+      .eq('profile_id', profile.id)
+      .eq('workspace_id', profile.default_workspace_id)
+      .eq('status', 'active')
+      .in('role', ['owner', 'teacher'])
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('workspaces')
+      .select('id, name')
+      .eq('id', profile.default_workspace_id)
+      .single(),
+    supabase
+      .from('academic_terms')
+      .select('id, name, status')
+      .eq('workspace_id', profile.default_workspace_id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
+  // Yetki kontrolü sorgular paralelleştirildikten SONRA da aynı noktada
+  // uygulanır: üyeliği olmayan kullanıcı yine /login'e gider.
   if (!member) redirect('/login')
-
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('id, name')
-    .eq('id', profile.default_workspace_id)
-    .single()
-
-  const { data: activeTerm } = await supabase
-    .from('academic_terms')
-    .select('id, name, status')
-    .eq('workspace_id', profile.default_workspace_id)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   return {
     supabase,
@@ -50,9 +63,9 @@ export async function getTeacherContext() {
     role: member.role as string,
     activeTerm: activeTerm as { id: string; name: string; status: string } | null,
   }
-}
+})
 
-export async function getStudentContext() {
+export const getStudentContext = cache(async function getStudentContext() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -65,23 +78,24 @@ export async function getStudentContext() {
 
   if (!profile?.default_workspace_id) redirect('/login')
 
-  const { data: studentRecord } = await supabase
-    .from('students')
-    .select('id, full_name, workspace_id, exam_type')
-    .eq('profile_id', profile.id)
-    .eq('workspace_id', profile.default_workspace_id)
-    .single()
+  const [{ data: studentRecord }, { data: activeTerm }] = await Promise.all([
+    supabase
+      .from('students')
+      .select('id, full_name, workspace_id, exam_type')
+      .eq('profile_id', profile.id)
+      .eq('workspace_id', profile.default_workspace_id)
+      .single(),
+    supabase
+      .from('academic_terms')
+      .select('id, name')
+      .eq('workspace_id', profile.default_workspace_id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   if (!studentRecord) redirect('/login')
-
-  const { data: activeTerm } = await supabase
-    .from('academic_terms')
-    .select('id, name')
-    .eq('workspace_id', profile.default_workspace_id)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   return {
     supabase,
@@ -90,9 +104,9 @@ export async function getStudentContext() {
     workspaceId: profile.default_workspace_id as string,
     activeTerm: activeTerm as { id: string; name: string } | null,
   }
-}
+})
 
-export async function getParentContext() {
+export const getParentContext = cache(async function getParentContext() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -127,4 +141,4 @@ export async function getParentContext() {
       students: { id: string; full_name: string; exam_type: string | null; grade_level: string | null }
     }>,
   }
-}
+})

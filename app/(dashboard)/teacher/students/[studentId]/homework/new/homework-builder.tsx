@@ -24,6 +24,7 @@ import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-a
 import { BookMapGrid } from '@/components/shared/book-map-grid'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
+import { buildShareText } from '@/lib/share-text'
 import { COUNTER_LABEL } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -99,8 +100,13 @@ export function HomeworkBuilder({
             sectionId: section.id,
             sectionTitle: section.title,
             testTitle: test.title,
-            // Matristeki sütun numarası (1 tabanlı) — panelde gösterilen numara.
-            orderIndex: position + 1,
+            // Test kitabında matristeki sütun numarası (1 tabanlı); sayfa
+            // takipli kitapta birim tek bir fiziksel sayfadır (022), o zaman
+            // gösterilen numara gerçek sayfa numarasıdır.
+            orderIndex:
+              book.trackingMode === 'page' && test.pageStart != null
+                ? test.pageStart
+                : position + 1,
             trackingMode: book.trackingMode,
           })
         })
@@ -144,6 +150,26 @@ export function HomeworkBuilder({
     }
   }, [activeBook])
 
+  // Haftalık planda hatırlatılacak video görevleri. Kitap veya bölüm
+  // seviyesindeki video kaynağı, öğrenci-kitap tercihine göre mesaja
+  // eklenir; hesap birimi değildir (R4 §6).
+  const videoTasksByBookId = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const book of books) {
+      if (book.videoMode === 'none') continue
+      // Tercih "kaynak olarak göster" ise mesajda hatırlatma yapılmaz.
+      if (book.videoDisplay !== 'weekly_reminder') continue
+      const tasks =
+        book.videoMode === 'book'
+          ? [`${book.title} konu anlatım videolarını izle`]
+          : book.sections
+              .filter(s => s.videoUrl)
+              .map(s => `${s.title} konu anlatım videolarını izle`)
+      if (tasks.length > 0) map.set(book.bookId, tasks)
+    }
+    return map
+  }, [books])
+
   // Kitap başlığı altında gruplanmış sepet ("Bu Haftanın Planı").
   const groupedSelection = useMemo(() => {
     const byBook = new Map<
@@ -154,6 +180,7 @@ export function HomeworkBuilder({
         trackingMode: string
         count: number
         sections: Map<string, { title: string; units: number[] }>
+        videoTasks: string[]
       }
     >()
     for (const t of selectedTests) {
@@ -163,6 +190,8 @@ export function HomeworkBuilder({
         trackingMode: t.trackingMode,
         count: 0,
         sections: new Map<string, { title: string; units: number[] }>(),
+        // Video plan temposuna girmez (R4 §6); yalnız mesajda hatırlatılır.
+        videoTasks: videoTasksByBookId.get(t.bookId) ?? [],
       }
       group.count++
       const section = group.sections.get(t.sectionId) ?? { title: t.sectionTitle, units: [] }
@@ -288,22 +317,23 @@ export function HomeworkBuilder({
 
   function copyShareText() {
     if (selectedTests.length === 0) return
-    const lines = [
-      `Merhaba ${studentName},`,
-      '',
-      'Bu haftaki ödevlerin:',
-      `Teslim tarihi: ${dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : '—'}`,
-      '',
-    ]
-    for (const group of groupedSelection) {
-      lines.push(group.bookTitle + ':')
-      for (const section of group.sections.values()) {
-        lines.push(`• ${section.title} — ${formatSelectedUnits(section.units, group.trackingMode)}`)
-      }
-      lines.push('')
-    }
-    lines.push('Tamamladığında panelden işaretlemeyi unutma.')
-    navigator.clipboard.writeText(lines.join('\n'))
+    // Metin üretimi lib/share-text.ts'te; sıkıştırma kuralları (R4 §7)
+    // orada tek yerde duruyor ve testleniyor.
+    navigator.clipboard.writeText(
+      buildShareText({
+        studentName,
+        dueDate,
+        books: groupedSelection.map(group => ({
+          bookTitle: group.bookTitle,
+          trackingMode: group.trackingMode,
+          sections: [...group.sections.values()].map(section => ({
+            title: section.title,
+            units: section.units,
+          })),
+          videoTasks: group.videoTasks,
+        })),
+      })
+    )
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

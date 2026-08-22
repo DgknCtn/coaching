@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 // students/[studentId]/homework-actions.ts ile aynı RPC'ler; tek fark
 // revalidate hedefi — buradan onaylanan iş dashboard sayaçlarını da düşürür.
@@ -20,7 +21,7 @@ export async function approveFromTasksAction(homeworkItemId: string) {
     p_homework_item_id: parsed.data,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/tasks')
   revalidatePath('/teacher')
   return { success: true }
@@ -43,7 +44,7 @@ export async function rejectFromTasksAction(homeworkItemId: string, note?: strin
     p_note: parsed.data.note || null,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/tasks')
   revalidatePath('/teacher')
   return { success: true }
@@ -70,7 +71,7 @@ export async function approveHomeworkBatchAction(homeworkBatchId: string, bookId
     p_book_id: parsedBookId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/tasks')
   revalidatePath('/teacher')
   return { success: true }

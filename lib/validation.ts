@@ -1,4 +1,16 @@
 import { z } from 'zod'
+import {
+  LEVEL_EXAMS,
+  SUBJECTS,
+  TRACKING_MODES,
+  VIDEO_MODES,
+  EDITION_YEAR_MIN,
+  EDITION_YEAR_MAX,
+} from '@/lib/book-taxonomy'
+
+// Ders/seviye/takip/video listeleri artık lib/book-taxonomy.ts'te (R4 §3).
+// Buradan yeniden dışa aktarılıyorlar ki mevcut importlar kırılmasın.
+export { LEVEL_EXAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES }
 
 // Server Action'larda kullanılan paylaşılan doğrulama şemaları.
 // Client tarafındaki react-hook-form doğrulaması kolayca atlanabilir;
@@ -28,11 +40,6 @@ export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer'] as const
-
-export const SUBJECTS = [
-  'Matematik', 'Türkçe', 'Fizik', 'Kimya', 'Biyoloji',
-  'Geometri', 'Tarih', 'Coğrafya', 'Edebiyat', 'İngilizce', 'Diğer',
-] as const
 
 export const studentSchema = z.object({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
@@ -66,18 +73,49 @@ const sectionSchema = z.object({
     .int('Test sayısı tam sayı olmalı.')
     .min(0, 'Test sayısı negatif olamaz.')
     .max(1000, 'Test sayısı çok yüksek.'),
+  // R4 §3: bölümün niteliğini insan dilinde anlatan kısa not. Kur/etkinlik
+  // gibi alt türler için ayrı veri modeli açmak yerine buraya yazılır.
+  note: z.string().trim().max(500, 'Bölüm notu en fazla 500 karakter olabilir.').optional().or(z.literal('')),
+  video_url: z.string().trim().url('Geçerli bir bağlantı girin.').max(500).optional().or(z.literal('')),
+  // Sayfa takipli kitapta bölüm "sf. 1-56" gibi fiziksel kapsamla tanımlanır.
+  page_start: z.number().int().min(1).max(100000).optional().nullable(),
+  page_end: z.number().int().min(1).max(100000).optional().nullable(),
 })
+  .refine(
+    (v) => v.page_start == null || v.page_end == null || v.page_end >= v.page_start,
+    { message: 'Bitiş sayfası başlangıçtan küçük olamaz.', path: ['page_end'] }
+  )
 
-export const TRACKING_MODES = ['test', 'page'] as const
+const levelExam = z
+  .enum(LEVEL_EXAMS, { message: 'Geçersiz seviye / sınav türü.' })
+  .optional()
+  .or(z.literal(''))
 
+const editionYear = z
+  .number({ message: 'Baskı yılı sayı olmalı.' })
+  .int('Baskı yılı tam sayı olmalı.')
+  .min(EDITION_YEAR_MIN, 'Baskı yılı çok eski.')
+  .max(EDITION_YEAR_MAX, 'Baskı yılı çok ileri.')
+  .optional()
+  .nullable()
+
+const videoMode = z.enum(VIDEO_MODES, { message: 'Geçersiz video desteği seçimi.' }).default('none')
+const videoUrl = z.string().trim().url('Geçerli bir video bağlantısı girin.').max(500).optional().or(z.literal(''))
+
+// R4 §3. Değişenler: examType yerine levelExam (exam_type artık DB'de
+// derive_exam_type ile türetiliyor), baskı yılı ve video desteği eklendi,
+// termId opsiyonelleşti — kitap havuzu artık dönemden bağımsız (021).
 export const bookSchema = z.object({
   title: z.string().trim().min(2, 'Kitap adı en az 2 karakter olmalı.').max(200),
   subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
   publisher: z.string().trim().max(120).optional().or(z.literal('')),
-  examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
+  levelExam,
+  editionYear,
   trackingMode: z.enum(TRACKING_MODES, { message: 'Geçersiz takip türü.' }).default('test'),
   description: z.string().trim().max(2000).optional().or(z.literal('')),
-  termId: uuid,
+  videoMode,
+  videoUrl,
+  termId: uuid.optional().or(z.literal('')),
   sections: z.array(sectionSchema).min(1, 'En az bir bölüm ekleyin.').max(100),
 })
 
@@ -88,8 +126,23 @@ export const bookUpdateSchema = z.object({
   title: z.string().trim().min(2, 'Kitap adı en az 2 karakter olmalı.').max(200),
   subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
   publisher: z.string().trim().max(120).optional().or(z.literal('')),
-  examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
+  levelExam,
+  editionYear,
   description: z.string().trim().max(2000).optional().or(z.literal('')),
+  videoMode,
+  videoUrl,
+})
+
+// "Bu kitabın yeni baskısını oluştur" (R4 §1B, §8): 2026 içeriği eklenirken
+// 2025 kaydı ezilmesin diye kitap kopyalanır.
+export const bookEditionSchema = z.object({
+  bookId: uuid,
+  editionYear: z
+    .number({ message: 'Baskı yılı sayı olmalı.' })
+    .int('Baskı yılı tam sayı olmalı.')
+    .min(EDITION_YEAR_MIN, 'Baskı yılı çok eski.')
+    .max(EDITION_YEAR_MAX, 'Baskı yılı çok ileri.'),
+  title: z.string().trim().max(200).optional().or(z.literal('')),
 })
 
 export const sectionTitleSchema = z.object({

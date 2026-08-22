@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { BookOpen, Plus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
+import { resolvePlanScope } from '@/lib/plan-scope'
 import { testStateLabel, TEST_STATE_VARIANT } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +12,10 @@ import { MetricRow } from '@/components/shared/metric-row'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
+import { BookMapGrid } from '@/components/shared/book-map-grid'
 import { Section } from '@/components/shared/section'
+import { TargetCard } from './target-card'
+import { VideoPreference } from './video-preference'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,8 +54,11 @@ export default async function StudentBookDetailPage({
 
   if (!book) notFound()
 
-  const totalTests = progress.total_tests ?? 0
-  const completedTests = progress.completed_tests ?? 0
+  // Plan matematiği hedef kapsamından beslenir (R4 §5). Hedef yoksa kapsam
+  // tüm kitaptır ve değerler view'inkiyle birebir aynı kalır.
+  const scope = resolvePlanScope(book)
+  const totalTests = scope.totalUnits
+  const completedTests = scope.completedUnits
   const pendingApprovalCount = book.sections.reduce(
     (sum, s) => sum + s.tests.filter(t => t.state === 'pending_approval').length,
     0
@@ -60,7 +67,9 @@ export default async function StudentBookDetailPage({
     (sum, s) => sum + s.tests.filter(t => t.state === 'overdue').length,
     0
   )
-  const percentage = Number(progress.completion_percentage ?? 0)
+  const percentage =
+    totalTests === 0 ? 0 : Math.round((completedTests / totalTests) * 100)
+  const unitLabel = book.trackingMode === 'page' ? 'sayfa' : 'test'
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
@@ -82,7 +91,7 @@ export default async function StudentBookDetailPage({
       <MetricRow
         className="md:grid-cols-5"
         metrics={[
-          { label: 'Toplam test', value: totalTests },
+          { label: book.trackingMode === 'page' ? 'Toplam sayfa' : 'Toplam test', value: totalTests },
           { label: 'Tamamlanan', value: completedTests },
           { label: 'Onay Bekleyen', value: pendingApprovalCount },
           { label: 'Süresi Geçen', value: overdueCount },
@@ -93,16 +102,16 @@ export default async function StudentBookDetailPage({
       <div className="space-y-2 rounded-lg border bg-card p-4">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">
-            {completedTests} / {totalTests} test tamamlandı
+            {completedTests} / {totalTests} {unitLabel} tamamlandı
           </span>
           <span className="font-medium tabular-nums">{percentage}%</span>
         </div>
         <ProgressBar value={percentage} label={`${progress.book_title} ilerlemesi`} />
-        {progress.target_end_date && (
-          <p className="text-xs text-muted-foreground">
-            Hedef: {new Date(progress.target_end_date).toLocaleDateString('tr-TR')}
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          Hedef kapsamı: {scope.label}
+          {scope.targetEndDate &&
+            ` · ${new Date(scope.targetEndDate).toLocaleDateString('tr-TR')}`}
+        </p>
       </div>
 
       <Section
@@ -111,15 +120,31 @@ export default async function StudentBookDetailPage({
       >
         <PlanTempoCard
           bookTitle={progress.book_title}
-          startDate={progress.start_date}
-          targetEndDate={progress.target_end_date}
+          startDate={scope.startDate}
+          targetEndDate={scope.targetEndDate}
           totalUnits={totalTests}
           completedUnits={completedTests}
         />
       </Section>
 
-      <Section title="Bölümler" description="Bu öğrencinin bu kitaptaki test durumu.">
-        {book.sections.length === 0 ? (
+      <Section
+        title="Hedef"
+        description="Plan tüm kitap yerine yalnızca seçili bölümler üzerinden de çalışabilir."
+      >
+        <TargetCard studentId={studentId} book={book} />
+      </Section>
+
+      <Section
+        title="Video kaynakları"
+        description="Video plan temposuna dahil edilmez; öğrenci onayı gerekmez."
+      >
+        <VideoPreference studentId={studentId} book={book} />
+      </Section>
+
+      <Section title="Bölümler" description="Bu öğrencinin bu kitaptaki ilerleme durumu.">
+        {book.trackingMode === 'page' && book.sections.length > 0 ? (
+          <BookMapGrid book={book} readOnly audience="teacher" />
+        ) : book.sections.length === 0 ? (
           <div className="rounded-lg border bg-card">
             <EmptyState
               icon={BookOpen}

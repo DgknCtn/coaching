@@ -12,24 +12,35 @@ export const dynamic = 'force-dynamic'
 export default async function StudentPage() {
   const { supabase, student, workspaceId } = await getStudentContext()
 
-  const { data: batches } = await supabase
-    .from('homework_batches')
-    .select(`
-      id, title, due_date, status,
-      homework_items(
-        id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
-        books(title, subject),
-        book_sections(title),
-        book_tests(title)
-      )
-    `)
-    .eq('student_id', student.id)
-    .eq('workspace_id', workspaceId)
-    .eq('status', 'active')
-    .order('due_date', { ascending: true })
+  // Ödevler, kitap ilerlemesi ve bildirim materyalizasyonu birbirinden
+  // bağımsız — tek dalgada çalışırlar.
+  const [{ data: batches }, { data: bookProgress }] = await Promise.all([
+    supabase
+      .from('homework_batches')
+      .select(`
+        id, title, due_date, status,
+        homework_items(
+          id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
+          books(title, subject),
+          book_sections(title),
+          book_tests(title)
+        )
+      `)
+      .eq('student_id', student.id)
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .order('due_date', { ascending: true }),
+    supabase
+      .from('student_book_progress_view')
+      .select('*')
+      .eq('student_id', student.id)
+      .eq('workspace_id', workspaceId),
+    // Sonucu okunmuyor ama aşağıdaki sorgudan ÖNCE bitmeli (yazdığı satırı
+    // o okuyor) — bu yüzden bu dalganın içinde, sonrakinden önce.
+    supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
+  ])
 
   // Açık durum bildirimi (varsa) — süresi gelen tek kayıt.
-  await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
   const { data: openCheckIn } = await supabase
     .from('student_check_ins')
     .select('id, due_at')
@@ -39,12 +50,6 @@ export default async function StudentPage() {
     .order('due_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-
-  const { data: bookProgress } = await supabase
-    .from('student_book_progress_view')
-    .select('*')
-    .eq('student_id', student.id)
-    .eq('workspace_id', workspaceId)
 
   const todayStr = new Date().toISOString().split('T')[0]
 

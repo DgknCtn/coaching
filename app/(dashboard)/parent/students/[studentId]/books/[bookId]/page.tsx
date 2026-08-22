@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation'
 import { getParentContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
+import { resolvePlanScope } from '@/lib/plan-scope'
+import { collectVideoResources } from '@/lib/book-videos'
+import { BookVideoPanel } from '@/components/shared/book-video-panel'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
@@ -38,6 +41,9 @@ export default async function ParentBookMapPage({
 
   if (!book) notFound()
 
+  // Öğretmenin hedef kapsamı neyse veli de onu görür.
+  const scope = resolvePlanScope(book)
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
@@ -52,11 +58,15 @@ export default async function ParentBookMapPage({
 
       <PlanTempoCard
         bookTitle={book.title}
-        startDate={book.startDate}
-        targetEndDate={book.targetEndDate}
-        totalUnits={book.totalTests}
-        completedUnits={book.completedTests}
+        startDate={scope.startDate}
+        targetEndDate={scope.targetEndDate}
+        totalUnits={scope.totalUnits}
+        completedUnits={scope.completedUnits}
       />
+
+      {/* Video kaynakları veliye yalnız gösterilir; "İzledim" öğrenciye ait
+          bir aksiyondur ve plan temposuna girmez (R4 §6). */}
+      <BookVideoPanel book={book} resources={collectVideoResources(book, new Set())} />
 
       {/* Matris masaüstü içindir; dar ekranda bölüm bazlı özet kalır. */}
       <div className="hidden lg:block">

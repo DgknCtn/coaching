@@ -139,10 +139,28 @@ describe('sınav türü daraltması', () => {
     expect(studentSchema.safeParse({ ...base, examType: 'Other' }).success).toBe(false)
   })
 
-  it('bookUpdateSchema aynı listeyi kullanır', () => {
+  // R4 (021): kitapta sınav türü yerini seviye/sınav türüne bıraktı;
+  // exam_type artık DB'de level_exam'dan türetiliyor. Öğrenci tarafındaki
+  // TYT/AYT daraltması aynen duruyor (yukarıdaki test).
+  it('bookUpdateSchema seviye/sınav listesini kullanır', () => {
     const base = { bookId: UUID, title: 'Kimya Soru Bankası', subject: 'Kimya' }
-    expect(bookUpdateSchema.safeParse({ ...base, examType: 'AYT' }).success).toBe(true)
-    expect(bookUpdateSchema.safeParse({ ...base, examType: 'KPSS' }).success).toBe(false)
+    expect(bookUpdateSchema.safeParse({ ...base, levelExam: 'AYT' }).success).toBe(true)
+    expect(bookUpdateSchema.safeParse({ ...base, levelExam: '10. Sınıf' }).success).toBe(true)
+    expect(bookUpdateSchema.safeParse({ ...base, levelExam: 'KPSS' }).success).toBe(false)
+  })
+
+  it('bookSchema baskı yılını ve video desteğini doğrular', () => {
+    const base = {
+      title: 'Metin 10. Sınıf Matematik',
+      subject: 'Matematik',
+      sections: [{ title: 'Üçgenler', test_count: 10 }],
+    }
+    expect(bookSchema.safeParse({ ...base, editionYear: 2026 }).success).toBe(true)
+    expect(bookSchema.safeParse({ ...base, editionYear: 1899 }).success).toBe(false)
+    expect(bookSchema.safeParse({ ...base, videoMode: 'section' }).success).toBe(true)
+    expect(bookSchema.safeParse({ ...base, videoMode: 'playlist' }).success).toBe(false)
+    // Kitap havuzu dönemden bağımsız: termId zorunlu değil.
+    expect(bookSchema.safeParse(base).success).toBe(true)
   })
 
   it('seçenek listeleri şemayla aynı değerleri sunar', () => {

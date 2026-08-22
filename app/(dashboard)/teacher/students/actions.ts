@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { studentSchema, assignBookSchema, firstIssue } from '@/lib/validation'
+import { studentSchema, assignBookSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 export async function createStudentAction(
   fullName: string,
@@ -34,7 +35,7 @@ export async function createStudentAction(
     status: 'active',
   }).select('id').single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/students')
   redirect(`/teacher/students/${data.id}`)
 }
@@ -69,7 +70,7 @@ export async function updateStudentAction(
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
@@ -97,37 +98,43 @@ export async function assignBookAction(
     p_target_end_date: targetEndDate || null,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
 
 export async function removeBookAssignmentAction(assignmentId: string, studentId: string) {
+  const parsed = uuidSchema.safeParse(assignmentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('student_book_assignments')
     .update({ status: 'archived' })
-    .eq('id', assignmentId)
+    .eq('id', parsed.data)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
 
 export async function archiveStudentAction(studentId: string) {
+  const parsed = uuidSchema.safeParse(studentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('students')
     .update({ status: 'archived' })
-    .eq('id', studentId)
+    .eq('id', parsed.data)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/students')
   redirect('/teacher/students')
 }

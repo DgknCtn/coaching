@@ -5,13 +5,15 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Copy, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   updateBookAction,
+  duplicateBookAsEditionAction,
   renameSectionAction,
   setSectionTestCountAction,
   addSectionAction,
+  addPageSectionAction,
   deleteSectionAction,
 } from '../actions'
 import { Button } from '@/components/ui/button'
@@ -20,14 +22,23 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EXAM_TYPE_OPTIONS, SUBJECTS } from '@/lib/validation'
+import {
+  SUBJECTS,
+  LEVEL_EXAMS,
+  VIDEO_MODE_OPTIONS,
+  EDITION_YEAR_MIN,
+  EDITION_YEAR_MAX,
+} from '@/lib/book-taxonomy'
 
 const schema = z.object({
   title: z.string().min(2, 'Kitap adı en az 2 karakter olmalı'),
   subject: z.string().min(1, 'Ders seçin'),
   publisher: z.string().optional(),
-  examType: z.string().optional(),
+  levelExam: z.string().optional(),
+  editionYear: z.number().int().min(EDITION_YEAR_MIN).max(EDITION_YEAR_MAX).optional().or(z.nan()),
   description: z.string().optional(),
+  videoMode: z.enum(['none', 'book', 'section']),
+  videoUrl: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -58,14 +69,16 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
 
   const onSubmit = (data: FormData) => {
     startTransition(async () => {
-      const result = await updateBookAction(
-        bookId,
-        data.title,
-        data.subject,
-        data.publisher || undefined,
-        data.examType || undefined,
-        data.description || undefined
-      )
+      const result = await updateBookAction(bookId, {
+        title: data.title,
+        subject: data.subject,
+        publisher: data.publisher || undefined,
+        levelExam: data.levelExam || undefined,
+        editionYear: Number.isFinite(data.editionYear) ? (data.editionYear as number) : null,
+        description: data.description || undefined,
+        videoMode: data.videoMode,
+        videoUrl: data.videoUrl || undefined,
+      })
       if (result?.error) {
         toast.error(result.error)
         return
@@ -100,17 +113,44 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="examType">Sınav Türü</Label>
-                <NativeSelect id="examType" {...register('examType')}>
+                <Label htmlFor="levelExam">Seviye / Sınav Türü</Label>
+                <NativeSelect id="levelExam" {...register('levelExam')}>
                   <option value="">Seçin</option>
-                  {EXAM_TYPE_OPTIONS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+                  {LEVEL_EXAMS.map((l) => <option key={l} value={l}>{l}</option>)}
                 </NativeSelect>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="publisher">Yayın</Label>
-              <Input id="publisher" {...register('publisher')} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="publisher">Yayın</Label>
+                <Input id="publisher" {...register('publisher')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="editionYear">Baskı Yılı</Label>
+                <Input
+                  id="editionYear"
+                  type="number"
+                  min={EDITION_YEAR_MIN}
+                  max={EDITION_YEAR_MAX}
+                  {...register('editionYear', { valueAsNumber: true })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="videoMode">Video Desteği</Label>
+                <NativeSelect id="videoMode" {...register('videoMode')}>
+                  {VIDEO_MODE_OPTIONS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                </NativeSelect>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="videoUrl">Video Bağlantısı</Label>
+                <Input id="videoUrl" placeholder="Kanal veya oynatma listesi" {...register('videoUrl')} />
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -131,6 +171,8 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
         </CardContent>
       </Card>
 
+      <NewEditionCard bookId={bookId} currentYear={defaultValues.editionYear} />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Bölümler</CardTitle>
@@ -145,7 +187,11 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
             />
           ))}
 
-          <NewSectionForm bookId={bookId} unitLabel={unitLabel} />
+          {trackingMode === 'page' ? (
+            <NewPageSectionForm bookId={bookId} />
+          ) : (
+            <NewSectionForm bookId={bookId} unitLabel={unitLabel} />
+          )}
         </CardContent>
       </Card>
     </div>
@@ -278,6 +324,149 @@ function NewSectionForm({ bookId, unitLabel }: { bookId: string; unitLabel: stri
         />
       </div>
       <Button size="sm" variant="outline" disabled={isPending || !title.trim()} onClick={add}>
+        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus />}
+        Bölüm ekle
+      </Button>
+    </div>
+  )
+}
+
+// R4 §1B / §8: 2026 baskısı eklenirken 2025 kaydı ezilmemelidir. Kitabı
+// bölüm/test yapısıyla kopyalar; öğrenci ilerlemesi kopyalanmaz.
+function NewEditionCard({ bookId, currentYear }: { bookId: string; currentYear?: number | null }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [year, setYear] = useState<string>(currentYear ? String(currentYear + 1) : '')
+
+  const submit = () => {
+    const parsed = Number(year)
+    if (!Number.isInteger(parsed)) {
+      toast.error('Baskı yılı girin.')
+      return
+    }
+    startTransition(async () => {
+      const result = await duplicateBookAsEditionAction(bookId, parsed)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Yeni baskı oluşturuldu.')
+      if (result.bookId) router.push(`/teacher/books/${result.bookId}`)
+      else router.push('/teacher/books')
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Yeni baskı oluştur</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Bu kitabı bölüm ve test yapısıyla kopyalar, yalnızca baskı yılı değişir.
+          Mevcut kayıt ve öğrenci ilerlemesi olduğu gibi kalır.
+        </p>
+        <div className="flex items-end gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="newEditionYear">Yeni baskı yılı</Label>
+            <Input
+              id="newEditionYear"
+              type="number"
+              className="w-32"
+              min={EDITION_YEAR_MIN}
+              max={EDITION_YEAR_MAX}
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+            />
+          </div>
+          <Button type="button" variant="outline" onClick={submit} disabled={isPending}>
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Copy />}
+            Yeni baskı oluştur
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// R4 §2A/§3: sayfa takipli kitapta bölüm "adı + başlangıç sayfası + bitiş
+// sayfası + isteğe bağlı kısa not" ile tanımlanır. Kur/etkinlik/test türleri
+// ayrı bir veri modeli değildir; gerekirse nota insan dilinde yazılır.
+function NewPageSectionForm({ bookId }: { bookId: string }) {
+  const router = useRouter()
+  const [title, setTitle] = useState('')
+  const [pageStart, setPageStart] = useState('')
+  const [pageEnd, setPageEnd] = useState('')
+  const [note, setNote] = useState('')
+  const [isPending, startTransition] = useTransition()
+
+  const add = () => {
+    startTransition(async () => {
+      const r = await addPageSectionAction(
+        bookId,
+        title,
+        Number(pageStart),
+        Number(pageEnd),
+        note || undefined
+      )
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success('Bölüm eklendi.')
+      setTitle('')
+      setPageStart('')
+      setPageEnd('')
+      setNote('')
+      router.refresh()
+    })
+  }
+
+  const valid = title.trim() !== '' && Number(pageStart) >= 1 && Number(pageEnd) >= Number(pageStart)
+
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed p-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-48 flex-1 space-y-1.5">
+          <Label htmlFor="new-page-section-title">Yeni bölüm adı</Label>
+          <Input
+            id="new-page-section-title"
+            placeholder="Örn: Üçgenler"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+        <div className="w-28 space-y-1.5">
+          <Label htmlFor="new-page-start">Başlangıç sf.</Label>
+          <Input
+            id="new-page-start"
+            type="number"
+            min={1}
+            value={pageStart}
+            onChange={(e) => setPageStart(e.target.value)}
+          />
+        </div>
+        <div className="w-28 space-y-1.5">
+          <Label htmlFor="new-page-end">Bitiş sf.</Label>
+          <Input
+            id="new-page-end"
+            type="number"
+            min={1}
+            value={pageEnd}
+            onChange={(e) => setPageEnd(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="new-page-note">Bölüm notu (isteğe bağlı)</Label>
+        <Input
+          id="new-page-note"
+          placeholder="Konu anlatımı + uygulama + ileri seviye çalışmalar"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      <Button size="sm" variant="outline" disabled={isPending || !valid} onClick={add}>
         {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus />}
         Bölüm ekle
       </Button>

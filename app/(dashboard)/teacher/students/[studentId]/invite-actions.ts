@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
+import { dbErrorToTr } from '@/lib/auth-errors'
 import { generateToken, hashToken } from '@/lib/invite'
 
 export async function createInviteAction(studentId: string, role: 'student' | 'parent') {
@@ -40,7 +41,7 @@ export async function createInviteAction(studentId: string, role: 'student' | 'p
     status: 'pending',
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
 
   revalidatePath(`/teacher/students/${studentId}`)
   return { link: `${appUrl}/invite/${token}` }

@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { termSchema, firstIssue } from '@/lib/validation'
+import { termSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 export async function createTermAction(name: string, startDate?: string, endDate?: string) {
   const parsed = termSchema.safeParse({ name, startDate, endDate })
@@ -21,7 +22,7 @@ export async function createTermAction(name: string, startDate?: string, endDate
     created_by_profile_id: profile.id,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/terms')
   return { success: true }
 }
@@ -50,13 +51,16 @@ export async function updateTermAction(
     .eq('id', termId)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/terms')
   revalidatePath('/teacher')
   return { success: true }
 }
 
 export async function setTermActiveAction(termId: string) {
+  const parsed = uuidSchema.safeParse(termId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
@@ -70,26 +74,29 @@ export async function setTermActiveAction(termId: string) {
   const { error } = await supabase
     .from('academic_terms')
     .update({ status: 'active' })
-    .eq('id', termId)
+    .eq('id', parsed.data)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher')
   revalidatePath('/teacher/terms')
   return { success: true }
 }
 
 export async function archiveTermAction(termId: string) {
+  const parsed = uuidSchema.safeParse(termId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase
     .from('academic_terms')
     .update({ status: 'archived' })
-    .eq('id', termId)
+    .eq('id', parsed.data)
     .eq('workspace_id', workspaceId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/teacher/terms')
   return { success: true }
 }

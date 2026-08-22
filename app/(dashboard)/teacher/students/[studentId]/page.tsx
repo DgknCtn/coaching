@@ -37,94 +37,108 @@ export default async function StudentDetailPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  const { data: bookProgress } = await supabase
-    .from('student_book_progress_view')
-    .select('*')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-
-  const { data: checkInSchedule } = await supabase
-    .from('student_check_in_schedules')
-    .select('interval_days, is_active')
-    .eq('student_id', studentId)
-    .maybeSingle()
-
-  const { data: checkIns } = await supabase
-    .from('student_check_ins')
-    .select('id, due_at, submitted_at, status, mood, message')
-    .eq('student_id', studentId)
-    .order('due_at', { ascending: false })
-    .limit(10)
-
-  const { data: homeworkBatches } = await supabase
-    .from('homework_batches')
-    .select(`
-      id, title, due_date, status,
-      homework_items(id, status)
-    `)
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-    .eq('status', 'active')
-    .order('due_date', { ascending: false })
-    .limit(20)
-
-  const { data: pendingApprovalItems } = await supabase
-    .from('homework_items')
-    .select(`
-      id, book_id, homework_batch_id,
-      books(title),
-      book_sections(title),
-      book_tests(title),
-      homework_batches!inner(student_id, workspace_id, title, due_date)
-    `)
-    .eq('status', 'pending_approval')
-    .eq('homework_batches.student_id', studentId)
-    .eq('homework_batches.workspace_id', workspaceId)
-
-  const { data: parentLinks } = await supabase
-    .from('parent_student_links')
-    .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-    .neq('status', 'removed')
+  // Buradan sonraki sorguların hiçbiri diğerinin sonucuna ihtiyaç duymuyor;
+  // sıralı beklemek sayfa açılışına doğrudan 10 gidiş-dönüş ekliyordu.
+  // Tek dalgada çalışırlar — dönen veriler ve aşağıdaki hesaplar aynı.
+  //
+  // Tek incelik: "atanabilir kitaplar" listesi bookProgress'e göre
+  // FİLTRELENİYOR ama sorgusu ondan bağımsız. Bu yüzden sorgu paralel
+  // çalışır, eleme sonuçlar geldikten sonra yapılır (aşağıda).
+  const [
+    { data: bookProgress },
+    { data: checkInSchedule },
+    { data: checkIns },
+    { data: homeworkBatches },
+    { data: pendingApprovalItems },
+    { data: parentLinks },
+    { data: termBooks },
+    { data: weeklySummary },
+    { data: pendingApprovalSummary },
+    { data: overdueSummary },
+  ] = await Promise.all([
+    supabase
+      .from('student_book_progress_view')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
+    supabase
+      .from('student_check_in_schedules')
+      .select('interval_days, is_active')
+      .eq('student_id', studentId)
+      .maybeSingle(),
+    supabase
+      .from('student_check_ins')
+      .select('id, due_at, submitted_at, status, mood, message')
+      .eq('student_id', studentId)
+      .order('due_at', { ascending: false })
+      .limit(10),
+    supabase
+      .from('homework_batches')
+      .select(`
+        id, title, due_date, status,
+        homework_items(id, status)
+      `)
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .order('due_date', { ascending: false })
+      .limit(20),
+    supabase
+      .from('homework_items')
+      .select(`
+        id, book_id, homework_batch_id,
+        books(title),
+        book_sections(title),
+        book_tests(title),
+        homework_batches!inner(student_id, workspace_id, title, due_date)
+      `)
+      .eq('status', 'pending_approval')
+      .eq('homework_batches.student_id', studentId)
+      .eq('homework_batches.workspace_id', workspaceId),
+    supabase
+      .from('parent_student_links')
+      .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .neq('status', 'removed'),
+    // Aktif dönem yoksa sorgu hiç yapılmaz (önceki davranışla aynı).
+    activeTerm
+      ? supabase
+          .from('books')
+          .select('id, title, subject')
+          .eq('workspace_id', workspaceId)
+          .eq('academic_term_id', activeTerm.id)
+          .eq('status', 'active')
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('student_weekly_homework_summary_view')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    // "Onay Bekleyen" ve "Süresi Geçen" hafta penceresinden BAĞIMSIZ sayılır.
+    // weeklySummary yalnız bu haftaya düşen batch'leri görür; oysa yukarıdaki
+    // pendingApprovalItems listesi (ve /teacher/tasks) tüm haftaları kapsıyor.
+    // 017 bu düzeltmeyi dashboard'a uygulamıştı, bu sayfa atlanmıştı — sayaç
+    // "2" derken altındaki liste 5 satır gösterebiliyordu.
+    supabase
+      .from('student_pending_approval_view')
+      .select('pending_approval_items')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    supabase
+      .from('student_overdue_homework_view')
+      .select('overdue_items')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+  ])
 
   const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
-  let availableBooks: { id: string; title: string; subject: string }[] = []
-  if (activeTerm) {
-    const { data } = await supabase
-      .from('books')
-      .select('id, title, subject')
-      .eq('workspace_id', workspaceId)
-      .eq('academic_term_id', activeTerm.id)
-      .eq('status', 'active')
-    availableBooks = (data ?? []).filter(b => !assignedBookIds.includes(b.id))
-  }
-
-  const { data: weeklySummary } = await supabase
-    .from('student_weekly_homework_summary_view')
-    .select('*')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-    .maybeSingle()
-
-  // "Onay Bekleyen" ve "Süresi Geçen" hafta penceresinden BAĞIMSIZ sayılır.
-  // weeklySummary yalnız bu haftaya düşen batch'leri görür; oysa yukarıdaki
-  // pendingApprovalItems listesi (ve /teacher/tasks) tüm haftaları kapsıyor.
-  // 017 bu düzeltmeyi dashboard'a uygulamıştı, bu sayfa atlanmıştı — sayaç
-  // "2" derken altındaki liste 5 satır gösterebiliyordu.
-  const { data: pendingApprovalSummary } = await supabase
-    .from('student_pending_approval_view')
-    .select('pending_approval_items')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-    .maybeSingle()
-
-  const { data: overdueSummary } = await supabase
-    .from('student_overdue_homework_view')
-    .select('overdue_items')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
-    .maybeSingle()
+  const availableBooks: { id: string; title: string; subject: string }[] = (
+    termBooks ?? []
+  ).filter(b => !assignedBookIds.includes(b.id))
 
   const hasAccount = !!student.profile_id
 

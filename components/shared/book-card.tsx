@@ -11,6 +11,8 @@ interface BookCardProps {
     subject: string
     publisher?: string | null
     exam_type?: string | null
+    level_exam?: string | null
+    edition_year?: number | null
     sectionCount?: number
     testCount?: number
   }
@@ -41,12 +43,13 @@ export function BookCard({ book, progress, href, className }: BookCardProps) {
             <p className="mt-1 text-sm text-muted-foreground">
               {book.subject}
               {book.publisher && ` · ${book.publisher}`}
+              {book.edition_year != null && ` · ${book.edition_year}`}
             </p>
           </div>
         </div>
-        {book.exam_type && (
+        {(book.level_exam || book.exam_type) && (
           <Badge variant="neutral" className="shrink-0">
-            {book.exam_type}
+            {book.level_exam || book.exam_type}
           </Badge>
         )}
       </div>

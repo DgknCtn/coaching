@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { BookOpen, CircleCheck, UserRound, Hourglass, CircleAlert, CircleDashed } from 'lucide-react'
 import { getStudentContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
+import { resolvePlanScope } from '@/lib/plan-scope'
 import { COUNTER_LABEL } from '@/lib/homework-status'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
@@ -10,6 +11,7 @@ import { MetricTiles } from '@/components/shared/metric-tiles'
 import { TempoStrip } from '@/components/shared/tempo-strip'
 import { ProgressSummary } from '@/components/shared/progress-summary'
 import { BookMapGrid, BookMapLegend } from '@/components/shared/book-map-grid'
+import { StudentBookVideos } from './book-videos'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +38,16 @@ export default async function StudentBookMapPage({
 
   // Kitap bu öğrenciye atanmamışsa gösterilecek bir bağlam yok.
   if (!book) notFound()
+
+  // Video kaynakları ve öğrencinin "izledim" işaretleri (R4 §6).
+  const { data: watchRows } = await supabase
+    .from('video_watch_marks')
+    .select('section_id')
+    .eq('student_book_assignment_id', book.assignmentId)
+
+  // Öğretmenin belirlediği hedef kapsamı öğrencide de aynı sayıları
+  // göstermeli (R3 v2 "Tutarlılık"): tempo ve ilerleme aynı kaynaktan.
+  const scope = resolvePlanScope(book)
 
   let completed = 0
   let assigned = 0
@@ -79,18 +91,20 @@ export default async function StudentBookMapPage({
         ]}
       />
 
+      <StudentBookVideos book={book} watchRows={watchRows ?? []} />
+
       <TempoStrip
-        startDate={book.startDate}
-        targetEndDate={book.targetEndDate}
-        totalUnits={book.totalTests}
-        completedUnits={book.completedTests}
+        startDate={scope.startDate}
+        targetEndDate={scope.targetEndDate}
+        totalUnits={scope.totalUnits}
+        completedUnits={scope.completedUnits}
       />
 
       <ProgressSummary
-        startDate={book.startDate}
-        targetEndDate={book.targetEndDate}
-        totalUnits={book.totalTests}
-        completedUnits={book.completedTests}
+        startDate={scope.startDate}
+        targetEndDate={scope.targetEndDate}
+        totalUnits={scope.totalUnits}
+        completedUnits={scope.completedUnits}
         label={`${book.title} ilerlemesi`}
       />
 

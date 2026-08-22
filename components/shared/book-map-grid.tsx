@@ -8,6 +8,7 @@ import {
   type HomeworkTestState,
   type StatusAudience,
 } from '@/lib/homework-status'
+import { BookPageMap } from '@/components/shared/book-page-map'
 import { cn } from '@/lib/utils'
 
 // Masaüstü Kitap Haritası (R3 v2 §1). Bölüm satır, test sütun.
@@ -98,6 +99,21 @@ export function BookMapGrid({
   readOnly = false,
   audience = 'teacher',
 }: Props) {
+  // Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022): 400 sayfa
+  // = 400 hücre olurdu. R4 §4 bunun yerine bölüm bazlı bir tablo istiyor.
+  // Ayrım tek yerde, burada yapılır; çağıran ekranların (öğretmen, öğrenci,
+  // veli) hiçbiri hangi görünümü çizeceğini bilmek zorunda değil.
+  if (book.trackingMode === 'page') {
+    return (
+      <BookPageMap
+        book={book}
+        selectedTestIds={selectedTestIds}
+        onToggleSection={onToggleSection}
+        readOnly={readOnly}
+      />
+    )
+  }
+
   const columns = Array.from({ length: book.maxTestsPerSection }, (_, i) => i)
 
   return (

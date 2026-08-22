@@ -14,21 +14,34 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { EXAM_TYPE_OPTIONS, SUBJECTS } from '@/lib/validation'
+import {
+  SUBJECTS,
+  LEVEL_EXAMS,
+  TRACKING_MODE_OPTIONS,
+  VIDEO_MODE_OPTIONS,
+  EDITION_YEAR_MIN,
+  EDITION_YEAR_MAX,
+} from '@/lib/book-taxonomy'
 
 const sectionSchema = z.object({
   title: z.string().min(1, 'Bölüm adı gerekli'),
-  test_count: z.number().int().min(1, 'En az 1 test').max(200),
+  test_count: z.number().int().min(1, 'En az 1 test').max(200).optional().or(z.nan()),
+  page_start: z.number().int().min(1).optional().or(z.nan()),
+  page_end: z.number().int().min(1).optional().or(z.nan()),
+  note: z.string().optional(),
 })
 
 const schema = z.object({
   title: z.string().min(2, 'Kitap adı gerekli'),
   subject: z.string().min(1, 'Ders seçimi gerekli'),
+  levelExam: z.string().min(1, 'Seviye / sınav türü gerekli'),
   publisher: z.string().optional(),
-  examType: z.string().optional(),
+  editionYear: z.number().int().min(EDITION_YEAR_MIN).max(EDITION_YEAR_MAX).optional().or(z.nan()),
   trackingMode: z.enum(['test', 'page']),
   description: z.string().optional(),
-  termId: z.string().min(1),
+  videoMode: z.enum(['none', 'book', 'section']),
+  videoUrl: z.string().optional(),
+  termId: z.string().optional(),
   sections: z.array(sectionSchema).min(1, 'En az 1 bölüm ekleyin'),
 })
 
@@ -45,30 +58,49 @@ export function BookForm({ terms, defaultTermId }: Props) {
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
 
-  const { register, control, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       termId: defaultTermId,
       trackingMode: 'test',
-      sections: [{ title: '', test_count: 1 }],
+      videoMode: 'none',
+      sections: [{ title: '', test_count: 1, note: '' }],
+      // trackingMode 'page' seçilirse aşağıdaki bölüm satırları sayfa
+      // aralığı ister; test sayısı alanı gizlenir.
     },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'sections' })
 
+  // Sayfa takipli kitapta bölüm, test sayısıyla değil fiziksel kapsamıyla
+  // tanımlanır: "Üçgenler | sf. 1-78" (R4 §3).
+  const isPageBook = watch('trackingMode') === 'page'
+
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
-      const result = await createBookAction(
-        data.title,
-        data.subject,
-        data.publisher,
-        data.examType,
-        data.description,
-        data.termId,
-        data.sections,
-        data.trackingMode
-      )
+      const result = await createBookAction({
+        title: data.title,
+        subject: data.subject,
+        publisher: data.publisher,
+        levelExam: data.levelExam,
+        // Boş bırakılan sayı alanı NaN gelir; sunucuya null gitmeli.
+        editionYear: Number.isFinite(data.editionYear) ? (data.editionYear as number) : null,
+        description: data.description,
+        trackingMode: data.trackingMode,
+        videoMode: data.videoMode,
+        videoUrl: data.videoUrl,
+        termId: data.termId,
+        sections: data.sections.map((s) => ({
+          title: s.title,
+          // Sayfa kitabında birim sayısı sayfa aralığından türetilir; test
+          // kitabında girilen test sayısı kullanılır.
+          test_count: isPageBook ? 0 : Number(s.test_count) || 0,
+          note: s.note,
+          page_start: isPageBook && Number.isFinite(s.page_start) ? (s.page_start as number) : null,
+          page_end: isPageBook && Number.isFinite(s.page_end) ? (s.page_end as number) : null,
+        })),
+      })
       if (result?.error) {
         setServerError(result.error)
       } else {
@@ -102,31 +134,63 @@ export function BookForm({ terms, defaultTermId }: Props) {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="examType">Sınav Türü</Label>
+              <Label htmlFor="levelExam">Seviye / Sınav Türü *</Label>
               <NativeSelect
-                id="examType"
-                {...register('examType')}
+                id="levelExam"
+                aria-invalid={!!errors.levelExam}
+                {...register('levelExam')}
               >
                 <option value="">Seçin</option>
-                {EXAM_TYPE_OPTIONS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                {LEVEL_EXAMS.map(l => <option key={l} value={l}>{l}</option>)}
               </NativeSelect>
+              {errors.levelExam && <p className="text-xs text-destructive">{errors.levelExam.message}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="publisher">Yayın</Label>
+              <Input id="publisher" placeholder="Bilgi Sarmal" {...register('publisher')} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="editionYear">Baskı Yılı</Label>
+              <Input
+                id="editionYear"
+                type="number"
+                min={EDITION_YEAR_MIN}
+                max={EDITION_YEAR_MAX}
+                placeholder="2026"
+                {...register('editionYear', { valueAsNumber: true })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Aynı kitabın farklı baskıları ayrı kayıt olarak tutulur.
+              </p>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="publisher">Yayın</Label>
-            <Input id="publisher" placeholder="Bilgi Sarmal" {...register('publisher')} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="trackingMode">Takip Türü</Label>
+            <Label htmlFor="trackingMode">Takip Türü *</Label>
             <NativeSelect
               id="trackingMode"
               {...register('trackingMode')}
             >
-              <option value="test">Test Sayısı ile Takip</option>
-              <option value="page">Sayfa Aralığı ile Takip</option>
+              {TRACKING_MODE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </NativeSelect>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="videoMode">Video Desteği</Label>
+              <NativeSelect id="videoMode" {...register('videoMode')}>
+                {VIDEO_MODE_OPTIONS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+              </NativeSelect>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="videoUrl">Video Bağlantısı</Label>
+              <Input id="videoUrl" placeholder="Kanal veya oynatma listesi" {...register('videoUrl')} />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -166,14 +230,39 @@ export function BookForm({ terms, defaultTermId }: Props) {
                   aria-invalid={!!errors.sections?.[index]?.title}
                   {...register(`sections.${index}.title`)}
                 />
+                {isPageBook ? (
+                  <>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-24 shrink-0"
+                      placeholder="Baş. sf."
+                      {...register(`sections.${index}.page_start`, { valueAsNumber: true })}
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-24 shrink-0"
+                      placeholder="Bitiş sf."
+                      aria-invalid={!!errors.sections?.[index]?.page_end}
+                      {...register(`sections.${index}.page_end`, { valueAsNumber: true })}
+                    />
+                  </>
+                ) : (
+                  <Input
+                    type="number"
+                    min={1}
+                    max={200}
+                    className="w-24 shrink-0"
+                    placeholder="Test"
+                    aria-invalid={!!errors.sections?.[index]?.test_count}
+                    {...register(`sections.${index}.test_count`, { valueAsNumber: true })}
+                  />
+                )}
                 <Input
-                  type="number"
-                  min={1}
-                  max={200}
-                  className="w-24 shrink-0"
-                  placeholder="Test"
-                  aria-invalid={!!errors.sections?.[index]?.test_count}
-                  {...register(`sections.${index}.test_count`, { valueAsNumber: true })}
+                  className="flex-1"
+                  placeholder="Not (isteğe bağlı)"
+                  {...register(`sections.${index}.note`)}
                 />
               </div>
               <Button
@@ -197,7 +286,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
           variant="outline"
           size="sm"
           className="mt-3"
-          onClick={() => append({ title: '', test_count: 1 })}
+          onClick={() => append({ title: '', test_count: 1, note: '' })}
         >
           <Plus className="size-3.5" /> Bölüm Ekle
         </Button>

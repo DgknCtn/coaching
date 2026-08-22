@@ -70,21 +70,28 @@ export async function middleware(request: NextRequest) {
   const area = user ? roleAreas.find((a) => pathname.startsWith(a.prefix)) : undefined
 
   if (user && area) {
+    // Profil ve üyelikler TEK sorguda alınır: bunlar iki ayrı istek olarak
+    // yapıldığında her sayfa gezinmesine (ve her prefetch'e) fazladan bir
+    // gidiş-dönüş biniyordu. Gömülü select aynı veriyi tek turda döner.
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, default_workspace_id')
+      .select('id, default_workspace_id, workspace_members(role, workspace_id, status)')
       .eq('auth_user_id', user.id)
       .maybeSingle()
 
     if (profile?.default_workspace_id) {
-      const { data: members } = await supabase
-        .from('workspace_members')
-        .select('role')
-        .eq('profile_id', profile.id)
-        .eq('workspace_id', profile.default_workspace_id)
-        .eq('status', 'active')
+      const members = (profile.workspace_members ?? []) as unknown as {
+        role: string
+        workspace_id: string
+        status: string
+      }[]
 
-      const userRoles = (members ?? []).map((m) => m.role as string)
+      // Filtreleme artık istemci tarafında: sorgu tüm üyelikleri getiriyor,
+      // aktif dönem workspace'ine ait ve 'active' olanlar seçiliyor. Sonuç
+      // önceki iki sorgulu halle birebir aynı.
+      const userRoles = members
+        .filter((m) => m.workspace_id === profile.default_workspace_id && m.status === 'active')
+        .map((m) => m.role)
       const hasAccess = userRoles.some((r) => area.roles.includes(r as never))
 
       if (!hasAccess) {
@@ -100,6 +107,15 @@ export async function middleware(request: NextRequest) {
         url.pathname = home
         return NextResponse.redirect(url)
       }
+    } else {
+      // Profil yok ya da varsayılan workspace atanmamış. Önceden bu dal
+      // rol kontrolünü tamamen atlıyordu; sayfaya girildiğinde getXContext
+      // zaten /login'e yönlendirdiği için sonuç aynıydı ama middleware'in
+      // "ek savunma katmanı" olma iddiası bu durumda geçerli değildi.
+      // Aynı son duruma burada da varılır.
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
   }
 

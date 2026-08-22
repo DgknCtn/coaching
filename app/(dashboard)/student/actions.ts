@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getStudentContext } from '@/lib/workspace'
 import { checkInSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import { dbErrorToTr } from '@/lib/auth-errors'
 
 export async function submitHomeworkItemAction(homeworkItemId: string) {
   const parsed = uuidSchema.safeParse(homeworkItemId)
@@ -16,7 +17,7 @@ export async function submitHomeworkItemAction(homeworkItemId: string) {
     p_homework_item_id: homeworkItemId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/student')
   return { success: true }
 }
@@ -43,7 +44,7 @@ export async function submitHomeworkBatchAction(homeworkBatchId: string, bookId?
     p_book_id: parsedBookId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/student')
   return { success: true }
 }
@@ -59,7 +60,7 @@ export async function revertCompletedAction(homeworkItemId: string) {
     p_homework_item_id: homeworkItemId,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/student')
   return { success: true }
 }
@@ -77,7 +78,53 @@ export async function submitCheckInAction(checkInId: string, mood: string, messa
     p_message: parsed.data.message || null,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath('/student')
+  return { success: true }
+}
+
+// R4 §6: video görevini öğrenci kendi işaretler, öğretmen onayı gerekmez.
+// Video plan temposuna dahil olmadığı için homework_items'a değil, ayrı ve
+// hafif video_watch_marks tablosuna yazılır (023).
+export async function markVideoWatchedAction(assignmentId: string, sectionId: string | null) {
+  const parsedAssignment = uuidSchema.safeParse(assignmentId)
+  if (!parsedAssignment.success) return { error: firstIssue(parsedAssignment.error) }
+
+  if (sectionId !== null) {
+    const parsedSection = uuidSchema.safeParse(sectionId)
+    if (!parsedSection.success) return { error: firstIssue(parsedSection.error) }
+  }
+
+  const { workspaceId, student } = await getStudentContext()
+  const supabase = await createClient()
+
+  // Atama gerçekten bu öğrenciye mi ait? RLS (023) zaten yabancı bir
+  // atamaya yazmayı reddediyor, ama tek savunma katmanı DB olmamalı —
+  // uygulama katmanı da doğrulasın.
+  const { data: assignment } = await supabase
+    .from('student_book_assignments')
+    .select('id')
+    .eq('id', parsedAssignment.data)
+    .eq('student_id', student.id)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (!assignment) return { error: 'Bu kitap sana atanmamış.' }
+
+  // Aynı kaynağı iki kez işaretlemek hata değildir; benzersiz indeks
+  // (023) çakışmayı sessizce yutar.
+  const { error } = await supabase
+    .from('video_watch_marks')
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        student_book_assignment_id: parsedAssignment.data,
+        section_id: sectionId,
+      },
+      { ignoreDuplicates: true }
+    )
+
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath('/student')
   return { success: true }
 }
