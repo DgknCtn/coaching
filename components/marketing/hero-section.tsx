@@ -29,11 +29,12 @@ export function HeroSection() {
       <div className="mx-auto max-w-5xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Öğrencilerinizin başarısını tam olarak takip edin
+            20 öğrenci, 20 ayrı Excel dosyası olmasın
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
-            Ödevleri, kitap ilerlemelerini ve risk analizini tek platformda yönetin.
-            Koç, öğrenci ve veliler için bütünleşik bir sistem.
+            Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride
+            kaldı — hepsi tek ekranda. Veliler kendi panelinden izler, siz her hafta
+            aynı soruları cevaplamazsınız.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -45,6 +46,10 @@ export function HeroSection() {
               Demoyu Gör
             </Link>
           </div>
+
+          <p className="mt-4 text-sm text-muted-foreground">
+            10 öğrenciye kadar ücretsiz · Kredi kartı istemiyoruz
+          </p>
         </div>
 
         {/* Ürün önizlemesi — gerçek arayüzün sadeleştirilmiş bir temsili. */}

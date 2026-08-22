@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { GraduationCap, Menu, X } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { BRAND } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 
 export function Navbar() {
@@ -31,7 +32,7 @@ export function Navbar() {
             <div className="flex size-8 items-center justify-center rounded-md bg-primary">
               <GraduationCap className="size-4 text-primary-foreground" />
             </div>
-            <span className="text-base font-semibold tracking-tight">KoçTakip</span>
+            <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
           </Link>
 
           <nav className="hidden md:flex items-center">
@@ -46,6 +47,12 @@ export function Navbar() {
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Nasıl Çalışır
+            </a>
+            <a
+              href="#fiyatlar"
+              className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Fiyatlar
             </a>
             <Link
               href="/demo"
@@ -92,6 +99,13 @@ export function Navbar() {
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Nasıl Çalışır
+            </a>
+            <a
+              href="#fiyatlar"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Fiyatlar
             </a>
             <Link
               href="/demo"

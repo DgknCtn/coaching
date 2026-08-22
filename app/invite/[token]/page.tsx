@@ -2,6 +2,7 @@ import { hashToken } from '@/lib/invite'
 import { createClient } from '@/lib/supabase/server'
 import { InviteForm } from './invite-form'
 import { AlertCircle, GraduationCap } from 'lucide-react'
+import { BRAND } from '@/lib/brand'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,7 +79,7 @@ export default async function InvitePage({
           <div className="flex size-8 items-center justify-center rounded-md bg-muted">
             <GraduationCap className="size-4 text-muted-foreground" />
           </div>
-          <span className="text-sm font-semibold">Koçluk Takip</span>
+          <span className="text-sm font-semibold">{BRAND.name}</span>
         </div>
 
         <div className="mb-8">

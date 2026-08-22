@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Copy, Check, UserPlus, Loader2 } from 'lucide-react'
 import { createInviteAction } from './invite-actions'
+import { BRAND } from '@/lib/brand'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -89,7 +90,7 @@ export function InviteDialog({ studentId, studentName, inviteType }: Props) {
                   size="sm"
                   className="flex-1"
                   onClick={() => {
-                    const text = `Merhaba! Koçluk Takip Sistemi'ne davet edildiniz.\n\nLink: ${inviteLink}\n\nLink 7 gün geçerlidir.`
+                    const text = `Merhaba! ${BRAND.name}'e davet edildiniz.\n\nLink: ${inviteLink}\n\nLink 7 gün geçerlidir.`
                     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
                   }}
                 >
@@ -100,8 +101,8 @@ export function InviteDialog({ studentId, studentName, inviteType }: Props) {
                   size="sm"
                   className="flex-1"
                   onClick={() => {
-                    const text = `Koçluk Takip Sistemi'ne davet edildiniz: ${inviteLink}`
-                    window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Koçluk Takip Sistemi daveti')}`, '_blank')
+                    const text = `${BRAND.name}'e davet edildiniz: ${inviteLink}`
+                    window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(`${BRAND.name} daveti`)}`, '_blank')
                   }}
                 >
                   Telegram

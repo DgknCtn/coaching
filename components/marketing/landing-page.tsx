@@ -4,6 +4,8 @@ import { StatsBar } from './stats-bar'
 import { FeaturesSection } from './features-section'
 import { HowItWorks } from './how-it-works'
 import { FeatureGrid } from './feature-grid'
+import { PricingSection } from './pricing-section'
+import { FaqSection } from './faq-section'
 import { DemoCta } from './demo-cta'
 import { Footer } from './footer'
 
@@ -16,6 +18,8 @@ export function LandingPage() {
       <FeaturesSection />
       <HowItWorks />
       <FeatureGrid />
+      <PricingSection />
+      <FaqSection />
       <DemoCta />
       <Footer />
     </div>

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { GraduationCap } from 'lucide-react'
+import { BRAND, contactMailto } from '@/lib/brand'
 
 export function Footer() {
   return (
@@ -12,11 +13,17 @@ export function Footer() {
               <div className="flex size-8 items-center justify-center rounded-md bg-primary">
                 <GraduationCap className="size-4 text-primary-foreground" />
               </div>
-              <span className="text-base font-semibold tracking-tight">KoçTakip</span>
+              <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Koçluk sürecinizi dijitalleştirin.
+              Öğrenci takibini Excel&apos;den kurtarın.
             </p>
+            <a
+              href={contactMailto(`${BRAND.name} hakkında`)}
+              className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              {BRAND.contactEmail}
+            </a>
           </div>
 
           {/* Links */}
@@ -56,7 +63,7 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>© 2026 KoçTakip. Tüm hakları saklıdır.</span>
+          <span>© {BRAND.since} {BRAND.name}. Tüm hakları saklıdır.</span>
           <span>Türkiye&apos;nin koçluk takip platformu</span>
         </div>
       </div>

@@ -4,10 +4,11 @@ import { buttonVariants } from '@/components/ui/button'
 import { Navbar } from '@/components/marketing/navbar'
 import { Footer } from '@/components/marketing/footer'
 import { DemoTabs } from '@/components/marketing/demo/demo-tabs'
+import { BRAND } from '@/lib/brand'
 
 export const metadata = {
-  title: 'Demo – KoçTakip',
-  description: 'KoçTakip uygulamasını kayıt olmadan keşfedin.',
+  title: 'Demo',
+  description: `${BRAND.name} uygulamasını kayıt olmadan keşfedin.`,
 }
 
 export default function DemoPage() {

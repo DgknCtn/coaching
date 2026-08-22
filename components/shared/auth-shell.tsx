@@ -1,4 +1,5 @@
 import { GraduationCap } from 'lucide-react'
+import { BRAND } from '@/lib/brand'
 
 interface AuthShellProps {
   title: string
@@ -19,7 +20,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
           <div className="flex size-8 items-center justify-center rounded-md bg-sidebar-accent">
             <GraduationCap className="size-4 text-sidebar-foreground" />
           </div>
-          <span className="text-sm font-semibold text-sidebar-foreground">Koçluk Takip</span>
+          <span className="text-sm font-semibold text-sidebar-foreground">{BRAND.name}</span>
         </div>
 
         <div>
@@ -32,7 +33,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         </div>
 
         <p className="text-xs text-sidebar-foreground/40">
-          © 2026 Koçluk Takip
+          © {BRAND.since} {BRAND.name}
         </p>
       </div>
 
@@ -42,7 +43,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
             <div className="flex size-8 items-center justify-center rounded-md bg-muted">
               <GraduationCap className="size-4 text-muted-foreground" />
             </div>
-            <span className="text-sm font-semibold">Koçluk Takip</span>
+            <span className="text-sm font-semibold">{BRAND.name}</span>
           </div>
 
           <div className="mb-8">

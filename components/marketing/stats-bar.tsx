@@ -1,20 +1,46 @@
-export function StatsBar() {
-  const stats = [
-    { value: '500+', label: 'Aktif Öğrenci' },
-    { value: '50+', label: 'Koç & Öğretmen' },
-    { value: '10.000+', label: 'Ödev Takibi' },
-    { value: '%94', label: 'Memnuniyet' },
-  ]
+import { Users, BookOpen, ClipboardCheck, ShieldCheck } from 'lucide-react'
 
+// Önceden burada "500+ Aktif Öğrenci", "50+ Koç", "%94 Memnuniyet" gibi
+// UYDURMA rakamlar vardı. Ürün henüz satılmadığı için bunlar doğru değildi
+// ve ilk müşteride fark edildiğinde en başta güven kaybettirirdi.
+//
+// Yerine ürünün BUGÜN yaptığı, doğrulanabilir şeyler yazıldı. Gerçek
+// kullanım rakamları oluştuğunda buraya onlar konabilir.
+
+const FACTS = [
+  {
+    icon: Users,
+    title: 'Üç rol, tek sistem',
+    detail: 'Öğretmen, öğrenci ve veli aynı veriyi kendi paneline uygun şekilde görür.',
+  },
+  {
+    icon: BookOpen,
+    title: 'Test ve sayfa takibi',
+    detail: 'Kitabı test sayısıyla da, "sf. 1-56" gibi sayfa aralığıyla da takip edin.',
+  },
+  {
+    icon: ClipboardCheck,
+    title: 'Öğretmen onaylı ilerleme',
+    detail: 'Yüzdeler yalnız sizin onayladığınız çalışmalardan hesaplanır.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Veri yalıtımı',
+    detail: 'Her çalışma alanı veritabanı düzeyinde ayrıdır; kimse diğerini göremez.',
+  },
+]
+
+export function StatsBar() {
   return (
-    <section className="border-y border-border bg-muted/30">
-      <div className="max-w-5xl mx-auto px-4 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-0 md:divide-x md:divide-border">
-        {stats.map((stat) => (
-          <div key={stat.label} className="text-center px-6">
-            <div className="text-2xl font-semibold tracking-tight tabular-nums">
-              {stat.value}
-            </div>
-            <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+    <section className="border-y bg-muted/30">
+      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-6 py-12 sm:grid-cols-2 lg:grid-cols-4">
+        {FACTS.map((fact) => (
+          <div key={fact.title}>
+            <fact.icon className="size-5 text-muted-foreground" />
+            <p className="mt-3 text-sm font-semibold">{fact.title}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {fact.detail}
+            </p>
           </div>
         ))}
       </div>
