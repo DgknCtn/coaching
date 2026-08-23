@@ -6,6 +6,12 @@
         "shadcn@latest",
         "mcp"
       ]
+    },
+    "codebase-memory": {
+      "command": "node",
+      "args": [
+        "node_modules/codebase-memory-mcp/bin.js"
+      ]
     }
   }
 }
