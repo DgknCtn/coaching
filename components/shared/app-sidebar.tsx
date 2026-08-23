@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { GraduationCap, LogOut, Menu, X } from 'lucide-react'
 import { useEffect, useState, useTransition } from 'react'
+import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 import { navByRole, type NavItem, type Role } from '@/components/nav-config'
@@ -140,6 +141,7 @@ export function AppSidebar({
           <p className="text-xs text-sidebar-foreground/50">{roleLabel}</p>
         </div>
       </div>
+      <ThemeToggle variant="sidebar" showLabel />
       <button
         type="button"
         onClick={handleLogout}
@@ -195,7 +197,9 @@ export function AppSidebar({
       {mobileOpen && (
         <div className="fixed inset-0 z-30 pt-14 md:hidden">
           <div
-            className="absolute inset-0 bg-foreground/40"
+            // Sabit siyah: bg-foreground/40 token olduğu için koyu temada ters
+            // dönüp beyaz bir perde oluyordu.
+            className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />

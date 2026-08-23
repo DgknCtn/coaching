@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { GraduationCap, Menu, X } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { BRAND } from '@/lib/brand'
+import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
 
 export function Navbar() {
@@ -63,6 +64,7 @@ export function Navbar() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
             <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
               Giriş Yap
             </Link>
@@ -116,6 +118,7 @@ export function Navbar() {
             </Link>
           </nav>
           <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
+            <ThemeToggle showLabel className="w-full" onToggled={() => setMobileOpen(false)} />
             <Link href="/login" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full' })}>
               Giriş Yap
             </Link>

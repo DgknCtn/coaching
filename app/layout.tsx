@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { BRAND } from '@/lib/brand'
+import { ThemeProvider } from '@/components/shared/theme-provider'
 import { Inter } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
@@ -26,10 +27,15 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="tr" className={`${inter.variable} h-full antialiased`}>
+    // suppressHydrationWarning: next-themes tema sınıfını hidrasyondan ÖNCE
+    // <html>'e yazar; React'in sunucu/istemci karşılaştırması aksi halde
+    // burada uyarı verir. Yalnız bu etiketi kapsar.
+    <html lang="tr" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
-        {children}
-        <Toaster richColors position="top-right" />
+        <ThemeProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </ThemeProvider>
       </body>
     </html>
   )
