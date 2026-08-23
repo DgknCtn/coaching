@@ -5,7 +5,7 @@ import { BRAND, contactMailto } from '@/lib/brand'
 export function Footer() {
   return (
     <footer className="border-t border-border bg-muted/20">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
           {/* Logo + tagline */}
           <div className="flex flex-col items-center md:items-start gap-2">

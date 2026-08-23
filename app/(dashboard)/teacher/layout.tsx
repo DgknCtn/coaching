@@ -1,4 +1,5 @@
 import { AppSidebar } from '@/components/shared/app-sidebar'
+import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +13,8 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     .eq('workspace_id', workspaceId)
     .order('student_full_name')
     .limit(500)
+
+  const collapsed = await getSidebarCollapsed()
 
   const students = (studentRows ?? []).map((s) => ({
     id: s.student_id as string,
@@ -29,6 +32,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         userName={profile.full_name}
         panel={activeTerm ? { label: 'Aktif dönem', items: [activeTerm.name] } : undefined}
         students={students}
+        defaultCollapsed={collapsed}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         {children}

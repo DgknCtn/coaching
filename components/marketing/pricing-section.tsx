@@ -3,6 +3,7 @@ import { Check, ArrowRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { BRAND, contactMailto } from '@/lib/brand'
 import { cn } from '@/lib/utils'
+import { SectionHeading } from './section-heading'
 
 // Fiyatlandırma (SaaS vitrini).
 //
@@ -67,25 +68,26 @@ const PLANS: Plan[] = [
 
 export function PricingSection() {
   return (
-    <section id="fiyatlar" className="border-t px-6 py-20">
-      <div className="mx-auto max-w-5xl">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Öğrenci sayınıza göre
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            10 öğrenciye kadar ücretsiz kullanın. Portföyünüz büyüdüğünde konuşalım —
-            fiyatı öğrenci sayınıza ve ihtiyacınıza göre birlikte belirleyelim.
-          </p>
-        </div>
+    <section
+      id="fiyatlar"
+      className="scroll-mt-16 border-y bg-muted/30 px-6 py-20 md:py-28"
+    >
+      <div className="mx-auto max-w-6xl">
+        <SectionHeading
+          eyebrow="Fiyatlandırma"
+          title="Öğrenci sayınıza göre"
+          description="10 öğrenciye kadar ücretsiz kullanın. Portföyünüz büyüdüğünde konuşalım — fiyatı öğrenci sayınıza ve ihtiyacınıza göre birlikte belirleyelim."
+        />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-14 grid gap-6 md:grid-cols-3">
           {PLANS.map((plan) => (
             <div
               key={plan.name}
               className={cn(
-                'flex flex-col rounded-lg border bg-card p-6',
-                plan.highlighted && 'border-primary shadow-sm'
+                'flex flex-col rounded-lg border bg-card p-6 transition-colors',
+                plan.highlighted
+                  ? 'border-primary shadow-lg shadow-primary/10 md:-my-2 md:py-8'
+                  : 'hover:border-primary/40'
               )}
             >
               <div className="flex items-center justify-between gap-2">

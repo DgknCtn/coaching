@@ -1,4 +1,5 @@
 import { BRAND, contactMailto } from '@/lib/brand'
+import { SectionHeading } from './section-heading'
 
 // SSS — satın alma kararının önündeki gerçek soruları karşılar.
 // Cevaplar ürünün BUGÜN yaptığı işe göre yazıldı; söz verilen ama
@@ -37,15 +38,16 @@ const FAQS: { q: string; a: string }[] = [
 
 export function FaqSection() {
   return (
-    <section id="sss" className="border-t px-6 py-20">
+    <section id="sss" className="scroll-mt-16 px-6 py-20 md:py-28">
       <div className="mx-auto max-w-3xl">
-        <h2 className="text-center text-2xl font-semibold tracking-tight sm:text-3xl">
-          Sık sorulanlar
-        </h2>
+        <SectionHeading eyebrow="SSS" title="Sık sorulanlar" />
 
-        <div className="mt-10 divide-y rounded-lg border bg-card">
+        <div className="mt-12 divide-y rounded-lg border bg-card">
           {FAQS.map((faq) => (
-            <details key={faq.q} className="group px-5 py-4">
+            <details
+              key={faq.q}
+              className="group px-5 py-4 transition-colors hover:bg-muted/40 open:bg-muted/20"
+            >
               <summary className="cursor-pointer list-none text-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                 <span className="flex items-start justify-between gap-4">
                   {faq.q}

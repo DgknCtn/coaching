@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -25,13 +25,27 @@ const statusTone: Record<string, string> = {
 
 export function HeroSection() {
   return (
-    <section className="border-b bg-background pt-32 pb-20">
-      <div className="mx-auto max-w-5xl px-6">
+    <section className="relative overflow-hidden border-b bg-background pt-32 pb-24">
+      {/*
+        Zemin ışığı. Renk `--primary` token'ından türetiliyor (ham hex yok),
+        böylece koyu temada da marka rengiyle uyumlu kalıyor.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_60%_at_50%_0%,var(--primary)_0%,transparent_70%)] opacity-[0.08]"
+      />
+
+      <div className="relative mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          <p className="mx-auto inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <Sparkles className="size-3.5 text-primary" />
+            10 öğrenciye kadar ücretsiz
+          </p>
+
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
             20 öğrenci, 20 ayrı Excel dosyası olmasın
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
+          <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride
             kaldı — hepsi tek ekranda. Veliler kendi panelinden izler, siz her hafta
             aynı soruları cevaplamazsınız.
@@ -53,7 +67,15 @@ export function HeroSection() {
         </div>
 
         {/* Ürün önizlemesi — gerçek arayüzün sadeleştirilmiş bir temsili. */}
-        <div className="mt-16 overflow-hidden rounded-lg border bg-card">
+        <div className="mx-auto mt-16 max-w-4xl overflow-hidden rounded-xl border bg-card shadow-xl shadow-primary/5">
+          {/* Sahte pencere çubuğu — kartın bir "ekran" olduğunu okutuyor. */}
+          <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-2.5">
+            <span className="size-2.5 rounded-full bg-destructive/40" />
+            <span className="size-2.5 rounded-full bg-warning/40" />
+            <span className="size-2.5 rounded-full bg-success/40" />
+            <span className="ml-3 text-xs text-muted-foreground">Koç paneli</span>
+          </div>
+
           <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-4">
             {previewStats.map((s) => (
               <div key={s.label} className="bg-card p-4">
@@ -72,7 +94,10 @@ export function HeroSection() {
             </div>
             <ul className="divide-y">
               {previewRows.map((r) => (
-                <li key={r.name} className="flex items-center justify-between gap-4 px-4 py-3">
+                <li
+                  key={r.name}
+                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
+                >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{r.detail}</p>
