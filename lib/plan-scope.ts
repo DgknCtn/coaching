@@ -66,9 +66,22 @@ export function resolvePlanScope(book: BookMapBook): PlanScope {
 
   for (const section of book.sections) {
     for (const test of section.tests) {
-      if (!isInScope(section, test.id, target)) continue
+      const completed = test.state === 'completed'
+
+      // R5.1 / KP-03: TAMAMLANMIŞ İŞ HER ZAMAN PLANA DAHİLDİR.
+      //
+      // "14 testlik bölümde 6 test tamamlanmışken bölüm Plan Dışı yapılırsa
+      //  6 geçmişte kalır; kalan 8 hedef paydasından çıkar."
+      //
+      // Yani kapsam daraltmak yalnız YAPILMAMIŞ işi paydadan düşürür;
+      // yapılmış iş hem payda hem payda-içi tamamlanan olarak kalır
+      // (bölüm 6/6 olur). Aksi halde bir bölümü plan dışı bırakmak plan
+      // yüzdesini geriye zıplatırdı — "plan değişebilir, geçmiş çalışma
+      // değişmez" ilkesinin (§2.5) doğrudan ihlali.
+      if (!completed && !isInScope(section, test.id, target)) continue
+
       unitIds.add(test.id)
-      if (test.state === 'completed') completedUnits++
+      if (completed) completedUnits++
     }
   }
 

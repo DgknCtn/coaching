@@ -139,3 +139,52 @@ export async function clearStudentBookTargetAction(
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
+
+/**
+ * Kitap Durumu ve Kaynak Rolü (R5.1 §3.1).
+ *
+ * Rol kitabın değil ÖĞRENCİ-KİTAP İLİŞKİSİNİN özelliğidir ve süreç içinde
+ * değişir. İkisi de yalnız meta bilgidir; hiçbir ilerleme hesabına girmez
+ * (KP-06). Yeni kaynağa geçiş için kilit/koşul motoru yoktur.
+ */
+export async function setStudentBookPlanAction(
+  studentId: string,
+  bookId: string,
+  assignmentId: string,
+  input: { status?: string; role?: string | null }
+) {
+  const parsed = uuidSchema.safeParse(assignmentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { status, role } = input
+
+  if (status !== undefined && !['pending', 'active', 'completed'].includes(status)) {
+    return { error: 'Geçersiz kitap durumu.' }
+  }
+  if (
+    role !== undefined &&
+    role !== null &&
+    role !== '' &&
+    !['temel_olusturma', 'ana_calisma', 'pekistirme', 'yeniden_temas'].includes(role)
+  ) {
+    return { error: 'Geçersiz kaynak rolü.' }
+  }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_student_book_plan', {
+    p_assignment_id: parsed.data,
+    p_status: status ?? null,
+    p_role: role || null,
+    // Boş string "rolü temizle" demektir; null ise "dokunma".
+    p_clear_role: role === '' || role === null,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/students/${studentId}/books/${bookId}`)
+  revalidatePath(`/teacher/students/${studentId}/goals`)
+  revalidatePath(`/teacher/students/${studentId}`)
+  return { success: true }
+}

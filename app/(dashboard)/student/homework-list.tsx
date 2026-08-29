@@ -16,6 +16,7 @@ import {
   testStateLabel,
   TEST_STATE_VARIANT,
   type HomeworkTestState,
+  todayDateString,
 } from '@/lib/homework-status'
 
 interface HomeworkItem {
@@ -103,9 +104,15 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
   }
   const groups = [...bookGroups.values()]
 
+  // R5.1: çalışmanın gerçekten yapıldığı gün. Varsayılan bugün; öğrenci
+  // geriye dönük bir gün seçebilir ("dün çalıştım, bugün işaretliyorum").
+  // Bu tarih onay anında test_completions.studied_on'a taşınır ve Koruma
+  // Havuzu'nun "son temas" hesabının kaynağı olur — onay tarihi değil.
+  const [studiedOn, setStudiedOn] = useState(todayDateString())
+
   function submitAll(bookId?: string) {
     startTransition(async () => {
-      await submitHomeworkBatchAction(batch.id, bookId)
+      await submitHomeworkBatchAction(batch.id, bookId, studiedOn)
     })
   }
 
@@ -127,10 +134,22 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">
             Teslim: {new Date(batch.due_date).toLocaleDateString('tr-TR')}
           </span>
+          {pendingCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Çalıştığım gün</span>
+              <input
+                type="date"
+                value={studiedOn}
+                max={todayDateString()}
+                onChange={e => setStudiedOn(e.target.value)}
+                className="h-7 rounded-md border border-input bg-card px-2 text-xs outline-none focus-visible:border-ring"
+              />
+            </label>
+          )}
           {pendingCount > 1 && (
             <Button size="xs" disabled={isPending} onClick={() => submitAll()}>
               {isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
@@ -157,6 +176,7 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
             multipleBooks={groups.length > 1}
             onSubmitGroup={() => submitAll(group.bookId ?? undefined)}
             groupPending={isPending}
+            studiedOn={studiedOn}
           />
         ))}
       </div>
@@ -170,6 +190,7 @@ function BookGroup({
   multipleBooks,
   onSubmitGroup,
   groupPending,
+  studiedOn,
 }: {
   group: {
     bookId: string | null
@@ -181,6 +202,7 @@ function BookGroup({
   multipleBooks: boolean
   onSubmitGroup: () => void
   groupPending: boolean
+  studiedOn: string
 }) {
   // Tek kitaplı ödevde ekstra bir katman göstermenin anlamı yok.
   const [expanded, setExpanded] = useState(!multipleBooks)
@@ -190,7 +212,7 @@ function BookGroup({
     return (
       <div className="divide-y">
         {group.items.map(item => (
-          <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} />
+          <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} studiedOn={studiedOn} />
         ))}
       </div>
     )
@@ -224,7 +246,7 @@ function BookGroup({
       {expanded && (
         <div className="divide-y">
           {group.items.map(item => (
-            <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} />
+            <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} studiedOn={studiedOn} />
           ))}
         </div>
       )}
@@ -232,7 +254,16 @@ function BookGroup({
   )
 }
 
-function HomeworkItemRow({ item, dueDate }: { item: HomeworkItem; dueDate: string }) {
+function HomeworkItemRow({
+  item,
+  dueDate,
+  studiedOn,
+}: {
+  item: HomeworkItem
+  dueDate: string
+  /** Grup başlığında seçilen "çalıştığım gün" (R5.1). */
+  studiedOn: string
+}) {
   const [isPending, startTransition] = useTransition()
   const state = stateOf(item, dueDate)
   const isDone = state === 'completed' || state === 'pending_approval'
@@ -243,7 +274,7 @@ function HomeworkItemRow({ item, dueDate }: { item: HomeworkItem; dueDate: strin
       if (isDone) {
         await revertCompletedAction(item.id)
       } else {
-        await submitHomeworkItemAction(item.id)
+        await submitHomeworkItemAction(item.id, studiedOn)
       }
     })
   }

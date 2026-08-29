@@ -10,7 +10,7 @@ import {
   revertConfirmMessage,
   type BulkAction,
 } from '@/lib/bulk-actions'
-import type { HomeworkTestState } from '@/lib/homework-status'
+import { todayDateString, type HomeworkTestState } from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -28,7 +28,10 @@ export interface BulkActionPanelProps {
   book: BookMapBook
   selectedIds: Set<string>
   onClearSelection: () => void
-  onComplete: (unitIds: string[]) => Promise<{ error?: string; success?: boolean }>
+  onComplete: (
+    unitIds: string[],
+    studiedOn: string
+  ) => Promise<{ error?: string; success?: boolean }>
   onApprove: (unitIds: string[]) => Promise<{ error?: string; success?: boolean }>
   onRevert: (unitIds: string[]) => Promise<{ error?: string; success?: boolean }>
   className?: string
@@ -52,6 +55,9 @@ export function BulkActionPanel({
   className,
 }: BulkActionPanelProps) {
   const [pendingAction, setPendingAction] = useState<BulkAction | null>(null)
+  // R5.1: "Tamamlandı Olarak İşle" geçmişte yapılmış işi kaydeder; tarih
+  // bugüne sabitlenirse Koruma Havuzu'nun son temas hesabı yanılır.
+  const [studiedOn, setStudiedOn] = useState(todayDateString())
   const [isPending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
 
@@ -94,12 +100,15 @@ export function BulkActionPanel({
 
     if (action === 'revert' && !window.confirm(revertConfirmMessage(ids.length))) return
 
-    const handler = action === 'complete' ? onComplete : action === 'approve' ? onApprove : onRevert
-
     setPendingAction(action)
     setMessage(null)
     startTransition(async () => {
-      const result = await handler(ids)
+      const result =
+        action === 'complete'
+          ? await onComplete(ids, studiedOn)
+          : action === 'approve'
+            ? await onApprove(ids)
+            : await onRevert(ids)
       setPendingAction(null)
       if (result.error) {
         setMessage(result.error)
@@ -147,6 +156,22 @@ export function BulkActionPanel({
       </div>
 
       {message && <p className="text-xs text-destructive">{message}</p>}
+
+      {/* Tamamlandı Olarak İşle geçmiş bir çalışmayı kaydediyor olabilir;
+          gerçek çalışma günü seçilebilmeli (R5.1). */}
+      {counts.complete > 0 && (
+        <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          Çalışmanın yapıldığı gün
+          <input
+            type="date"
+            value={studiedOn}
+            max={todayDateString()}
+            disabled={isPending}
+            onChange={e => setStudiedOn(e.target.value)}
+            className="h-7 rounded-md border border-input bg-card px-2 text-xs outline-none focus-visible:border-ring"
+          />
+        </label>
+      )}
 
       {/* Her düğme kaç öğeye uygulanacağını kendi üstünde söyler; eğitmen
           karma seçimde ne olacağını tahmin etmek zorunda kalmaz. */}

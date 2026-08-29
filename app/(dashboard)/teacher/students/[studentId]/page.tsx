@@ -213,7 +213,7 @@ export default async function StudentDetailPage({
               render={<Link href={`/teacher/students/${studentId}/goals`} />}
             >
               <Target />
-              Hedef
+              Kaynak Planı
             </Button>
             <Button
               size="sm"

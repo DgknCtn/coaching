@@ -40,6 +40,8 @@ function book(sections: BookMapSection[], overrides: Partial<BookMapBook> = {}):
   return {
     assignmentId: 'a1',
     bookId: 'b1',
+    status: 'active',
+    role: null,
     title: 'Metin 10. Sınıf Matematik',
     subject: 'Matematik',
     examType: null,
@@ -118,7 +120,10 @@ describe('resolvePlanScope (R4 §5)', () => {
     expect(scope.label).toBe('Tüm kitap')
   })
 
-  it('bölüm kapsamı yalnız seçili bölümü sayar', () => {
+  it('bölüm kapsamı seçili bölümü + kapsam dışı tamamlanmışları sayar', () => {
+    // R5.1 / KP-03 ile davranış değişti: kapsam daraltmak yalnız YAPILMAMIŞ
+    // işi paydadan düşürür. bolumB kapsam dışıdır ama içindeki tamamlanmış
+    // sayfa (3) planda kalır; yapılmamış sayfası (4) düşer.
     const scope = resolvePlanScope(
       book([bolumA, bolumB], {
         target: {
@@ -132,8 +137,8 @@ describe('resolvePlanScope (R4 §5)', () => {
         },
       })
     )
-    expect(scope.totalUnits).toBe(2)
-    expect(scope.completedUnits).toBe(1)
+    expect(scope.totalUnits).toBe(3) // A'nın 2 sayfası + B'nin tamamlanmış 1 sayfası
+    expect(scope.completedUnits).toBe(2)
   })
 
   it('birim kapsamı yalnız seçili birimleri sayar', () => {
@@ -278,5 +283,209 @@ describe('resolveInterimScope', () => {
     expect(scope.percentage).toBe(100)
     expect(scope.bookPercentage).toBeLessThan(100)
     expect(scope.bookTotalUnits).toBe(done.tests.length + bolumB.tests.length)
+  })
+})
+
+// ============================================================
+// R5.1 — Öğrenci Kaynak Planı kabul testleri (KP-01 … KP-08)
+//
+// İki formül şartnamenin §3.2'sinden:
+//   plan_completion = onaylı(hedef kapsam içi) / hedef kapsam toplamı
+//   book_coverage   = onaylı(kitapta)         / kitabın takip edilebilir toplamı
+// ============================================================
+
+describe('R5.1 · Kaynak Planı kabul testleri', () => {
+  /** n testlik bir bölüm; ilk `done` tanesi tamamlanmış. */
+  function testSection(id: string, count: number, done = 0): BookMapSection {
+    const tests: BookMapTest[] = Array.from({ length: count }, (_, i) => ({
+      id: `${id}-${i + 1}`,
+      title: `${i + 1}. Test`,
+      orderIndex: i + 1,
+      state: (i < done ? 'completed' : 'not_assigned') as HomeworkTestState,
+      homeworkItemId: null,
+      pageStart: null,
+      pageEnd: null,
+    }))
+    return {
+      id,
+      title: id,
+      orderIndex: 1,
+      tests,
+      completedCount: done,
+      groupLabel: null,
+      themeLabel: null,
+      pageStart: null,
+      pageEnd: null,
+      note: null,
+      videoUrl: null,
+    }
+  }
+
+  function testBook(sections: BookMapSection[], overrides: Partial<BookMapBook> = {}) {
+    return book(sections, { trackingMode: 'test', ...overrides })
+  }
+
+  const resourceTarget = (over: Partial<NonNullable<BookMapBook['target']>> = {}) => ({
+    id: 'hedef',
+    kind: 'resource' as const,
+    startDate: '2026-09-01',
+    targetDate: '2026-12-01',
+    scopeType: 'sections' as const,
+    sectionIds: [] as string[],
+    unitIds: [] as string[],
+    ...over,
+  })
+
+  it('KP-01: 420 toplam / 276 hedef / 276 onay -> Plan %100, Kitap ~%66', () => {
+    // Hedefteki 276'nın tamamı onaylı; kitabın kalan 144 testi hiç yapılmamış.
+    const scope = resolvePlanScope(
+      testBook([testSection('hedef', 276, 276), testSection('disarida', 144, 0)], {
+        target: resourceTarget({ sectionIds: ['hedef'] }),
+      })
+    )
+
+    expect(scope.totalUnits).toBe(276)
+    expect(scope.completedUnits).toBe(276)
+    expect(scope.percentage).toBe(100)
+
+    expect(scope.bookTotalUnits).toBe(420)
+    expect(scope.bookCompletedUnits).toBe(276)
+    expect(scope.bookPercentage).toBe(66) // 276/420 = %65,7 -> 66
+  })
+
+  it('KP-02: onay bekleyen plan hesabına girmez', () => {
+    // 276 hedef: 230 onaylı, 20 onay bekliyor, 26 hiç başlanmamış.
+    const tests: BookMapTest[] = Array.from({ length: 276 }, (_, i) => ({
+      id: `t${i}`,
+      title: `${i + 1}. Test`,
+      orderIndex: i + 1,
+      state: (i < 230 ? 'completed' : i < 250 ? 'pending_approval' : 'not_assigned') as HomeworkTestState,
+      homeworkItemId: null,
+      pageStart: null,
+      pageEnd: null,
+    }))
+    const section: BookMapSection = {
+      id: 'hedef',
+      title: 'hedef',
+      orderIndex: 1,
+      tests,
+      completedCount: 230,
+      groupLabel: null,
+      themeLabel: null,
+      pageStart: null,
+      pageEnd: null,
+      note: null,
+      videoUrl: null,
+    }
+
+    const scope = resolvePlanScope(
+      testBook([section], { target: resourceTarget({ sectionIds: ['hedef'] }) })
+    )
+
+    expect(scope.totalUnits).toBe(276)
+    expect(scope.completedUnits).toBe(230) // yalnız onaylı
+    expect(scope.percentage).toBe(83) // 230/276
+
+    // Onay bekleyenler ayrı sayılır; plana dahil DEĞİL.
+    const pendingApproval = section.tests.filter(t => t.state === 'pending_approval').length
+    expect(pendingApproval).toBe(20)
+  })
+
+  it('KP-03: 14 testlik bölümde 6 tamam -> Plan Dışı -> 6 kalır, 8 çıkar', () => {
+    const bolum = testSection('B', 14, 6)
+    const digeri = testSection('A', 10, 0)
+
+    const dahil = resolvePlanScope(
+      testBook([digeri, bolum], { target: resourceTarget({ sectionIds: ['A', 'B'] }) })
+    )
+    expect(dahil.totalUnits).toBe(24) // 10 + 14
+
+    // B plan dışı bırakılır.
+    const disarida = resolvePlanScope(
+      testBook([digeri, bolum], { target: resourceTarget({ sectionIds: ['A'] }) })
+    )
+
+    expect(disarida.totalUnits).toBe(16) // 24 - 8 (yalnız yapılmamışlar çıktı)
+    expect(disarida.completedUnits).toBe(6) // 6 geçmişte kaldı ve sayılıyor
+    expect(dahil.totalUnits - disarida.totalUnits).toBe(8)
+  })
+
+  it('KP-04: hedef kapsam büyütülünce yüzde ve kalan yeniden hesaplanır', () => {
+    const a = testSection('A', 276, 138)
+    const b = testSection('B', 24, 0)
+
+    const once = resolvePlanScope(
+      testBook([a, b], { target: resourceTarget({ sectionIds: ['A'] }) })
+    )
+    expect(once.totalUnits).toBe(276)
+    expect(once.percentage).toBe(50)
+
+    const sonra = resolvePlanScope(
+      testBook([a, b], { target: resourceTarget({ sectionIds: ['A', 'B'] }) })
+    )
+    expect(sonra.totalUnits).toBe(300)
+    expect(sonra.completedUnits).toBe(138)
+    expect(sonra.percentage).toBe(46) // 138/300
+    expect(sonra.totalUnits - sonra.completedUnits).toBe(162) // kalan
+  })
+
+  it('KP-05: hedef tarihi değişince haftalık tempo yeniden hesaplanır', () => {
+    const girdi = {
+      startDate: '2026-09-01',
+      totalUnits: 276,
+      completedUnits: 76,
+      trackingMode: 'test',
+      today: new Date('2026-10-01T09:00:00Z'),
+    }
+
+    const uzak = calculatePlanTempo({ ...girdi, targetEndDate: '2027-06-01' })
+    const yakin = calculatePlanTempo({ ...girdi, targetEndDate: '2026-12-01' })
+
+    expect(uzak.remainingUnits).toBe(200)
+    expect(yakin.remainingUnits).toBe(200)
+    // Aynı iş, daha kısa süre -> daha yüksek gerekli tempo.
+    expect(yakin.requiredPacePerWeek).toBeGreaterThan(uzak.requiredPacePerWeek!)
+  })
+
+  it('KP-06: rol değişimi ilerleme verisine dokunmaz', () => {
+    // Rol student_book_assignments üzerinde bir meta alandır ve hiçbir
+    // hesaba girmez; plan kapsamı yalnız hedeften ve tamamlanmadan türer.
+    const sections = [testSection('A', 20, 8)]
+    const target = resourceTarget({ sectionIds: ['A'] })
+
+    const pekistirme = resolvePlanScope(testBook(sections, { target }))
+    const anaCalisma = resolvePlanScope(testBook(sections, { target }))
+
+    expect(anaCalisma.totalUnits).toBe(pekistirme.totalUnits)
+    expect(anaCalisma.completedUnits).toBe(pekistirme.completedUnits)
+    expect(anaCalisma.percentage).toBe(pekistirme.percentage)
+  })
+
+  it('KP-07: Tam Kitap seçilince tüm takip edilebilir kapsam paydaya girer', () => {
+    const scope = resolvePlanScope(
+      testBook([testSection('A', 276, 100), testSection('B', 144, 0)], {
+        target: resourceTarget({ scopeType: 'whole_book' }),
+      })
+    )
+    expect(scope.totalUnits).toBe(420)
+    expect(scope.totalUnits).toBe(scope.bookTotalUnits)
+    expect(scope.percentage).toBe(scope.bookPercentage)
+  })
+
+  it('KP-08: örtüşen sayfa aralıkları çift sayılmaz', () => {
+    // 022'den beri her fiziksel sayfa TEK book_tests satırıdır; aynı sayfa
+    // iki farklı ödevde verilse bile tek birimdir. Çift sayım şema
+    // düzeyinde imkânsızdır.
+    const bolum = section(
+      'F1',
+      [pageTest(1, 'completed'), pageTest(2, 'completed'), pageTest(3, 'not_assigned')],
+      1,
+      3
+    )
+    const scope = resolvePlanScope(book([bolum]))
+
+    expect(scope.totalUnits).toBe(3)
+    expect(scope.completedUnits).toBe(2)
+    expect(scope.unitIds.size).toBe(3) // Set: aynı birim iki kez giremez
   })
 })

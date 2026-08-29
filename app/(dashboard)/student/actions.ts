@@ -5,8 +5,18 @@ import { createClient } from '@/lib/supabase/server'
 import { getStudentContext } from '@/lib/workspace'
 import { checkInSchema, uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { todayDateString } from '@/lib/homework-status'
 
-export async function submitHomeworkItemAction(homeworkItemId: string) {
+// R5.1: çalışmanın GERÇEKTEN yapıldığı gün. Öğrenci geçmiş bir gün
+// seçebilir ("dün çalıştım, bugün işaretliyorum"); gelecek gün seçemez.
+// Verilmezse RPC bugünü kullanır — mevcut davranış korunur.
+function normalizeStudiedOn(value?: string): string | null {
+  if (!value) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  return value > todayDateString() ? null : value
+}
+
+export async function submitHomeworkItemAction(homeworkItemId: string, studiedOn?: string) {
   const parsed = uuidSchema.safeParse(homeworkItemId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
@@ -15,6 +25,7 @@ export async function submitHomeworkItemAction(homeworkItemId: string) {
 
   const { error } = await supabase.rpc('submit_homework_item_for_approval', {
     p_homework_item_id: homeworkItemId,
+    p_studied_on: normalizeStudiedOn(studiedOn),
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -25,7 +36,11 @@ export async function submitHomeworkItemAction(homeworkItemId: string) {
 // Toplu gönderim (R3 v2 §D): 100 testlik haftada öğrencinin 100 kez butona
 // basması beklenemez. Arka planda kalemler yine tek tek güncellenir; bu yalnız
 // arayüz kolaylığıdır.
-export async function submitHomeworkBatchAction(homeworkBatchId: string, bookId?: string) {
+export async function submitHomeworkBatchAction(
+  homeworkBatchId: string,
+  bookId?: string,
+  studiedOn?: string
+) {
   const parsedBatch = uuidSchema.safeParse(homeworkBatchId)
   if (!parsedBatch.success) return { error: firstIssue(parsedBatch.error) }
 
@@ -42,6 +57,7 @@ export async function submitHomeworkBatchAction(homeworkBatchId: string, bookId?
   const { error } = await supabase.rpc('submit_homework_items_bulk', {
     p_homework_batch_id: parsedBatch.data,
     p_book_id: parsedBookId,
+    p_studied_on: normalizeStudiedOn(studiedOn),
   })
 
   if (error) return { error: dbErrorToTr(error.message) }

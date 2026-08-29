@@ -22,9 +22,20 @@ import { dbErrorToTr } from '@/lib/auth-errors'
 const bulkSchema = z.object({
   assignmentId: uuidSchema,
   unitIds: z.array(uuidSchema).min(1, 'En az bir çalışma seçin.').max(2000),
+  /**
+   * Çalışmanın GERÇEKTEN yapıldığı gün (R5.1). Manuel tamamlamada bu alan
+   * kritik: "bunları geçen ay bitirmişti" denen iş bugüne yazılırsa Koruma
+   * Havuzu'nun son temas hesabı sistematik olarak yanlış olur.
+   * Verilmezse RPC bugünü kullanır.
+   */
+  studiedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir tarih seçin.')
+    .optional()
+    .or(z.literal('')),
 })
 
-type BulkInput = { assignmentId: string; unitIds: string[] }
+type BulkInput = { assignmentId: string; unitIds: string[]; studiedOn?: string }
 
 /** İşlem sonrası harita, sayaçlar ve tempo anında güncellenmeli (§11). */
 function revalidate(studentId: string, bookId: string) {
@@ -46,10 +57,17 @@ async function callBulkRpc(
   await getTeacherContext()
   const supabase = await createClient()
 
-  const { data, error } = await supabase.rpc(fn, {
+  // studied_on yalnız manuel tamamlamada anlamlı: onay ve geri alma
+  // tarihlerini kalemin kendi beyanından alır.
+  const args: Record<string, unknown> = {
     p_student_book_assignment_id: parsed.data.assignmentId,
     p_book_test_ids: parsed.data.unitIds,
-  })
+  }
+  if (fn === 'complete_units_manually') {
+    args.p_studied_on = parsed.data.studiedOn || null
+  }
+
+  const { data, error } = await supabase.rpc(fn, args)
 
   if (error) return { error: dbErrorToTr(error.message) }
 

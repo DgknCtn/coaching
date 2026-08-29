@@ -88,6 +88,16 @@ export interface BookMapBook {
    *  plan mesajında da hatırlat (R4 §6). */
   videoDisplay: string
   /** Tek aktif hedef; yoksa null (o zaman kapsam tüm kitaptır). */
+  /**
+   * Kitap Durumu (R5.1): pending=Bekliyor, active=Aktif,
+   * completed=Hedef Tamamlandı. paused/archived geriye dönük değerlerdir.
+   */
+  status: string
+  /**
+   * Kaynağın bu öğrencinin planındaki rolü (R5.1). Kitabın değil
+   * öğrenci-kitap ilişkisinin özelliğidir; hiçbir hesaba girmez.
+   */
+  role: string | null
   /** Kaynak Hedefi — ana tempo bundan hesaplanır (R6-04). */
   target: BookMapTarget | null
   /** Ara Hedef — varsa kısa menzilli plan. Ana tempoyu etkilemez. */
@@ -97,8 +107,16 @@ export interface BookMapBook {
 interface LoadBookMapArgs {
   workspaceId: string
   studentId: string
-  /** Verilirse yalnız bu kitaplar yüklenir; verilmezse tüm aktif atamalar. */
+  /** Verilirse yalnız bu kitaplar yüklenir; verilmezse tüm atamalar. */
   bookIds?: string[]
+  /**
+   * Yüklenecek atama durumları (R5.1). Varsayılan yalnız 'active' —
+   * bugünkü tüm çağıranlar (Kitap Haritası, ödev verme, veli/öğrenci
+   * ekranları) yalnız aktif kaynakla ilgileniyor ve davranışları
+   * değişmemeli. Kaynak Planı ekranı Bekliyor/Tamamlandı gruplarını da
+   * göstermek için bunu genişletir.
+   */
+  statuses?: string[]
   /** Test edilebilirlik için enjekte edilebilir. */
   today?: Date
 }
@@ -116,12 +134,12 @@ type SupabaseLike = any
  */
 export async function loadBookMap(
   supabase: SupabaseLike,
-  { workspaceId, studentId, bookIds, today }: LoadBookMapArgs
+  { workspaceId, studentId, bookIds, statuses, today }: LoadBookMapArgs
 ): Promise<BookMapBook[]> {
   let assignmentQuery = supabase
     .from('student_book_assignments')
     .select(`
-      id, book_id, start_date, target_end_date, video_display,
+      id, book_id, start_date, target_end_date, video_display, status, role,
       books(
         id, title, subject, exam_type, level_exam, curriculum_program,
         publisher, tracking_mode, video_mode, video_url,
@@ -134,7 +152,7 @@ export async function loadBookMap(
     `)
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
-    .eq('status', 'active')
+    .in('status', statuses ?? ['active'])
 
   if (bookIds?.length) {
     assignmentQuery = assignmentQuery.in('book_id', bookIds)
@@ -253,6 +271,8 @@ export async function loadBookMap(
     return {
       assignmentId: assignment.id,
       bookId: assignment.book_id,
+      status: assignment.status ?? 'active',
+      role: assignment.role ?? null,
       title: book?.title ?? '',
       subject: book?.subject ?? null,
       examType: book?.exam_type ?? null,

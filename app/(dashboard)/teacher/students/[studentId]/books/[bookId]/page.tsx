@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { unitLabel } from '@/lib/unit-labels'
 import { ResourceMap } from './resource-map'
+import { ResourcePlanCard } from './plan-card'
 import { notFound } from 'next/navigation'
 import { BookOpen, Plus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
@@ -36,21 +37,24 @@ export default async function StudentBookDetailPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  // Kitap bu öğrenciye atanmış mı? View sadece status='active' atamaları döner,
-  // dolayısıyla satır yoksa bu sayfanın gösterecek bir bağlamı da yok.
-  const { data: progress } = await supabase
-    .from('student_book_progress_view')
-    .select('*')
-    .eq('student_id', studentId)
-    .eq('book_id', bookId)
-    .eq('workspace_id', workspaceId)
-    .maybeSingle()
-
-  if (!progress) notFound()
-
   // Durumlar Kitap Haritası ile aynı yükleyiciden gelir; bu sayfa ile harita
   // aynı test için aynı aktif durumu göstermek zorunda (R3 v2 "Tutarlılık").
-  const [book] = await loadBookMap(supabase, { workspaceId, studentId, bookIds: [bookId] })
+  //
+  // R5.1: Bekliyor ve Hedef Tamamlandı durumundaki kaynaklar da açılabilmeli.
+  // loadBookMap'in varsayılanı yalnız 'active' olduğu için o kaynaklara
+  // Kaynak Planı'ndan tıklandığında bu sayfa notFound() veriyordu.
+  //
+  // Aidiyet kontrolü de buradan gelir: loadBookMap zaten student_id ve
+  // workspace_id ile süzüyor, sonuç boşsa kitap bu öğrenciye atanmamıştır.
+  // Önceden bu kontrol student_book_progress_view üzerinden yapılıyordu ama
+  // o view yalnız status='active' satırları döndürdüğü için Bekliyor ve
+  // Hedef Tamamlandı kaynakları açılamıyordu.
+  const [book] = await loadBookMap(supabase, {
+    workspaceId,
+    studentId,
+    bookIds: [bookId],
+    statuses: ['active', 'pending', 'paused', 'completed'],
+  })
 
   if (!book) notFound()
 
@@ -75,12 +79,12 @@ export default async function StudentBookDetailPage({
     <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} › ${progress.book_title}`}
-        subtitle={[progress.subject, progress.publisher].filter(Boolean).join(' · ')}
+        title={`${student.full_name} › ${book.title}`}
+        subtitle={[book.subject, book.publisher].filter(Boolean).join(' · ')}
         badges={
           // R6-16: canonical değer level_exam; exam_type yalnız fallback.
-          book.levelExam || progress.exam_type ? (
-            <Badge variant="neutral">{book.levelExam || progress.exam_type}</Badge>
+          book.levelExam || book.examType ? (
+            <Badge variant="neutral">{book.levelExam || book.examType}</Badge>
           ) : undefined
         }
         action={
@@ -109,7 +113,7 @@ export default async function StudentBookDetailPage({
           </span>
           <span className="font-medium tabular-nums">{percentage}%</span>
         </div>
-        <ProgressBar value={percentage} label={`${progress.book_title} ilerlemesi`} />
+        <ProgressBar value={percentage} label={`${book.title} ilerlemesi`} />
         <p className="text-xs text-muted-foreground">
           Hedef kapsamı: {scope.label}
           {scope.targetEndDate &&
@@ -130,13 +134,20 @@ export default async function StudentBookDetailPage({
         description="Hedef tarihe göre konum ve bugün gereken ortalama tempo."
       >
         <PlanTempoCard
-          bookTitle={progress.book_title}
+          bookTitle={book.title}
           startDate={scope.startDate}
           targetEndDate={scope.targetEndDate}
           totalUnits={totalTests}
           completedUnits={completedTests}
           trackingMode={book.trackingMode}
         />
+      </Section>
+
+      <Section
+        title="Kaynak planı"
+        description="Bu kaynağın öğrencinin planındaki durumu ve rolü."
+      >
+        <ResourcePlanCard studentId={studentId} book={book} />
       </Section>
 
       <Section

@@ -1,24 +1,45 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { BookOpen, Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
-import { calculatePlanPace } from '@/lib/plan-pace'
+import { loadBookMap, type BookMapBook } from '@/lib/book-map'
+import { resolvePlanScope, type PlanScope } from '@/lib/plan-scope'
+import { calculatePlanTempo } from '@/lib/plan-pace'
+import {
+  BOOK_PLAN_GROUP_LABEL,
+  bookPlanGroup,
+  bookPlanStatusLabel,
+  bookRoleLabel,
+  targetTypeLabel,
+  type BookPlanGroup,
+} from '@/lib/resource-plan'
+import { formatTempo, formatUnitCount, unitLabel } from '@/lib/unit-labels'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { Section } from '@/components/shared/section'
+
+// Öğrenci Kaynak Planı (R5.1).
+//
+// Cevapladığı soru: "Bu kaynak bu öğrenci için neden kullanılıyor, ne
+// kadarının tamamlanmasını planladık ve hedef tarihe göre neredeyiz?"
+//
+// Bu ekran eski "Hedef" ekranının yerine geçer. Eski sürüm
+// student_book_progress_view'dan besleniyordu ve KAPSAM-DUYARLI DEĞİLDİ:
+// hedef yalnız birkaç bölüm olsa bile kitabın tamamı üzerinden yüzde
+// gösteriyordu. Artık veri loadBookMap + resolvePlanScope'tan gelir.
+//
+// İKİ AYRI YÜZDE (§3.2) — karıştırılmamalı:
+//   Plan %  = hedef kapsamında onaylanan / hedef kapsam toplamı  (ANA gösterge)
+//   Kitap % = kitapta onaylanan / kitabın takip edilebilir toplamı (fiziksel bilgi)
+// 420 testlik kitapta 276 hedef ve 276 onay -> Plan %100, Kitap %66.
 
 export const dynamic = 'force-dynamic'
 
-// plan-pace çıktısı → badge variant. Mantık lib/plan-pace.ts'te kalır.
-const paceVariant: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = {
-  ahead: 'success',
-  on_track: 'info',
-  behind: 'warning',
-  no_target: 'neutral',
-  not_started: 'neutral',
-}
+const GROUP_ORDER: BookPlanGroup[] = ['active', 'pending', 'completed']
 
-export default async function StudentGoalsPage({
+export default async function StudentResourcePlanPage({
   params,
 }: {
   params: Promise<{ studentId: string }>
@@ -35,32 +56,26 @@ export default async function StudentGoalsPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  const { data: bookProgress } = await supabase
-    .from('student_book_progress_view')
-    .select('*')
-    .eq('student_id', studentId)
-    .eq('workspace_id', workspaceId)
+  // Bekliyor ve Hedef Tamamlandı grupları da görünmeli; loadBookMap'in
+  // varsayılanı yalnız 'active'dir.
+  const books = await loadBookMap(supabase, {
+    workspaceId,
+    studentId,
+    statuses: ['active', 'pending', 'paused', 'completed'],
+  })
 
-  const books = bookProgress ?? []
-  const today = new Date()
-
-  const paced = books.map((b) => ({
-    book: b,
-    pace: calculatePlanPace({
-      startDate: b.start_date,
-      targetEndDate: b.target_end_date,
-      totalUnits: Number(b.total_tests ?? 0),
-      completedUnits: Number(b.completed_tests ?? 0),
-      today,
-    }),
-  }))
+  const grouped = new Map<BookPlanGroup, BookMapBook[]>()
+  for (const book of books) {
+    const group = bookPlanGroup(book.status)
+    grouped.set(group, [...(grouped.get(group) ?? []), book])
+  }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
+    <div className="mx-auto max-w-5xl space-y-8 p-6 md:p-8">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} — Hedef`}
-        subtitle="Her kitap için plan çizgisine göre ilerleme"
+        title={`${student.full_name} — Kaynak Planı`}
+        subtitle="Her kaynağın rolü, hedef kapsamı ve hedef tarihe göre durumu"
         badges={
           <>
             {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
@@ -69,78 +84,131 @@ export default async function StudentGoalsPage({
         }
       />
 
-      {!books.length ? (
+      {books.length === 0 ? (
         <div className="rounded-lg border bg-card">
           <EmptyState
             icon={BookOpen}
-            title="Atanmış kitap yok"
-            description="Bu öğrenciye kitap atandığında hedef ilerlemesi burada görünür."
+            title="Atanmış kaynak yok"
+            description="Bu öğrenciye kitap atandığında kaynak planı burada görünür."
           />
         </div>
       ) : (
-        <div className="space-y-3">
-          {paced.map(({ book: b, pace }) => {
-            const pct = Number(b.completion_percentage ?? 0)
-            const remainingUnits = Math.max(Number(b.total_tests ?? 0) - Number(b.completed_tests ?? 0), 0)
-            const remainingDays = b.target_end_date
-              ? Math.ceil((new Date(b.target_end_date).getTime() - today.getTime()) / 86_400_000)
-              : null
-
-            return (
-              <div
-                key={b.student_book_assignment_id}
-                className="rounded-lg border bg-card p-4"
-              >
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{b.book_title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[b.subject, b.exam_type].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm tabular-nums">
-                      {b.completed_tests}
-                      <span className="text-muted-foreground">/{b.total_tests}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {b.tracking_mode === 'page' ? 'sayfa aralığı' : 'test'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-3 flex items-center gap-3">
-                  <ProgressBar value={pct} label={`${b.book_title} ilerlemesi`} className="flex-1" />
-                  <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-                    {pct}%
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Badge variant={paceVariant[pace.phraseKey] ?? 'neutral'}>
-                    {pace.phraseKey === 'ahead' && <TrendingUp />}
-                    {pace.phraseKey === 'behind' && <TrendingDown />}
-                    {pace.phraseKey === 'on_track' && <Minus />}
-                    {pace.phrase}
-                  </Badge>
-
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>
-                      {remainingUnits} {b.tracking_mode === 'page' ? 'sayfa aralığı' : 'test'} kaldı
-                    </span>
-                    {remainingDays !== null && (
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="size-3.5" />
-                        {remainingDays >= 0 ? `${remainingDays} gün kaldı` : 'Hedef tarihi geçti'}
-                      </span>
-                    )}
-                  </div>
-                </div>
+        GROUP_ORDER.map(group => {
+          const groupBooks = grouped.get(group) ?? []
+          if (groupBooks.length === 0) return null
+          return (
+            <Section key={group} title={BOOK_PLAN_GROUP_LABEL[group]}>
+              <div className="space-y-3">
+                {groupBooks.map(book => (
+                  <ResourceCard key={book.assignmentId} studentId={studentId} book={book} />
+                ))}
               </div>
-            )
-          })}
-        </div>
+            </Section>
+          )
+        })
       )}
+
+      <p className="text-xs text-muted-foreground">
+        Plan % hedef kapsamı üzerinden hesaplanır ve ana göstergedir. Kitap % kaynağın
+        fiziksel kapsamını gösterir; plan tamamlanmış olsa bile daha düşük olabilir.
+        Onay bekleyen çalışma plan hesabına girmez.
+      </p>
     </div>
+  )
+}
+
+function ResourceCard({ studentId, book }: { studentId: string; book: BookMapBook }) {
+  const scope: PlanScope = resolvePlanScope(book)
+
+  const tempo = calculatePlanTempo({
+    startDate: scope.startDate,
+    targetEndDate: scope.targetEndDate,
+    totalUnits: scope.totalUnits,
+    completedUnits: scope.completedUnits,
+    trackingMode: book.trackingMode,
+  })
+
+  // Onay bekleyen AYRI gösterilir ve plana girmez (§3.4, KP-02).
+  const pendingApproval = book.sections.reduce(
+    (n, s) => n + s.tests.filter(t => t.state === 'pending_approval').length,
+    0
+  )
+
+  const role = bookRoleLabel(book.role)
+  const remaining = Math.max(0, scope.totalUnits - scope.completedUnits)
+
+  return (
+    <Link
+      href={`/teacher/students/${studentId}/books/${book.bookId}`}
+      className="block rounded-lg border bg-card p-4 transition-colors hover:border-foreground/20"
+    >
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{book.title}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{bookPlanStatusLabel(book.status)}</span>
+            {role && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{role}</span>
+              </>
+            )}
+            <span aria-hidden>·</span>
+            <span>{targetTypeLabel(scope.scopeType)}</span>
+          </p>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-semibold tabular-nums">%{scope.percentage}</p>
+          <p className="text-[11px] text-muted-foreground">Plan</p>
+        </div>
+      </div>
+
+      <ProgressBar value={scope.percentage} label={`${book.title} plan ilerlemesi`} />
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+        <div>
+          <dt className="text-muted-foreground">Plan kapsamı</dt>
+          <dd className="mt-0.5 tabular-nums">
+            {scope.completedUnits} / {scope.totalUnits} {unitLabel(book.trackingMode)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Planda kalan</dt>
+          <dd className="mt-0.5 tabular-nums">
+            {formatUnitCount(remaining, book.trackingMode)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Hedef tarih</dt>
+          <dd className="mt-0.5 tabular-nums">
+            {scope.targetEndDate
+              ? new Date(scope.targetEndDate).toLocaleDateString('tr-TR')
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Gerekli tempo</dt>
+          <dd className="mt-0.5 tabular-nums">
+            {tempo.isTargetReached
+              ? `${formatUnitCount(tempo.remainingUnits, book.trackingMode)} kaldı`
+              : formatTempo(tempo.requiredPacePerWeek, book.trackingMode)}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+        <span>
+          Kitap kapsamı: {scope.bookCompletedUnits} / {scope.bookTotalUnits} ·{' '}
+          <span className="tabular-nums">%{scope.bookPercentage}</span>
+        </span>
+        {pendingApproval > 0 && (
+          <span className="text-info-foreground">
+            {formatUnitCount(pendingApproval, book.trackingMode)} onay bekliyor
+          </span>
+        )}
+        {scope.scopeType !== 'whole_book' && <span>Kapsam: {scope.label}</span>}
+      </div>
+    </Link>
   )
 }

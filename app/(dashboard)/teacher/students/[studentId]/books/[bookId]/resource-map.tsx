@@ -164,10 +164,11 @@ export function ResourceMap({ studentId, book }: Props) {
           book={book}
           selectedIds={selectedIds}
           onClearSelection={clearSelection}
-          onComplete={ids =>
+          onComplete={(ids, studiedOn) =>
             completeUnitsManuallyAction(studentId, book.bookId, {
               assignmentId: book.assignmentId,
               unitIds: ids,
+              studiedOn,
             }).then(report('tamamlandı olarak işlendi'))
           }
           onApprove={ids =>
