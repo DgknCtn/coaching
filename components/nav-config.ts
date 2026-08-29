@@ -1,6 +1,7 @@
 import {
   BookOpen,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   LayoutDashboard,
   Users,
@@ -22,6 +23,7 @@ export const teacherNav: NavItem[] = [
   { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
   { href: '/teacher/students', label: 'Öğrenciler', icon: Users },
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
+  { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
 ]
 
