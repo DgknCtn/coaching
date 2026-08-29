@@ -19,9 +19,10 @@ export default async function BookEditPage({
     .from('books')
     .select(`
       id, title, subject, publisher, exam_type, level_exam, edition_year,
+      curriculum_program,
       description, status, tracking_mode, video_mode, video_url,
       book_sections(
-        id, title, order_index,
+        id, title, order_index, group_label, theme_label,
         book_tests(id)
       )
     `)
@@ -37,6 +38,8 @@ export default async function BookEditPage({
       id: s.id,
       title: s.title,
       testCount: (s.book_tests ?? []).length,
+      groupLabel: s.group_label ?? null,
+      themeLabel: s.theme_label ?? null,
     }))
 
   return (
@@ -58,6 +61,7 @@ export default async function BookEditPage({
           subject: book.subject,
           publisher: book.publisher ?? '',
           levelExam: book.level_exam ?? '',
+          curriculumProgram: book.curriculum_program ?? 'Belirtilmedi',
           editionYear: book.edition_year ?? undefined,
           description: book.description ?? '',
           videoMode: (book.video_mode ?? 'none') as 'none' | 'book' | 'section',

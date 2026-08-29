@@ -31,6 +31,15 @@ export interface ShareTextInput {
   /** ISO tarih (YYYY-MM-DD); yoksa "—" yazılır. */
   dueDate?: string | null
   books: ShareBook[]
+  /**
+   * Ödev notu (R6-05) — isteğe bağlı insan bağlamı.
+   *
+   * Boşsa çıktıya HİÇBİR ŞEY eklenmez: başlık da satır da yok. R6-05'in
+   * kabul testi #36 bunu ölçüyor ("not boşken mevcut çıktı değişmemeli").
+   * Ödev başına TEK nottur; test veya sayfa kaynağı sayısı fark etmez,
+   * mesajda bir kez görünür (#39).
+   */
+  note?: string | null
 }
 
 function formatDate(dueDate?: string | null): string {
@@ -57,9 +66,16 @@ function formatDate(dueDate?: string | null): string {
  *   • Hareket → sf. 72-91
  *   • Hareket konu anlatım videolarını izle
  *
+ *   Not: Parçalı fonksiyona kadar çalış, yapamadığın soruları gruba at.
+ *
  *   Çalışmalarını tamamladığında panelden durumunu işaretlemeyi unutma.
  */
-export function buildShareText({ studentName, dueDate, books }: ShareTextInput): string {
+export function buildShareText({
+  studentName,
+  dueDate,
+  books,
+  note,
+}: ShareTextInput): string {
   const lines: string[] = [
     `Merhaba ${studentName},`,
     '',
@@ -82,6 +98,11 @@ export function buildShareText({ studentName, dueDate, books }: ShareTextInput):
 
     lines.push('', book.bookTitle, ...sectionLines, ...videoLines)
   }
+
+  // Not, ödev listesinin ARDINDAN gelir (#38): önce ne yapılacağı, sonra
+  // nasıl yapılacağına dair bağlam.
+  const trimmedNote = note?.trim()
+  if (trimmedNote) lines.push('', `Not: ${trimmedNote}`)
 
   lines.push('', 'Çalışmalarını tamamladığında panelden durumunu işaretlemeyi unutma.')
 

@@ -6,7 +6,15 @@ export interface Metric {
   value: string | number
   subValue?: string
   hint?: string
-  /** Verilirse kart tıklanabilir olur (filtrelenmiş listeye gider). */
+  /**
+   * Verilirse kart tıklanabilir olur (filtrelenmiş listeye gider).
+   *
+   * R6-10 kabul #62 — TUTARLILIK KURALI: href'i olan bir sayaç DEĞERİ SIFIR
+   * OLSA DA tıklanabilir kalır. "0 ise link kapansın" davranışı, aynı kartın
+   * bazen tıklanıp bazen tıklanmaması demek olurdu; kullanıcı hangi kartın
+   * tıklanabilir olduğunu değere bakarak tahmin etmek zorunda kalırdı.
+   * Boş listeye gitmek zararsızdır — hedef ekran kendi boş durumunu gösterir.
+   */
   href?: string
 }
 

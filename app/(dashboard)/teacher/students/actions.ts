@@ -36,6 +36,19 @@ export async function createStudentAction(
   }).select('id').single()
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // R6-07: Notlar sekmesi artık academic_notes'u gösteriyor. students.notes
+  // geriye dönük uyum için yazılmaya devam ediyor ama TEK BAŞINA yeterli
+  // değil — buraya yazılan not hiçbir ekranda görünmezdi. Bu yüzden ilk not
+  // aynı zamanda bir akademik not olarak açılır.
+  if (notes && notes.trim()) {
+    await supabase.rpc('add_academic_note', {
+      p_student_id: data.id,
+      p_note_text: notes.trim(),
+      p_pinned: false,
+    })
+  }
+
   revalidatePath('/teacher/students')
   redirect(`/teacher/students/${data.id}`)
 }
@@ -56,6 +69,10 @@ export async function updateStudentAction(
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
+  // R6-07: notes artık düzenleme formunda YOKTUR (notlar academic_notes'ta
+  // yönetiliyor). Bu yüzden `notes` tanımsız geldiğinde eski değeri EZMEYİZ —
+  // aksi halde düzenleme, geriye dönük uyum için tutulan kolonu sessizce
+  // temizlerdi.
   const { error } = await supabase
     .from('students')
     .update({
@@ -65,7 +82,7 @@ export async function updateStudentAction(
       grade_level: gradeLevel || null,
       exam_type: examType || null,
       lesson_type: lessonType || null,
-      notes: notes || null,
+      ...(notes === undefined ? {} : { notes: notes || null }),
     })
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)

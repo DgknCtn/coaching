@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { formatUnitCount } from '@/lib/unit-labels'
 import { Check, X, Loader2, Clock3, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   approveHomeworkItemAction,
@@ -15,7 +16,7 @@ interface PendingItem {
   book_id: string | null
   homework_batch_id: string
   book_tests: { title: string } | null
-  books: { title: string } | null
+  books: { title: string; tracking_mode?: string | null } | null
   book_sections: { title: string } | null
 }
 
@@ -24,6 +25,7 @@ interface Group {
   batchId: string
   bookId: string | null
   bookTitle: string
+  trackingMode: string
   items: PendingItem[]
 }
 
@@ -46,6 +48,7 @@ export function PendingApprovalList({
       batchId: item.homework_batch_id,
       bookId: item.book_id,
       bookTitle: item.books?.title ?? 'Kitap',
+      trackingMode: item.books?.tracking_mode ?? 'test',
       items: [],
     }
     group.items.push(item)
@@ -96,7 +99,7 @@ function PendingGroup({ studentId, group }: { studentId: string; group: Group })
           )}
           <span className="truncate text-xs font-medium">{group.bookTitle}</span>
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-            {group.items.length} test
+            {formatUnitCount(group.items.length, group.trackingMode)}
           </span>
         </button>
         {group.items.length > 1 && (

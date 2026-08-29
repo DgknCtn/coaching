@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { isOverdue } from '@/lib/homework-status'
+import { unitLabel } from '@/lib/unit-labels'
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
 import { CheckInCard } from './check-in-card'
@@ -18,10 +20,10 @@ export default async function StudentPage() {
     supabase
       .from('homework_batches')
       .select(`
-        id, title, due_date, status,
+        id, title, description, due_date, status,
         homework_items(
           id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
-          books(title, subject),
+          books(title, subject, tracking_mode),
           book_sections(title),
           book_tests(title)
         )
@@ -51,12 +53,14 @@ export default async function StudentPage() {
     .limit(1)
     .maybeSingle()
 
-  const todayStr = new Date().toISOString().split('T')[0]
 
   const overdue = (batches ?? []).filter(b => {
-    return b.due_date < todayStr && (b.homework_items as { status: string }[]).some(i => i.status === 'pending')
+    return (
+      isOverdue(b.due_date) &&
+      (b.homework_items as { status: string }[]).some(i => i.status === 'pending')
+    )
   })
-  const upcoming = (batches ?? []).filter(b => b.due_date >= todayStr)
+  const upcoming = (batches ?? []).filter(b => !isOverdue(b.due_date))
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-6 md:p-8">
@@ -119,7 +123,8 @@ export default async function StudentPage() {
                   label={`${p.book_title} ilerlemesi`}
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {p.completed_tests} / {p.total_tests} test tamamlandı · {p.remaining_tests} kaldı
+                  {p.completed_tests} / {p.total_tests} {unitLabel(p.tracking_mode)} tamamlandı ·{' '}
+                  {p.remaining_tests} kaldı
                 </p>
                 <p className="mt-1 text-xs text-primary">Kitap haritasını gör →</p>
               </Link>

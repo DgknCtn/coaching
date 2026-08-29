@@ -8,12 +8,17 @@
 // geridesin" gibi yargılayıcı ifadeler üretilmez; sadece aşağıdaki nötr/
 // pozitif şablonlar kullanılır.
 
+import { unitLabel } from '@/lib/unit-labels'
+import type { UnitMode } from '@/lib/unit-labels'
+
 export type PhraseKey = 'ahead' | 'on_track' | 'behind' | 'no_target' | 'not_started'
 
 export interface PlanPaceInput {
   startDate: string | null // ISO date (YYYY-MM-DD), student_book_assignments.start_date
   targetEndDate: string | null // ISO date, student_book_assignments.target_end_date
-  totalUnits: number // total_tests (test veya sayfa-aralığı birimi, tracking_mode bağımsız)
+  totalUnits: number // total_tests (sayfa takipli kitapta birim = fiziksel sayfa, 022)
+  /** Kitabın takip türü — yalnız ETİKET için (R6-01). Matematiği etkilemez. */
+  trackingMode?: UnitMode
   completedUnits: number // completed_tests (sadece onaylanmış/tamamlanmış birimler)
   today?: Date // test edilebilirlik için enjekte edilebilir
 }
@@ -61,14 +66,14 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
   const expectedCompletedUnits = Math.round(elapsedFraction * totalUnits)
   const delta = completedUnits - expectedCompletedUnits
 
-  const unitLabel = 'test'
+  const unit = unitLabel(input.trackingMode)
 
   if (delta > 0) {
     return {
       delta,
       expectedCompletedUnits,
       phraseKey: 'ahead',
-      phrase: `Plan çizgisinin ${delta} ${unitLabel} önündesin.`,
+      phrase: `Plan çizgisinin ${delta} ${unit} önündesin.`,
     }
   }
 
@@ -77,7 +82,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
       delta,
       expectedCompletedUnits,
       phraseKey: 'behind',
-      phrase: `Plan çizgisinin ${Math.abs(delta)} ${unitLabel} gerisindesin.`,
+      phrase: `Plan çizgisinin ${Math.abs(delta)} ${unit} gerisindesin.`,
     }
   }
 
@@ -101,9 +106,11 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
 export interface PlanTempoInput {
   startDate: string | null
   targetEndDate: string | null
-  /** Takip edilen toplam test (T). */
+  /** Kitabın takip türü — yalnız ETİKET için (R6-01). Matematiği etkilemez. */
+  trackingMode?: UnitMode
+  /** Takip edilen toplam birim (T): test kitabında test, sayfa kitabında sayfa. */
   totalUnits: number
-  /** Eğitmen onaylı tamamlanan test (C). */
+  /** Eğitmen onaylı tamamlanan birim (C). */
   completedUnits: number
   today?: Date
 }

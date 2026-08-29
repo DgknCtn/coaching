@@ -2,7 +2,8 @@
 
 import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
-import { isSelectableState } from '@/lib/book-map'
+import { isSelectableState, type BookMapMode } from '@/lib/book-map'
+import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
 import {
   testStateLabel,
   type HomeworkTestState,
@@ -86,6 +87,11 @@ interface Props {
   readOnly?: boolean
   /** Etiket dili: öğretmende "Reddedildi", öğrenci/velide "İade Edildi". */
   audience?: StatusAudience
+  /**
+   * plan   — sepet doldurma (varsayılan, bugünkü davranış)
+   * manage — eğitmenin akademik kayıt yönetimi (R6-03): tüm durumlar seçilebilir
+   */
+  mode?: BookMapMode
 }
 
 const EMPTY_SELECTION: Set<string> = new Set()
@@ -98,6 +104,7 @@ export function BookMapGrid({
   onSelectRange,
   readOnly = false,
   audience = 'teacher',
+  mode = 'plan',
 }: Props) {
   // Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022): 400 sayfa
   // = 400 hücre olurdu. R4 §4 bunun yerine bölüm bazlı bir tablo istiyor.
@@ -110,6 +117,7 @@ export function BookMapGrid({
         selectedTestIds={selectedTestIds}
         onToggleSection={onToggleSection}
         readOnly={readOnly}
+        mode={mode}
       />
     )
   }
@@ -147,7 +155,7 @@ export function BookMapGrid({
           <tbody>
             {book.sections.map(section => {
               const selectableIds = section.tests
-                .filter(t => isSelectableState(t.state))
+                .filter(t => isSelectableState(t.state, mode))
                 .map(t => t.id)
               const allSelected =
                 selectableIds.length > 0 && selectableIds.every(id => selectedTestIds.has(id))
@@ -179,11 +187,44 @@ export function BookMapGrid({
                               : 'Bölümdeki seçilebilir testleri seç'
                         }
                       >
-                        <span className="truncate text-xs">{section.title}</span>
+                        <span className="min-w-0 truncate text-xs">
+                          {section.title}
+                          {(section.groupLabel || section.themeLabel) && (
+                            <span className="block truncate text-[10px] text-muted-foreground">
+                              {[section.groupLabel, section.themeLabel]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          )}
+                        </span>
                         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                           {section.completedCount}/{section.tests.length}
                         </span>
                       </button>
+                    )}
+
+                    {/* Durum bazlı toplu seçim yalnız yönetim modunda; plan
+                        modunda bölüm başlığına tıklamak bugünkü gibi
+                        seçilebilir testleri toplar (R6-03 §5). */}
+                    {!readOnly && mode === 'manage' && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {SECTION_SELECT_OPTIONS.filter(o => o.kind !== 'all').map(option => {
+                          const ids = selectByState(option.kind, section.tests)
+                          if (ids.length === 0) return null
+                          return (
+                            <button
+                              key={option.kind}
+                              type="button"
+                              onClick={() => onToggleSection?.(book.bookId, ids)}
+                              title={`${section.title} · ${option.label}`}
+                              className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted"
+                            >
+                              {option.shortLabel}
+                              <span className="ml-0.5 tabular-nums">{ids.length}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     )}
                   </th>
 
@@ -209,7 +250,7 @@ export function BookMapGrid({
                     }
 
                     const Icon = STATE_ICON[test.state]
-                    const selectable = isSelectableState(test.state)
+                    const selectable = isSelectableState(test.state, mode)
                     const selected = selectedTestIds.has(test.id)
                     const label =
                       section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, audience)

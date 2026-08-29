@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTestState, testStateLabel, COUNTER_LABEL } from '@/lib/homework-status'
+import {
+  deriveTestState,
+  testStateLabel,
+  COUNTER_LABEL,
+  isOverdue,
+} from '@/lib/homework-status'
 import { formatSelectedUnits } from '@/lib/book-map'
 
 const today = new Date('2026-03-10')
@@ -91,5 +96,65 @@ describe('formatSelectedUnits', () => {
 
   it('returns an empty string when nothing is selected', () => {
     expect(formatSelectedUnits([], 'test')).toBe('')
+  })
+})
+
+// ============================================================
+// R6-02: teslim gününün tamamı kullanılabilir (kabul #7-#9, #12)
+// ============================================================
+
+describe('isOverdue', () => {
+  const due = '2026-08-25'
+  // Anlar UTC olarak yazılır ki test makinesinin saat diliminden bağımsız
+  // olsun. Uygulamanın takvimi Europe/Istanbul'dur (UTC+3).
+  const istanbul = (iso: string) => new Date(iso)
+
+  it('kabul #7: teslim günü 10:00 gecikmiş değil', () => {
+    expect(isOverdue(due, istanbul('2026-08-25T07:00:00Z'))).toBe(false)
+  })
+
+  it('kabul #8: teslim günü 23:59 gecikmiş değil', () => {
+    expect(isOverdue(due, istanbul('2026-08-25T20:59:00Z'))).toBe(false)
+  })
+
+  it('kabul #9: ertesi gün 00:01 gecikmiş', () => {
+    expect(isOverdue(due, istanbul('2026-08-25T21:01:00Z'))).toBe(true)
+  })
+
+  it('teslim tarihi yoksa gecikme yoktur', () => {
+    expect(isOverdue(null, istanbul('2026-08-26T09:00:00Z'))).toBe(false)
+    expect(isOverdue(undefined, istanbul('2026-08-26T09:00:00Z'))).toBe(false)
+  })
+
+  it('UTC tuzağı: new Date(dueDate) < new Date() ile AYNI sonucu vermez', () => {
+    // Türkiye saatiyle 25.08 10:00 — naif karşılaştırma "gecikmiş" derdi,
+    // çünkü new Date('2026-08-25') UTC gece yarısıdır.
+    const now = istanbul('2026-08-25T07:00:00Z') // İstanbul'da 25.08 10:00
+    expect(new Date(due) < now).toBe(true) // naif ve YANLIŞ
+    expect(isOverdue(due, now)).toBe(false) // doğru
+  })
+})
+
+describe('deriveTestState · R6-02 etkileşimi', () => {
+  const istanbulDay = (iso: string) => new Date(iso)
+
+  it('kabul #10: teslim günü gönderilen çalışma ertesi gün Onay Bekliyor kalır', () => {
+    expect(
+      deriveTestState({
+        itemStatus: 'pending_approval',
+        dueDate: '2026-08-25',
+        today: istanbulDay('2026-08-26T09:00:00Z'),
+      })
+    ).toBe('pending_approval')
+  })
+
+  it('teslim günü içinde bekleyen çalışma Ödevde kalır', () => {
+    expect(
+      deriveTestState({
+        itemStatus: 'pending',
+        dueDate: '2026-08-25',
+        today: istanbulDay('2026-08-25T20:50:00Z'),
+      })
+    ).toBe('assigned')
   })
 })

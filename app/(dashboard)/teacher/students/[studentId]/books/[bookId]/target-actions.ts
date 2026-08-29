@@ -19,6 +19,9 @@ const targetSchema = z
     startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir başlangıç tarihi seçin.').optional().or(z.literal('')),
     targetDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir hedef tarihi seçin.').optional().or(z.literal('')),
     scopeType: z.enum(['whole_book', 'sections', 'units'], { message: 'Geçersiz hedef kapsamı.' }),
+    // R6-04: resource = Kaynak Hedefi (ana tempo bundan gelir),
+    // interim = Ara Hedef (ana hedefi asla değiştirmez).
+    kind: z.enum(['resource', 'interim']).default('resource'),
     sectionIds: z.array(uuidSchema).max(200).default([]),
     unitIds: z.array(uuidSchema).max(2000).default([]),
   })
@@ -38,6 +41,7 @@ export interface TargetInput {
   scopeType: 'whole_book' | 'sections' | 'units'
   sectionIds?: string[]
   unitIds?: string[]
+  kind?: 'resource' | 'interim'
 }
 
 export async function setStudentBookTargetAction(studentId: string, bookId: string, input: TargetInput) {
@@ -45,6 +49,7 @@ export async function setStudentBookTargetAction(studentId: string, bookId: stri
     ...input,
     sectionIds: input.sectionIds ?? [],
     unitIds: input.unitIds ?? [],
+    kind: input.kind ?? 'resource',
   })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
@@ -65,6 +70,7 @@ export async function setStudentBookTargetAction(studentId: string, bookId: stri
     p_target_date: parsed.data.targetDate || null,
     p_scope_type: scopeType,
     p_scope_data: scopeData,
+    p_kind: parsed.data.kind,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -101,5 +107,35 @@ export async function setVideoDisplayAction(
 
   if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/students/${studentId}/books/${bookId}`)
+  return { success: true }
+}
+
+/**
+ * Hedefi kaldırır (R6-04). Ara Hedef geçici bir araçtır; kapatılabilmelidir.
+ * Geçmiş hedefler silinmez, yalnız pasife alınır (022'nin kuralı).
+ */
+export async function clearStudentBookTargetAction(
+  studentId: string,
+  bookId: string,
+  assignmentId: string,
+  kind: 'resource' | 'interim' = 'interim'
+) {
+  const parsed = uuidSchema.safeParse(assignmentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  if (kind !== 'resource' && kind !== 'interim') return { error: 'Geçersiz hedef türü.' }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('clear_student_book_target', {
+    p_assignment_id: assignmentId,
+    p_kind: kind,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/students/${studentId}/books/${bookId}`)
+  revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }

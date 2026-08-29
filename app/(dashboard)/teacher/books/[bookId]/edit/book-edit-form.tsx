@@ -12,6 +12,7 @@ import {
   duplicateBookAsEditionAction,
   renameSectionAction,
   setSectionTestCountAction,
+  setSectionGroupingAction,
   addSectionAction,
   addPageSectionAction,
   deleteSectionAction,
@@ -28,6 +29,7 @@ import {
   VIDEO_MODE_OPTIONS,
   EDITION_YEAR_MIN,
   EDITION_YEAR_MAX,
+  CURRICULUM_PROGRAM_OPTIONS,
 } from '@/lib/book-taxonomy'
 
 const schema = z.object({
@@ -35,6 +37,7 @@ const schema = z.object({
   subject: z.string().min(1, 'Ders seçin'),
   publisher: z.string().optional(),
   levelExam: z.string().optional(),
+  curriculumProgram: z.string().optional(),
   editionYear: z.number().int().min(EDITION_YEAR_MIN).max(EDITION_YEAR_MAX).optional().or(z.nan()),
   description: z.string().optional(),
   videoMode: z.enum(['none', 'book', 'section']),
@@ -46,6 +49,9 @@ export interface SectionRow {
   id: string
   title: string
   testCount: number
+  /** R6-17: opsiyonel fasikül ve tema etiketleri. */
+  groupLabel: string | null
+  themeLabel: string | null
 }
 
 interface Props {
@@ -60,7 +66,9 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const unitLabel = trackingMode === 'page' ? 'Sayfa aralığı' : 'Test'
+  // R6-01: sayfa takipli kitapta girilen sayı fiziksel sayfa sayısıdır
+  // (022: her sayfa ayrı bir birim satırı), "Sayfa aralığı sayısı" değil.
+  const unitLabel = trackingMode === 'page' ? 'Sayfa' : 'Test'
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -74,6 +82,7 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
         subject: data.subject,
         publisher: data.publisher || undefined,
         levelExam: data.levelExam || undefined,
+        curriculumProgram: data.curriculumProgram || undefined,
         editionYear: Number.isFinite(data.editionYear) ? (data.editionYear as number) : null,
         description: data.description || undefined,
         videoMode: data.videoMode,
@@ -119,6 +128,18 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
                   {LEVEL_EXAMS.map((l) => <option key={l} value={l}>{l}</option>)}
                 </NativeSelect>
               </div>
+            </div>
+
+            {/* R6-14: öğretim programı (TYMM geçişi). */}
+            <div className="space-y-1.5">
+              <Label htmlFor="curriculumProgram">Öğretim Programı</Label>
+              <NativeSelect id="curriculumProgram" {...register('curriculumProgram')}>
+                {CURRICULUM_PROGRAM_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -210,9 +231,17 @@ function SectionRowForm({
   const router = useRouter()
   const [title, setTitle] = useState(section.title)
   const [count, setCount] = useState(String(section.testCount))
+  // R6-17: fasikül ve tema OPSİYONELDİR; klasik kitaplarda boş bırakılır ve
+  // akışı hiç ağırlaştırmaz.
+  const [groupLabel, setGroupLabel] = useState(section.groupLabel ?? '')
+  const [themeLabel, setThemeLabel] = useState(section.themeLabel ?? '')
   const [isPending, startTransition] = useTransition()
 
-  const dirty = title !== section.title || Number(count) !== section.testCount
+  const dirty =
+    title !== section.title ||
+    Number(count) !== section.testCount ||
+    groupLabel !== (section.groupLabel ?? '') ||
+    themeLabel !== (section.themeLabel ?? '')
 
   function save() {
     startTransition(async () => {
@@ -229,6 +258,16 @@ function SectionRowForm({
           // Kullanılmış test silinemez — RPC'nin Türkçe mesajı burada görünür.
           toast.error(r.error)
           setCount(String(section.testCount))
+          return
+        }
+      }
+      if (
+        groupLabel !== (section.groupLabel ?? '') ||
+        themeLabel !== (section.themeLabel ?? '')
+      ) {
+        const r = await setSectionGroupingAction(bookId, section.id, groupLabel, themeLabel)
+        if (r?.error) {
+          toast.error(r.error)
           return
         }
       }
@@ -257,6 +296,24 @@ function SectionRowForm({
           id={`title-${section.id}`}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+      <div className="w-32 space-y-1.5">
+        <Label htmlFor={`group-${section.id}`}>Fasikül</Label>
+        <Input
+          id={`group-${section.id}`}
+          placeholder="ör. F1"
+          value={groupLabel}
+          onChange={(e) => setGroupLabel(e.target.value)}
+        />
+      </div>
+      <div className="w-40 space-y-1.5">
+        <Label htmlFor={`theme-${section.id}`}>Tema</Label>
+        <Input
+          id={`theme-${section.id}`}
+          placeholder="ör. Nicelikler ve Değişimler"
+          value={themeLabel}
+          onChange={(e) => setThemeLabel(e.target.value)}
         />
       </div>
       <div className="w-28 space-y-1.5">

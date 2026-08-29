@@ -115,3 +115,51 @@ describe('buildShareText (R4 §7)', () => {
 function range(from: number, to: number): number[] {
   return Array.from({ length: to - from + 1 }, (_, i) => from + i)
 }
+
+// ============================================================
+// R6-05: Ödev Notu (kabul #36-#39)
+// ============================================================
+
+describe('buildShareText · ödev notu', () => {
+  const base = {
+    studentName: 'Ömer',
+    dueDate: '2026-08-30',
+    books: [
+      {
+        bookTitle: 'MÖF Matematik',
+        trackingMode: 'page',
+        sections: [{ title: 'F1 · Sayılar', units: [6, 7, 8] }],
+      },
+    ],
+  }
+
+  it('kabul #36: not boşken çıktı birebir aynı kalır', () => {
+    const without = buildShareText(base)
+    expect(buildShareText({ ...base, note: undefined })).toBe(without)
+    expect(buildShareText({ ...base, note: null })).toBe(without)
+    expect(buildShareText({ ...base, note: '   ' })).toBe(without)
+    expect(without).not.toContain('Not:')
+  })
+
+  it('kabul #38: not ödev listesinin ardından görünür', () => {
+    const text = buildShareText({ ...base, note: 'Parçalı fonksiyona kadar.' })
+    expect(text).toContain('Not: Parçalı fonksiyona kadar.')
+    expect(text.indexOf('MÖF Matematik')).toBeLessThan(text.indexOf('Not:'))
+  })
+
+  it('kabul #39: test + sayfa kaynağı birlikteyken not tek kez görünür', () => {
+    const text = buildShareText({
+      ...base,
+      books: [
+        ...base.books,
+        {
+          bookTitle: '345 Matematik',
+          trackingMode: 'test',
+          sections: [{ title: 'Polinomlar', units: [1, 2, 3] }],
+        },
+      ],
+      note: 'Videoyu izle.',
+    })
+    expect(text.match(/Not: Videoyu izle\./g)).toHaveLength(1)
+  })
+})

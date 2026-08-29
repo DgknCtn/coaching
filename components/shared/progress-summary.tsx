@@ -1,9 +1,12 @@
 import { calculatePlanPace } from '@/lib/plan-pace'
+import { unitLabel } from '@/lib/unit-labels'
+import type { UnitMode } from '@/lib/unit-labels'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { cn } from '@/lib/utils'
 
 /**
  * "41 / 168 test tamamlandı · Plan çizgisinin 7 test gerisinde · %24,4"
+ * Sayfa takipli kaynakta aynı satır "sayfa" birimiyle kurulur (R6-01).
  *
  * Karşılaştırma cümlesi lib/plan-pace.ts'ten OLDUĞU GİBİ alınır — o modülün
  * başındaki kural gereği başka hiçbir yer kendi "önde/geride" metnini üretmez.
@@ -14,6 +17,7 @@ export function ProgressSummary({
   startDate,
   targetEndDate,
   label,
+  trackingMode,
   className,
 }: {
   totalUnits: number
@@ -21,9 +25,17 @@ export function ProgressSummary({
   startDate: string | null
   targetEndDate: string | null
   label: string
+  /** Kitabın takip türü (R6-01) — yalnız etiketi belirler. */
+  trackingMode?: UnitMode
   className?: string
 }) {
-  const pace = calculatePlanPace({ startDate, targetEndDate, totalUnits, completedUnits })
+  const pace = calculatePlanPace({
+    startDate,
+    targetEndDate,
+    totalUnits,
+    completedUnits,
+    trackingMode,
+  })
   const percentage = totalUnits === 0 ? 0 : (completedUnits / totalUnits) * 100
 
   return (
@@ -33,7 +45,7 @@ export function ProgressSummary({
           <span className="font-semibold tabular-nums">
             {completedUnits} / {totalUnits}
           </span>{' '}
-          <span className="text-muted-foreground">test tamamlandı</span>
+          <span className="text-muted-foreground">{unitLabel(trackingMode)} tamamlandı</span>
         </p>
         <div className="flex items-baseline gap-3">
           <span className="text-xs text-muted-foreground">{pace.phrase}</span>

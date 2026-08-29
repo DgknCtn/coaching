@@ -130,18 +130,38 @@ describe('uuidSchema', () => {
   it('rejects non-uuid', () => expect(uuidSchema.safeParse('nope').success).toBe(false))
 })
 
-describe('sınav türü daraltması', () => {
-  it('studentSchema yalnızca TYT/AYT kabul eder', () => {
+describe('hazırlık programı ve seviye', () => {
+  // R6-11: eski TYT/AYT daraltması KALDIRILDI. Öğrencinin neye hazırlandığı
+  // ile hangi sınıfta olduğu bağımsızdır; şema ikisi arasında çapraz
+  // doğrulama YAPMAZ.
+  it('studentSchema genişletilmiş hazırlık programlarını kabul eder', () => {
     const base = { fullName: 'Ali Veli' }
-    expect(studentSchema.safeParse({ ...base, examType: 'TYT' }).success).toBe(true)
-    expect(studentSchema.safeParse({ ...base, examType: 'AYT' }).success).toBe(true)
-    expect(studentSchema.safeParse({ ...base, examType: 'LGS' }).success).toBe(false)
-    expect(studentSchema.safeParse({ ...base, examType: 'Other' }).success).toBe(false)
+    for (const value of ['Yok', 'LGS', 'YKS', 'TYT', 'AYT', 'IB', 'SAT', 'AP', 'DGS', 'ALES', 'KPSS', 'Diğer']) {
+      expect(studentSchema.safeParse({ ...base, examType: value }).success).toBe(true)
+    }
+  })
+
+  it('tanımsız bir hazırlık programını yine de reddeder', () => {
+    const base = { fullName: 'Ali Veli' }
+    expect(studentSchema.safeParse({ ...base, examType: 'GRE' }).success).toBe(false)
+  })
+
+  it('kabul #63/#64: sınıf ve hazırlık programı birbirini kısıtlamaz', () => {
+    const base = { fullName: 'Ali Veli' }
+    expect(
+      studentSchema.safeParse({ ...base, gradeLevel: '10. Sınıf', examType: 'IB' }).success
+    ).toBe(true)
+    expect(
+      studentSchema.safeParse({ ...base, gradeLevel: '9. Sınıf', examType: 'YKS' }).success
+    ).toBe(true)
+    // kabul #65
+    expect(
+      studentSchema.safeParse({ ...base, gradeLevel: 'Mezun', examType: 'ALES' }).success
+    ).toBe(true)
   })
 
   // R4 (021): kitapta sınav türü yerini seviye/sınav türüne bıraktı;
-  // exam_type artık DB'de level_exam'dan türetiliyor. Öğrenci tarafındaki
-  // TYT/AYT daraltması aynen duruyor (yukarıdaki test).
+  // exam_type artık DB'de level_exam'dan türetiliyor.
   it('bookUpdateSchema seviye/sınav listesini kullanır', () => {
     const base = { bookId: UUID, title: 'Kimya Soru Bankası', subject: 'Kimya' }
     expect(bookUpdateSchema.safeParse({ ...base, levelExam: 'AYT' }).success).toBe(true)
@@ -164,7 +184,20 @@ describe('sınav türü daraltması', () => {
   })
 
   it('seçenek listeleri şemayla aynı değerleri sunar', () => {
-    expect(EXAM_TYPE_OPTIONS.map((o) => o.value)).toEqual(['TYT', 'AYT'])
+    expect(EXAM_TYPE_OPTIONS.map((o) => o.value)).toEqual([
+      'Yok',
+      'LGS',
+      'YKS',
+      'TYT',
+      'AYT',
+      'IB',
+      'SAT',
+      'AP',
+      'DGS',
+      'ALES',
+      'KPSS',
+      'Diğer',
+    ])
     expect(LESSON_TYPE_OPTIONS.map((o) => o.value)).toEqual([
       'yuz_yuze_ozel',
       'online_birebir',

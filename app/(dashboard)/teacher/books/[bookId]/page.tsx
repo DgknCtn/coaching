@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { formatUnitCount } from '@/lib/unit-labels'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, BookOpen, Pencil, Users } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
@@ -20,7 +21,8 @@ export default async function BookDetailPage({
   const { data: book } = await supabase
     .from('books')
     .select(`
-      id, title, subject, publisher, exam_type, description, status,
+      id, title, subject, publisher, exam_type, level_exam, description, status,
+      tracking_mode,
       book_sections(
         id, title, order_index, status,
         book_tests(id, title, order_index, status)
@@ -56,7 +58,13 @@ export default async function BookDetailPage({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{book.title}</h1>
-            {book.exam_type && <Badge variant="secondary">{book.exam_type}</Badge>}
+            {/* R6-16: level_exam gerçek seviye/sınav değeridir. exam_type,
+                 021'deki derive_exam_type ile dar bir kümeye indirgenir ve
+                 '9. Sınıf' gibi değerleri 'Other' yapar. Görüntülemede
+                 canonical alan level_exam'dır. */}
+            {(book.level_exam || book.exam_type) && (
+              <Badge variant="secondary">{book.level_exam || book.exam_type}</Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">{book.subject}{book.publisher ? ` · ${book.publisher}` : ''}</p>
         </div>
@@ -113,7 +121,9 @@ export default async function BookDetailPage({
                 return (
                   <div key={section.id} className="flex items-center justify-between py-2.5 text-sm">
                     <span>{section.title}</span>
-                    <span className="text-muted-foreground text-xs">{activeTests.length} test</span>
+                    <span className="text-muted-foreground text-xs">
+                      {formatUnitCount(activeTests.length, book.tracking_mode)}
+                    </span>
                   </div>
                 )
               })}

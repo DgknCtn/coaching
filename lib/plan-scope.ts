@@ -28,6 +28,19 @@ export interface PlanScope {
   scopeType: BookMapTarget['scopeType']
   /** Kapsam tüm kitap değilse kullanıcıya gösterilecek kısa açıklama. */
   label: string
+  /** Kapsam içi tamamlanma yüzdesi ("Plan tamamlandı %100"). */
+  percentage: number
+  /**
+   * Kitabın GENEL tamamlanma yüzdesi — kapsamdan bağımsız (R6-04 kabul #34).
+   *
+   * Kapsam %66 seçiliyken seçili kapsamın tamamı bitirildiğinde plan %100
+   * olur ama kitabın kendisi hâlâ %66'dır. İki sayı ayrı gösterilmeli,
+   * yoksa "bitirdim" izlenimi yanlış olur.
+   */
+  bookPercentage: number
+  /** Kitabın tamamındaki birim sayıları — bookPercentage'ın ham hâli. */
+  bookTotalUnits: number
+  bookCompletedUnits: number
 }
 
 function isInScope(
@@ -59,15 +72,48 @@ export function resolvePlanScope(book: BookMapBook): PlanScope {
     }
   }
 
+  // Kitap geneli, kapsamdan bağımsız olarak ayrıca sayılır.
+  let bookTotalUnits = 0
+  let bookCompletedUnits = 0
+  for (const section of book.sections) {
+    for (const test of section.tests) {
+      bookTotalUnits++
+      if (test.state === 'completed') bookCompletedUnits++
+    }
+  }
+
+  const totalUnits = unitIds.size
+
   return {
     unitIds,
-    totalUnits: unitIds.size,
+    totalUnits,
     completedUnits,
     startDate: target?.startDate ?? book.startDate,
     targetEndDate: target?.targetDate ?? book.targetEndDate,
     scopeType: target?.scopeType ?? 'whole_book',
     label: scopeLabel(book, target),
+    percentage: totalUnits === 0 ? 0 : Math.round((completedUnits / totalUnits) * 100),
+    bookPercentage:
+      bookTotalUnits === 0 ? 0 : Math.round((bookCompletedUnits / bookTotalUnits) * 100),
+    bookTotalUnits,
+    bookCompletedUnits,
   }
+}
+
+/**
+ * Ara Hedef kapsamı (R6-04).
+ *
+ * Kaynak Hedefi ile AYNI matematiği kullanır; tek fark hangi hedef satırından
+ * beslendiğidir. Ara hedef yoksa null döner — çağıran taraf o zaman yalnız
+ * Kaynak Hedefini gösterir.
+ *
+ * Ara hedefin tamamlanması ana hedefin kalanını zaten azaltır (ikisi de aynı
+ * completion verisini okur), bu yüzden ana tempo kendiliğinden yeniden
+ * hesaplanır; ayrıca bir bağ kurmaya gerek yoktur (kabul #32).
+ */
+export function resolveInterimScope(book: BookMapBook): PlanScope | null {
+  if (!book.interimTarget) return null
+  return resolvePlanScope({ ...book, target: book.interimTarget })
 }
 
 function scopeLabel(book: BookMapBook, target: BookMapTarget | null): string {

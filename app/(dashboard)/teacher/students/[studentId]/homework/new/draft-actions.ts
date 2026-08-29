@@ -15,6 +15,8 @@ const draftSchema = z.object({
   studentId: uuidSchema,
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   title: z.string().trim().max(200).optional().or(z.literal('')),
+  // Ödev notu (R6-05). Sınır lib/validation.ts'teki notes alanıyla tutarlı.
+  note: z.string().trim().max(2000).optional().or(z.literal('')),
   items: z
     .array(
       z.object({
@@ -30,9 +32,10 @@ export async function saveWeeklyPlanDraftAction(
   studentId: string,
   dueDate: string | undefined,
   title: string | undefined,
-  items: { student_book_assignment_id: string; book_test_id: string }[]
+  items: { student_book_assignment_id: string; book_test_id: string }[],
+  note?: string
 ) {
-  const parsed = draftSchema.safeParse({ workspaceId, studentId, dueDate, title, items })
+  const parsed = draftSchema.safeParse({ workspaceId, studentId, dueDate, title, note, items })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   // RPC'ye oturumun workspace'i gider; istemcinin gönderdiği değer değil.
@@ -45,6 +48,7 @@ export async function saveWeeklyPlanDraftAction(
     p_due_date: parsed.data.dueDate || null,
     p_title: parsed.data.title || null,
     p_items: parsed.data.items,
+    p_note: parsed.data.note || null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }

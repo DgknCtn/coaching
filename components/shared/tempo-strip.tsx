@@ -1,5 +1,6 @@
 import { CalendarDays, CalendarCheck, LayoutGrid, CalendarClock, TrendingUp } from 'lucide-react'
 import { calculatePlanTempo, type PlanTempoInput } from '@/lib/plan-pace'
+import { formatTempo, formatUnitCount } from '@/lib/unit-labels'
 import { cn } from '@/lib/utils'
 
 /**
@@ -12,10 +13,6 @@ import { cn } from '@/lib/utils'
 
 function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString('tr-TR') : '—'
-}
-
-function formatPace(value: number | null): string {
-  return value === null ? '—' : `${value.toLocaleString('tr-TR')} test/hafta`
 }
 
 export function TempoStrip({ className, ...input }: PlanTempoInput & { className?: string }) {
@@ -37,7 +34,7 @@ export function TempoStrip({ className, ...input }: PlanTempoInput & { className
     {
       icon: TrendingUp,
       label: 'Başlangıç planı',
-      value: formatPace(tempo.initialPacePerWeek),
+      value: formatTempo(tempo.initialPacePerWeek, input.trackingMode),
       accent: true,
     },
     {
@@ -45,8 +42,8 @@ export function TempoStrip({ className, ...input }: PlanTempoInput & { className
       label: 'Güncel gerekli tempo',
       // Hedef tarihi geçmişse "kalan işin tamamı" anlamına gelir; tempo değil.
       value: tempo.isTargetReached
-        ? `${tempo.remainingUnits} test kaldı`
-        : formatPace(tempo.requiredPacePerWeek),
+        ? `${formatUnitCount(tempo.remainingUnits, input.trackingMode)} kaldı`
+        : formatTempo(tempo.requiredPacePerWeek, input.trackingMode),
       accent: true,
     },
   ]

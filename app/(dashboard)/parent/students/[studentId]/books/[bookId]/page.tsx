@@ -62,6 +62,7 @@ export default async function ParentBookMapPage({
         targetEndDate={scope.targetEndDate}
         totalUnits={scope.totalUnits}
         completedUnits={scope.completedUnits}
+        trackingMode={book.trackingMode}
       />
 
       {/* Video kaynakları veliye yalnız gösterilir; "İzledim" öğrenciye ait

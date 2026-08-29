@@ -1,4 +1,6 @@
 import { calculatePlanPace, calculatePlanTempo } from '@/lib/plan-pace'
+import { formatTempo, formatUnitCount, formatUnitProgress } from '@/lib/unit-labels'
+import type { UnitMode } from '@/lib/unit-labels'
 
 interface PlanTempoCardProps {
   bookTitle: string
@@ -6,14 +8,13 @@ interface PlanTempoCardProps {
   targetEndDate: string | null
   totalUnits: number
   completedUnits: number
+  /** Kitabın takip türü (R6-01). Veli panelinde sayfa kaynağı için
+   *  hiçbir yerde "test" ifadesi görünmemeli — kabul testi #5. */
+  trackingMode?: UnitMode
 }
 
 function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString('tr-TR') : '—'
-}
-
-function formatPace(value: number | null): string {
-  return value === null ? '—' : `${value.toLocaleString('tr-TR')} test/hafta`
 }
 
 /**
@@ -28,9 +29,11 @@ export function PlanTempoCard({
   targetEndDate,
   totalUnits,
   completedUnits,
+  trackingMode,
 }: PlanTempoCardProps) {
-  const tempo = calculatePlanTempo({ startDate, targetEndDate, totalUnits, completedUnits })
-  const pace = calculatePlanPace({ startDate, targetEndDate, totalUnits, completedUnits })
+  const input = { startDate, targetEndDate, totalUnits, completedUnits, trackingMode }
+  const tempo = calculatePlanTempo(input)
+  const pace = calculatePlanPace(input)
 
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -45,12 +48,14 @@ export function PlanTempoCard({
         <div>
           <dt className="text-muted-foreground">Kapsam</dt>
           <dd className="mt-0.5 tabular-nums">
-            {tempo.completedUnits} / {tempo.totalUnits} test
+            {formatUnitProgress(tempo.completedUnits, tempo.totalUnits, trackingMode)}
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Kalan</dt>
-          <dd className="mt-0.5 tabular-nums">{tempo.remainingUnits} test</dd>
+          <dd className="mt-0.5 tabular-nums">
+            {formatUnitCount(tempo.remainingUnits, trackingMode)}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Kalan hafta</dt>
@@ -66,14 +71,16 @@ export function PlanTempoCard({
         </div>
         <div>
           <dt className="text-muted-foreground">Planlanan tempo</dt>
-          <dd className="mt-0.5 tabular-nums">{formatPace(tempo.initialPacePerWeek)}</dd>
+          <dd className="mt-0.5 tabular-nums">
+            {formatTempo(tempo.initialPacePerWeek, trackingMode)}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Güncel gerekli tempo</dt>
           <dd className="mt-0.5 tabular-nums">
             {tempo.isTargetReached
-              ? `${tempo.remainingUnits} test (hedef tarihi geçti)`
-              : formatPace(tempo.requiredPacePerWeek)}
+              ? `${formatUnitCount(tempo.remainingUnits, trackingMode)} (hedef tarihi geçti)`
+              : formatTempo(tempo.requiredPacePerWeek, trackingMode)}
           </dd>
         </div>
       </dl>

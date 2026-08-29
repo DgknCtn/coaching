@@ -25,14 +25,16 @@ import { BookMapGrid } from '@/components/shared/book-map-grid'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
 import { buildShareText } from '@/lib/share-text'
-import { COUNTER_LABEL } from '@/lib/homework-status'
+import { COUNTER_LABEL, todayDateString } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { NativeSelect } from '@/components/ui/native-select'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { TempoStrip } from '@/components/shared/tempo-strip'
+import { formatUnitCount, unitLabel } from '@/lib/unit-labels'
 import { ProgressSummary } from '@/components/shared/progress-summary'
 import { cn } from '@/lib/utils'
 
@@ -58,6 +60,7 @@ interface Props {
   initialSelectedTestIds: string[]
   initialDueDate: string
   initialTitle: string
+  initialNote: string
 }
 
 export function HomeworkBuilder({
@@ -69,12 +72,15 @@ export function HomeworkBuilder({
   initialSelectedTestIds,
   initialDueDate,
   initialTitle,
+  initialNote,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [activeBookId, setActiveBookId] = useState(books[0]?.bookId ?? '')
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [title, setTitle] = useState(initialTitle)
+  // Ödev notu (R6-05): ödev başına TEK isteğe bağlı alan.
+  const [note, setNote] = useState(initialNote)
   const [serverError, setServerError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [panelOpen, setPanelOpen] = useState(true)
@@ -202,6 +208,14 @@ export function HomeworkBuilder({
     return [...byBook.values()]
   }, [selectedTests])
 
+  // Sepetteki kitaplar tek bir takip türünde toplanıyorsa o birimin adı
+  // kullanılır (R6-01 kabul #3). Test ve sayfa kaynakları karışıksa tek bir
+  // birim adı doğru olmaz; nötr "çalışma" denir.
+  const basketUnitLabel = useMemo(() => {
+    const modes = new Set(groupedSelection.map(g => g.trackingMode))
+    return modes.size === 1 ? unitLabel([...modes][0]) : 'çalışma'
+  }, [groupedSelection])
+
   // Taslağı debounce'lu kaydet. upsert_weekly_plan_draft idempotent olduğu
   // için aynı payload'ın iki kez gitmesi zararsızdır.
   const isFirstRender = useRef(true)
@@ -219,11 +233,12 @@ export function HomeworkBuilder({
         selectedTests.map(t => ({
           student_book_assignment_id: t.student_book_assignment_id,
           book_test_id: t.book_test_id,
-        }))
+        })),
+        note || undefined
       )
     }, 500)
     return () => clearTimeout(handle)
-  }, [selectedTests, dueDate, title, workspaceId, studentId])
+  }, [selectedTests, dueDate, title, note, workspaceId, studentId])
 
   // Shift+tık aralık seçiminin çıpası: en son tıklanan hücre.
   const lastClickedRef = useRef<string | null>(null)
@@ -303,7 +318,8 @@ export function HomeworkBuilder({
         selectedTests.map(t => ({
           student_book_assignment_id: t.student_book_assignment_id,
           book_test_id: t.book_test_id,
-        }))
+        })),
+        note || undefined
       )
       if (result?.error) {
         setServerError(result.error)
@@ -332,6 +348,7 @@ export function HomeworkBuilder({
           })),
           videoTasks: group.videoTasks,
         })),
+        note: note || undefined,
       })
     )
     setCopied(true)
@@ -392,7 +409,11 @@ export function HomeworkBuilder({
           {activeMetrics && (
             <MetricTiles
               metrics={[
-                { label: 'Toplam test', value: activeMetrics.total, icon: BookOpen },
+                {
+                  label: `Toplam ${unitLabel(activeBook?.trackingMode)}`,
+                  value: activeMetrics.total,
+                  icon: BookOpen,
+                },
                 {
                   label: COUNTER_LABEL.completed,
                   value: activeMetrics.completed,
@@ -429,8 +450,10 @@ export function HomeworkBuilder({
                 targetEndDate={activeBook.targetEndDate}
                 totalUnits={activeBook.totalTests}
                 completedUnits={activeBook.completedTests}
+                trackingMode={activeBook.trackingMode}
               />
               <ProgressSummary
+                trackingMode={activeBook.trackingMode}
                 startDate={activeBook.startDate}
                 targetEndDate={activeBook.targetEndDate}
                 totalUnits={activeBook.totalTests}
@@ -529,7 +552,7 @@ export function HomeworkBuilder({
             </div>
 
             <p className="px-4 pt-3 text-xs text-muted-foreground">
-              {groupedSelection.length} kitap · {selectedTests.length} test seçildi
+              {groupedSelection.length} kitap · {selectedTests.length} {basketUnitLabel} seçildi
             </p>
 
             {panelOpen && (
@@ -560,7 +583,7 @@ export function HomeworkBuilder({
                             </span>
                           </button>
                           <Badge variant="info" className="shrink-0 tabular-nums">
-                            {group.count} test
+                            {formatUnitCount(group.count, group.trackingMode)}
                           </Badge>
                         </div>
                         <ul className="mt-2 space-y-1">
@@ -606,8 +629,24 @@ export function HomeworkBuilder({
                       type="date"
                       value={dueDate}
                       onChange={e => setDueDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={todayDateString()}
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="note" className="text-xs">
+                      Ödev notu <span className="text-muted-foreground">(isteğe bağlı)</span>
+                    </Label>
+                    <Textarea
+                      id="note"
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Örn: Parçalı fonksiyona kadar çalış, yapamadığın soruları gruba at."
+                      value={note}
+                      onChange={e => setNote(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Öğrencinin ödev detayında ve WhatsApp metninde görünür.
+                    </p>
                   </div>
 
                   {serverError && <p className="text-sm text-destructive">{serverError}</p>}

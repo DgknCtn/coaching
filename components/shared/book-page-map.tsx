@@ -16,7 +16,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, Lightbulb, Plus, Video } from 'lucide-react'
 import type { BookMapBook, BookMapSection } from '@/lib/book-map'
-import { isSelectableState } from '@/lib/book-map'
+import { isSelectableState, type BookMapMode } from '@/lib/book-map'
+import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
 import { sectionPageProgress, sectionScopeLabel } from '@/lib/plan-scope'
 import { formatRanges, parseRanges, pagesFromRanges } from '@/lib/page-ranges'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,8 @@ interface Props {
   /** Aralıktan gelen birimleri toplu ekler/çıkarır (BookMapGrid ile aynı imza). */
   onToggleSection?: (bookId: string, testIds: string[]) => void
   readOnly?: boolean
+  /** plan (varsayılan) | manage — R6-03 yönetim modu. */
+  mode?: BookMapMode
 }
 
 const EMPTY_SELECTION: Set<string> = new Set()
@@ -39,6 +42,7 @@ export function BookPageMap({
   selectedTestIds = EMPTY_SELECTION,
   onToggleSection,
   readOnly = false,
+  mode = 'plan',
 }: Props) {
   const [openSectionId, setOpenSectionId] = useState<string | null>(null)
 
@@ -74,6 +78,7 @@ export function BookPageMap({
                 selectedTestIds={selectedTestIds}
                 onToggleSection={onToggleSection}
                 readOnly={readOnly}
+                mode={mode}
               />
             ))}
           </tbody>
@@ -102,6 +107,7 @@ function SectionRow({
   selectedTestIds,
   onToggleSection,
   readOnly,
+  mode,
 }: {
   book: BookMapBook
   section: BookMapSection
@@ -110,6 +116,7 @@ function SectionRow({
   selectedTestIds: Set<string>
   onToggleSection?: (bookId: string, testIds: string[]) => void
   readOnly: boolean
+  mode: BookMapMode
 }) {
   const progress = useMemo(() => sectionPageProgress(section), [section])
 
@@ -133,11 +140,20 @@ function SectionRow({
               {section.title}
             </button>
           )}
+          {/* R6-17: fasikül/tema üst grup metadata'sıdır; varsa gösterilir,
+              yoksa satır bugünkü gibi sade kalır. */}
+          {(section.groupLabel || section.themeLabel) && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {[section.groupLabel, section.themeLabel].filter(Boolean).join(' · ')}
+            </p>
+          )}
           {section.note && (
             <p className="mt-0.5 text-xs text-muted-foreground">{section.note}</p>
           )}
           {selectedCount > 0 && (
-            <p className="mt-0.5 text-xs text-primary">{selectedCount} sayfa planda</p>
+            <p className="mt-0.5 text-xs text-primary">
+              {selectedCount} sayfa {mode === 'manage' ? 'seçili' : 'planda'}
+            </p>
           )}
         </td>
         <td className="border-b px-3 py-2.5 text-muted-foreground tabular-nums">{scope || '–'}</td>
@@ -184,11 +200,21 @@ function SectionRow({
       {open && !readOnly && (
         <tr>
           <td colSpan={6} className="border-b bg-muted/30 px-4 py-3">
-            <RangePicker
-              book={book}
-              section={section}
-              onToggleSection={onToggleSection}
-            />
+            <div className="space-y-3">
+              {mode === 'manage' && (
+                <SectionStateSelect
+                  book={book}
+                  section={section}
+                  onToggleSection={onToggleSection}
+                />
+              )}
+              <RangePicker
+                book={book}
+                section={section}
+                onToggleSection={onToggleSection}
+                mode={mode}
+              />
+            </div>
           </td>
         </tr>
       )}
@@ -196,7 +222,14 @@ function SectionRow({
   )
 }
 
-function RangePicker({
+/**
+ * Bölüm bazlı durum seçimi (R6-03 §7).
+ *
+ * KRİTİK: Seçim yalnız BU bölümün sayfalarına uygulanır. Kitap genelinde
+ * bağlamsız bir "6-45" aralığı YOKTUR; farklı fasiküllerde aynı sayfa
+ * numaraları tekrar edebilir ve bunlar ayrı fiziksel sayfalardır.
+ */
+function SectionStateSelect({
   book,
   section,
   onToggleSection,
@@ -204,6 +237,41 @@ function RangePicker({
   book: BookMapBook
   section: BookMapSection
   onToggleSection?: (bookId: string, testIds: string[]) => void
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium">{section.title} içinden seç</p>
+      <div className="flex flex-wrap gap-1.5">
+        {SECTION_SELECT_OPTIONS.map((option) => {
+          const ids = selectByState(option.kind, section.tests)
+          return (
+            <button
+              key={option.kind}
+              type="button"
+              disabled={ids.length === 0}
+              onClick={() => onToggleSection?.(book.bookId, ids)}
+              className="rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40"
+            >
+              {option.label}
+              <span className="ml-1 tabular-nums">({ids.length})</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function RangePicker({
+  book,
+  section,
+  onToggleSection,
+  mode,
+}: {
+  book: BookMapBook
+  section: BookMapSection
+  onToggleSection?: (bookId: string, testIds: string[]) => void
+  mode: BookMapMode
 }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -223,11 +291,17 @@ function RangePicker({
     // Yalnız henüz verilmemiş sayfalar plana eklenir; tamamlanmış veya
     // hâlihazırda ödevde olan sayfayı create_homework_batch zaten reddeder.
     const ids = section.tests
-      .filter((t) => t.pageStart != null && wanted.has(t.pageStart) && isSelectableState(t.state))
+      .filter(
+        (t) => t.pageStart != null && wanted.has(t.pageStart) && isSelectableState(t.state, mode)
+      )
       .map((t) => t.id)
 
     if (ids.length === 0) {
-      setError('Bu aralıkta planlanabilecek sayfa yok.')
+      setError(
+        mode === 'manage'
+          ? 'Bu aralıkta seçilebilecek sayfa yok.'
+          : 'Bu aralıkta planlanabilecek sayfa yok.'
+      )
       return
     }
 

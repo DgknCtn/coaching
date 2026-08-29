@@ -26,6 +26,7 @@ interface PageProps {
     publisher?: string
     year?: string
     tracking?: string
+    program?: string
   }>
 }
 
@@ -37,7 +38,7 @@ export default async function BooksPage({ searchParams }: PageProps) {
     .from('books')
     .select(`
       id, title, subject, publisher, exam_type, level_exam, edition_year,
-      tracking_mode, status,
+      tracking_mode, curriculum_program, status,
       book_tests(count),
       book_sections(count)
     `)
@@ -55,6 +56,9 @@ export default async function BooksPage({ searchParams }: PageProps) {
   if (filters.level) query = query.eq('level_exam', filters.level)
   if (filters.publisher) query = query.eq('publisher', filters.publisher)
   if (filters.tracking) query = query.eq('tracking_mode', filters.tracking)
+  // R6-14: öğretim programı. level_exam ile BAĞIMSIZ bir filtredir; TYT
+  // seçmek 1. Aşama kaynaklarını getirmez çünkü ikisi ayrı değerlerdir.
+  if (filters.program) query = query.eq('curriculum_program', filters.program)
   if (filters.year && /^\d{4}$/.test(filters.year)) {
     query = query.eq('edition_year', Number(filters.year))
   }
@@ -142,6 +146,8 @@ export default async function BooksPage({ searchParams }: PageProps) {
                       edition_year: book.edition_year,
                       sectionCount,
                       testCount,
+                      tracking_mode: book.tracking_mode,
+                      curriculum_program: book.curriculum_program,
                     }}
                     href={`/teacher/books/${book.id}`}
                   />

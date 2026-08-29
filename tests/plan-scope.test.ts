@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePlanScope, sectionPageProgress, sectionScopeLabel } from '@/lib/plan-scope'
+import { resolvePlanScope, sectionPageProgress, sectionScopeLabel,
+  resolveInterimScope,
+} from '@/lib/plan-scope'
 import { formatRanges } from '@/lib/page-ranges'
 import { calculatePlanTempo } from '@/lib/plan-pace'
 import type { BookMapBook, BookMapSection, BookMapTest } from '@/lib/book-map'
@@ -26,6 +28,8 @@ function section(id: string, tests: BookMapTest[], pageStart?: number, pageEnd?:
     completedCount: tests.filter((t) => t.state === 'completed').length,
     pageStart: pageStart ?? null,
     pageEnd: pageEnd ?? null,
+    groupLabel: null,
+    themeLabel: null,
     note: null,
     videoUrl: null,
   }
@@ -39,10 +43,13 @@ function book(sections: BookMapSection[], overrides: Partial<BookMapBook> = {}):
     title: 'Metin 10. Sınıf Matematik',
     subject: 'Matematik',
     examType: null,
+    levelExam: null,
+    curriculumProgram: null,
     publisher: null,
     trackingMode: 'page',
     startDate: '2026-09-01',
     targetEndDate: '2026-09-30',
+    interimTarget: null,
     sections,
     totalTests,
     completedTests: sections.reduce((n, s) => n + s.completedCount, 0),
@@ -116,6 +123,7 @@ describe('resolvePlanScope (R4 §5)', () => {
       book([bolumA, bolumB], {
         target: {
           id: 'g1',
+          kind: 'resource' as const,
           startDate: '2026-09-01',
           targetDate: '2026-09-30',
           scopeType: 'sections',
@@ -133,6 +141,7 @@ describe('resolvePlanScope (R4 §5)', () => {
       book([bolumA, bolumB], {
         target: {
           id: 'g1',
+          kind: 'resource' as const,
           startDate: null,
           targetDate: null,
           scopeType: 'units',
@@ -153,6 +162,7 @@ describe('resolvePlanScope (R4 §5)', () => {
       book([bolumA], {
         target: {
           id: 'g1',
+          kind: 'resource' as const,
           startDate: '2026-10-01',
           targetDate: '2026-10-31',
           scopeType: 'whole_book',
@@ -174,6 +184,7 @@ describe('kapsam + mevcut plan matematiği', () => {
       book([ucgenler()], {
         target: {
           id: 'g1',
+          kind: 'resource' as const,
           startDate: '2026-09-01',
           targetDate: '2026-09-30',
           scopeType: 'sections',
@@ -196,5 +207,76 @@ describe('kapsam + mevcut plan matematiği', () => {
     expect(tempo.remainingUnits).toBe(13)
     expect(tempo.completionPercentage).toBe(77)
     expect(tempo.totalWeeks).toBe(5)
+  })
+})
+
+// ============================================================
+// R6-04: Kaynak Hedefi / Ara Hedef ayrımı (kabul #31-#35)
+// ============================================================
+
+describe('resolveInterimScope', () => {
+  // Bu blok kendi bölümlerini kurar; yukarıdaki fixture'lar başka bir
+  // describe kapsamında tanımlı.
+  const bolumA = section('A', [pageTest(1, 'completed'), pageTest(2, 'not_assigned')], 1, 2)
+  const bolumB = section('B', [pageTest(3, 'completed'), pageTest(4, 'not_assigned')], 3, 4)
+
+  it('ara hedef yoksa null döner', () => {
+    expect(resolveInterimScope(book([bolumA, bolumB]))).toBeNull()
+  })
+
+  it('kabul #31: ara hedef Kaynak Hedefinin tarihini değiştirmez', () => {
+    const b = book([bolumA, bolumB], {
+      target: {
+        id: 'kaynak',
+        kind: 'resource' as const,
+        startDate: '2026-09-01',
+        targetDate: '2027-06-01',
+        scopeType: 'whole_book',
+        sectionIds: [],
+        unitIds: [],
+      },
+      interimTarget: {
+        id: 'ara',
+        kind: 'interim' as const,
+        startDate: '2026-09-01',
+        targetDate: '2026-09-15',
+        scopeType: 'sections',
+        sectionIds: ['A'],
+        unitIds: [],
+      },
+    })
+
+    const resource = resolvePlanScope(b)
+    const interim = resolveInterimScope(b)
+
+    expect(resource.targetEndDate).toBe('2027-06-01')
+    expect(interim?.targetEndDate).toBe('2026-09-15')
+    // Ana kapsam ara hedefin daraltmasından etkilenmez.
+    expect(resource.scopeType).toBe('whole_book')
+    expect(interim?.scopeType).toBe('sections')
+  })
+
+  it('kabul #34: kapsam %100 iken kitap geneli ayrı kalır', () => {
+    // bolumA tamamen tamamlanmış, bolumB hiç başlanmamış olsun.
+    const done = section(
+      'A',
+      bolumA.tests.map((t) => ({ ...t, state: 'completed' as const }))
+    )
+    const b = book([done, bolumB], {
+      target: {
+        id: 'kaynak',
+        kind: 'resource' as const,
+        startDate: '2026-09-01',
+        targetDate: '2026-09-30',
+        scopeType: 'sections',
+        sectionIds: ['A'],
+        unitIds: [],
+      },
+    })
+
+    const scope = resolvePlanScope(b)
+    expect(scope.percentage).toBe(100)
+    expect(scope.bookPercentage).toBeLessThan(100)
+    expect(scope.bookTotalUnits).toBe(done.tests.length + bolumB.tests.length)
   })
 })

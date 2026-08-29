@@ -53,7 +53,7 @@ export default async function NewHomeworkPage({
     // seçimlerin korunmasını sağlar.
     supabase
       .from('weekly_plan_drafts')
-      .select('id, due_date, title')
+      .select('id, due_date, title, note')
       .eq('workspace_id', workspaceId)
       .eq('student_id', studentId)
       .eq('teacher_profile_id', profile.id)
@@ -101,6 +101,7 @@ export default async function NewHomeworkPage({
         initialSelectedTestIds={draftTestIds}
         initialDueDate={draft?.due_date ?? ''}
         initialTitle={draft?.title ?? ''}
+        initialNote={draft?.note ?? ''}
       />
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { formatUnitCount } from '@/lib/unit-labels'
 import { CheckCircle2, RotateCcw, Loader2, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   submitHomeworkItemAction,
@@ -25,7 +26,7 @@ interface HomeworkItem {
   rejected_at: string | null
   submitted_at: string | null
   book_id: string | null
-  books: { title: string; subject: string } | null
+  books: { title: string; subject: string; tracking_mode?: string | null } | null
   book_sections: { title: string } | null
   book_tests: { title: string } | null
 }
@@ -33,6 +34,8 @@ interface HomeworkItem {
 interface HomeworkBatch {
   id: string
   title: string | null
+  /** Ödev notu (R6-05). homework_batches.description alanı. */
+  description: string | null
   due_date: string
   status: string
   homework_items: HomeworkItem[]
@@ -80,13 +83,19 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
   // gerekirse grubu açıp tek tek düzeltir (R3 v2 §3).
   const bookGroups = new Map<
     string,
-    { bookId: string | null; title: string; items: HomeworkItem[] }
+    {
+      bookId: string | null
+      title: string
+      trackingMode: string
+      items: HomeworkItem[]
+    }
   >()
   for (const item of items) {
     const key = item.book_id ?? item.books?.title ?? '—'
     const group = bookGroups.get(key) ?? {
       bookId: item.book_id,
       title: item.books?.title ?? 'Kitap',
+      trackingMode: item.books?.tracking_mode ?? 'test',
       items: [],
     }
     group.items.push(item)
@@ -131,6 +140,14 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
         </div>
       </div>
 
+      {/* Ödev notu (R6-05). Boşsa hiçbir başlık/kutu gösterilmez. */}
+      {batch.description?.trim() && (
+        <p className="border-b bg-muted/30 px-4 py-2.5 text-sm">
+          <span className="font-medium">Not: </span>
+          <span className="text-muted-foreground">{batch.description.trim()}</span>
+        </p>
+      )}
+
       <div className="divide-y">
         {groups.map(group => (
           <BookGroup
@@ -154,7 +171,12 @@ function BookGroup({
   onSubmitGroup,
   groupPending,
 }: {
-  group: { bookId: string | null; title: string; items: HomeworkItem[] }
+  group: {
+    bookId: string | null
+    title: string
+    trackingMode: string
+    items: HomeworkItem[]
+  }
   dueDate: string
   multipleBooks: boolean
   onSubmitGroup: () => void
@@ -189,7 +211,7 @@ function BookGroup({
           )}
           <span className="truncate text-xs font-medium">{group.title}</span>
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-            {group.items.length} test
+            {formatUnitCount(group.items.length, group.trackingMode)}
           </span>
         </button>
         {pendingCount > 0 && (

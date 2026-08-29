@@ -28,6 +28,10 @@ export interface BookMapSection {
   orderIndex: number
   tests: BookMapTest[]
   completedCount: number
+  /** R6-17: opsiyonel fasikül ve tema etiketleri. Takip birimi değil,
+   *  üst grup metadata'sıdır; boş olabilir ve klasik kitaplarda boştur. */
+  groupLabel: string | null
+  themeLabel: string | null
   /** R4 §3: bölümün fiziksel kapsamı ve kısa insan notu. */
   pageStart: number | null
   pageEnd: number | null
@@ -35,10 +39,21 @@ export interface BookMapSection {
   videoUrl: string | null
 }
 
-/** Öğrenci-kitap ilişkisindeki tek aktif hedef (022). Kapsam daraltıldığında
+/**
+ * Hedef türü (R6-04).
+ *
+ *   resource — Kaynak Hedefi: nihai kapsam + nihai tarih. ANA TEMPO her
+ *              zaman bundan hesaplanır.
+ *   interim  — Ara Hedef: kısa menzilli, değiştirilebilir. Kaynak Hedefinin
+ *              kapsamını veya tarihini asla değiştirmez.
+ */
+export type BookMapTargetKind = 'resource' | 'interim'
+
+/** Öğrenci-kitap ilişkisindeki aktif hedef (022). Kapsam daraltıldığında
  *  plan matematiği yalnız bu kümeden beslenir — bkz. lib/plan-scope.ts. */
 export interface BookMapTarget {
   id: string
+  kind: BookMapTargetKind
   startDate: string | null
   targetDate: string | null
   scopeType: 'whole_book' | 'sections' | 'units'
@@ -51,7 +66,13 @@ export interface BookMapBook {
   bookId: string
   title: string
   subject: string | null
+  /** Eski dar sınav alanı. R6-16: GÖRÜNTÜLEMEDE levelExam tercih edilir;
+   *  bu alan yalnız geriye dönük fallback'tir. */
   examType: string | null
+  /** Canonical seviye/sınav değeri (021: books.level_exam). */
+  levelExam: string | null
+  /** Öğretim programı (R6-14). */
+  curriculumProgram: string | null
   publisher: string | null
   trackingMode: string
   startDate: string | null
@@ -67,7 +88,10 @@ export interface BookMapBook {
    *  plan mesajında da hatırlat (R4 §6). */
   videoDisplay: string
   /** Tek aktif hedef; yoksa null (o zaman kapsam tüm kitaptır). */
+  /** Kaynak Hedefi — ana tempo bundan hesaplanır (R6-04). */
   target: BookMapTarget | null
+  /** Ara Hedef — varsa kısa menzilli plan. Ana tempoyu etkilemez. */
+  interimTarget: BookMapTarget | null
 }
 
 interface LoadBookMapArgs {
@@ -99,9 +123,11 @@ export async function loadBookMap(
     .select(`
       id, book_id, start_date, target_end_date, video_display,
       books(
-        id, title, subject, exam_type, publisher, tracking_mode, video_mode, video_url,
+        id, title, subject, exam_type, level_exam, curriculum_program,
+        publisher, tracking_mode, video_mode, video_url,
         book_sections(
           id, title, order_index, status, note, video_url, page_start, page_end,
+          group_label, theme_label,
           book_tests(id, title, order_index, status, page_start, page_end)
         )
       )
@@ -138,10 +164,14 @@ export async function loadBookMap(
       .select('book_test_id')
       .in('student_book_assignment_id', assignmentIds)
       .eq('status', 'active'),
-    // Tek aktif hedef (022). Hedef yoksa kapsam tüm kitaptır.
+    // Aktif hedefler (022 + 029). Tür başına en fazla bir aktif satır:
+    // Kaynak Hedefi ve Ara Hedef aynı anda var olabilir.
+    // Hedef yoksa kapsam tüm kitaptır.
     supabase
       .from('student_book_targets')
-      .select('id, student_book_assignment_id, start_date, target_date, scope_type, scope_data')
+      .select(
+        'id, student_book_assignment_id, start_date, target_date, scope_type, scope_data, kind'
+      )
       .in('student_book_assignment_id', assignmentIds)
       .eq('active', true),
   ])
@@ -151,15 +181,21 @@ export async function loadBookMap(
   )
 
   const targetByAssignment = new Map<string, BookMapTarget>()
+  const interimByAssignment = new Map<string, BookMapTarget>()
   for (const row of (targets ?? []) as any[]) {
-    targetByAssignment.set(row.student_book_assignment_id, {
+    // 029 öncesi satırlarda kind kolonu yoktur; onlar Kaynak Hedefidir.
+    const kind: BookMapTargetKind = row.kind === 'interim' ? 'interim' : 'resource'
+    const target: BookMapTarget = {
       id: row.id,
+      kind,
       startDate: row.start_date ?? null,
       targetDate: row.target_date ?? null,
       scopeType: row.scope_type ?? 'whole_book',
       sectionIds: row.scope_data?.section_ids ?? [],
       unitIds: row.scope_data?.unit_ids ?? [],
-    })
+    }
+    const bucket = kind === 'interim' ? interimByAssignment : targetByAssignment
+    bucket.set(row.student_book_assignment_id, target)
   }
 
   const itemByTestId = new Map<string, any>()
@@ -204,6 +240,8 @@ export async function loadBookMap(
           completedCount: tests.filter((t) => t.state === 'completed').length,
           pageStart: s.page_start ?? null,
           pageEnd: s.page_end ?? null,
+          groupLabel: s.group_label ?? null,
+          themeLabel: s.theme_label ?? null,
           note: s.note ?? null,
           videoUrl: s.video_url ?? null,
         }
@@ -218,6 +256,8 @@ export async function loadBookMap(
       title: book?.title ?? '',
       subject: book?.subject ?? null,
       examType: book?.exam_type ?? null,
+      levelExam: book?.level_exam ?? null,
+      curriculumProgram: book?.curriculum_program ?? null,
       publisher: book?.publisher ?? null,
       trackingMode: book?.tracking_mode ?? 'test',
       startDate: assignment.start_date ?? null,
@@ -230,13 +270,39 @@ export async function loadBookMap(
       videoUrl: book?.video_url ?? null,
       videoDisplay: assignment.video_display ?? 'resource',
       target: targetByAssignment.get(assignment.id) ?? null,
+      interimTarget: interimByAssignment.get(assignment.id) ?? null,
     }
   })
 }
 
-/** Haritada seçilebilir durumlar. Tamamlanmış veya halihazırda ödevde olan
- *  bir test yeniden atanamaz — create_homework_batch bunu zaten reddeder. */
-export function isSelectableState(state: HomeworkTestState): boolean {
+/**
+ * Kaynak Haritasının iki çalışma modu (R6-03).
+ *
+ *   plan   — "Bu Haftanın Planı" sepetini doldurma. Bugünkü davranış.
+ *   manage — Eğitmenin akademik kayıt yönetimi: toplu tamamlandı işleme,
+ *            onaylama, tamamlanmayı geri alma.
+ *
+ * İkisi bilinçli olarak AYRI tutulur. Sepet yalnız "henüz verilmedi"
+ * durumundaki birimleri kabul eder; yönetim modu ise gerçek hayattaki her
+ * duruma müdahale edebilmelidir. Tek bir seçim listesi iki amaca birden
+ * hizmet etseydi, ya sepet bozulur ya yönetim kısıtlı kalırdı.
+ */
+export type BookMapMode = 'plan' | 'manage'
+
+/**
+ * Haritada seçilebilir durumlar.
+ *
+ * plan modunda: yalnız 'not_assigned'. Tamamlanmış veya halihazırda ödevde
+ * olan bir test yeniden atanamaz — create_homework_batch bunu zaten reddeder.
+ *
+ * manage modunda: 'no_test' dışında hepsi. Seçim TEK BAŞINA hiçbir statüyü
+ * değiştirmez; değişiklik yalnız eğitmen bir işlem uyguladığında olur.
+ */
+export function isSelectableState(
+  state: HomeworkTestState,
+  mode: BookMapMode = 'plan'
+): boolean {
+  if (mode === 'manage') return state !== 'no_test'
   return state === 'not_assigned'
 }
 

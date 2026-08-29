@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { unitLabel } from '@/lib/unit-labels'
 import { BookOpen, CircleCheck, UserRound, Hourglass, CircleAlert, CircleDashed } from 'lucide-react'
 import { getStudentContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
@@ -73,7 +74,11 @@ export default async function StudentBookMapPage({
 
       <MetricTiles
         metrics={[
-          { label: 'Toplam test', value: book.totalTests, icon: BookOpen },
+          {
+            label: `Toplam ${unitLabel(book.trackingMode)}`,
+            value: book.totalTests,
+            icon: BookOpen,
+          },
           { label: COUNTER_LABEL.completed, value: completed, tone: 'success', icon: CircleCheck },
           { label: 'Yapılacak', value: assigned, tone: 'warning', icon: UserRound },
           {
@@ -98,9 +103,11 @@ export default async function StudentBookMapPage({
         targetEndDate={scope.targetEndDate}
         totalUnits={scope.totalUnits}
         completedUnits={scope.completedUnits}
+        trackingMode={book.trackingMode}
       />
 
       <ProgressSummary
+        trackingMode={book.trackingMode}
         startDate={scope.startDate}
         targetEndDate={scope.targetEndDate}
         totalUnits={scope.totalUnits}

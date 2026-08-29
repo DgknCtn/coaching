@@ -21,6 +21,7 @@ import {
   VIDEO_MODE_OPTIONS,
   EDITION_YEAR_MIN,
   EDITION_YEAR_MAX,
+  CURRICULUM_PROGRAM_OPTIONS,
 } from '@/lib/book-taxonomy'
 
 const sectionSchema = z.object({
@@ -35,6 +36,7 @@ const schema = z.object({
   title: z.string().min(2, 'Kitap adı gerekli'),
   subject: z.string().min(1, 'Ders seçimi gerekli'),
   levelExam: z.string().min(1, 'Seviye / sınav türü gerekli'),
+  curriculumProgram: z.string().optional(),
   publisher: z.string().optional(),
   editionYear: z.number().int().min(EDITION_YEAR_MIN).max(EDITION_YEAR_MAX).optional().or(z.nan()),
   trackingMode: z.enum(['test', 'page']),
@@ -84,6 +86,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
         subject: data.subject,
         publisher: data.publisher,
         levelExam: data.levelExam,
+        curriculumProgram: data.curriculumProgram || 'Belirtilmedi',
         // Boş bırakılan sayı alanı NaN gelir; sunucuya null gitmeli.
         editionYear: Number.isFinite(data.editionYear) ? (data.editionYear as number) : null,
         description: data.description,
@@ -145,6 +148,20 @@ export function BookForm({ terms, defaultTermId }: Props) {
               </NativeSelect>
               {errors.levelExam && <p className="text-xs text-destructive">{errors.levelExam.message}</p>}
             </div>
+          </div>
+
+          {/* R6-14: kaynağın hangi müfredata göre üretildiği, seviye/sınav
+              bilgisinden BAĞIMSIZ bir alandır. Varsayılan "Belirtilmedi";
+              zorunlu değildir ve mevcut akışı ağırlaştırmaz. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="curriculumProgram">Öğretim Programı</Label>
+            <NativeSelect id="curriculumProgram" {...register('curriculumProgram')}>
+              {CURRICULUM_PROGRAM_OPTIONS.map(c => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </NativeSelect>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -1,6 +1,10 @@
 import Link from 'next/link'
+import { isOverdue } from '@/lib/homework-status'
+import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
+import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
+import type { AssignableBook } from './assign-book-dialog'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed, Pencil } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +23,12 @@ import { Section } from '@/components/shared/section'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
 export const dynamic = 'force-dynamic'
+
+/** Supabase iç içe select'i tek kayıt için de dizi tipinde çözebiliyor. */
+type Nested<T> = T | T[] | null
+function one<T>(value: Nested<T>): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value
+}
 
 export default async function StudentDetailPage({
   params,
@@ -55,6 +65,7 @@ export default async function StudentDetailPage({
     { data: weeklySummary },
     { data: pendingApprovalSummary },
     { data: overdueSummary },
+    { data: academicNoteRows },
   ] = await Promise.all([
     supabase
       .from('student_book_progress_view')
@@ -75,8 +86,13 @@ export default async function StudentDetailPage({
     supabase
       .from('homework_batches')
       .select(`
-        id, title, due_date, status,
-        homework_items(id, status)
+        id, title, description, due_date, status,
+        homework_items(
+          id, status, book_id, section_id,
+          books(title, tracking_mode),
+          book_sections(title),
+          book_tests(order_index)
+        )
       `)
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
@@ -87,7 +103,7 @@ export default async function StudentDetailPage({
       .from('homework_items')
       .select(`
         id, book_id, homework_batch_id,
-        books(title),
+        books(title, tracking_mode),
         book_sections(title),
         book_tests(title),
         homework_batches!inner(student_id, workspace_id, title, due_date)
@@ -105,7 +121,8 @@ export default async function StudentDetailPage({
     activeTerm
       ? supabase
           .from('books')
-          .select('id, title, subject')
+          // R6-15: arama ve filtre için ek metadata.
+          .select('id, title, subject, publisher, level_exam, edition_year, curriculum_program')
           .eq('workspace_id', workspaceId)
           .eq('academic_term_id', activeTerm.id)
           .eq('status', 'active')
@@ -133,12 +150,37 @@ export default async function StudentDetailPage({
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .maybeSingle(),
+    // Akademik Not (R6-07). RLS gereği bu sorgu yalnız eğitmen oturumunda
+    // satır döndürür; öğrenci/veli için politika tanımlı değildir.
+    supabase
+      .from('academic_notes')
+      .select('id, note_text, pinned, created_at, profiles(full_name)')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(100),
   ])
 
+  const academicNotes: AcademicNote[] = ((academicNoteRows ?? []) as unknown as {
+    id: string
+    note_text: string
+    pinned: boolean
+    created_at: string
+    profiles: Nested<{ full_name: string | null }>
+  }[]).map(row => ({
+    id: row.id,
+    note_text: row.note_text,
+    pinned: row.pinned,
+    created_at: row.created_at,
+    author_name: one(row.profiles)?.full_name ?? null,
+  }))
+
+  const lastAcademicNote = academicNotes.find(n => n.pinned) ?? academicNotes[0] ?? null
+
   const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
-  const availableBooks: { id: string; title: string; subject: string }[] = (
-    termBooks ?? []
-  ).filter(b => !assignedBookIds.includes(b.id))
+  const availableBooks: AssignableBook[] = ((termBooks ?? []) as AssignableBook[]).filter(
+    b => !assignedBookIds.includes(b.id)
+  )
 
   const hasAccount = !!student.profile_id
 
@@ -157,6 +199,14 @@ export default async function StudentDetailPage({
         }
         action={
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/teacher/students/${studentId}/edit`} />}
+            >
+              <Pencil />
+              Düzenle
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -191,17 +241,42 @@ export default async function StudentDetailPage({
             { label: COUNTER_LABEL.assigned, value: weeklySummary.assigned_tests ?? 0 },
             { label: COUNTER_LABEL.completed, value: weeklySummary.completed_tests ?? 0 },
             { label: COUNTER_LABEL.pending, value: weeklySummary.pending_tests ?? 0 },
+            // R6-10: sayaçlar Görevler'i BU ÖĞRENCİYE daraltarak açar.
+            // Global sayaçlar (dashboard) öğrenci parametresi taşımaz.
             {
               label: COUNTER_LABEL.pendingApproval,
               value: pendingApprovalSummary?.pending_approval_items ?? 0,
+              href: `/teacher/tasks?filter=approval&student=${studentId}`,
             },
             {
               label: COUNTER_LABEL.overdue,
               value: overdueSummary?.overdue_items ?? 0,
               hint: OVERDUE_HINT,
+              href: `/teacher/tasks?filter=overdue&student=${studentId}`,
             },
           ]}
         />
+      )}
+
+      {/* Son Akademik Not (R6-07 kabul #48): tarih + kısa metin. Tüm notlar
+          Akademik Not sekmesinde kronolojik listelenir. Not yoksa BURASI HİÇ
+          GÖRÜNMEZ — sistem uyarı veya görev üretmez (#49). */}
+      {lastAcademicNote && (
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              {lastAcademicNote.pinned ? 'Önemli akademik not' : 'Son akademik not'}
+            </p>
+            <p className="shrink-0 text-[11px] text-muted-foreground">
+              {new Date(lastAcademicNote.created_at).toLocaleDateString('tr-TR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+          <p className="mt-1 line-clamp-2 text-sm">{lastAcademicNote.note_text}</p>
+        </div>
       )}
 
       <Tabs defaultValue="books">
@@ -218,11 +293,12 @@ export default async function StudentDetailPage({
           <TabsTrigger value="parents">
             <Users /> Veliler
           </TabsTrigger>
-          {student.notes && (
-            <TabsTrigger value="notes">
-              <StickyNote /> Notlar
-            </TabsTrigger>
-          )}
+          {/* R6-07: sekme artık koşulsuz. Eskiden yalnız students.notes
+              doluysa görünüyordu ve not eklemenin tek yolu öğrenci
+              oluşturma formuydu. */}
+          <TabsTrigger value="notes">
+            <StickyNote /> Akademik Not
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="books">
@@ -258,6 +334,7 @@ export default async function StudentDetailPage({
                       title: p.book_title,
                       subject: p.subject,
                       exam_type: p.exam_type,
+                      tracking_mode: p.tracking_mode,
                     }}
                     progress={{
                       completed: p.completed_tests,
@@ -315,12 +392,36 @@ export default async function StudentDetailPage({
               ) : (
                 <ul className="divide-y overflow-hidden rounded-lg border bg-card">
                   {homeworkBatches.map((batch) => {
-                    const items = (batch.homework_items as { id: string; status: string }[]) ?? []
+                    // Supabase iç içe select'i tek kaydı da dizi tipinde
+                    // çözebiliyor; okurken tekile indiriyoruz.
+                    const items =
+                      (batch.homework_items as unknown as {
+                        id: string
+                        status: string
+                        book_id: string | null
+                        section_id: string | null
+                        books: Nested<{ title: string; tracking_mode: string }>
+                        book_sections: Nested<{ title: string }>
+                        book_tests: Nested<{ order_index: number }>
+                      }[]) ?? []
                     const total = items.length
                     const completed = items.filter((i) => i.status === 'completed').length
-                    const isOverdue =
-                      new Date(batch.due_date) < new Date() &&
-                      items.some((i) => i.status === 'pending')
+                    // R6-06: detay assignment_items'tan türetilir; ödev
+                    // kaydında ayrı bir kopya metin tutulmaz.
+                    const detail = buildHomeworkDetail(
+                      items.map<HomeworkDetailItem>((i) => ({
+                        bookId: i.book_id,
+                        bookTitle: one(i.books)?.title ?? null,
+                        trackingMode: one(i.books)?.tracking_mode ?? null,
+                        sectionId: i.section_id,
+                        sectionTitle: one(i.book_sections)?.title ?? null,
+                        orderIndex: one(i.book_tests)?.order_index ?? null,
+                      }))
+                    )
+                    // R6-02: teslim gününün tamamı kullanılabilir. Gecikme
+                    // kararı lib/homework-status.ts'ten gelir.
+                    const batchOverdue =
+                      isOverdue(batch.due_date) && items.some((i) => i.status === 'pending')
                     return (
                       <li key={batch.id}>
                         <HomeworkBatchRow
@@ -328,7 +429,9 @@ export default async function StudentDetailPage({
                           dueDate={batch.due_date}
                           completed={completed}
                           total={total}
-                          isOverdue={isOverdue}
+                          isOverdue={batchOverdue}
+                          detail={detail}
+                          note={batch.description}
                         />
                       </li>
                     )
@@ -449,13 +552,14 @@ export default async function StudentDetailPage({
           </Section>
         </TabsContent>
 
-        {student.notes && (
-          <TabsContent value="notes">
-            <div className="rounded-lg border bg-card p-6">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{student.notes}</p>
-            </div>
-          </TabsContent>
-        )}
+        <TabsContent value="notes">
+          <Section
+            title="Akademik Not / Öğrenci Hafızası"
+            description="Derse başlarken hatırlamak istedikleriniz. Yalnız eğitmenlere görünür; öğrenci ve veli panelinde yer almaz."
+          >
+            <AcademicNotesPanel studentId={studentId} notes={academicNotes} />
+          </Section>
+        </TabsContent>
       </Tabs>
     </div>
   )

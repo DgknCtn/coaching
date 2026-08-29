@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { isOverdue } from '@/lib/homework-status'
 import { BookOpen } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Badge } from '@/components/ui/badge'
@@ -67,7 +68,8 @@ export default async function StudentReportPage({
     const active = items.filter((i) => i.status !== 'cancelled')
     hwTotal += active.length
     hwCompleted += active.filter((i) => i.status === 'completed').length
-    if (new Date(b.due_date) < now) {
+    // R6-02: date-only karşılaştırma; teslim günü boyunca gecikme yoktur.
+    if (isOverdue(b.due_date, now)) {
       hwOverdue += active.filter((i) => i.status === 'pending').length
     }
   }
@@ -97,7 +99,7 @@ export default async function StudentReportPage({
       <MetricRow
         metrics={[
           { label: 'Genel ilerleme', value: `${overallPct}%` },
-          { label: 'Tamamlanan test', value: completedTests, subValue: `/${totalTests}` },
+          { label: 'Tamamlanan çalışma', value: completedTests, subValue: `/${totalTests}` },
           { label: 'Ödev tamamlama', value: `${hwRate}%`, hint: `${hwCompleted}/${hwTotal}` },
           { label: 'Geciken çalışma', value: hwOverdue },
         ]}

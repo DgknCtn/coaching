@@ -24,6 +24,7 @@ export interface NewBookInput {
   subject: string
   publisher?: string
   levelExam?: string
+  curriculumProgram?: string
   editionYear?: number | null
   description?: string
   trackingMode?: string
@@ -57,6 +58,18 @@ export async function createBookAction(input: NewBookInput) {
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // R6-14: öğretim programı ayrı bir çağrıyla yazılır. create RPC'si
+  // bölüm/test üretimini de yapan uzun bir fonksiyon; ona alan eklemek
+  // için gövdesini çoğaltmak yerine tek işli yardımcı kullanılır.
+  const newBookId = (data as { book_id?: string } | null)?.book_id
+  if (newBookId && parsed.data.curriculumProgram) {
+    await supabase.rpc('set_book_curriculum_program', {
+      p_book_id: newBookId,
+      p_curriculum_program: parsed.data.curriculumProgram,
+    })
+  }
+
   revalidatePath('/teacher/books')
   return { success: true, data }
 }

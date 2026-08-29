@@ -38,13 +38,58 @@ export interface DeriveTestStateInput {
   today?: Date
 }
 
+/**
+ * Uygulamanın iş takvimi (R6-02).
+ *
+ * "Yerel gün" yeterli DEĞİLDİR: sunucu bileşenleri Vercel'de UTC'de,
+ * tarayıcı ise kullanıcının saat diliminde çalışır — ikisi gece saatlerinde
+ * farklı gün görür. Gecikme kararı tek bir takvime bağlanmalı. Aynı sabit
+ * SQL tarafında da kullanılır: supabase/migrations/027 -> today_local().
+ */
+export const APP_TIME_ZONE = 'Europe/Istanbul'
+
+// en-CA biçimi YYYY-MM-DD üretir; string karşılaştırması bu sayede
+// doğrudan tarih karşılaştırması anlamına gelir.
+const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: APP_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
 function toDateString(d: Date): string {
-  // Yerel takvim günü. UTC'ye çevirmek, akşam saatlerinde teslim tarihini
-  // bir gün ileri kaydırıp gecikmeyi erken tetikleyebilirdi.
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return dayFormatter.format(d)
+}
+
+/**
+ * Bugünün YEREL takvim günü (YYYY-MM-DD) — R6-02.
+ *
+ * `new Date().toISOString().split('T')[0]` KULLANILMAMALIDIR: o UTC gününü
+ * verir ve Türkiye (UTC+3) saatiyle gece 00:00-03:00 arasında bir gün geriye
+ * kayar. Aynı ödev o saatlerde bir ekranda gecikmiş, diğerinde değil görünür.
+ */
+export function todayDateString(today?: Date): string {
+  return toDateString(today ?? new Date())
+}
+
+/**
+ * Bir teslim tarihinin geçip geçmediği (R6-02).
+ *
+ * KURAL: Gecikme kararını veren TEK yer burasıdır. Hiçbir ekran kendi
+ * karşılaştırmasını kurmamalı — özellikle `new Date(dueDate) < new Date()`
+ * YAZILMAMALIDIR: `new Date('2026-08-25')` UTC gece yarısı olarak ayrışır,
+ * bu yüzden Türkiye saatiyle gün içinde ödev daha teslim günü dolmadan
+ * "gecikmiş" görünür. Teslim gününün TAMAMI kullanılabilir sayılır.
+ *
+ *   25.08 10:00 -> false
+ *   25.08 23:59 -> false
+ *   26.08 00:01 -> true
+ *
+ * @param dueDate Date-only teslim tarihi (YYYY-MM-DD). Yoksa gecikme yok.
+ */
+export function isOverdue(dueDate: string | null | undefined, today?: Date): boolean {
+  if (!dueDate) return false
+  return dueDate < toDateString(today ?? new Date())
 }
 
 /**
@@ -68,8 +113,7 @@ export function deriveTestState(input: DeriveTestStateInput): HomeworkTestState 
   // Buradan sonrası yalnızca açık (pending) bir ödev kaydı için anlamlı.
   if (itemStatus !== 'pending') return 'not_assigned'
 
-  const todayStr = toDateString(input.today ?? new Date())
-  if (dueDate && dueDate < todayStr) return 'overdue'
+  if (isOverdue(dueDate, input.today)) return 'overdue'
   if (rejectedAt) return 'returned'
   return 'assigned'
 }

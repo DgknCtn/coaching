@@ -76,3 +76,29 @@ export async function approveHomeworkBatchAction(homeworkBatchId: string, bookId
   revalidatePath('/teacher')
   return { success: true }
 }
+
+/**
+ * Seçili kalemleri onaylar (R6-08).
+ *
+ * approveHomeworkBatchAction "grubun hepsini onayla" der; bu ise eğitmenin
+ * drawer'da gözden geçirip bazılarını çıkardığı listeyi onaylar. Kaç kalemin
+ * gerçekten onaylandığı geri döndürülür — kısmi başarı gizlenmez.
+ */
+export async function approveSelectedItemsAction(homeworkItemIds: string[]) {
+  const parsed = z.array(uuidSchema).min(1, 'En az bir çalışma seçin.').max(500)
+    .safeParse(homeworkItemIds)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('approve_selected_homework_items', {
+    p_homework_item_ids: parsed.data,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/teacher/tasks')
+  revalidatePath('/teacher')
+  return { success: true, approved: Number((data as { approved?: number })?.approved ?? 0) }
+}

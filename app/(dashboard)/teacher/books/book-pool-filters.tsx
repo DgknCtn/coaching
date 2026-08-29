@@ -14,7 +14,12 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { SUBJECTS, LEVEL_EXAMS, TRACKING_MODE_OPTIONS } from '@/lib/book-taxonomy'
+import {
+  SUBJECTS,
+  LEVEL_EXAMS,
+  TRACKING_MODE_OPTIONS,
+  CURRICULUM_PROGRAM_OPTIONS,
+} from '@/lib/book-taxonomy'
 
 interface Props {
   /** Havuzda gerçekten bulunan yayınlar — boş seçenek göstermemek için. */
@@ -52,7 +57,7 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
     })
   }
 
-  const activeFilters = ['subject', 'level', 'publisher', 'year', 'tracking', 'q'].filter((k) =>
+  const activeFilters = ['subject', 'level', 'publisher', 'year', 'tracking', 'program', 'q'].filter((k) =>
     params.get(k)
   )
 
@@ -127,6 +132,26 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
           >
             <option value="">Tümü</option>
             {TRACKING_MODE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </NativeSelect>
+        </div>
+
+        {/* R6-14: TYMM geçiş döneminde eski ve yeni program kaynaklarını
+            ayırt etmek için. */}
+        <div className="space-y-1">
+          <Label htmlFor="filter-program" className="text-xs text-muted-foreground">
+            Öğretim Programı
+          </Label>
+          <NativeSelect
+            id="filter-program"
+            value={params.get('program') ?? ''}
+            onChange={(e) => setParam('program', e.target.value)}
+          >
+            <option value="">Tümü</option>
+            {CURRICULUM_PROGRAM_OPTIONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </NativeSelect>
         </div>
       </div>

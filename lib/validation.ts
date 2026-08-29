@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   LEVEL_EXAMS,
+  CURRICULUM_PROGRAMS,
   SUBJECTS,
   TRACKING_MODES,
   VIDEO_MODES,
@@ -10,7 +11,7 @@ import {
 
 // Ders/seviye/takip/video listeleri artık lib/book-taxonomy.ts'te (R4 §3).
 // Buradan yeniden dışa aktarılıyorlar ki mevcut importlar kırılmasın.
-export { LEVEL_EXAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES }
+export { LEVEL_EXAMS, CURRICULUM_PROGRAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES }
 
 // Server Action'larda kullanılan paylaşılan doğrulama şemaları.
 // Client tarafındaki react-hook-form doğrulaması kolayca atlanabilir;
@@ -21,17 +22,39 @@ export { LEVEL_EXAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES }
 // tutuyordu ve listeler birbirinden ayrışmıştı (öğrenci formunda 6, kitap
 // formunda 4 sınav türü vardı). Formlar artık buradan import ediyor.
 //
-// NOT: DB'deki CHECK kısıtı hâlâ TYT/AYT/LGS/KPSS/DGS/Other kabul ediyor
-// (001 ve 009). Daraltma bilinçli olarak yalnızca form katmanında: geçmişte
-// başka bir türle kaydedilmiş satırlar okunmaya devam etsin.
-export const EXAM_TYPES = ['TYT', 'AYT'] as const
+// R6-11: "Sınav Türü" -> "Hazırlık Programı".
+//
+// Öğrencinin NEYE HAZIRLANDIĞI ile ŞU AN NEREDE OLDUĞU (GRADE_LEVELS)
+// bağımsızdır ve birbirini kısıtlamaz: 9. Sınıf + YKS, 10. Sınıf + IB ya da
+// Mezun + ALES geçerli kombinasyonlardır.
+//
+// DB tarafındaki CHECK 033_student_prep_program.sql ile bu listeyi kabul
+// edecek şekilde genişletildi; eski değerler (KPSS, DGS, Other) korunuyor
+// ki geçmişte kaydedilmiş satırlar okunmaya devam etsin.
+export const EXAM_TYPES = [
+  'Yok',
+  'LGS',
+  'YKS',
+  'TYT',
+  'AYT',
+  'IB',
+  'SAT',
+  'AP',
+  'DGS',
+  'ALES',
+  'KPSS',
+  'Diğer',
+] as const
 export const LESSON_TYPES = ['yuz_yuze_ozel', 'online_birebir', 'online_grup', 'bireysel_kocluk'] as const
 
-export const EXAM_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'TYT', label: 'TYT' },
-  { value: 'AYT', label: 'AYT' },
-]
+/** Form etiketi: "Hazırlık Programı". */
+export const EXAM_TYPE_OPTIONS: { value: string; label: string }[] = EXAM_TYPES.map(v => ({
+  value: v,
+  label: v,
+}))
 
+/** R6-11: "Ders Türü" -> "Çalışma Modeli". DEĞERLER DEĞİŞMEZ; yalnız
+ *  kullanıcıya görünen alan adı değişir, bu yüzden migration gerekmez. */
 export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'yuz_yuze_ozel', label: 'Yüzyüze Özel Ders' },
   { value: 'online_birebir', label: 'Online Birebir' },
@@ -46,8 +69,8 @@ export const studentSchema = z.object({
   email: z.string().trim().email('Geçerli bir e-posta girin.').optional().or(z.literal('')),
   phone: z.string().trim().max(30).optional().or(z.literal('')),
   gradeLevel: z.string().trim().max(30).optional().or(z.literal('')),
-  examType: z.enum(EXAM_TYPES, { message: 'Geçersiz sınav türü.' }).optional().or(z.literal('')),
-  lessonType: z.enum(LESSON_TYPES, { message: 'Geçersiz ders türü.' }).optional().or(z.literal('')),
+  examType: z.enum(EXAM_TYPES, { message: 'Geçersiz hazırlık programı.' }).optional().or(z.literal('')),
+  lessonType: z.enum(LESSON_TYPES, { message: 'Geçersiz çalışma modeli.' }).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
 })
 
@@ -99,6 +122,11 @@ const editionYear = z
   .optional()
   .nullable()
 
+/** R6-14: öğretim programı. Verilmezse 'Belirtilmedi'. */
+const curriculumProgram = z
+  .enum(CURRICULUM_PROGRAMS, { message: 'Geçersiz öğretim programı.' })
+  .default('Belirtilmedi')
+
 const videoMode = z.enum(VIDEO_MODES, { message: 'Geçersiz video desteği seçimi.' }).default('none')
 const videoUrl = z.string().trim().url('Geçerli bir video bağlantısı girin.').max(500).optional().or(z.literal(''))
 
@@ -110,6 +138,7 @@ export const bookSchema = z.object({
   subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
   publisher: z.string().trim().max(120).optional().or(z.literal('')),
   levelExam,
+  curriculumProgram,
   editionYear,
   trackingMode: z.enum(TRACKING_MODES, { message: 'Geçersiz takip türü.' }).default('test'),
   description: z.string().trim().max(2000).optional().or(z.literal('')),
@@ -127,6 +156,7 @@ export const bookUpdateSchema = z.object({
   subject: z.string().trim().min(1, 'Ders alanı zorunlu.').max(80),
   publisher: z.string().trim().max(120).optional().or(z.literal('')),
   levelExam,
+  curriculumProgram,
   editionYear,
   description: z.string().trim().max(2000).optional().or(z.literal('')),
   videoMode,
@@ -187,7 +217,9 @@ export const homeworkBatchSchema = z.object({
   studentId: uuid,
   dueDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir teslim tarihi seçin.'),
   title: z.string().trim().max(200).optional().or(z.literal('')),
-  items: z.array(homeworkItemSchema).min(1, 'En az bir test seçin.').max(500),
+  /** Ödev notu (R6-05) — isteğe bağlı, ödev başına tek alan. */
+  note: z.string().trim().max(2000, 'Ödev notu en fazla 2000 karakter olabilir.').optional().or(z.literal('')),
+  items: z.array(homeworkItemSchema).min(1, 'En az bir çalışma seçin.').max(500),
 })
 
 export const CHECK_IN_MOODS = ['iyi', 'idare_eder', 'zorlaniyorum'] as const

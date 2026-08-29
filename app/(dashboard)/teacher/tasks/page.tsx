@@ -2,7 +2,14 @@ import Link from 'next/link'
 import { CheckCircle2, Clock, MessageSquareDashed } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { formatRelativeTime } from '@/lib/student-attention'
-import { COUNTER_LABEL } from '@/lib/homework-status'
+import { COUNTER_LABEL, todayDateString } from '@/lib/homework-status'
+import {
+  groupTasksByStudent,
+  taskGroupLabel,
+  type TaskRowLike,
+  type TaskStudentGroup,
+} from '@/lib/task-grouping'
+import { formatUnitCount } from '@/lib/unit-labels'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
@@ -34,10 +41,11 @@ type ItemRow = {
   book_id: string | null
   homework_batches: Nested<{
     due_date: string
+    title: string | null
     student_id: string
     students: Nested<{ full_name: string | null }>
   }>
-  books: Nested<{ title: string | null }>
+  books: Nested<{ title: string | null; tracking_mode: string | null }>
   book_sections: Nested<{ title: string | null }>
   book_tests: Nested<{ title: string | null }>
 }
@@ -51,8 +59,8 @@ type CheckInRow = {
 
 const ITEM_SELECT = `
   id, submitted_at, homework_batch_id, book_id,
-  homework_batches!inner(due_date, student_id, status, students(full_name)),
-  books(title),
+  homework_batches!inner(due_date, title, student_id, status, students(full_name)),
+  books(title, tracking_mode),
   book_sections(title),
   book_tests(title)
 `
@@ -65,12 +73,18 @@ function daysBetween(from: string, to = new Date()): number {
 export default async function TeacherTasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>
+  searchParams: Promise<{ filter?: string; student?: string }>
 }) {
-  const { filter: rawFilter } = await searchParams
+  const { filter: rawFilter, student: rawStudent } = await searchParams
   const filter: Filter = FILTERS.includes(rawFilter as Filter)
     ? (rawFilter as Filter)
     : 'approval'
+
+  // R6-10: öğrenci detayındaki sayaçlar bu ekranı O ÖĞRENCİYE daraltarak
+  // açar. Global sayaçlarla öğrenci bağlamı bilinçli olarak ayrıdır;
+  // parametre URL'de olduğu için tarayıcı geri tuşu ve yenileme doğru çalışır.
+  const studentFilter =
+    rawStudent && /^[0-9a-f-]{36}$/i.test(rawStudent) ? rawStudent : null
 
   const { supabase, workspaceId } = await getTeacherContext()
 
@@ -78,23 +92,28 @@ export default async function TeacherTasksPage({
   let checkInRows: CheckInRow[] = []
 
   if (filter === 'approval') {
-    const { data } = await supabase
+    let query = supabase
       .from('homework_items')
       .select(ITEM_SELECT)
       .eq('workspace_id', workspaceId)
       .eq('status', 'pending_approval')
       .eq('homework_batches.status', 'active')
-      .order('submitted_at', { ascending: true })
+    if (studentFilter) query = query.eq('homework_batches.student_id', studentFilter)
+    const { data } = await query.order('submitted_at', { ascending: true })
     itemRows = (data ?? []) as unknown as ItemRow[]
   } else if (filter === 'overdue') {
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
+    // R6-02: yerel takvim günü. UTC günü kullanmak gece saatlerinde
+    // gecikmiş kalemleri listeden düşürüyordu.
+    const today = todayDateString()
+    let query = supabase
       .from('homework_items')
       .select(ITEM_SELECT)
       .eq('workspace_id', workspaceId)
       .eq('status', 'pending')
       .eq('homework_batches.status', 'active')
       .lt('homework_batches.due_date', today)
+    if (studentFilter) query = query.eq('homework_batches.student_id', studentFilter)
+    const { data } = await query
     itemRows = (data ?? []) as unknown as ItemRow[]
     itemRows.sort((a, b) => {
       const da = one(a.homework_batches)?.due_date ?? ''
@@ -120,49 +139,76 @@ export default async function TeacherTasksPage({
     const map = new Map<string, ApprovalGroup>()
     for (const row of itemRows) {
       const key = `${row.homework_batch_id}:${row.book_id ?? '-'}`
+      // R6-08: drawer onay öncesi içeriği göstermek zorunda, bu yüzden
+      // grup yalnız sayı değil kalemlerin kendisini de taşır. Ek sorgu
+      // yok — veri zaten elimizdeki pending approvals sonucundan geliyor.
+      const item = {
+        id: row.id,
+        sectionTitle: one(row.book_sections)?.title ?? null,
+        unitTitle: one(row.book_tests)?.title ?? null,
+        submittedAt: row.submitted_at,
+      }
       const existing = map.get(key)
       if (existing) {
         existing.count++
+        existing.items.push(item)
         continue
       }
       map.set(key, {
         key,
         batchId: row.homework_batch_id,
         bookId: row.book_id,
+        batchTitle: one(row.homework_batches)?.title ?? null,
+        dueDate: one(row.homework_batches)?.due_date ?? null,
         studentName: one(one(row.homework_batches)?.students)?.full_name ?? '—',
         bookTitle: one(row.books)?.title ?? 'Kitap',
+        trackingMode: one(row.books)?.tracking_mode ?? 'test',
         count: 1,
+        items: [item],
       })
     }
     approvalGroups.push(...map.values())
   }
 
-  const studentColumn: Column<ItemRow> = {
-    key: 'student',
-    header: 'Öğrenci',
-    render: (r) => {
-      const batch = one(r.homework_batches)
-      return (
-        <div>
-          <p className="font-medium">{one(batch?.students)?.full_name ?? '—'}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {one(r.books)?.title ?? ''} · {one(r.book_sections)?.title ?? ''}
-          </p>
-        </div>
-      )
-    },
-  }
+  // R6-09: Öğrenci > Ödev/Kaynak > Çalışma hiyerarşisi. Veri yapısı
+  // değişmez; yalnız sorgu sonucu görüntüleme katmanında gruplanır.
+  type GroupedRow = ItemRow & TaskRowLike
+  const groupedRows: GroupedRow[] = itemRows.map((r) => {
+    const batch = one(r.homework_batches)
+    return {
+      ...r,
+      studentId: batch?.student_id ?? '—',
+      studentName: one(batch?.students)?.full_name ?? '—',
+      batchId: r.homework_batch_id,
+      batchTitle: batch?.title ?? null,
+      dueDate: batch?.due_date ?? null,
+      bookId: r.book_id,
+      bookTitle: one(r.books)?.title ?? 'Kaynak',
+      trackingMode: one(r.books)?.tracking_mode ?? 'test',
+    }
+  })
+  const studentGroups = groupTasksByStudent(groupedRows)
 
-  const testColumn: Column<ItemRow> = {
-    key: 'test',
+  // R6-09: Öğrenci ve ödev/kaynak bilgisi artık grup BAŞLIĞINDA duruyor;
+  // satırda tekrar etmesi gereksiz gürültüydü. Satırın işi yalnız hangi
+  // bölüm/çalışma olduğunu söylemek.
+  const workColumn: Column<ItemRow> = {
+    key: 'work',
     header: 'Çalışma',
-    hideBelow: 'sm',
-    render: (r) => <span className="text-sm">{one(r.book_tests)?.title ?? '—'}</span>,
+    render: (r) => (
+      <div className="min-w-0">
+        <p className="truncate text-sm">{one(r.book_tests)?.title ?? '—'}</p>
+        {one(r.book_sections)?.title && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {one(r.book_sections)?.title}
+          </p>
+        )}
+      </div>
+    ),
   }
 
   const approvalColumns: Column<ItemRow>[] = [
-    studentColumn,
-    testColumn,
+    workColumn,
     {
       key: 'submitted',
       header: 'Gönderildi',
@@ -182,8 +228,7 @@ export default async function TeacherTasksPage({
   ]
 
   const overdueColumns: Column<ItemRow>[] = [
-    studentColumn,
-    testColumn,
+    workColumn,
     {
       key: 'due',
       header: 'Teslim',
@@ -246,14 +291,38 @@ export default async function TeacherTasksPage({
     <div className="max-w-5xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Görevler"
-        subtitle="Bugün aksiyon almanı bekleyen işler."
+        subtitle={
+          studentFilter
+            ? `Tek öğrenciye daraltıldı: ${
+                studentGroups[0]?.studentName ?? 'seçili öğrenci'
+              }.`
+            : 'Bugün aksiyon almanı bekleyen işler.'
+        }
       />
+
+      {/* R6-10: öğrenci bağlamı görünür ve geri dönülebilir olmalı. */}
+      {studentFilter && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Yalnız bu öğrencinin çalışmaları gösteriliyor.</span>
+          <Link href={`/teacher/tasks?filter=${filter}`} className="font-medium hover:underline">
+            Tüm öğrencileri göster
+          </Link>
+          <Link
+            href={`/teacher/students/${studentFilter}`}
+            className="font-medium hover:underline"
+          >
+            Öğrenci detayı
+          </Link>
+        </div>
+      )}
 
       <nav className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={`/teacher/tasks?filter=${t.key}`}
+            href={`/teacher/tasks?filter=${t.key}${
+              studentFilter ? `&student=${studentFilter}` : ''
+            }`}
             className={cn(
               'rounded-md border px-3 py-1.5 text-sm transition-colors',
               t.key === filter
@@ -285,28 +354,22 @@ export default async function TeacherTasksPage({
             }}
           />
         ) : filter === 'approval' ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <BulkApprovalBar groups={approvalGroups} />
-            <DataTable
-            columns={approvalColumns}
-            rows={itemRows}
-            rowKey={(r) => r.id}
-            empty={{
-              icon: CheckCircle2,
-              title: 'Onay kuyruğu boş',
-              description: 'Öğretmen onayı bekleyen çalışma yok.',
-            }}
+            <GroupedTaskList
+              groups={studentGroups}
+              columns={approvalColumns}
+              empty={{
+                icon: CheckCircle2,
+                title: 'Onay kuyruğu boş',
+                description: 'Öğretmen onayı bekleyen çalışma yok.',
+              }}
             />
           </div>
         ) : (
-          <DataTable
+          <GroupedTaskList
+            groups={studentGroups}
             columns={overdueColumns}
-            rows={itemRows}
-            rowKey={(r) => r.id}
-            rowHref={(r) => `/teacher/students/${one(r.homework_batches)?.student_id}`}
-            rowLabel={(r) =>
-              `${one(one(r.homework_batches)?.students)?.full_name} detayına git`
-            }
             empty={{
               icon: Clock,
               title: 'Geciken çalışma yok',
@@ -315,6 +378,58 @@ export default async function TeacherTasksPage({
           />
         )}
       </Section>
+    </div>
+  )
+}
+
+/**
+ * Öğrenci > Ödev/Kaynak > Çalışma hiyerarşisi (R6-09).
+ *
+ * Tekil Onayla/Reddet düğmeleri satırlarda KALIR (kabul #56) — gruplama
+ * yalnız görsel bir düzenlemedir, aksiyonları kaldırmaz.
+ */
+function GroupedTaskList({
+  groups,
+  columns,
+  empty,
+}: {
+  groups: TaskStudentGroup<ItemRow & TaskRowLike>[]
+  columns: Column<ItemRow>[]
+  empty: { icon: typeof CheckCircle2; title: string; description: string }
+}) {
+  if (groups.length === 0) {
+    return <DataTable columns={columns} rows={[]} rowKey={(r) => r.id} empty={empty} />
+  }
+
+  return (
+    <div className="space-y-5">
+      {groups.map((student) => (
+        <section key={student.studentId} className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Link
+              href={`/teacher/students/${student.studentId}`}
+              className="text-sm font-medium hover:underline"
+            >
+              {student.studentName}
+            </Link>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {student.count} çalışma
+            </span>
+          </div>
+
+          {student.books.map((group) => (
+            <div key={group.key} className="overflow-hidden rounded-lg border">
+              <p className="flex flex-wrap items-baseline justify-between gap-2 border-b bg-muted/40 px-3 py-2 text-xs">
+                <span className="truncate font-medium">{taskGroupLabel(group)}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {formatUnitCount(group.rows.length, group.trackingMode)}
+                </span>
+              </p>
+              <DataTable columns={columns} rows={group.rows} rowKey={(r) => r.id} />
+            </div>
+          ))}
+        </section>
+      ))}
     </div>
   )
 }

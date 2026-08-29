@@ -1,4 +1,5 @@
 import { BookOpen, Users } from 'lucide-react'
+import { isOverdue } from '@/lib/homework-status'
 import { getParentContext } from '@/lib/workspace'
 import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
@@ -9,14 +10,20 @@ import { MetricRow } from '@/components/shared/metric-row'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
+import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
 
 export const dynamic = 'force-dynamic'
 
+/** Supabase iç içe select'i tek kayıt için de dizi tipinde çözebiliyor. */
+type Nested<T> = T | T[] | null
+function one<T>(value: Nested<T>): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value
+}
+
 export default async function ParentPage() {
   const { supabase, workspaceId, linkedStudents } = await getParentContext()
 
-  const todayStr = new Date().toISOString().split('T')[0]
 
   const studentData = await Promise.all(
     linkedStudents.map(async (link) => {
@@ -30,7 +37,15 @@ export default async function ParentPage() {
           .eq('workspace_id', workspaceId),
         supabase
           .from('homework_batches')
-          .select('id, title, due_date, status, homework_items(id, status)')
+          .select(
+            `id, title, description, due_date, status,
+             homework_items(
+               id, status, book_id, section_id,
+               books(title, tracking_mode),
+               book_sections(title),
+               book_tests(order_index)
+             )`
+          )
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
           .eq('status', 'active')
@@ -73,7 +88,7 @@ export default async function ParentPage() {
       {studentData.map(({ student, bookProgress, batches, weekly }) => {
         const overdueBatches = batches.filter((b) => {
           return (
-            b.due_date < todayStr &&
+            isOverdue(b.due_date) &&
             (b.homework_items as { status: string }[]).some((i) => i.status === 'pending')
           )
         })
@@ -137,7 +152,7 @@ export default async function ParentPage() {
                   metrics={[
                     { label: 'Genel ilerleme', value: `${overallPct}%` },
                     {
-                      label: 'Tamamlanan test',
+                      label: 'Tamamlanan çalışma',
                       value: overallCompleted,
                       subValue: `/${overallTotal}`,
                     },
@@ -162,6 +177,7 @@ export default async function ParentPage() {
                       targetEndDate={p.target_end_date}
                       totalUnits={Number(p.total_tests ?? 0)}
                       completedUnits={Number(p.completed_tests ?? 0)}
+                      trackingMode={p.tracking_mode}
                     />
                   ))}
                 </div>
@@ -179,6 +195,7 @@ export default async function ParentPage() {
                         id: p.book_id,
                         title: p.book_title,
                         subject: p.subject,
+                        tracking_mode: p.tracking_mode,
                       }}
                       progress={{
                         completed: p.completed_tests,
@@ -196,11 +213,29 @@ export default async function ParentPage() {
               <Section title="Son ödevler" variant="card">
                 <ul className="divide-y">
                   {batches.slice(0, 5).map((batch) => {
-                    const items = batch.homework_items as { id: string; status: string }[]
+                    const items = batch.homework_items as unknown as {
+                      id: string
+                      status: string
+                      book_id: string | null
+                      section_id: string | null
+                      books: Nested<{ title: string; tracking_mode: string }>
+                      book_sections: Nested<{ title: string }>
+                      book_tests: Nested<{ order_index: number }>
+                    }[]
+                    const detail = buildHomeworkDetail(
+                      items.map<HomeworkDetailItem>((i) => ({
+                        bookId: i.book_id,
+                        bookTitle: one(i.books)?.title ?? null,
+                        trackingMode: one(i.books)?.tracking_mode ?? null,
+                        sectionId: i.section_id,
+                        sectionTitle: one(i.book_sections)?.title ?? null,
+                        orderIndex: one(i.book_tests)?.order_index ?? null,
+                      }))
+                    )
                     const total = items.filter((i) => i.status !== 'cancelled').length
                     const completed = items.filter((i) => i.status === 'completed').length
-                    const isOverdue =
-                      batch.due_date < todayStr && items.some((i) => i.status === 'pending')
+                    const batchOverdue =
+                      isOverdue(batch.due_date) && items.some((i) => i.status === 'pending')
 
                     return (
                       <li key={batch.id}>
@@ -209,7 +244,9 @@ export default async function ParentPage() {
                           dueDate={batch.due_date}
                           completed={completed}
                           total={total}
-                          isOverdue={isOverdue}
+                          isOverdue={batchOverdue}
+                          detail={detail}
+                          note={batch.description}
                           dateStyle={{ day: 'numeric', month: 'long' }}
                         />
                       </li>

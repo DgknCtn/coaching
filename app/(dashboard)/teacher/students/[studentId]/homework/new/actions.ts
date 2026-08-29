@@ -17,9 +17,18 @@ export async function createHomeworkBatchAction(
   studentId: string,
   dueDate: string,
   title: string | undefined,
-  items: HomeworkItem[]
+  items: HomeworkItem[],
+  note?: string
 ) {
-  const parsed = homeworkBatchSchema.safeParse({ workspaceId, termId, studentId, dueDate, title, items })
+  const parsed = homeworkBatchSchema.safeParse({
+    workspaceId,
+    termId,
+    studentId,
+    dueDate,
+    title,
+    note,
+    items,
+  })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   // workspaceId istemciden de geliyor (imza korunuyor) ama RPC'ye
@@ -34,7 +43,9 @@ export async function createHomeworkBatchAction(
     p_student_id: studentId,
     p_due_date: dueDate,
     p_title: title || null,
-    p_description: null,
+    // R6-05: Ödev Notu. homework_batches.description 001'den beri vardı ve
+    // kullanılmıyordu; yeni kolon açmak yerine o alan kullanılır.
+    p_description: parsed.data.note || null,
     p_items: items,
   })
 

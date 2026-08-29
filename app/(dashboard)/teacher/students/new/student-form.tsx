@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
-import { createStudentAction } from '../actions'
+import { createStudentAction, updateStudentAction } from '../actions'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -46,6 +47,30 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
+      // R6-11: düzenleme modu artık gerçekten kaydediyor. Önceden
+      // `mode`/`studentId` propları alınıyordu ama onSubmit her durumda
+      // createStudentAction çağırıyordu — düzenleme yolu ölü koddu.
+      if (mode === 'edit' && studentId) {
+        const result = await updateStudentAction(
+          studentId,
+          data.fullName,
+          data.email || undefined,
+          data.phone || undefined,
+          data.gradeLevel || undefined,
+          data.examType || undefined,
+          data.lessonType || undefined,
+          data.notes || undefined
+        )
+        if (result?.error) {
+          setServerError(result.error)
+          return
+        }
+        toast.success('Öğrenci bilgileri güncellendi.')
+        router.push(`/teacher/students/${studentId}`)
+        router.refresh()
+        return
+      }
+
       const result = await createStudentAction(
         data.fullName,
         data.email || undefined,
@@ -69,9 +94,12 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
             {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
           </div>
 
+          {/* R6-11: iki alan BAĞIMSIZDIR. "9. Sınıf + YKS" ya da
+              "10. Sınıf + IB" geçerli kombinasyonlardır; form da backend de
+              aralarında kısıtlama uygulamaz. */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="examType">Sınav Türü</Label>
+              <Label htmlFor="examType">Hazırlık Programı</Label>
               <NativeSelect
                 id="examType"
                 {...register('examType')}
@@ -81,7 +109,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
               </NativeSelect>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="gradeLevel">Sınıf</Label>
+              <Label htmlFor="gradeLevel">Sınıf / Durum</Label>
               <NativeSelect
                 id="gradeLevel"
                 {...register('gradeLevel')}
@@ -93,7 +121,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="lessonType">Ders Türü</Label>
+            <Label htmlFor="lessonType">Çalışma Modeli</Label>
             <NativeSelect
               id="lessonType"
               {...register('lessonType')}
@@ -115,10 +143,28 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="notes">Notlar</Label>
-            <Textarea id="notes" rows={3} placeholder="Öğrenci hakkında notlar..." {...register('notes')} />
-          </div>
+          {/* R6-07: notlar artık academic_notes tablosunda ve öğrenci
+              detayındaki Akademik Not sekmesinden yönetiliyor. Burada yalnız
+              OLUŞTURMA anında bir ilk not alınır (kaydedilirken akademik nota
+              dönüşür). Düzenleme modunda alan gösterilmez — aksi halde ikinci
+              bir yazma yolu oluşur ve hangisinin geçerli olduğu belirsizleşir. */}
+          {mode === 'create' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="notes">
+                İlk akademik not <span className="text-muted-foreground">(isteğe bağlı)</span>
+              </Label>
+              <Textarea
+                id="notes"
+                rows={3}
+                placeholder="Örn: Parçalı fonksiyonda zorlanıyor. Salı akşamları çalışamıyor."
+                {...register('notes')}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Yalnız eğitmenlere görünür. Sonraki notları öğrenci detayındaki
+                Akademik Not sekmesinden ekleyebilirsiniz.
+              </p>
+            </div>
+          )}
 
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}
 
