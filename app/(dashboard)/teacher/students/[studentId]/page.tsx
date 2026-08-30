@@ -4,7 +4,7 @@ import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-det
 import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
 import type { AssignableBook } from './assign-book-dialog'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed, Pencil, CalendarRange } from 'lucide-react'
+import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed, Pencil, CalendarRange, ShieldCheck } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -214,6 +214,14 @@ export default async function StudentDetailPage({
             >
               <CalendarRange />
               Akış
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/teacher/students/${studentId}/protection`} />}
+            >
+              <ShieldCheck />
+              Koruma
             </Button>
             <Button
               size="sm"
