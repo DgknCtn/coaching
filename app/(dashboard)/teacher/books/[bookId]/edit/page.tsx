@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
-import { BookEditForm } from './book-edit-form'
+import { BookEditForm, type TopicOption } from './book-edit-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +22,7 @@ export default async function BookEditPage({
       curriculum_program,
       description, status, tracking_mode, video_mode, video_url,
       book_sections(
-        id, title, order_index, group_label, theme_label,
+        id, title, order_index, group_label, theme_label, topic_id,
         book_tests(id)
       )
     `)
@@ -32,6 +32,30 @@ export default async function BookEditPage({
 
   if (!book || book.status === 'archived') notFound()
 
+  // R5.3: eşlenebilecek müfredat konuları, kapsam adıyla birlikte.
+  // Hiç konu tanımlı değilse seçici hiç gösterilmez ve kitap düzenleme
+  // ekranı bugünkü hâliyle kalır.
+  const { data: topicRows } = await supabase
+    .from('topics')
+    .select('id, name, academic_scopes(name)')
+    .eq('workspace_id', workspaceId)
+    .eq('active', true)
+    .order('name')
+
+  const topics: TopicOption[] = (
+    (topicRows ?? []) as unknown as {
+      id: string
+      name: string
+      academic_scopes: { name: string } | { name: string }[] | null
+    }[]
+  ).map((t) => ({
+    id: t.id,
+    name: t.name,
+    scopeName:
+      (Array.isArray(t.academic_scopes) ? t.academic_scopes[0] : t.academic_scopes)?.name ??
+      'Kapsam',
+  }))
+
   const sections = (book.book_sections ?? [])
     .sort((a, b) => a.order_index - b.order_index)
     .map((s) => ({
@@ -40,6 +64,7 @@ export default async function BookEditPage({
       testCount: (s.book_tests ?? []).length,
       groupLabel: s.group_label ?? null,
       themeLabel: s.theme_label ?? null,
+      topicId: s.topic_id ?? null,
     }))
 
   return (
@@ -68,6 +93,7 @@ export default async function BookEditPage({
           videoUrl: book.video_url ?? '',
         }}
         sections={sections}
+        topics={topics}
         trackingMode={book.tracking_mode ?? 'test'}
       />
     </div>

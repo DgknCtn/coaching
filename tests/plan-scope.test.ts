@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { resolvePlanScope, sectionPageProgress, sectionScopeLabel,
   resolveInterimScope,
+  isSectionInTarget,
 } from '@/lib/plan-scope'
 import { formatRanges } from '@/lib/page-ranges'
 import { calculatePlanTempo } from '@/lib/plan-pace'
@@ -30,6 +31,8 @@ function section(id: string, tests: BookMapTest[], pageStart?: number, pageEnd?:
     pageEnd: pageEnd ?? null,
     groupLabel: null,
     themeLabel: null,
+    topicId: null,
+    curriculumStatus: null,
     note: null,
     videoUrl: null,
   }
@@ -314,6 +317,8 @@ describe('R5.1 · Kaynak Planı kabul testleri', () => {
       completedCount: done,
       groupLabel: null,
       themeLabel: null,
+      topicId: null,
+      curriculumStatus: null,
       pageStart: null,
       pageEnd: null,
       note: null,
@@ -372,6 +377,8 @@ describe('R5.1 · Kaynak Planı kabul testleri', () => {
       completedCount: 230,
       groupLabel: null,
       themeLabel: null,
+      topicId: null,
+      curriculumStatus: null,
       pageStart: null,
       pageEnd: null,
       note: null,
@@ -487,5 +494,71 @@ describe('R5.1 · Kaynak Planı kabul testleri', () => {
     expect(scope.totalUnits).toBe(3)
     expect(scope.completedUnits).toBe(2)
     expect(scope.unitIds.size).toBe(3) // Set: aynı birim iki kez giremez
+  })
+})
+
+// ============================================================
+// R5.3 / MK-09 — plan dışı bırakma ve müfredat sinyali birlikte
+// ============================================================
+
+describe('R5.3 · MK-09', () => {
+  function testSection(id: string, count: number, done = 0): BookMapSection {
+    const tests: BookMapTest[] = Array.from({ length: count }, (_, i) => ({
+      id: `${id}-${i + 1}`,
+      title: `${i + 1}. Test`,
+      orderIndex: i + 1,
+      state: (i < done ? 'completed' : 'not_assigned') as HomeworkTestState,
+      homeworkItemId: null,
+      pageStart: null,
+      pageEnd: null,
+    }))
+    return {
+      id,
+      title: id,
+      orderIndex: 1,
+      tests,
+      completedCount: done,
+      groupLabel: null,
+      themeLabel: null,
+      topicId: `${id}-topic`,
+      curriculumStatus: 'current',
+      pageStart: null,
+      pageEnd: null,
+      note: null,
+      videoUrl: null,
+    }
+  }
+
+  const hedef = (sectionIds: string[]) => ({
+    id: 'hedef',
+    kind: 'resource' as const,
+    startDate: '2026-09-01',
+    targetDate: '2026-12-01',
+    scopeType: 'sections' as const,
+    sectionIds,
+    unitIds: [] as string[],
+  })
+
+  it('14 testlik satırda 6 tamamlandıktan sonra Plan Dışı: 6 korunur, 8 hedeften çıkar', () => {
+    const bolum = testSection('B', 14, 6)
+    const digeri = testSection('A', 10, 0)
+    const kitap = (ids: string[]) =>
+      book([digeri, bolum], { trackingMode: 'test', target: hedef(ids) })
+
+    const dahil = resolvePlanScope(kitap(['A', 'B']))
+    const disarida = resolvePlanScope(kitap(['A']))
+
+    expect(dahil.totalUnits - disarida.totalUnits).toBe(8)
+    expect(disarida.completedUnits).toBe(6)
+  })
+
+  it('plan dışı bırakılan bölüm müfredat sinyalini KAYBETMEZ', () => {
+    // §5.3 matrisi: "Aktif + Plan Dışı + Zamanı Geldi -> Sinyal ve Plan
+    // Dışı aynı anda korunur." İkisi bağımsız eksenlerdir.
+    const bolum = testSection('B', 14, 6)
+    const kitap = book([bolum], { trackingMode: 'test', target: hedef([]) })
+
+    expect(isSectionInTarget(kitap.sections[0], kitap.target)).toBe(false)
+    expect(kitap.sections[0].curriculumStatus).toBe('current')
   })
 })

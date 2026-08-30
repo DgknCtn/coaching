@@ -13,6 +13,7 @@ import {
   renameSectionAction,
   setSectionTestCountAction,
   setSectionGroupingAction,
+  setSectionTopicAction,
   addSectionAction,
   addPageSectionAction,
   deleteSectionAction,
@@ -52,6 +53,15 @@ export interface SectionRow {
   /** R6-17: opsiyonel fasikül ve tema etiketleri. */
   groupLabel: string | null
   themeLabel: string | null
+  /** R5.3: bağlandığı canonical topic; eşlemesizse null. */
+  topicId: string | null
+}
+
+/** Müfredat konuları, kapsamına göre gruplanmış (R5.3). */
+export interface TopicOption {
+  id: string
+  name: string
+  scopeName: string
 }
 
 interface Props {
@@ -60,9 +70,11 @@ interface Props {
   sections: SectionRow[]
   /** 'page' kitaplarda birimler test değil sayfa aralığı olarak adlandırılır. */
   trackingMode: string
+  /** R5.3: eşlenebilecek müfredat konuları. Boşsa seçici gösterilmez. */
+  topics: TopicOption[]
 }
 
-export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: Props) {
+export function BookEditForm({ bookId, defaultValues, sections, trackingMode, topics }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -205,6 +217,7 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode }: 
               bookId={bookId}
               section={section}
               unitLabel={unitLabel}
+              topics={topics}
             />
           ))}
 
@@ -223,10 +236,12 @@ function SectionRowForm({
   bookId,
   section,
   unitLabel,
+  topics,
 }: {
   bookId: string
   section: SectionRow
   unitLabel: string
+  topics: TopicOption[]
 }) {
   const router = useRouter()
   const [title, setTitle] = useState(section.title)
@@ -235,13 +250,17 @@ function SectionRowForm({
   // akışı hiç ağırlaştırmaz.
   const [groupLabel, setGroupLabel] = useState(section.groupLabel ?? '')
   const [themeLabel, setThemeLabel] = useState(section.themeLabel ?? '')
+  // R5.3: bölümün canonical topic eşlemesi. Boş = eşleme yok; bölüm R4'te
+  // normal çalışır, yalnız müfredat sinyali almaz.
+  const [topicId, setTopicId] = useState(section.topicId ?? '')
   const [isPending, startTransition] = useTransition()
 
   const dirty =
     title !== section.title ||
     Number(count) !== section.testCount ||
     groupLabel !== (section.groupLabel ?? '') ||
-    themeLabel !== (section.themeLabel ?? '')
+    themeLabel !== (section.themeLabel ?? '') ||
+    topicId !== (section.topicId ?? '')
 
   function save() {
     startTransition(async () => {
@@ -266,6 +285,13 @@ function SectionRowForm({
         themeLabel !== (section.themeLabel ?? '')
       ) {
         const r = await setSectionGroupingAction(bookId, section.id, groupLabel, themeLabel)
+        if (r?.error) {
+          toast.error(r.error)
+          return
+        }
+      }
+      if (topicId !== (section.topicId ?? '')) {
+        const r = await setSectionTopicAction(bookId, section.id, topicId || null)
         if (r?.error) {
           toast.error(r.error)
           return
@@ -298,6 +324,32 @@ function SectionRowForm({
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
+      {topics.length > 0 && (
+        <div className="w-52 space-y-1.5">
+          <Label htmlFor={`topic-${section.id}`}>Müfredat konusu</Label>
+          <NativeSelect
+            id={`topic-${section.id}`}
+            value={topicId}
+            onChange={(e) => setTopicId(e.target.value)}
+          >
+            <option value="">Eşleme yok</option>
+            {Object.entries(
+              topics.reduce<Record<string, TopicOption[]>>((acc, t) => {
+                ;(acc[t.scopeName] ??= []).push(t)
+                return acc
+              }, {})
+            ).map(([scopeName, list]) => (
+              <optgroup key={scopeName} label={scopeName}>
+                {list.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
       <div className="w-32 space-y-1.5">
         <Label htmlFor={`group-${section.id}`}>Fasikül</Label>
         <Input

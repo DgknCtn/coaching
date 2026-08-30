@@ -4,6 +4,8 @@ import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucid
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, type BookMapMode } from '@/lib/book-map'
 import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
+import { SectionTitle } from '@/components/shared/section-title'
+import { isSectionInTarget } from '@/lib/plan-scope'
 import {
   testStateLabel,
   type HomeworkTestState,
@@ -168,7 +170,10 @@ export function BookMapGrid({
                   >
                     {readOnly ? (
                       <span className="flex w-full items-center justify-between gap-2">
-                        <span className="truncate text-xs">{section.title}</span>
+                        <SectionTitle
+                          section={section}
+                          outOfScope={!isSectionInTarget(section, book.target)}
+                        />
                         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                           {section.completedCount}/{section.tests.length}
                         </span>
@@ -187,16 +192,10 @@ export function BookMapGrid({
                               : 'Bölümdeki seçilebilir testleri seç'
                         }
                       >
-                        <span className="min-w-0 truncate text-xs">
-                          {section.title}
-                          {(section.groupLabel || section.themeLabel) && (
-                            <span className="block truncate text-[10px] text-muted-foreground">
-                              {[section.groupLabel, section.themeLabel]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </span>
-                          )}
-                        </span>
+                        <SectionTitle
+                          section={section}
+                          outOfScope={!isSectionInTarget(section, book.target)}
+                        />
                         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                           {section.completedCount}/{section.tests.length}
                         </span>

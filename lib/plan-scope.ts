@@ -54,6 +54,24 @@ function isInScope(
 }
 
 /**
+ * Bölüm, kitabın HEDEF KAPSAMINA dahil mi? (R5.3 §5.4)
+ *
+ * "Plan dışı" YALNIZ şu demektir: bu bölüm bu kitapta mevcut hedef
+ * kapsama dahil değil. Kitabın Bekliyor olması, müfredat zamanının
+ * gelmemesi veya başka bir kitabın bitmemesi anlamına GELMEZ.
+ *
+ * Dikkat: bu kontrol HEDEFE bakar, resolvePlanScope'un ürettiği kümeye
+ * değil. Plan kümesi KP-03 gereği tamamlanmış birimleri her hâlükârda
+ * içerir; onu ölçüt alsaydık, kapsamdan çıkarılmış ama içinde bitmiş iş
+ * olan bir bölüm "plan dahil" görünürdü.
+ */
+export function isSectionInTarget(section: BookMapSection, target: BookMapTarget | null): boolean {
+  if (!target || target.scopeType === 'whole_book') return true
+  if (target.scopeType === 'sections') return target.sectionIds.includes(section.id)
+  return section.tests.some((t) => target.unitIds.includes(t.id))
+}
+
+/**
  * Kitabın aktif hedefine göre plan kapsamını hesaplar.
  *
  * Hedef yoksa kapsam tüm kitaptır ve sonuç, bugünkü davranışla birebir

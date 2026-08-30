@@ -271,3 +271,43 @@ export async function setSectionGroupingAction(
   revalidatePath(`/teacher/books/${bookId}`)
   return { success: true }
 }
+
+/**
+ * Kitap bölümünü canonical topic'e bağlar (R5.3 §5.1).
+ *
+ * Mapping GLOBALDİR: kitabın yapısal bilgisidir, öğrenciye özel değildir.
+ * Boş gönderilirse eşleme kaldırılır ve bölüm R4 davranışına döner —
+ * yanlış eşleme geri alınabilmeli.
+ *
+ * Eşleme müfredat sinyalinden başka HİÇBİR ŞEYİ etkilemez: ödev
+ * oluşturmaz, kapsamı değiştirmez, temas üretmez (§5.5).
+ */
+export async function setSectionTopicAction(
+  bookId: string,
+  sectionId: string,
+  topicId: string | null
+) {
+  const parsedSection = uuidSchema.safeParse(sectionId)
+  if (!parsedSection.success) return { error: firstIssue(parsedSection.error) }
+
+  let parsedTopicId: string | null = null
+  if (topicId) {
+    const parsedTopic = uuidSchema.safeParse(topicId)
+    if (!parsedTopic.success) return { error: 'Geçersiz konu.' }
+    parsedTopicId = parsedTopic.data
+  }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_book_section_topic', {
+    p_section_id: parsedSection.data,
+    p_topic_id: parsedTopicId,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}

@@ -6,7 +6,16 @@
 // lib/homework-status.ts'e delege edilir — renkler yalnız o durumların görsel
 // karşılığıdır.
 
-import { deriveTestState, type HomeworkTestState } from '@/lib/homework-status'
+import {
+  deriveTestState,
+  todayDateString,
+  type HomeworkTestState,
+} from '@/lib/homework-status'
+import {
+  buildCurriculumIndex,
+  sectionCurriculumStatus,
+} from '@/lib/curriculum-signal'
+import type { FlowStatus } from '@/lib/curriculum-flow'
 import { formatPageRangeLabel, formatRanges, rangesFromPages } from '@/lib/page-ranges'
 
 export interface BookMapTest {
@@ -32,6 +41,19 @@ export interface BookMapSection {
    *  üst grup metadata'sıdır; boş olabilir ve klasik kitaplarda boştur. */
   groupLabel: string | null
   themeLabel: string | null
+  /**
+   * R5.3: bölümün bağlandığı canonical topic. Eşlemesi olmayan bölümde
+   * null'dır ve o bölüm müfredat sinyali almaz — R4 davranışı bozulmaz.
+   */
+  topicId: string | null
+  /**
+   * R5.3: öğrencinin kişisel akışına göre bu konunun müfredat durumu.
+   * null = eşleme yok, akışta yok ya da akış hiç atanmamış.
+   *
+   * SALT GÖRSELDİR: ödev oluşturmaz, kitabı Aktif yapmaz, hedef kapsamı
+   * değiştirmez, temas üretmez (§5.5).
+   */
+  curriculumStatus: FlowStatus | null
   /** R4 §3: bölümün fiziksel kapsamı ve kısa insan notu. */
   pageStart: number | null
   pageEnd: number | null
@@ -145,7 +167,7 @@ export async function loadBookMap(
         publisher, tracking_mode, video_mode, video_url,
         book_sections(
           id, title, order_index, status, note, video_url, page_start, page_end,
-          group_label, theme_label,
+          group_label, theme_label, topic_id,
           book_tests(id, title, order_index, status, page_start, page_end)
         )
       )
@@ -166,7 +188,12 @@ export async function loadBookMap(
 
   // Üç sorgu da assignmentIds'e bağlı ama BİRBİRİNDEN bağımsız; sıralı
   // beklemek için sebep yok. Tek dalgada çalışırlar, sonuçlar aynıdır.
-  const [{ data: openItems }, { data: completions }, { data: targets }] = await Promise.all([
+  const [
+    { data: openItems },
+    { data: completions },
+    { data: targets },
+    { data: curriculumRows },
+  ] = await Promise.all([
     // Açık ödev kayıtları + ait oldukları batch'in teslim tarihi.
     supabase
       .from('homework_items')
@@ -192,7 +219,23 @@ export async function loadBookMap(
       )
       .in('student_book_assignment_id', assignmentIds)
       .eq('active', true),
+    // R5.3: öğrencinin kişisel müfredat akışı. Sinyal BU tablodan gelir;
+    // kitabın kendi verisinden değil. Aynı kitabı iki öğrenci çalışırken
+    // sinyalleri farklı olabilir — akış kişiseldir.
+    supabase
+      .from('student_curriculum_items')
+      .select('topic_id, start_date, passed_at')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
   ])
+
+  // Sinyal ve ödev durumu AYNI takvim gününü görmeli; ikisi de
+  // Europe/Istanbul'a sabitli tek helper'dan besleniyor.
+  const todayStr = todayDateString(today)
+
+  const curriculumByTopic = buildCurriculumIndex(
+    (curriculumRows ?? []) as { topic_id: string | null; start_date: string; passed_at: string | null }[]
+  )
 
   const completedIds = new Set<string>(
     ((completions ?? []) as any[]).map((c) => c.book_test_id)
@@ -260,6 +303,12 @@ export async function loadBookMap(
           pageEnd: s.page_end ?? null,
           groupLabel: s.group_label ?? null,
           themeLabel: s.theme_label ?? null,
+          topicId: s.topic_id ?? null,
+          curriculumStatus: sectionCurriculumStatus(
+            s.topic_id ?? null,
+            curriculumByTopic,
+            todayStr
+          ),
           note: s.note ?? null,
           videoUrl: s.video_url ?? null,
         }

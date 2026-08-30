@@ -18,6 +18,9 @@ import { ChevronDown, Lightbulb, Plus, Video } from 'lucide-react'
 import type { BookMapBook, BookMapSection } from '@/lib/book-map'
 import { isSelectableState, type BookMapMode } from '@/lib/book-map'
 import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
+import { hasActiveSignal, signalLabel } from '@/lib/curriculum-signal'
+import { isSectionInTarget } from '@/lib/plan-scope'
+import { Circle } from 'lucide-react'
 import { sectionPageProgress, sectionScopeLabel } from '@/lib/plan-scope'
 import { formatRanges, parseRanges, pagesFromRanges } from '@/lib/page-ranges'
 import { Button } from '@/components/ui/button'
@@ -120,6 +123,11 @@ function SectionRow({
 }) {
   const progress = useMemo(() => sectionPageProgress(section), [section])
 
+  // Sinyal salt görseldir; seçim, kapsam veya ödev davranışını etkilemez.
+  const signalActive = hasActiveSignal(section.curriculumStatus)
+  const signalText = signalLabel(section.curriculumStatus)
+  const outOfScope = !isSectionInTarget(section, book.target)
+
   const selectedCount = section.tests.filter((t) => selectedTestIds.has(t.id)).length
   const scope = sectionScopeLabel(section)
 
@@ -127,8 +135,18 @@ function SectionRow({
     <>
       <tr className="align-top">
         <td className="border-b px-4 py-2.5">
+          {/* R5.3: müfredat sinyali YALNIZ konu başlığında; sayfa
+              hücrelerinin R4 renklerine dokunulmaz (§5.2). */}
+          {signalActive && (
+            <span className="mr-1.5 inline-flex items-center" title={signalText ?? undefined}>
+              <Circle aria-hidden className="size-2 fill-primary text-primary" />
+              <span className="sr-only">{signalText}</span>
+            </span>
+          )}
           {readOnly ? (
-            <span className="text-sm">{section.title}</span>
+            <span className={cn('text-sm', signalActive && 'font-semibold')}>
+              {section.title}
+            </span>
           ) : (
             <button
               type="button"
@@ -137,14 +155,16 @@ function SectionRow({
               className="flex items-center gap-1.5 text-left text-sm hover:underline"
             >
               <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-180')} />
-              {section.title}
+              <span className={cn(signalActive && 'font-semibold')}>{section.title}</span>
             </button>
           )}
           {/* R6-17: fasikül/tema üst grup metadata'sıdır; varsa gösterilir,
               yoksa satır bugünkü gibi sade kalır. */}
-          {(section.groupLabel || section.themeLabel) && (
+          {(section.groupLabel || section.themeLabel || outOfScope) && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {[section.groupLabel, section.themeLabel].filter(Boolean).join(' · ')}
+              {[section.groupLabel, section.themeLabel, outOfScope ? 'Plan dışı' : null]
+                .filter(Boolean)
+                .join(' · ')}
             </p>
           )}
           {section.note && (
