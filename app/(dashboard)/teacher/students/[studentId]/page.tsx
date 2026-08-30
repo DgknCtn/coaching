@@ -21,6 +21,18 @@ import { MetricRow } from '@/components/shared/metric-row'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
+import { R5SummaryCards } from '@/components/shared/r5-summary-cards'
+import { loadBookMap } from '@/lib/book-map'
+import { resolvePlanScope } from '@/lib/plan-scope'
+import { bookPlanGroup } from '@/lib/resource-plan'
+import { buildProtectionPool } from '@/lib/protection-pool'
+import {
+  summarizeAcademicFlow,
+  summarizeProtectionPool,
+  summarizeResourcePlan,
+  type FlowSummaryItem,
+  type ResourceSummaryItem,
+} from '@/lib/student-overview'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +78,11 @@ export default async function StudentDetailPage({
     { data: pendingApprovalSummary },
     { data: overdueSummary },
     { data: academicNoteRows },
+    { data: flowRows },
+    { data: contactRows },
+    { data: openWorkRows },
+    { data: overrideRows },
+    r5Books,
   ] = await Promise.all([
     supabase
       .from('student_book_progress_view')
@@ -159,6 +176,35 @@ export default async function StudentDetailPage({
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(100),
+    // R5.5: üç özet kartın verisi. Hepsi opsiyoneldir — R5 verisi olmayan
+    // öğrencide boş döner ve kartlar nötr boş durum gösterir (OG-07).
+    supabase
+      .from('student_curriculum_items')
+      .select('topic_id, scope_id, start_date, end_date, passed_at, topics(name), academic_scopes(name)')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
+    supabase
+      .from('student_topic_contact_view')
+      .select('topic_id, last_contact_date, last_contact_source, last_contact_amount')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
+    supabase
+      .from('student_topic_open_work_view')
+      .select('topic_id, open_items')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
+    supabase
+      .from('student_topic_overrides')
+      .select('topic_id, keep_active')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId),
+    // Kaynak Planı özeti kapsam-duyarlı olmalı: Plan % ana göstergedir
+    // (OG-04), o da hedef kapsamından hesaplanır.
+    loadBookMap(supabase, {
+      workspaceId,
+      studentId,
+      statuses: ['active', 'pending', 'paused', 'completed'],
+    }),
   ])
 
   const academicNotes: AcademicNote[] = ((academicNoteRows ?? []) as unknown as {
@@ -176,6 +222,97 @@ export default async function StudentDetailPage({
   }))
 
   const lastAcademicNote = academicNotes.find(n => n.pinned) ?? academicNotes[0] ?? null
+
+  // ============================================================
+  // R5.5 — üç özet kartın verisi
+  //
+  // Hesaplama lib/student-overview.ts'te; burası yalnız satırları
+  // biçime çevirir. R5 verisi yoksa hepsi boş döner ve kartlar nötr
+  // boş durum gösterir; ekran kırılmaz (OG-07).
+  // ============================================================
+  const flowItems: FlowSummaryItem[] = (
+    (flowRows ?? []) as unknown as {
+      topic_id: string
+      scope_id: string
+      start_date: string
+      end_date: string
+      passed_at: string | null
+      topics: Nested<{ name: string }>
+      academic_scopes: Nested<{ name: string }>
+    }[]
+  ).map(r => ({
+    topicId: r.topic_id,
+    topicName: one(r.topics)?.name ?? 'Konu',
+    scopeId: r.scope_id,
+    scopeName: one(r.academic_scopes)?.name ?? 'Kapsam',
+    startDate: r.start_date,
+    endDate: r.end_date,
+    passed: r.passed_at !== null,
+  }))
+
+  const flowSummary = summarizeAcademicFlow(flowItems)
+
+  const resourceSummary = summarizeResourcePlan(
+    (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map<ResourceSummaryItem>(b => {
+      const scope = resolvePlanScope(b)
+      return {
+        bookId: b.bookId,
+        title: b.title,
+        group: bookPlanGroup(b.status),
+        planPercentage: scope.percentage,
+        bookPercentage: scope.bookPercentage,
+      }
+    })
+  )
+
+  // Havuz, akıştaki konularla sınırlıdır (KH-17) — detay ekranıyla aynı kural.
+  const contactByTopic = new Map(
+    (
+      (contactRows ?? []) as {
+        topic_id: string
+        last_contact_date: string
+        last_contact_source: string
+        last_contact_amount: number
+      }[]
+    ).map(r => [r.topic_id, r])
+  )
+  const openByTopic = new Map(
+    ((openWorkRows ?? []) as { topic_id: string; open_items: number }[]).map(r => [
+      r.topic_id,
+      r.open_items,
+    ])
+  )
+  const overrideByTopic = new Map(
+    ((overrideRows ?? []) as { topic_id: string; keep_active: boolean }[]).map(r => [
+      r.topic_id,
+      r.keep_active,
+    ])
+  )
+
+  const poolSummary = summarizeProtectionPool(
+    buildProtectionPool(
+      [...new Map(flowItems.map(f => [f.topicId, f])).values()].map(f => {
+        const contact = contactByTopic.get(f.topicId)
+        return {
+          topicId: f.topicId,
+          topicName: f.topicName,
+          scopeId: f.scopeId,
+          scopeName: f.scopeName,
+          lastContactDate: contact?.last_contact_date ?? null,
+          lastContactSource:
+            (contact?.last_contact_source as 'homework' | 'lesson' | 'self_study' | null) ?? null,
+          lastContactAmount: Number(contact?.last_contact_amount ?? 0),
+          openWorkCount: Number(openByTopic.get(f.topicId) ?? 0),
+          keepActive: overrideByTopic.get(f.topicId) === true,
+          bookTitles: [],
+        }
+      })
+    ).map(r => ({
+      topicId: r.topicId,
+      topicName: r.topicName,
+      daysSinceContact: r.daysSinceContact,
+    }))
+  )
 
   const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
   const availableBooks: AssignableBook[] = ((termBooks ?? []) as AssignableBook[]).filter(
@@ -273,6 +410,15 @@ export default async function StudentDetailPage({
           ]}
         />
       )}
+
+      {/* R5.5: üç sistemin nabzı. Mevcut R4 operasyon sayaçları
+          (yukarıda) AYRI KATMANDIR ve bu bloktan etkilenmez (OG-09). */}
+      <R5SummaryCards
+        studentId={studentId}
+        flow={flowSummary}
+        resources={resourceSummary}
+        pool={poolSummary}
+      />
 
       {/* Son Akademik Not (R6-07 kabul #48): tarih + kısa metin. Tüm notlar
           Akademik Not sekmesinde kronolojik listelenir. Not yoksa BURASI HİÇ
