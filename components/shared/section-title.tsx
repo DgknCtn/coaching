@@ -29,7 +29,7 @@ export function SectionTitle({
 }: {
   section: Pick<
     BookMapSection,
-    'title' | 'groupLabel' | 'themeLabel' | 'curriculumStatus'
+    'title' | 'groupLabel' | 'themeLabel' | 'curriculumStatus' | 'partTitle'
   >
   /** Bölüm bu kitabın hedef kapsamı dışında mı? (R5.3 §5.4) */
   outOfScope?: boolean
@@ -37,7 +37,14 @@ export function SectionTitle({
 }) {
   const active = hasActiveSignal(section.curriculumStatus)
   const label = signalLabel(section.curriculumStatus)
-  const meta = [section.groupLabel, section.themeLabel].filter(Boolean).join(' · ')
+  // R7-02 §6.4: Parça adı meta satırının BAŞINDA durur — sayfa bazlı
+  // kaynaklarda bölümün hangi fasikülde olduğu, seçim yaparken bağlamın
+  // kendisidir (§1.4: F2 sf.5 ile F3 sf.5 aynı şey değildir).
+  // groupLabel/themeLabel R6-17'den kalan eski etiketlerdir; yeni kayıtlarda
+  // boştur ve Parça onların yerini alır.
+  const meta = [section.partTitle, section.groupLabel, section.themeLabel]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <span className={cn('flex min-w-0 items-start gap-1.5', className)}>

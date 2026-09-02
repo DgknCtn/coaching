@@ -10,6 +10,8 @@ import { dbErrorToTr } from '@/lib/auth-errors'
 export interface SectionInput {
   title: string
   test_count: number
+  /** R7-02 §6.4: çok parçalı kaynakta bölümün Parça adı. Boşsa parçasız. */
+  part?: string
   /** R4 §3: bölümün niteliğini anlatan kısa insan notu. */
   note?: string
   video_url?: string
@@ -27,6 +29,9 @@ export interface NewBookInput {
   curriculumProgram?: string
   editionYear?: number | null
   description?: string
+  /** R7-02 §6.2-6.3: sınıflama alanları. */
+  resourceType?: string
+  structureKind?: string
   trackingMode?: string
   videoMode?: string
   videoUrl?: string
@@ -68,6 +73,33 @@ export async function createBookAction(input: NewBookInput) {
       p_book_id: newBookId,
       p_curriculum_program: parsed.data.curriculumProgram,
     })
+  }
+
+  // R7-02 §6.2-6.3: Kaynak Türü / Yapısı da aynı gerekçeyle ayrı çağrıdır.
+  // Kolonların DEFAULT'u tutarlı olduğu için bu çağrı başarısız olsa da
+  // kitap kullanılabilir kalır.
+  if (newBookId) {
+    await supabase.rpc('set_book_classification', {
+      p_book_id: newBookId,
+      p_resource_type: parsed.data.resourceType,
+      p_structure_kind: parsed.data.structureKind,
+    })
+
+    // §6.4: çok parçalı kaynakta bölümler Parça altında toplanır. Parçalar
+    // bölüm sırasına göre kurulur; tek parçalı kaynakta liste boştur ve
+    // hiçbir şey olmaz.
+    if (parsed.data.structureKind === 'multi') {
+      const sectionParts = parsed.data.sections
+        .map((section, index) => ({ order_index: index + 1, part: section.part ?? '' }))
+        .filter(entry => entry.part.trim() !== '')
+
+      if (sectionParts.length > 0) {
+        await supabase.rpc('apply_book_parts', {
+          p_book_id: newBookId,
+          p_section_parts: sectionParts,
+        })
+      }
+    }
   }
 
   revalidatePath('/teacher/books')

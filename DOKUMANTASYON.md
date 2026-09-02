@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–023
+supabase/migrations/ 001–043
 ```
 
 ---
@@ -169,6 +169,24 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R4 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4). 23 veritabanı migration'ı çalıştırılmıştır (001–023).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 43 veritabanı migration'ı çalıştırılmıştır (001–043).
 
-**R4 sonrası bekleme listesi:** haritada toplu onay akışı; reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma.
+### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
+
+**Kaynak → Parça → Bölüm (042).** MÖF, Kondisyon, AllStar gibi fasiküllü kaynaklar artık ayrı kitap açılmadan tek kaynağın altında durur: `book_parts` tablosu + `book_sections.part_id`. Parça bir **gruplama katmanıdır**, takip birimi değildir — öğrencide tek plan ve tek toplam ilerleme yüzdesi korunur. R6-17'nin serbest metin `group_label`/`theme_label` alanları UI'dan kaldırıldı; kolonlar ve verileri **duruyor** (kör otomasyonla dönüştürülmedi), düzenleme ekranında "eski etiket" ipucu olarak görünür.
+
+**Kaynak Türü ve Kaynak Yapısı (042).** `books.resource_type` (Soru Bankası, Video Destekli Defter, Kamp Kitabı, …) yalnız sınıflama, filtre ve kart etiketidir; hiçbir hesaba girmez ve aynı türden ikinci kitabı engellemez. `books.structure_kind` = `single` | `multi`.
+
+**Takip türü beşe çıktı:** `test | page | section | step | trial`. Yeni tür ≠ yeni tablo — her birim yine bir `book_tests` satırıdır (022); değişen yalnız birimin adıdır (`lib/unit-labels.ts`).
+
+**Video Desteği → Video Kullanımı.** Soru bankasının çözüm videosu ile VDD'nin ders akışı ayrıldı: `none | solution_videos | video_course | mixed`. Eski `book`/`section` değerleri geçerli kalır ve listede "(eski)" olarak görünür.
+
+**0 ilerlemeli kaynakta yapı kilidi açıldı.** Tek ölçüt `book_has_progress()`: kaynakta ödev veya aktif tamamlama kaydı yoksa takip türü (`set_book_tracking_mode`) ve bölüm sayfa aralığı (`set_section_page_range`) düzeltilebilir. İlerleme başladıysa yapısal alanlar kilitli kalır, isim/açıklama/video düzenlenebilir. Yeni Kitap formunda **Enter artık kaydetmez**.
+
+**Müfredat eşleştirmesi (043).** Bölüm birden fazla konuya bağlanabilir (`book_section_topics`); liste kitabın ders + seviye/sınav bilgisine göre filtrelenir ve aranabilir çoklu seçimle sunulur (`components/shared/topic-multi-select.tsx`). `book_sections.topic_id` **birincil eşleme** olarak korunur ve listenin ilk elemanıyla senkron tutulur — R5.3 müfredat sinyali bozulmadan çalışır. Eşleme zorunlu değildir ve bölümün tamamlanması konuyu otomatik "öğrenildi" yapmaz.
+
+**Tek Kitap Haritası (R6-03 güncellemesi).** Ödev verme ve yönetim aynı akademik verinin farklı işlemleridir; ikisi `/teacher/students/[id]/homework/new` yüzeyinde birleşti. Harita `manage` modunda çalışır (altı durum da seçilebilir), altındaki işlem çubuğunda **Ödeve Ekle / Tamamlandı Olarak İşle / Onayla / Tamamlanmayı Geri Al** vardır ve her düğme kaç öğeye uygulanacağını söyler. Kritik ayrım: **seçim tek başına veri durumunu değiştirmez** — harita seçimi (`mapSelection`) ile plan sepeti (`basketIds`) ayrı kümelerdir. Yayından sonra aynı haritada kalınır. Kitap detayındaki Kaynak Haritası salt görünüme indi ve "Bu kitapta çalış" ile bu yüzeye yönlendirir.
+
+**WhatsApp çıktısı (R7-01…04).** Teslim tarihi "31 Ağustos 2026 Pazartesi (7 gün sonra)" (Bugün/Yarın destekli, R6-02'nin yerel gün semantiğiyle); kitap başlıkları miktar taşır ("345 Matematik (1 test)"); hiyerarşi öğrenci → tarih → kitap + miktar → çalışma → not → hatırlatma. Haftalık plan sepeti `lg` kırılımından itibaren sticky ve kendi içinde kayar; "Planı Yayınla" uzun listede erişilebilir kalır.
+
+**R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

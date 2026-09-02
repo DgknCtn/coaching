@@ -7,6 +7,10 @@ import {
   studentSchema,
   termSchema,
   bookSchema,
+  bookTrackingModeSchema,
+  sectionPageRangeSchema,
+  sectionPartSchema,
+  sectionTopicsSchema,
   assignBookSchema,
   homeworkBatchSchema,
   loginSchema,
@@ -17,6 +21,7 @@ import {
 } from '@/lib/validation'
 
 const UUID = '11111111-1111-4111-8111-111111111111'
+const UUID2 = '22222222-2222-4222-8222-222222222222'
 
 describe('studentSchema', () => {
   it('accepts a valid student with optional fields empty', () => {
@@ -88,6 +93,82 @@ describe('bookSchema', () => {
   })
   it('rejects invalid tracking mode', () => {
     expect(bookSchema.safeParse({ ...base, trackingMode: 'chapters' }).success).toBe(false)
+  })
+
+  // R7-02 §6.5: takip türü beşe çıktı; 'test' ve 'page' anlamları değişmedi.
+  it('R7: bölüm / adım / deneme takip türlerini kabul eder', () => {
+    for (const mode of ['section', 'step', 'trial']) {
+      expect(bookSchema.safeParse({ ...base, trackingMode: mode }).success).toBe(true)
+    }
+  })
+
+  // R7-02 §6.2-6.3: sınıflama alanları zorunlu değildir; verilmezse
+  // 'Belirtilmedi' / 'single' olur ve eski akış hiç değişmez.
+  it('R7: kaynak türü ve yapısı verilmezse varsayılana düşer', () => {
+    const r = bookSchema.safeParse(base)
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data.resourceType).toBe('Belirtilmedi')
+      expect(r.data.structureKind).toBe('single')
+    }
+  })
+
+  it('R7: geçersiz kaynak türünü reddeder', () => {
+    expect(bookSchema.safeParse({ ...base, resourceType: 'Kitapçık' }).success).toBe(false)
+    expect(bookSchema.safeParse({ ...base, resourceType: 'Kamp Kitabı' }).success).toBe(true)
+  })
+
+  it('R7: çok parçalı kaynakta bölüm parça adı taşıyabilir', () => {
+    const multi = {
+      ...base,
+      structureKind: 'multi',
+      sections: [{ title: 'Üslü Sayılar', test_count: 10, part: 'F1 Sayılar' }],
+    }
+    expect(bookSchema.safeParse(multi).success).toBe(true)
+  })
+})
+
+// R7-02 §6.5 ve §8 ile gelen şemalar.
+describe('R7 kitap yapısı şemaları', () => {
+  it('sectionPageRangeSchema geçerli aralığı kabul eder', () => {
+    expect(
+      sectionPageRangeSchema.safeParse({ sectionId: UUID, pageStart: 84, pageEnd: 96 }).success
+    ).toBe(true)
+  })
+
+  it('sectionPageRangeSchema ters aralığı reddeder', () => {
+    expect(
+      sectionPageRangeSchema.safeParse({ sectionId: UUID, pageStart: 96, pageEnd: 84 }).success
+    ).toBe(false)
+  })
+
+  it('sectionPageRangeSchema 1000 sayfayı aşan bölümü reddeder', () => {
+    expect(
+      sectionPageRangeSchema.safeParse({ sectionId: UUID, pageStart: 1, pageEnd: 1001 }).success
+    ).toBe(false)
+  })
+
+  it('bookTrackingModeSchema yalnız bilinen türleri kabul eder', () => {
+    expect(bookTrackingModeSchema.safeParse({ bookId: UUID, trackingMode: 'step' }).success).toBe(true)
+    expect(bookTrackingModeSchema.safeParse({ bookId: UUID, trackingMode: 'kur' }).success).toBe(false)
+  })
+
+  it('sectionTopicsSchema boş listeyi kabul eder (eşleme kaldırma)', () => {
+    expect(sectionTopicsSchema.safeParse({ sectionId: UUID, topicIds: [] }).success).toBe(true)
+  })
+
+  it('sectionTopicsSchema çoklu konuyu kabul eder', () => {
+    expect(
+      sectionTopicsSchema.safeParse({ sectionId: UUID, topicIds: [UUID, UUID2] }).success
+    ).toBe(true)
+  })
+
+  it('sectionTopicsSchema uuid olmayan konuyu reddeder', () => {
+    expect(sectionTopicsSchema.safeParse({ sectionId: UUID, topicIds: ['abc'] }).success).toBe(false)
+  })
+
+  it('sectionPartSchema parçasız bırakmayı (null) kabul eder', () => {
+    expect(sectionPartSchema.safeParse({ sectionId: UUID, partId: null }).success).toBe(true)
   })
 })
 

@@ -10,10 +10,15 @@ export const dynamic = 'force-dynamic'
 
 export default async function NewHomeworkPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studentId: string }>
+  /** R7: kitap detayındaki "Bu kitapta çalış" bağlantısı haritayı doğrudan
+   *  o kaynakta açar. */
+  searchParams: Promise<{ book?: string }>
 }) {
   const { studentId } = await params
+  const { book: initialBookId } = await searchParams
   const { supabase, workspaceId, activeTerm, profile } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -98,6 +103,7 @@ export default async function NewHomeworkPage({
         workspaceId={workspaceId}
         studentName={student.full_name}
         books={books}
+        initialBookId={initialBookId}
         initialSelectedTestIds={draftTestIds}
         initialDueDate={draft?.due_date ?? ''}
         initialTitle={draft?.title ?? ''}

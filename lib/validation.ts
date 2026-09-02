@@ -5,13 +5,15 @@ import {
   SUBJECTS,
   TRACKING_MODES,
   VIDEO_MODES,
+  RESOURCE_TYPES,
+  STRUCTURE_KINDS,
   EDITION_YEAR_MIN,
   EDITION_YEAR_MAX,
 } from '@/lib/book-taxonomy'
 
 // Ders/seviye/takip/video listeleri artık lib/book-taxonomy.ts'te (R4 §3).
 // Buradan yeniden dışa aktarılıyorlar ki mevcut importlar kırılmasın.
-export { LEVEL_EXAMS, CURRICULUM_PROGRAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES }
+export { LEVEL_EXAMS, CURRICULUM_PROGRAMS, SUBJECTS, TRACKING_MODES, VIDEO_MODES, RESOURCE_TYPES, STRUCTURE_KINDS }
 
 // Server Action'larda kullanılan paylaşılan doğrulama şemaları.
 // Client tarafındaki react-hook-form doğrulaması kolayca atlanabilir;
@@ -100,6 +102,9 @@ const sectionSchema = z.object({
   // gibi alt türler için ayrı veri modeli açmak yerine buraya yazılır.
   note: z.string().trim().max(500, 'Bölüm notu en fazla 500 karakter olabilir.').optional().or(z.literal('')),
   video_url: z.string().trim().url('Geçerli bir bağlantı girin.').max(500).optional().or(z.literal('')),
+  // R7-02 §6.4: çok parçalı kaynakta bölümün bağlı olduğu Parça adı.
+  // Tek parçalı kaynakta boştur ve hiçbir şey değiştirmez.
+  part: z.string().trim().max(120, 'Parça adı en fazla 120 karakter olabilir.').optional().or(z.literal('')),
   // Sayfa takipli kitapta bölüm "sf. 1-56" gibi fiziksel kapsamla tanımlanır.
   page_start: z.number().int().min(1).max(100000).optional().nullable(),
   page_end: z.number().int().min(1).max(100000).optional().nullable(),
@@ -127,7 +132,17 @@ const curriculumProgram = z
   .enum(CURRICULUM_PROGRAMS, { message: 'Geçersiz öğretim programı.' })
   .default('Belirtilmedi')
 
-const videoMode = z.enum(VIDEO_MODES, { message: 'Geçersiz video desteği seçimi.' }).default('none')
+const videoMode = z.enum(VIDEO_MODES, { message: 'Geçersiz video kullanımı seçimi.' }).default('none')
+
+/** R7-02 §6.2: Kaynak Türü. Zorunlu değildir; verilmezse 'Belirtilmedi'. */
+const resourceType = z
+  .enum(RESOURCE_TYPES, { message: 'Geçersiz kaynak türü.' })
+  .default('Belirtilmedi')
+
+/** R7-02 §6.3: Tek Parça / Çok Parçalı. */
+const structureKind = z
+  .enum(STRUCTURE_KINDS, { message: 'Geçersiz kaynak yapısı.' })
+  .default('single')
 const videoUrl = z.string().trim().url('Geçerli bir video bağlantısı girin.').max(500).optional().or(z.literal(''))
 
 // R4 §3. Değişenler: examType yerine levelExam (exam_type artık DB'de
@@ -140,6 +155,8 @@ export const bookSchema = z.object({
   levelExam,
   curriculumProgram,
   editionYear,
+  resourceType,
+  structureKind,
   trackingMode: z.enum(TRACKING_MODES, { message: 'Geçersiz takip türü.' }).default('test'),
   description: z.string().trim().max(2000).optional().or(z.literal('')),
   videoMode,
@@ -158,6 +175,8 @@ export const bookUpdateSchema = z.object({
   levelExam,
   curriculumProgram,
   editionYear,
+  resourceType,
+  structureKind,
   description: z.string().trim().max(2000).optional().or(z.literal('')),
   videoMode,
   videoUrl,
@@ -197,6 +216,59 @@ export const newSectionSchema = z.object({
     .int('Test sayısı tam sayı olmalı.')
     .min(1, 'Bölümde en az 1 test olmalı.')
     .max(200, 'Test sayısı çok yüksek.'),
+})
+
+/** R7-02 §6.5: 0 ilerlemeli kaynakta takip türü düzeltmesi. */
+export const bookTrackingModeSchema = z.object({
+  bookId: uuid,
+  trackingMode: z.enum(TRACKING_MODES, { message: 'Geçersiz takip türü.' }),
+})
+
+/** R7-02 §6.5 kabul #2: bölümün sayfa aralığı düzenlenebilir olmalı. */
+export const sectionPageRangeSchema = z
+  .object({
+    sectionId: uuid,
+    pageStart: z
+      .number({ message: 'Başlangıç sayfası sayı olmalı.' })
+      .int('Başlangıç sayfası tam sayı olmalı.')
+      .min(1, 'Başlangıç sayfası en az 1 olmalı.')
+      .max(100000),
+    pageEnd: z
+      .number({ message: 'Bitiş sayfası sayı olmalı.' })
+      .int('Bitiş sayfası tam sayı olmalı.')
+      .min(1)
+      .max(100000),
+  })
+  .refine(v => v.pageEnd >= v.pageStart, {
+    message: 'Bitiş sayfası başlangıçtan küçük olamaz.',
+    path: ['pageEnd'],
+  })
+  .refine(v => v.pageEnd - v.pageStart + 1 <= 1000, {
+    message: 'Bir bölüm en fazla 1000 sayfa olabilir.',
+    path: ['pageEnd'],
+  })
+
+/** R7-02 §6.4: Parça (fasikül/cilt/modül). */
+export const bookPartSchema = z.object({
+  bookId: uuid,
+  title: z.string().trim().min(1, 'Parça adı boş olamaz.').max(120),
+})
+
+export const bookPartRenameSchema = z.object({
+  partId: uuid,
+  title: z.string().trim().min(1, 'Parça adı boş olamaz.').max(120),
+})
+
+export const sectionPartSchema = z.object({
+  sectionId: uuid,
+  partId: uuid.nullable(),
+})
+
+/** R7-02 §8: bölüm birden fazla müfredat konusuna bağlanabilir. Boş liste
+ *  eşlemeyi kaldırır — yanlış eşleme geri alınabilmeli (040 ilkesi). */
+export const sectionTopicsSchema = z.object({
+  sectionId: uuid,
+  topicIds: z.array(uuid).max(20, 'Bir bölüme en fazla 20 konu bağlanabilir.'),
 })
 
 export const assignBookSchema = z.object({

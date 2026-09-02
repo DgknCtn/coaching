@@ -1,5 +1,6 @@
 'use client'
 
+import { Fragment } from 'react'
 import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, type BookMapMode } from '@/lib/book-map'
@@ -78,6 +79,14 @@ interface Props {
   book: BookMapBook
   /** Salt okunur modda boş geçilebilir. */
   selectedTestIds?: Set<string>
+  /**
+   * R7 (R6-03 güncellemesi): haftalık plan sepetine ALINMIŞ birimler.
+   *
+   * Seçimden ayrı bir kavramdır: seçim yapılacak işlemin hedefidir, sepet
+   * ise "Ödeve Ekle" ile o işlemin sonucudur. Harita ikisini ayrı gösterir
+   * ki öğretmen neyin plana girdiğini seçimi kaybetmeden görebilsin.
+   */
+  basketTestIds?: Set<string>
   onToggleTest?: (bookId: string, testId: string) => void
   onToggleSection?: (bookId: string, testIds: string[]) => void
   /** Shift+tık: son tıklanan hücreden buraya kadar seçilebilir testleri seçer. */
@@ -101,6 +110,7 @@ const EMPTY_SELECTION: Set<string> = new Set()
 export function BookMapGrid({
   book,
   selectedTestIds = EMPTY_SELECTION,
+  basketTestIds,
   onToggleTest,
   onToggleSection,
   onSelectRange,
@@ -117,6 +127,7 @@ export function BookMapGrid({
       <BookPageMap
         book={book}
         selectedTestIds={selectedTestIds}
+        basketTestIds={basketTestIds}
         onToggleSection={onToggleSection}
         readOnly={readOnly}
         mode={mode}
@@ -155,15 +166,34 @@ export function BookMapGrid({
             </tr>
           </thead>
           <tbody>
-            {book.sections.map(section => {
+            {book.sections.map((section, sectionIndex) => {
               const selectableIds = section.tests
                 .filter(t => isSelectableState(t.state, mode))
                 .map(t => t.id)
               const allSelected =
                 selectableIds.length > 0 && selectableIds.every(id => selectedTestIds.has(id))
 
+              // R7-02 §6.4: çok parçalı kaynakta bölümler parça başlığı
+              // altında toplanır. Parça değiştiğinde tek bir ayırıcı satır
+              // yeterli; parçasız kaynakta hiç görünmez ve harita bugünkü
+              // düz listesini korur.
+              const previousPart = book.sections[sectionIndex - 1]?.partTitle ?? null
+              const startsNewPart = !!section.partTitle && section.partTitle !== previousPart
+
               return (
-                <tr key={section.id} className="group">
+                <Fragment key={section.id}>
+                {startsNewPart && (
+                  <tr>
+                    <th
+                      scope="colgroup"
+                      colSpan={columns.length + 1}
+                      className="sticky left-0 border-b bg-muted/60 px-4 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
+                    >
+                      {section.partTitle}
+                    </th>
+                  </tr>
+                )}
+                <tr className="group">
                   <th
                     scope="row"
                     className="sticky left-0 z-10 min-w-56 max-w-72 border-b border-r bg-card px-4 py-1.5 text-left font-normal group-hover:bg-muted/40"
@@ -251,8 +281,14 @@ export function BookMapGrid({
                     const Icon = STATE_ICON[test.state]
                     const selectable = isSelectableState(test.state, mode)
                     const selected = selectedTestIds.has(test.id)
+                    const inBasket = basketTestIds?.has(test.id) ?? false
                     const label =
-                      section.title + ' / ' + test.title + ' — ' + testStateLabel(test.state, audience)
+                      section.title +
+                      ' / ' +
+                      test.title +
+                      ' — ' +
+                      testStateLabel(test.state, audience) +
+                      (basketTestIds?.has(test.id) ? ' · plana eklendi' : '')
 
                     if (readOnly) {
                       return (
@@ -289,7 +325,10 @@ export function BookMapGrid({
                             selectable && 'cursor-pointer hover:brightness-95',
                             !selectable && 'cursor-not-allowed',
                             selected &&
-                              'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+                              'border-primary bg-primary/10 text-primary ring-1 ring-primary',
+                            // Sepettekiler kesik çerçeveyle ayrılır: seçili
+                            // olmasalar da plana girecekleri görünür kalmalı.
+                            !selected && inBasket && 'border-dashed border-primary text-primary'
                           )}
                         >
                           {selected ? (
@@ -304,6 +343,7 @@ export function BookMapGrid({
                     )
                   })}
                 </tr>
+                </Fragment>
               )
             })}
           </tbody>

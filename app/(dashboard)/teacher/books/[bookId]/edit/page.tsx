@@ -19,11 +19,14 @@ export default async function BookEditPage({
     .from('books')
     .select(`
       id, title, subject, publisher, exam_type, level_exam, edition_year,
-      curriculum_program,
+      curriculum_program, resource_type, structure_kind,
       description, status, tracking_mode, video_mode, video_url,
+      book_parts(id, title, order_index),
       book_sections(
         id, title, order_index, group_label, theme_label, topic_id,
-        book_tests(id)
+        part_id, page_start, page_end,
+        book_tests(id),
+        book_section_topics(topic_id)
       )
     `)
     .eq('id', bookId)
@@ -32,39 +35,74 @@ export default async function BookEditPage({
 
   if (!book || book.status === 'archived') notFound()
 
-  // R5.3: eşlenebilecek müfredat konuları, kapsam adıyla birlikte.
-  // Hiç konu tanımlı değilse seçici hiç gösterilmez ve kitap düzenleme
-  // ekranı bugünkü hâliyle kalır.
-  const { data: topicRows } = await supabase
-    .from('topics')
-    .select('id, name, academic_scopes(name)')
+  // R7-02 §6.5: yapısal düzenlemenin (takip türü, sayfa aralığı) tek kilit
+  // ölçütü kaynakta ilerleme olup olmadığıdır. Ölçüt DB'de book_has_progress
+  // içinde; burada yalnız formun neyi kilitleyeceğini bilmek için okunur.
+  const { data: hasProgress } = await supabase.rpc('book_has_progress', {
+    p_book_id: bookId,
+  })
+
+  // R7-02 §8: müfredat listesi kitabın Ders + Seviye/Sınav bilgisine göre
+  // FİLTRELENİR. Kabul #8: "TYT Matematik müfredat seçiminde AYT Felsefe
+  // görünmüyor." Filtre kapsam (academic_scopes) düzeyinde uygulanır; kapsam
+  // zaten subject/level_exam taşıyor (038).
+  //
+  // Kapsamın alanı BOŞSA dışarıda bırakılmaz: eski kapsamlarda bu alanlar
+  // doldurulmamış olabilir ve onları gizlemek eşlemeyi imkânsız kılardı.
+  let scopeQuery = supabase
+    .from('academic_scopes')
+    .select('id, name, subject, level_exam')
     .eq('workspace_id', workspaceId)
     .eq('active', true)
-    .order('name')
 
-  const topics: TopicOption[] = (
-    (topicRows ?? []) as unknown as {
-      id: string
-      name: string
-      academic_scopes: { name: string } | { name: string }[] | null
-    }[]
-  ).map((t) => ({
+  if (book.subject) {
+    scopeQuery = scopeQuery.or(`subject.is.null,subject.eq.${book.subject}`)
+  }
+  if (book.level_exam) {
+    scopeQuery = scopeQuery.or(`level_exam.is.null,level_exam.eq.${book.level_exam}`)
+  }
+
+  const { data: scopeRows } = await scopeQuery
+  const scopeIds = (scopeRows ?? []).map((s) => s.id)
+  const scopeNameById = new Map((scopeRows ?? []).map((s) => [s.id, s.name]))
+
+  const { data: topicRows } = scopeIds.length
+    ? await supabase
+        .from('topics')
+        .select('id, name, scope_id')
+        .eq('workspace_id', workspaceId)
+        .eq('active', true)
+        .in('scope_id', scopeIds)
+        .order('sort_order')
+        .order('name')
+    : { data: [] }
+
+  const topics: TopicOption[] = (topicRows ?? []).map((t) => ({
     id: t.id,
     name: t.name,
-    scopeName:
-      (Array.isArray(t.academic_scopes) ? t.academic_scopes[0] : t.academic_scopes)?.name ??
-      'Kapsam',
+    scopeName: scopeNameById.get(t.scope_id) ?? 'Kapsam',
   }))
 
+  const parts = (book.book_parts ?? [])
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((p) => ({ id: p.id, title: p.title }))
+
   const sections = (book.book_sections ?? [])
+    .slice()
     .sort((a, b) => a.order_index - b.order_index)
     .map((s) => ({
       id: s.id,
       title: s.title,
       testCount: (s.book_tests ?? []).length,
+      // R6-17 etiketleri artık düzenlenmiyor; yalnız eski kayıtlarda
+      // Parça'ya taşınabilsin diye okunur ipucu olarak gösteriliyor.
       groupLabel: s.group_label ?? null,
       themeLabel: s.theme_label ?? null,
-      topicId: s.topic_id ?? null,
+      partId: s.part_id ?? null,
+      pageStart: s.page_start ?? null,
+      pageEnd: s.page_end ?? null,
+      topicIds: (s.book_section_topics ?? []).map((t) => t.topic_id),
     }))
 
   return (
@@ -88,13 +126,17 @@ export default async function BookEditPage({
           levelExam: book.level_exam ?? '',
           curriculumProgram: book.curriculum_program ?? 'Belirtilmedi',
           editionYear: book.edition_year ?? undefined,
+          resourceType: book.resource_type ?? 'Belirtilmedi',
+          structureKind: (book.structure_kind ?? 'single') as 'single' | 'multi',
           description: book.description ?? '',
-          videoMode: (book.video_mode ?? 'none') as 'none' | 'book' | 'section',
+          videoMode: book.video_mode ?? 'none',
           videoUrl: book.video_url ?? '',
         }}
         sections={sections}
+        parts={parts}
         topics={topics}
         trackingMode={book.tracking_mode ?? 'test'}
+        hasProgress={hasProgress === true}
       />
     </div>
   )

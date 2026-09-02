@@ -37,6 +37,16 @@ export interface BookMapSection {
   orderIndex: number
   tests: BookMapTest[]
   completedCount: number
+  /**
+   * R7-02 §6.4: bölümün bağlı olduğu Parça (fasikül/cilt/modül).
+   *
+   * Parça bir GRUPLAMA katmanıdır: harita bölümleri parça başlığı altında
+   * toplar. İlerleme ve yüzde hesabına GİRMEZ — MÖF öğrencide tek plan ve
+   * tek toplam yüzde olarak kalır. Tek parçalı kaynakta null'dır ve harita
+   * bugünkü düz listesini gösterir.
+   */
+  partId: string | null
+  partTitle: string | null
   /** R6-17: opsiyonel fasikül ve tema etiketleri. Takip birimi değil,
    *  üst grup metadata'sıdır; boş olabilir ve klasik kitaplarda boştur. */
   groupLabel: string | null
@@ -165,9 +175,10 @@ export async function loadBookMap(
       books(
         id, title, subject, exam_type, level_exam, curriculum_program,
         publisher, tracking_mode, video_mode, video_url,
+        book_parts(id, title, order_index),
         book_sections(
           id, title, order_index, status, note, video_url, page_start, page_end,
-          group_label, theme_label, topic_id,
+          group_label, theme_label, topic_id, part_id,
           book_tests(id, title, order_index, status, page_start, page_end)
         )
       )
@@ -268,6 +279,14 @@ export async function loadBookMap(
 
   return rows.map((assignment) => {
     const book = assignment.books
+    // R7-02 §6.4: parça başlıkları bölüm satırında değil ayrı tabloda; harita
+    // gruplaması için id -> ad sözlüğü kurulur. Parçasız kaynakta boştur ve
+    // hiçbir davranış değişmez.
+    const partTitleById = new Map<string, string>(
+      ((book?.book_parts ?? []) as any[])
+        .sort((a, b) => a.order_index - b.order_index)
+        .map((p: any) => [p.id, p.title])
+    )
     const sections: BookMapSection[] = (book?.book_sections ?? [])
       .filter((s: any) => s.status === 'active')
       .sort((a: any, b: any) => a.order_index - b.order_index)
@@ -303,6 +322,8 @@ export async function loadBookMap(
           pageEnd: s.page_end ?? null,
           groupLabel: s.group_label ?? null,
           themeLabel: s.theme_label ?? null,
+          partId: s.part_id ?? null,
+          partTitle: s.part_id ? (partTitleById.get(s.part_id) ?? null) : null,
           topicId: s.topic_id ?? null,
           curriculumStatus: sectionCurriculumStatus(
             s.topic_id ?? null,

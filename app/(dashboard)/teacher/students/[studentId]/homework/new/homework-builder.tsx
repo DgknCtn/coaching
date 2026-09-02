@@ -19,9 +19,16 @@ import {
   ChevronUp,
   Info,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { createHomeworkBatchAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
+import {
+  approveUnitsAction,
+  completeUnitsManuallyAction,
+  revertUnitsAction,
+} from '../../books/[bookId]/map-actions'
 import { BookMapGrid } from '@/components/shared/book-map-grid'
+import { BulkActionPanel } from '@/components/shared/bulk-action-panel'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
 import { buildShareText } from '@/lib/share-text'
@@ -37,6 +44,25 @@ import { TempoStrip } from '@/components/shared/tempo-strip'
 import { formatUnitCount, unitLabel } from '@/lib/unit-labels'
 import { ProgressSummary } from '@/components/shared/progress-summary'
 import { cn } from '@/lib/utils'
+
+// Tek Kitap Haritası — öğretmenin kaynak üzerindeki ana çalışma yüzeyi
+// (R7 / R6-03 güncellemesi).
+//
+// ÖNCESİ: aynı kitap verisi üzerinde İKİ ayrı çalışma bağlamı vardı — burada
+// ödev sepeti (mode='plan'), kitap detayında Yönetim modu (mode='manage').
+// Fonksiyonlar doğru çalışıyordu ama öğretmenin doğal akışını parçalıyordu:
+// "ödev veriyorum" ile "yönetim yapıyorum" ayrı ekran mantıklarıydı.
+//
+// ŞİMDİ: tek harita, altı durum da seçilebilir; seçime göre uygun işlemler
+// aktif olur. Kitap detayındaki harita salt görünüme indi ve buraya yönlendirir.
+//
+// İKİ AYRI KÜME (§1.2 güvenlik kuralı):
+//   mapSelection — haritada seçili birimler. Bir kutuyu seçmek veri
+//                  durumunu TEK BAŞINA değiştirmez; seçim yalnız yapılacak
+//                  işlemin hedefidir.
+//   basketIds    — "Ödeve Ekle" ile haftalık plan sepetine alınanlar. Durum
+//                  ancak "Planı Yayınla" ile değişir. Taslak (019) bu kümeyi
+//                  saklar.
 
 interface SelectedTest {
   student_book_assignment_id: string
@@ -56,6 +82,8 @@ interface Props {
   workspaceId: string
   studentName: string
   books: BookMapBook[]
+  /** R7: kitap detayından gelindiğinde harita bu kaynakta açılır. */
+  initialBookId?: string
   /** 019 taslağından hidrate edilen seçimler (sayfa yenilemede korunur). */
   initialSelectedTestIds: string[]
   initialDueDate: string
@@ -69,6 +97,7 @@ export function HomeworkBuilder({
   workspaceId,
   studentName,
   books,
+  initialBookId,
   initialSelectedTestIds,
   initialDueDate,
   initialTitle,
@@ -76,7 +105,13 @@ export function HomeworkBuilder({
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [activeBookId, setActiveBookId] = useState(books[0]?.bookId ?? '')
+  const [activeBookId, setActiveBookId] = useState(
+    // R7: kitap detayından "Bu kitapta çalış" ile gelindiyse o kaynakta aç.
+    () =>
+      (initialBookId && books.some(b => b.bookId === initialBookId)
+        ? initialBookId
+        : books[0]?.bookId) ?? ''
+  )
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [title, setTitle] = useState(initialTitle)
   // Ödev notu (R6-05): ödev başına TEK isteğe bağlı alan.
@@ -86,11 +121,16 @@ export function HomeworkBuilder({
   const [panelOpen, setPanelOpen] = useState(true)
   const dueDateRef = useRef<HTMLInputElement>(null)
 
-  // Seçimler kitap bileşeninin İÇİNDE değil, bu üst katmanda tutulur —
-  // eğitmen kitaplar arasında dolaşırken seçim kaybolmaz (R3 v2 §B).
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+  // Sepet kitap bileşeninin İÇİNDE değil, bu üst katmanda tutulur — eğitmen
+  // kitaplar arasında dolaşırken plan kaybolmaz (R3 v2 §B) ve taslak (019)
+  // sayfa yenilemesinde geri gelir.
+  const [basketIds, setBasketIds] = useState<Set<string>>(
     () => new Set(initialSelectedTestIds)
   )
+
+  // Harita seçimi sepetten AYRIDIR (R7 §1.2): seçim yapılacak işlemin
+  // hedefini belirler, veriyi değiştirmez ve plana kendiliğinden girmez.
+  const [mapSelection, setMapSelection] = useState<Set<string>>(new Set())
 
   // Test id → kitap/bölüm bağlamı. Sepet ve "metni kopyala" bunu kullanır.
   const testIndex = useMemo(() => {
@@ -104,7 +144,12 @@ export function HomeworkBuilder({
             bookId: book.bookId,
             bookTitle: book.title,
             sectionId: section.id,
-            sectionTitle: section.title,
+            // R7 §1.4: sayfa bazlı kaynakta bölüm adı TEK BAŞINA yetmez —
+            // "5-25" hangi fasikülün sayfaları? Parça adı sepette ve
+            // WhatsApp metninde bölüm başlığının önüne yazılır.
+            sectionTitle: section.partTitle
+              ? `${section.partTitle} | ${section.title}`
+              : section.title,
             testTitle: test.title,
             // Test kitabında matristeki sütun numarası (1 tabanlı); sayfa
             // takipli kitapta birim tek bir fiziksel sayfadır (022), o zaman
@@ -121,12 +166,13 @@ export function HomeworkBuilder({
     return index
   }, [books])
 
+  // Sepetin içeriği: yayınlanacak ve WhatsApp metnine girecek olan küme.
   const selectedTests = useMemo(
     () =>
-      [...selectedIds]
+      [...basketIds]
         .map(id => testIndex.get(id))
         .filter((t): t is SelectedTest => Boolean(t)),
-    [selectedIds, testIndex]
+    [basketIds, testIndex]
   )
 
   const activeBook = books.find(b => b.bookId === activeBookId) ?? books[0]
@@ -245,7 +291,7 @@ export function HomeworkBuilder({
 
   const toggleTest = useCallback((_bookId: string, testId: string) => {
     lastClickedRef.current = testId
-    setSelectedIds(prev => {
+    setMapSelection(prev => {
       const next = new Set(prev)
       if (next.has(testId)) next.delete(testId)
       else next.add(testId)
@@ -255,7 +301,7 @@ export function HomeworkBuilder({
 
   const toggleSection = useCallback((_bookId: string, testIds: string[]) => {
     if (testIds.length === 0) return
-    setSelectedIds(prev => {
+    setMapSelection(prev => {
       const next = new Set(prev)
       const allSelected = testIds.every(id => next.has(id))
       for (const id of testIds) {
@@ -286,13 +332,15 @@ export function HomeworkBuilder({
       }
 
       const [start, end] = from <= to ? [from, to] : [to, from]
+      // Birleşik yüzeyde altı durum da seçilebilir (R7): aralık seçimi de
+      // yönetim modunun seçilebilirlik kuralını kullanır.
       const ids = flat
         .slice(start, end + 1)
-        .filter(t => isSelectableState(t.state))
+        .filter(t => isSelectableState(t.state, 'manage'))
         .map(t => t.id)
 
       lastClickedRef.current = testId
-      setSelectedIds(prev => {
+      setMapSelection(prev => {
         const next = new Set(prev)
         for (const id of ids) next.add(id)
         return next
@@ -301,8 +349,54 @@ export function HomeworkBuilder({
     [books, toggleTest]
   )
 
-  function clearSelection() {
-    setSelectedIds(new Set())
+  const clearMapSelection = useCallback(() => setMapSelection(new Set()), [])
+
+  /** Dar ekran listesi için: sepete ekle/çıkar. */
+  function toggleBasket(testId: string) {
+    setBasketIds(prev => {
+      const next = new Set(prev)
+      if (next.has(testId)) next.delete(testId)
+      else next.add(testId)
+      return next
+    })
+  }
+
+  function clearBasket() {
+    setBasketIds(new Set())
+  }
+
+  /**
+   * "Ödeve Ekle" — seçimi haftalık plan sepetine taşır.
+   *
+   * VERİYE DOKUNMAZ: durum ancak "Planı Yayınla" ile değişir. Panel yalnız
+   * uygun (henüz verilmemiş) birimleri gönderir; sayım lib/bulk-actions.ts'te.
+   */
+  function addToBasket(unitIds: string[]) {
+    if (unitIds.length === 0) return
+    setBasketIds(prev => {
+      const next = new Set(prev)
+      for (const id of unitIds) next.add(id)
+      return next
+    })
+    clearMapSelection()
+  }
+
+  /**
+   * Yönetim işlemleri (Onayla / Tamamlandı Olarak İşle / Geri Al).
+   *
+   * Aynı RPC'leri kitap detayındaki harita da kullanıyordu; işlem sonrası
+   * router.refresh() ile harita durumları anında güncellenir (kabul R6-03.5).
+   * Geri alma geçmişi fiziksel olarak silmez — kayıt 'reverted' işaretlenir.
+   */
+  function reportBulk(verb: string) {
+    return (result: { error?: string; success?: boolean; result?: Record<string, number> }) => {
+      if (result.error) toast.error(result.error)
+      else {
+        toast.success(`Seçili çalışmalar ${verb}.`)
+        router.refresh()
+      }
+      return result
+    }
   }
 
   function handleSubmit() {
@@ -327,7 +421,15 @@ export function HomeworkBuilder({
       }
       // Yayınlanan plan taslakta durmamalı.
       await clearWeeklyPlanDraftAction(workspaceId, studentId)
-      router.push(`/teacher/students/${studentId}`)
+      // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
+      // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
+      // zorunluluk değil.
+      setBasketIds(new Set())
+      clearMapSelection()
+      setTitle('')
+      setNote('')
+      toast.success('Plan yayınlandı. Harita güncellendi.')
+      router.refresh()
     })
   }
 
@@ -342,6 +444,8 @@ export function HomeworkBuilder({
         books: groupedSelection.map(group => ({
           bookTitle: group.bookTitle,
           trackingMode: group.trackingMode,
+          // R7-02: sepette zaten hesaplanan kitap bazlı adet metne taşınır.
+          unitCount: group.count,
           sections: [...group.sections.values()].map(section => ({
             title: section.title,
             units: section.units,
@@ -404,7 +508,10 @@ export function HomeworkBuilder({
         </div>
       </div>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_20rem]">
+      {/* R7-03: sepet artık 2xl'de değil lg'de sabitlenir. Amaç, öğretmenin
+          Kitap Haritasından kopmadan çok kitaplı bir ödev sepeti
+          hazırlayabilmesi. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-4">
           {activeMetrics && (
             <MetricTiles
@@ -484,15 +591,48 @@ export function HomeworkBuilder({
           )}
 
           {/* Harita — masaüstü. Dar ekranda gizlenir (R3 v2 "Mobil karar"). */}
-          <div className="hidden lg:block">
+          <div className="hidden space-y-3 lg:block">
             {activeBook && (
-              <BookMapGrid
-                book={activeBook}
-                selectedTestIds={selectedIds}
-                onToggleTest={toggleTest}
-                onToggleSection={toggleSection}
-                onSelectRange={selectRange}
-              />
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Çalışmaları seçmek durumlarını değiştirmez. Değişiklik yalnız
+                  aşağıdaki panelden bir işlem uyguladığınızda gerçekleşir.
+                </p>
+                <BookMapGrid
+                  book={activeBook}
+                  mode="manage"
+                  selectedTestIds={mapSelection}
+                  basketTestIds={basketIds}
+                  onToggleTest={toggleTest}
+                  onToggleSection={toggleSection}
+                  onSelectRange={selectRange}
+                />
+                <BulkActionPanel
+                  book={activeBook}
+                  selectedIds={mapSelection}
+                  onClearSelection={clearMapSelection}
+                  onAssign={addToBasket}
+                  onComplete={(ids, studiedOn) =>
+                    completeUnitsManuallyAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                      studiedOn,
+                    }).then(reportBulk('tamamlandı olarak işlendi'))
+                  }
+                  onApprove={ids =>
+                    approveUnitsAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                    }).then(reportBulk('onaylandı'))
+                  }
+                  onRevert={ids =>
+                    revertUnitsAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                    }).then(reportBulk('geri alındı'))
+                  }
+                />
+              </>
             )}
           </div>
 
@@ -506,14 +646,16 @@ export function HomeworkBuilder({
                 <p className="mb-2 text-xs font-medium">{section.title}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {section.tests.map(test => {
+                    // Dar ekranda yönetim işlemleri gösterilmez; liste
+                    // doğrudan sepeti doldurur (R3 v2 "Mobil karar").
                     const selectable = isSelectableState(test.state)
-                    const selected = selectedIds.has(test.id)
+                    const selected = basketIds.has(test.id)
                     return (
                       <button
                         key={test.id}
                         type="button"
                         disabled={!selectable}
-                        onClick={() => toggleTest(activeBook.bookId, test.id)}
+                        onClick={() => toggleBasket(test.id)}
                         className={cn(
                           'rounded-md border px-2 py-1 text-xs',
                           selected
@@ -533,9 +675,13 @@ export function HomeworkBuilder({
         </div>
 
         {/* Bu Haftanın Planı — tüm kaynaklar tek sepette. */}
-        <aside className="2xl:sticky 2xl:top-6 2xl:self-start">
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start">
+          {/* Panel bir dikey yığındır: başlık ve özet üstte sabit, seçim
+              listesi TEK kaydırma alanı, yayınlama bloğu altta sabit. Böylece
+              70 çalışmalık bir planda bile "Planı Yayınla" erişilebilir kalır
+              ve sayfa aşırı uzamaz (R7-03). */}
+          <div className="flex max-h-full flex-col overflow-hidden rounded-xl border bg-card">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
               <div className="flex min-w-0 items-center gap-1.5">
                 <h2 className="truncate text-sm font-semibold">Bu Haftanın Planı</h2>
                 <Info className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -551,19 +697,21 @@ export function HomeworkBuilder({
               </button>
             </div>
 
-            <p className="px-4 pt-3 text-xs text-muted-foreground">
-              {groupedSelection.length} kitap · {selectedTests.length} {basketUnitLabel} seçildi
+            {/* Özet listeyle birlikte kaymaz: "3 kitap · 14 çalışma" bilgisi
+                panel açıkken her zaman görünür kalır (R7-03). */}
+            <p className="shrink-0 px-4 pt-3 text-xs text-muted-foreground">
+              {groupedSelection.length} kitap · {selectedTests.length} {basketUnitLabel} planda
             </p>
 
             {panelOpen && (
               <>
                 {selectedTests.length === 0 ? (
                   <p className="px-4 py-4 text-xs text-muted-foreground">
-                    Haritadan test seçin. Kitap değiştirdiğinizde ve sayfayı yenilediğinizde
-                    seçimleriniz korunur.
+                    Haritadan çalışma seçip &quot;Ödeve Ekle&quot; deyin. Kitap
+                    değiştirdiğinizde ve sayfayı yenilediğinizde plan korunur.
                   </p>
                 ) : (
-                  <div className="max-h-[26rem] divide-y overflow-y-auto">
+                  <div className="min-h-0 flex-1 divide-y overflow-y-auto">
                     {groupedSelection.map(group => (
                       <div key={group.bookId} className="px-4 py-3">
                         <div className="flex items-center justify-between gap-2">
@@ -607,7 +755,7 @@ export function HomeworkBuilder({
                   </div>
                 )}
 
-                <div className="space-y-3 border-t px-4 py-3">
+                <div className="shrink-0 space-y-3 overflow-y-auto border-t px-4 py-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="title" className="text-xs">
                       Başlık
@@ -665,9 +813,9 @@ export function HomeworkBuilder({
                     </p>
                   )}
                   {selectedTests.length > 0 && (
-                    <Button size="xs" variant="ghost" onClick={clearSelection} className="w-full">
+                    <Button size="xs" variant="ghost" onClick={clearBasket} className="w-full">
                       <Trash2 />
-                      Seçimi temizle
+                      Planı temizle
                     </Button>
                   )}
                 </div>

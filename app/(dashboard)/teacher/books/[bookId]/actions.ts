@@ -13,6 +13,12 @@ import {
   sectionTitleSchema,
   sectionTestCountSchema,
   newSectionSchema,
+  bookTrackingModeSchema,
+  sectionPageRangeSchema,
+  bookPartSchema,
+  bookPartRenameSchema,
+  sectionPartSchema,
+  sectionTopicsSchema,
 } from '@/lib/validation'
 
 const pageSectionSchema = z
@@ -83,6 +89,9 @@ export interface BookMetadataInput {
   curriculumProgram?: string
   editionYear?: number | null
   description?: string
+  /** R7-02 §6.2-6.3: sınıflama alanları. */
+  resourceType?: string
+  structureKind?: string
   videoMode?: string
   videoUrl?: string
 }
@@ -110,6 +119,17 @@ export async function updateBookAction(bookId: string, input: BookMetadataInput)
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // R7-02 §6.2-6.3: sınıflama ayrı RPC'de. update_book_metadata 018'den beri
+  // sabit ve başka çağrıları var; imzasını genişletmek yerine tek işli
+  // yardımcı kullanılır (034'ün set_book_curriculum_program gerekçesi).
+  const { error: classificationError } = await supabase.rpc('set_book_classification', {
+    p_book_id: parsed.data.bookId,
+    p_resource_type: parsed.data.resourceType,
+    p_structure_kind: parsed.data.structureKind,
+  })
+  if (classificationError) return { error: dbErrorToTr(classificationError.message) }
+
   revalidatePath(`/teacher/books/${bookId}`)
   revalidatePath('/teacher/books')
   return { success: true }
@@ -303,6 +323,183 @@ export async function setSectionTopicAction(
   const { error } = await supabase.rpc('set_book_section_topic', {
     p_section_id: parsedSection.data,
     p_topic_id: parsedTopicId,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+/**
+ * Takip türünü düzeltir (R7-02 §6.5, kabul #1).
+ *
+ * 018 bu alanı bilinçli olarak dışarıda bırakmıştı: tür değişimi mevcut
+ * tamamlama kayıtlarını anlamsızlaştırır. Gerekçe hâlâ geçerli, bu yüzden
+ * kilit KALKMIYOR — RPC yalnız kaynakta hiç ilerleme yokken izin verir.
+ * Kazanılan: yarım kalmış 3D VDD gibi kayıtlar silinip yeniden kurulmak
+ * zorunda kalmadan düzeltilebiliyor.
+ */
+export async function setBookTrackingModeAction(bookId: string, trackingMode: string) {
+  const parsed = bookTrackingModeSchema.safeParse({ bookId, trackingMode })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_book_tracking_mode', {
+    p_book_id: parsed.data.bookId,
+    p_tracking_mode: parsed.data.trackingMode,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  revalidatePath('/teacher/books')
+  return { success: true }
+}
+
+/**
+ * Bölümün sayfa aralığını düzenler (R7-02 §6.5, kabul #2).
+ *
+ * Değerler 022'den beri book_sections.page_start/page_end'de saklanıyordu;
+ * eksik olan yalnız düzenleme yoluydu. Aralık değişince birim satırları
+ * create_page_section ile aynı mantıkla yeniden kurulur.
+ */
+export async function setSectionPageRangeAction(
+  bookId: string,
+  sectionId: string,
+  pageStart: number,
+  pageEnd: number
+) {
+  const parsed = sectionPageRangeSchema.safeParse({ sectionId, pageStart, pageEnd })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_section_page_range', {
+    p_section_id: parsed.data.sectionId,
+    p_page_start: parsed.data.pageStart,
+    p_page_end: parsed.data.pageEnd,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+// ---------------------------------------------------------------
+// Parça yönetimi (R7-02 §6.4)
+//
+// Parça bir GRUPLAMA katmanıdır: MÖF F1-F5 ayrı kitap açılmadan tek
+// kaynağın altında tutulur. Takip birimi değildir; ilerleme yüzdesi yine
+// bölüm/birim üzerinden hesaplanır.
+// ---------------------------------------------------------------
+
+export async function addBookPartAction(bookId: string, title: string) {
+  const parsed = bookPartSchema.safeParse({ bookId, title })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('add_book_part', {
+    p_book_id: parsed.data.bookId,
+    p_title: parsed.data.title,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+export async function renameBookPartAction(bookId: string, partId: string, title: string) {
+  const parsed = bookPartRenameSchema.safeParse({ partId, title })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('rename_book_part', {
+    p_part_id: parsed.data.partId,
+    p_title: parsed.data.title,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+/** Parça silmek BÖLÜM SİLMEZ: bölümler parçasız kalır. Yanlış kurulmuş bir
+ *  yapı, ilerleme verisi riske atılmadan geri alınabilmeli. */
+export async function deleteBookPartAction(bookId: string, partId: string) {
+  const parsed = uuidSchema.safeParse(partId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('delete_book_part', { p_part_id: parsed.data })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+export async function setSectionPartAction(
+  bookId: string,
+  sectionId: string,
+  partId: string | null
+) {
+  const parsed = sectionPartSchema.safeParse({ sectionId, partId: partId || null })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_section_part', {
+    p_section_id: parsed.data.sectionId,
+    p_part_id: parsed.data.partId,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+/**
+ * Bölümü birden fazla müfredat konusuna bağlar (R7-02 §8, kabul #9).
+ *
+ * setSectionTopicAction'ın çoklu karşılığı. Boş liste eşlemeyi kaldırır.
+ * RPC birincil eşlemeyi (book_sections.topic_id) listenin ilk elemanıyla
+ * senkron tutar; böylece R5.3 müfredat sinyali aynen çalışmaya devam eder.
+ *
+ * Eşleme müfredat sinyalinden başka hiçbir şeyi etkilemez: bölümün
+ * tamamlanması konuyu otomatik "öğrenildi" yapmaz.
+ */
+export async function setSectionTopicsAction(
+  bookId: string,
+  sectionId: string,
+  topicIds: string[]
+) {
+  const parsed = sectionTopicsSchema.safeParse({ sectionId, topicIds })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_book_section_topics', {
+    p_section_id: parsed.data.sectionId,
+    p_topic_ids: parsed.data.topicIds,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }

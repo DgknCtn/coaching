@@ -82,6 +82,8 @@ describe('countApplicable', () => {
     ]
     expect(countApplicable(states)).toEqual({
       selected: 9,
+      // R7: "Ödeve Ekle" yalnız henüz verilmemiş çalışmalara uygulanır.
+      assign: 3,
       complete: 9,
       approve: 2,
       revert: 0,
@@ -92,6 +94,7 @@ describe('countApplicable', () => {
     const states: HomeworkTestState[] = ['completed', 'completed', 'overdue']
     expect(countApplicable(states)).toEqual({
       selected: 3,
+      assign: 0,
       complete: 1,
       approve: 0,
       revert: 2,
@@ -99,7 +102,36 @@ describe('countApplicable', () => {
   })
 
   it('boş seçim sıfır üretir', () => {
-    expect(countApplicable([])).toEqual({ selected: 0, complete: 0, approve: 0, revert: 0 })
+    expect(countApplicable([])).toEqual({
+      selected: 0,
+      assign: 0,
+      complete: 0,
+      approve: 0,
+      revert: 0,
+    })
+  })
+})
+
+// R7 (R6-03 güncellemesi): tek harita üzerinde "Ödeve Ekle" de bir toplu
+// işlemdir. Diğerlerinden farkı veriye dokunmamasıdır; seçimi haftalık plan
+// sepetine taşır.
+describe('assign · Ödeve Ekle', () => {
+  it('yalnız henüz verilmemiş çalışmalara uygulanır', () => {
+    expect(isActionApplicable('assign', 'not_assigned')).toBe(true)
+    expect(isActionApplicable('assign', 'assigned')).toBe(false)
+    expect(isActionApplicable('assign', 'pending_approval')).toBe(false)
+    expect(isActionApplicable('assign', 'completed')).toBe(false)
+    expect(isActionApplicable('assign', 'overdue')).toBe(false)
+    expect(isActionApplicable('assign', 'no_test')).toBe(false)
+  })
+
+  it('karma seçimde sepete yalnız uygun birimler taşınır', () => {
+    const units = [
+      { id: 'a', state: 'not_assigned' as HomeworkTestState },
+      { id: 'b', state: 'completed' as HomeworkTestState },
+      { id: 'c', state: 'not_assigned' as HomeworkTestState },
+    ]
+    expect(filterApplicable('assign', units)).toEqual(['a', 'c'])
   })
 })
 

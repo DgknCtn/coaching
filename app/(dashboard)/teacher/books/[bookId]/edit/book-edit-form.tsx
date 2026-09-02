@@ -12,8 +12,13 @@ import {
   duplicateBookAsEditionAction,
   renameSectionAction,
   setSectionTestCountAction,
-  setSectionGroupingAction,
-  setSectionTopicAction,
+  setSectionTopicsAction,
+  setSectionPageRangeAction,
+  setSectionPartAction,
+  setBookTrackingModeAction,
+  addBookPartAction,
+  renameBookPartAction,
+  deleteBookPartAction,
   addSectionAction,
   addPageSectionAction,
   deleteSectionAction,
@@ -24,13 +29,19 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TopicMultiSelect, type TopicOption } from '@/components/shared/topic-multi-select'
+import { unitLabel } from '@/lib/unit-labels'
 import {
   SUBJECTS,
   LEVEL_EXAMS,
   VIDEO_MODE_OPTIONS,
+  RESOURCE_TYPE_OPTIONS,
+  STRUCTURE_KIND_OPTIONS,
+  TRACKING_MODE_OPTIONS,
   EDITION_YEAR_MIN,
   EDITION_YEAR_MAX,
   CURRICULUM_PROGRAM_OPTIONS,
+  videoUrlIsProminent,
 } from '@/lib/book-taxonomy'
 
 const schema = z.object({
@@ -40,8 +51,10 @@ const schema = z.object({
   levelExam: z.string().optional(),
   curriculumProgram: z.string().optional(),
   editionYear: z.number().int().min(EDITION_YEAR_MIN).max(EDITION_YEAR_MAX).optional().or(z.nan()),
+  resourceType: z.string().optional(),
+  structureKind: z.enum(['single', 'multi']),
   description: z.string().optional(),
-  videoMode: z.enum(['none', 'book', 'section']),
+  videoMode: z.string(),
   videoUrl: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
@@ -50,42 +63,80 @@ export interface SectionRow {
   id: string
   title: string
   testCount: number
-  /** R6-17: opsiyonel fasikül ve tema etiketleri. */
+  /** R6-17 etiketleri. Artık DÜZENLENMEZ (R7-02 §6.4): yerini gerçek Parça
+   *  nesnesi aldı. Eski kayıtlarda okunur ipucu olarak gösterilir ki
+   *  öğretmen bilgiyi Parça'ya taşıyabilsin. */
   groupLabel: string | null
   themeLabel: string | null
-  /** R5.3: bağlandığı canonical topic; eşlemesizse null. */
-  topicId: string | null
+  /** R7-02 §6.4: bölümün bağlı olduğu Parça; tek parçalı kaynakta null. */
+  partId: string | null
+  /** R4/022: sayfa takipli kitapta bölümün fiziksel kapsamı. */
+  pageStart: number | null
+  pageEnd: number | null
+  /** R7-02 §8: bölüm birden fazla müfredat konusuna bağlanabilir. */
+  topicIds: string[]
 }
 
-/** Müfredat konuları, kapsamına göre gruplanmış (R5.3). */
-export interface TopicOption {
+export interface PartRow {
   id: string
-  name: string
-  scopeName: string
+  title: string
 }
+
+export type { TopicOption }
 
 interface Props {
   bookId: string
   defaultValues: FormData
   sections: SectionRow[]
-  /** 'page' kitaplarda birimler test değil sayfa aralığı olarak adlandırılır. */
+  /** R7-02 §6.4: kaynağın parçaları (fasikül/cilt/modül). */
+  parts: PartRow[]
   trackingMode: string
-  /** R5.3: eşlenebilecek müfredat konuları. Boşsa seçici gösterilmez. */
+  /** R7-02 §8: kitabın ders/seviyesine göre FİLTRELENMİŞ konu listesi. */
   topics: TopicOption[]
+  /**
+   * R7-02 §6.5: kaynakta ödev veya aktif tamamlama kaydı var mı?
+   *
+   * Yapısal alanların (takip türü, sayfa aralığı) kilidi buna bakar.
+   * İlerleme yoksa yarım kalmış kayıt tamamen düzeltilebilir; başladıysa
+   * ilerlemenin anlamını bozacak alanlar kilitlenir, isim/açıklama/video
+   * gibi güvenli alanlar düzenlenmeye devam eder.
+   */
+  hasProgress: boolean
 }
 
-export function BookEditForm({ bookId, defaultValues, sections, trackingMode, topics }: Props) {
+export function BookEditForm({
+  bookId,
+  defaultValues,
+  sections,
+  parts,
+  trackingMode,
+  topics,
+  hasProgress,
+}: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  // R6-01: sayfa takipli kitapta girilen sayı fiziksel sayfa sayısıdır
-  // (022: her sayfa ayrı bir birim satırı), "Sayfa aralığı sayısı" değil.
-  const unitLabel = trackingMode === 'page' ? 'Sayfa' : 'Test'
+  // R6-01/R7-02 §6.5: birim adı takip türünden gelir (test/sayfa/bölüm/
+  // adım/deneme). Etiketin tek kaynağı lib/unit-labels.ts.
+  const unit = unitLabel(trackingMode)
+  const unitTitle = unit.charAt(0).toLocaleUpperCase('tr') + unit.slice(1)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues,
   })
+
+  const isMultiPart = watch('structureKind') === 'multi'
+  const videoUrlProminent = videoUrlIsProminent(watch('videoMode'))
+
+  // R7-02 §6.5: Enter tuşu formu kaydetmemeli — yarım kayıtların başlıca
+  // sebebi buydu. Kayıt yalnız Kaydet butonuyla.
+  function blockEnterSubmit(event: React.KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== 'Enter') return
+    const target = event.target as HTMLElement
+    if (target.tagName === 'TEXTAREA') return
+    event.preventDefault()
+  }
 
   const onSubmit = (data: FormData) => {
     startTransition(async () => {
@@ -96,6 +147,8 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
         levelExam: data.levelExam || undefined,
         curriculumProgram: data.curriculumProgram || undefined,
         editionYear: Number.isFinite(data.editionYear) ? (data.editionYear as number) : null,
+        resourceType: data.resourceType || undefined,
+        structureKind: data.structureKind,
         description: data.description || undefined,
         videoMode: data.videoMode,
         videoUrl: data.videoUrl || undefined,
@@ -116,7 +169,7 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
           <CardTitle className="text-base">Kitap bilgileri</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} onKeyDown={blockEnterSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="title">Kitap Adı *</Label>
               <Input id="title" aria-invalid={!!errors.title} {...register('title')} />
@@ -172,17 +225,50 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
               </div>
             </div>
 
+            {/* R7-02 §6.2-6.3: Kaynak Türü ve Kaynak Yapısı. */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="videoMode">Video Desteği</Label>
+                <Label htmlFor="resourceType">Kaynak Türü</Label>
+                <NativeSelect id="resourceType" {...register('resourceType')}>
+                  {RESOURCE_TYPE_OPTIONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </NativeSelect>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="structureKind">Kaynak Yapısı</Label>
+                <NativeSelect id="structureKind" {...register('structureKind')}>
+                  {STRUCTURE_KIND_OPTIONS.map((k) => (
+                    <option key={k.value} value={k.value}>{k.label}</option>
+                  ))}
+                </NativeSelect>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="videoMode">Video Kullanımı</Label>
+                {/* R7-02 §7.1: "video var mı?" değil "video NASIL kullanılıyor?".
+                    Eski book/section değerleri listede kalır ki mevcut kayıt
+                    kendi değerini göstersin. */}
                 <NativeSelect id="videoMode" {...register('videoMode')}>
-                  {VIDEO_MODE_OPTIONS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                  {VIDEO_MODE_OPTIONS.filter(
+                    (v) => !v.legacy || v.value === defaultValues.videoMode
+                  ).map((v) => (
+                    <option key={v.value} value={v.value}>{v.label}</option>
+                  ))}
                 </NativeSelect>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="videoUrl">Video Bağlantısı</Label>
                 <Input id="videoUrl" placeholder="Kanal veya oynatma listesi" {...register('videoUrl')} />
+                {videoUrlProminent && (
+                  <p className="text-xs text-muted-foreground">
+                    Video ders akışında bağlantı çalışmanın parçasıdır.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -191,11 +277,6 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
               <Textarea id="description" rows={2} {...register('description')} />
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Takip türü (test / sayfa aralığı) sonradan değiştirilemez — mevcut
-              tamamlama kayıtlarının anlamı bozulur.
-            </p>
-
             <Button type="submit" disabled={isPending}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
               Kaydet
@@ -203,6 +284,14 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
           </form>
         </CardContent>
       </Card>
+
+      <TrackingModeCard
+        bookId={bookId}
+        trackingMode={trackingMode}
+        hasProgress={hasProgress}
+      />
+
+      {isMultiPart && <PartsCard bookId={bookId} parts={parts} />}
 
       <NewEditionCard bookId={bookId} currentYear={defaultValues.editionYear} />
 
@@ -216,15 +305,18 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
               key={section.id}
               bookId={bookId}
               section={section}
-              unitLabel={unitLabel}
+              unitTitle={unitTitle}
+              isPageBook={trackingMode === 'page'}
+              parts={isMultiPart ? parts : []}
               topics={topics}
+              hasProgress={hasProgress}
             />
           ))}
 
           {trackingMode === 'page' ? (
             <NewPageSectionForm bookId={bookId} />
           ) : (
-            <NewSectionForm bookId={bookId} unitLabel={unitLabel} />
+            <NewSectionForm bookId={bookId} unitTitle={unitTitle} />
           )}
         </CardContent>
       </Card>
@@ -232,35 +324,238 @@ export function BookEditForm({ bookId, defaultValues, sections, trackingMode, to
   )
 }
 
+/**
+ * Takip türü düzeltmesi (R7-02 §6.5, kabul #1).
+ *
+ * R4-R6 boyunca bu alan tamamen kilitliydi ve "0 öğrencili yarım 3D VDD
+ * kaydı bile takip yapısını değiştiremiyor" şikâyetini doğurdu. Kilidin
+ * gerekçesi (mevcut tamamlama kayıtlarının anlamı bozulur) yalnız ilerleme
+ * VARKEN geçerlidir; bu yüzden kilit kaldırılmıyor, daraltılıyor.
+ */
+function TrackingModeCard({
+  bookId,
+  trackingMode,
+  hasProgress,
+}: {
+  bookId: string
+  trackingMode: string
+  hasProgress: boolean
+}) {
+  const router = useRouter()
+  const [mode, setMode] = useState(trackingMode)
+  const [isPending, startTransition] = useTransition()
+
+  function save() {
+    startTransition(async () => {
+      const r = await setBookTrackingModeAction(bookId, mode)
+      if (r?.error) {
+        toast.error(r.error)
+        setMode(trackingMode)
+        return
+      }
+      toast.success('Takip türü güncellendi.')
+      router.refresh()
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Takip türü</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-64 space-y-1.5">
+            <Label htmlFor="trackingMode">Takip Türü</Label>
+            <NativeSelect
+              id="trackingMode"
+              value={mode}
+              disabled={hasProgress}
+              onChange={(e) => setMode(e.target.value)}
+            >
+              {TRACKING_MODE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </NativeSelect>
+          </div>
+          {!hasProgress && (
+            <Button size="sm" disabled={isPending || mode === trackingMode} onClick={save}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
+              Takip türünü değiştir
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          {hasProgress
+            ? 'Bu kaynakta ödev veya tamamlama kaydı var. Takip türünü değiştirmek mevcut ilerlemenin anlamını bozacağı için kilitli; isim, açıklama ve video alanları düzenlenebilir.'
+            : 'Bu kaynakta henüz ilerleme yok. Takip türünü değiştirirseniz mevcut birim satırları yeniden kurulur; bölüm adları korunur.'}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Parça yönetimi (R7-02 §6.4).
+ *
+ * MÖF F1-F5 gibi fasiküller ayrı kitap açılmadan aynı kaynağın altında
+ * durur. Parça bir GRUPLAMA katmanıdır: öğrencide tek plan, tek toplam
+ * ilerleme yüzdesi korunur.
+ */
+function PartsCard({ bookId, parts }: { bookId: string; parts: PartRow[] }) {
+  const router = useRouter()
+  const [newTitle, setNewTitle] = useState('')
+  const [isPending, startTransition] = useTransition()
+
+  function add() {
+    startTransition(async () => {
+      const r = await addBookPartAction(bookId, newTitle)
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success('Parça eklendi.')
+      setNewTitle('')
+      router.refresh()
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Parçalar</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Fasikül, cilt veya modül. Bölümler aşağıda bir parçaya bağlanır.
+          Parçayı silmek bölümleri silmez, yalnız parçasız bırakır.
+        </p>
+
+        {parts.map((part) => (
+          <PartRowForm key={part.id} bookId={bookId} part={part} />
+        ))}
+
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-3">
+          <div className="min-w-48 flex-1 space-y-1.5">
+            <Label htmlFor="new-part-title">Yeni parça adı</Label>
+            <Input
+              id="new-part-title"
+              placeholder="Örn: F1 Sayılar"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+            />
+          </div>
+          <Button size="sm" variant="outline" disabled={isPending || !newTitle.trim()} onClick={add}>
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus />}
+            Parça ekle
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PartRowForm({ bookId, part }: { bookId: string; part: PartRow }) {
+  const router = useRouter()
+  const [title, setTitle] = useState(part.title)
+  const [isPending, startTransition] = useTransition()
+
+  function save() {
+    startTransition(async () => {
+      const r = await renameBookPartAction(bookId, part.id, title)
+      if (r?.error) {
+        toast.error(r.error)
+        setTitle(part.title)
+        return
+      }
+      toast.success('Parça güncellendi.')
+      router.refresh()
+    })
+  }
+
+  function remove() {
+    startTransition(async () => {
+      const r = await deleteBookPartAction(bookId, part.id)
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success('Parça silindi; bölümleri parçasız kaldı.')
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+      <div className="min-w-48 flex-1 space-y-1.5">
+        <Label htmlFor={`part-${part.id}`}>Parça adı</Label>
+        <Input
+          id={`part-${part.id}`}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+      <Button size="sm" disabled={isPending || title === part.title} onClick={save}>
+        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
+        Kaydet
+      </Button>
+      <Button size="sm" variant="ghost" disabled={isPending} onClick={remove}>
+        <Trash2 />
+        Sil
+      </Button>
+    </div>
+  )
+}
+
 function SectionRowForm({
   bookId,
   section,
-  unitLabel,
+  unitTitle,
+  isPageBook,
+  parts,
   topics,
+  hasProgress,
 }: {
   bookId: string
   section: SectionRow
-  unitLabel: string
+  unitTitle: string
+  isPageBook: boolean
+  parts: PartRow[]
   topics: TopicOption[]
+  hasProgress: boolean
 }) {
   const router = useRouter()
   const [title, setTitle] = useState(section.title)
   const [count, setCount] = useState(String(section.testCount))
-  // R6-17: fasikül ve tema OPSİYONELDİR; klasik kitaplarda boş bırakılır ve
-  // akışı hiç ağırlaştırmaz.
-  const [groupLabel, setGroupLabel] = useState(section.groupLabel ?? '')
-  const [themeLabel, setThemeLabel] = useState(section.themeLabel ?? '')
-  // R5.3: bölümün canonical topic eşlemesi. Boş = eşleme yok; bölüm R4'te
-  // normal çalışır, yalnız müfredat sinyali almaz.
-  const [topicId, setTopicId] = useState(section.topicId ?? '')
+  const [partId, setPartId] = useState(section.partId ?? '')
+  // R7-02 §6.5 kabul #2: sayfa aralığı 022'den beri saklanıyordu; eksik olan
+  // düzenleme yoluydu. "84-96" girilen bölüm burada 84 / 96 olarak görünür.
+  const [pageStart, setPageStart] = useState(section.pageStart ? String(section.pageStart) : '')
+  const [pageEnd, setPageEnd] = useState(section.pageEnd ? String(section.pageEnd) : '')
+  // R7-02 §8: çoklu eşleme. Boş liste eşlemeyi kaldırır.
+  const [topicIds, setTopicIds] = useState<string[]>(section.topicIds)
   const [isPending, startTransition] = useTransition()
+
+  const pageRangeChanged =
+    isPageBook &&
+    (Number(pageStart) || 0) !== (section.pageStart ?? 0) &&
+    Number(pageStart) >= 1 &&
+    Number(pageEnd) >= Number(pageStart)
+  const pageEndChanged =
+    isPageBook && (Number(pageEnd) || 0) !== (section.pageEnd ?? 0) && Number(pageEnd) >= 1
+
+  const topicsChanged =
+    topicIds.length !== section.topicIds.length ||
+    topicIds.some((id) => !section.topicIds.includes(id))
 
   const dirty =
     title !== section.title ||
-    Number(count) !== section.testCount ||
-    groupLabel !== (section.groupLabel ?? '') ||
-    themeLabel !== (section.themeLabel ?? '') ||
-    topicId !== (section.topicId ?? '')
+    (!isPageBook && Number(count) !== section.testCount) ||
+    partId !== (section.partId ?? '') ||
+    pageRangeChanged ||
+    pageEndChanged ||
+    topicsChanged
 
   function save() {
     startTransition(async () => {
@@ -271,27 +566,38 @@ function SectionRowForm({
           return
         }
       }
-      if (Number(count) !== section.testCount) {
+      if (!isPageBook && Number(count) !== section.testCount) {
         const r = await setSectionTestCountAction(bookId, section.id, Number(count))
         if (r?.error) {
-          // Kullanılmış test silinemez — RPC'nin Türkçe mesajı burada görünür.
+          // Kullanılmış birim silinemez — RPC'nin Türkçe mesajı burada görünür.
           toast.error(r.error)
           setCount(String(section.testCount))
           return
         }
       }
-      if (
-        groupLabel !== (section.groupLabel ?? '') ||
-        themeLabel !== (section.themeLabel ?? '')
-      ) {
-        const r = await setSectionGroupingAction(bookId, section.id, groupLabel, themeLabel)
+      if (isPageBook && (pageRangeChanged || pageEndChanged)) {
+        const r = await setSectionPageRangeAction(
+          bookId,
+          section.id,
+          Number(pageStart),
+          Number(pageEnd)
+        )
+        if (r?.error) {
+          toast.error(r.error)
+          setPageStart(section.pageStart ? String(section.pageStart) : '')
+          setPageEnd(section.pageEnd ? String(section.pageEnd) : '')
+          return
+        }
+      }
+      if (partId !== (section.partId ?? '')) {
+        const r = await setSectionPartAction(bookId, section.id, partId || null)
         if (r?.error) {
           toast.error(r.error)
           return
         }
       }
-      if (topicId !== (section.topicId ?? '')) {
-        const r = await setSectionTopicAction(bookId, section.id, topicId || null)
+      if (topicsChanged) {
+        const r = await setSectionTopicsAction(bookId, section.id, topicIds)
         if (r?.error) {
           toast.error(r.error)
           return
@@ -314,84 +620,107 @@ function SectionRowForm({
     })
   }
 
+  // R6-17'den kalan serbest metin etiketleri. Artık düzenlenmiyor; yalnız
+  // öğretmen bilgiyi Parça'ya taşıyabilsin diye gösteriliyor (§11: eski
+  // değerler kör otomasyonla dönüştürülmez).
+  const legacyLabels = [section.groupLabel, section.themeLabel].filter(Boolean).join(' · ')
+
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
-      <div className="min-w-48 flex-1 space-y-1.5">
-        <Label htmlFor={`title-${section.id}`}>Bölüm adı</Label>
-        <Input
-          id={`title-${section.id}`}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </div>
-      {topics.length > 0 && (
-        <div className="w-52 space-y-1.5">
-          <Label htmlFor={`topic-${section.id}`}>Müfredat konusu</Label>
-          <NativeSelect
-            id={`topic-${section.id}`}
-            value={topicId}
-            onChange={(e) => setTopicId(e.target.value)}
-          >
-            <option value="">Eşleme yok</option>
-            {Object.entries(
-              topics.reduce<Record<string, TopicOption[]>>((acc, t) => {
-                ;(acc[t.scopeName] ??= []).push(t)
-                return acc
-              }, {})
-            ).map(([scopeName, list]) => (
-              <optgroup key={scopeName} label={scopeName}>
-                {list.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </NativeSelect>
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-48 flex-1 space-y-1.5">
+          <Label htmlFor={`title-${section.id}`}>Bölüm adı</Label>
+          <Input
+            id={`title-${section.id}`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         </div>
+
+        {parts.length > 0 && (
+          <div className="w-44 space-y-1.5">
+            <Label htmlFor={`part-select-${section.id}`}>Parça</Label>
+            <NativeSelect
+              id={`part-select-${section.id}`}
+              value={partId}
+              onChange={(e) => setPartId(e.target.value)}
+            >
+              <option value="">Parçasız</option>
+              {parts.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </NativeSelect>
+          </div>
+        )}
+
+        {isPageBook ? (
+          <>
+            <div className="w-24 space-y-1.5">
+              <Label htmlFor={`page-start-${section.id}`}>Başlangıç sf.</Label>
+              <Input
+                id={`page-start-${section.id}`}
+                type="number"
+                min={1}
+                value={pageStart}
+                disabled={hasProgress}
+                onChange={(e) => setPageStart(e.target.value)}
+              />
+            </div>
+            <div className="w-24 space-y-1.5">
+              <Label htmlFor={`page-end-${section.id}`}>Bitiş sf.</Label>
+              <Input
+                id={`page-end-${section.id}`}
+                type="number"
+                min={1}
+                value={pageEnd}
+                disabled={hasProgress}
+                onChange={(e) => setPageEnd(e.target.value)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="w-28 space-y-1.5">
+            <Label htmlFor={`count-${section.id}`}>{unitTitle} sayısı</Label>
+            <Input
+              id={`count-${section.id}`}
+              type="number"
+              min={1}
+              max={200}
+              value={count}
+              onChange={(e) => setCount(e.target.value)}
+            />
+          </div>
+        )}
+
+        <Button size="sm" disabled={isPending || !dirty} onClick={save}>
+          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
+          Kaydet
+        </Button>
+        <Button size="sm" variant="ghost" disabled={isPending} onClick={remove}>
+          <Trash2 />
+          Sil
+        </Button>
+      </div>
+
+      {legacyLabels && (
+        <p className="text-xs text-muted-foreground">
+          Eski etiket: {legacyLabels} — bu bilgiyi yukarıdaki Parça alanına taşıyabilirsiniz.
+        </p>
       )}
-      <div className="w-32 space-y-1.5">
-        <Label htmlFor={`group-${section.id}`}>Fasikül</Label>
-        <Input
-          id={`group-${section.id}`}
-          placeholder="ör. F1"
-          value={groupLabel}
-          onChange={(e) => setGroupLabel(e.target.value)}
+
+      <div className="space-y-1.5">
+        <Label>Müfredat konuları</Label>
+        <TopicMultiSelect
+          topics={topics}
+          selectedIds={topicIds}
+          onChange={setTopicIds}
         />
       </div>
-      <div className="w-40 space-y-1.5">
-        <Label htmlFor={`theme-${section.id}`}>Tema</Label>
-        <Input
-          id={`theme-${section.id}`}
-          placeholder="ör. Nicelikler ve Değişimler"
-          value={themeLabel}
-          onChange={(e) => setThemeLabel(e.target.value)}
-        />
-      </div>
-      <div className="w-28 space-y-1.5">
-        <Label htmlFor={`count-${section.id}`}>{unitLabel} sayısı</Label>
-        <Input
-          id={`count-${section.id}`}
-          type="number"
-          min={1}
-          max={200}
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-        />
-      </div>
-      <Button size="sm" disabled={isPending || !dirty} onClick={save}>
-        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
-        Kaydet
-      </Button>
-      <Button size="sm" variant="ghost" disabled={isPending} onClick={remove}>
-        <Trash2 />
-        Sil
-      </Button>
     </div>
   )
 }
 
-function NewSectionForm({ bookId, unitLabel }: { bookId: string; unitLabel: string }) {
+function NewSectionForm({ bookId, unitTitle }: { bookId: string; unitTitle: string }) {
   const router = useRouter()
   const [title, setTitle] = useState('')
   const [count, setCount] = useState('5')
@@ -422,7 +751,7 @@ function NewSectionForm({ bookId, unitLabel }: { bookId: string; unitLabel: stri
         />
       </div>
       <div className="w-28 space-y-1.5">
-        <Label htmlFor="new-section-count">{unitLabel} sayısı</Label>
+        <Label htmlFor="new-section-count">{unitTitle} sayısı</Label>
         <Input
           id="new-section-count"
           type="number"

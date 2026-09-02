@@ -23,12 +23,29 @@ describe('unitLabel', () => {
     expect(unitLabel(null)).toBe('test')
     expect(unitLabel(undefined)).toBe('test')
   })
+
+  // R7-02 §6.5: takip türü beşe çıktı. Yapı aynı kaldı (her birim yine bir
+  // book_tests satırı); değişen yalnız birimin adı.
+  it('R7: bölüm / adım / deneme türlerinin birim adını üretir', () => {
+    expect(unitLabel('section')).toBe('bölüm')
+    expect(unitLabel('step')).toBe('adım')
+    expect(unitLabel('trial')).toBe('deneme')
+  })
+
+  it('R7: tanınmayan bir tür yine test kabul edilir', () => {
+    expect(unitLabel('bilinmeyen')).toBe('test')
+  })
 })
 
 describe('perWeekLabel', () => {
   it('sayfa/hafta ve test/hafta üretir', () => {
     expect(perWeekLabel('page')).toBe('sayfa/hafta')
     expect(perWeekLabel('test')).toBe('test/hafta')
+  })
+
+  it('R7: yeni türlerde de aynı kalıbı kullanır', () => {
+    expect(perWeekLabel('trial')).toBe('deneme/hafta')
+    expect(perWeekLabel('step')).toBe('adım/hafta')
   })
 })
 

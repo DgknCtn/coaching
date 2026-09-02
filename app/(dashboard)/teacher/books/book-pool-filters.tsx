@@ -18,6 +18,7 @@ import {
   SUBJECTS,
   LEVEL_EXAMS,
   TRACKING_MODE_OPTIONS,
+  RESOURCE_TYPE_OPTIONS,
   CURRICULUM_PROGRAM_OPTIONS,
 } from '@/lib/book-taxonomy'
 
@@ -57,9 +58,16 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
     })
   }
 
-  const activeFilters = ['subject', 'level', 'publisher', 'year', 'tracking', 'program', 'q'].filter((k) =>
-    params.get(k)
-  )
+  const activeFilters = [
+    'subject',
+    'level',
+    'publisher',
+    'year',
+    'tracking',
+    'program',
+    'type',
+    'q',
+  ].filter((k) => params.get(k))
 
   return (
     <div className="space-y-3">
@@ -132,6 +140,26 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
           >
             <option value="">Tümü</option>
             {TRACKING_MODE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </NativeSelect>
+        </div>
+
+        {/* R7-02 §6.2: Kaynak Türü yalnız sınıflama ve filtre içindir; hiçbir
+            hesaba girmez ve aynı türden ikinci kitabı engellemez. */}
+        <div className="space-y-1">
+          <Label htmlFor="filter-type" className="text-xs text-muted-foreground">
+            Kaynak Türü
+          </Label>
+          <NativeSelect
+            id="filter-type"
+            value={params.get('type') ?? ''}
+            onChange={(e) => setParam('type', e.target.value)}
+          >
+            <option value="">Tümü</option>
+            {RESOURCE_TYPE_OPTIONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
           </NativeSelect>
         </div>
 

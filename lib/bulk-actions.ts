@@ -14,7 +14,19 @@
 
 import type { HomeworkTestState } from '@/lib/homework-status'
 
-export type BulkAction = 'complete' | 'approve' | 'revert'
+export type BulkAction = 'assign' | 'complete' | 'approve' | 'revert'
+
+/**
+ * "Ödeve Ekle" — R6-03 güncellemesi (R7).
+ *
+ * Diğer üçünden ayrılan yanı: VERİYİ DEĞİŞTİRMEZ. Seçimi haftalık plan
+ * sepetine taşır; durum ancak plan yayınlandığında değişir. Bu yüzden
+ * yalnız henüz verilmemiş çalışmalara uygulanabilir — ödevde olan bir
+ * çalışmayı ikinci kez ödeve eklemek anlamsızdır.
+ */
+function canAssign(state: HomeworkTestState): boolean {
+  return state === 'not_assigned'
+}
 
 /**
  * "Tamamlandı Olarak İşle" — eğitmenin doğrudan akademik kayıt yetkisi.
@@ -39,6 +51,7 @@ function canRevert(state: HomeworkTestState): boolean {
 }
 
 const PREDICATE: Record<BulkAction, (state: HomeworkTestState) => boolean> = {
+  assign: canAssign,
   complete: canComplete,
   approve: canApprove,
   revert: canRevert,
@@ -51,6 +64,7 @@ export function isActionApplicable(action: BulkAction, state: HomeworkTestState)
 export interface BulkActionCounts {
   /** Seçimdeki toplam öğe sayısı. */
   selected: number
+  assign: number
   complete: number
   approve: number
   revert: number
@@ -65,6 +79,7 @@ export interface BulkActionCounts {
 export function countApplicable(states: HomeworkTestState[]): BulkActionCounts {
   return {
     selected: states.length,
+    assign: states.filter(canAssign).length,
     complete: states.filter(canComplete).length,
     approve: states.filter(canApprove).length,
     revert: states.filter(canRevert).length,

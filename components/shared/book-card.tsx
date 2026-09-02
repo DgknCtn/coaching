@@ -16,6 +16,10 @@ interface BookCardProps {
     edition_year?: number | null
     /** Öğretim programı (R6-14). 'Belirtilmedi' ise gösterilmez. */
     curriculum_program?: string | null
+    /** R7-02 §6.2: Kaynak Türü. 'Belirtilmedi' ise gösterilmez. */
+    resource_type?: string | null
+    /** R7-02 §6.3: 'multi' ise kartta "Çok parçalı" rozeti görünür. */
+    structure_kind?: string | null
     sectionCount?: number
     /** Takip birimi sayısı: test kitabında test, sayfa kitabında sayfa (022). */
     testCount?: number
@@ -61,6 +65,10 @@ export function BookCard({ book, progress, href, className }: BookCardProps) {
             {[
               book.subject,
               book.level_exam || book.exam_type,
+              book.resource_type && book.resource_type !== 'Belirtilmedi'
+                ? book.resource_type
+                : null,
+              book.structure_kind === 'multi' ? 'Çok parçalı' : null,
               book.curriculum_program && book.curriculum_program !== 'Belirtilmedi'
                 ? book.curriculum_program
                 : null,

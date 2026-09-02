@@ -177,7 +177,7 @@ export default async function StudentBookDetailPage({
 
       <Section
         title="Kaynak Haritası"
-        description="Bu öğrencinin bu kitaptaki durumu. Yönetim moduna geçerek çalışmaları toplu olarak tamamlandı işaretleyebilir, onaylayabilir veya tamamlanmayı geri alabilirsiniz."
+        description="Bu öğrencinin bu kitaptaki durumu. Ödev verme, onaylama ve düzeltme işlemleri tek Kitap Haritasında yapılır."
       >
         {book.sections.length === 0 ? (
           <div className="rounded-lg border bg-card">

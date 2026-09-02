@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 interface Props {
   book: BookMapBook
   selectedTestIds?: Set<string>
+  /** R7: haftalık plan sepetine alınmış sayfalar. Seçimden ayrı kavram. */
+  basketTestIds?: Set<string>
   /** Aralıktan gelen birimleri toplu ekler/çıkarır (BookMapGrid ile aynı imza). */
   onToggleSection?: (bookId: string, testIds: string[]) => void
   readOnly?: boolean
@@ -43,6 +45,7 @@ const EMPTY_SELECTION: Set<string> = new Set()
 export function BookPageMap({
   book,
   selectedTestIds = EMPTY_SELECTION,
+  basketTestIds,
   onToggleSection,
   readOnly = false,
   mode = 'plan',
@@ -71,14 +74,22 @@ export function BookPageMap({
             </tr>
           </thead>
           <tbody>
-            {book.sections.map((section) => (
+            {book.sections.map((section, sectionIndex) => (
               <SectionRow
                 key={section.id}
                 book={book}
                 section={section}
+                // R7-02 §6.4: parça değiştiğinde ayırıcı başlık. Sayfa bazlı
+                // kaynakta bu bağlam kritiktir: aynı sayfa numarası farklı
+                // fasiküllerde tekrar edebilir (§1.4).
+                startsNewPart={
+                  !!section.partTitle &&
+                  section.partTitle !== (book.sections[sectionIndex - 1]?.partTitle ?? null)
+                }
                 open={openSectionId === section.id}
                 onOpenChange={(open) => setOpenSectionId(open ? section.id : null)}
                 selectedTestIds={selectedTestIds}
+                basketTestIds={basketTestIds}
                 onToggleSection={onToggleSection}
                 readOnly={readOnly}
                 mode={mode}
@@ -108,18 +119,23 @@ function SectionRow({
   open,
   onOpenChange,
   selectedTestIds,
+  basketTestIds,
   onToggleSection,
   readOnly,
   mode,
+  startsNewPart,
 }: {
   book: BookMapBook
   section: BookMapSection
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedTestIds: Set<string>
+  basketTestIds?: Set<string>
   onToggleSection?: (bookId: string, testIds: string[]) => void
   readOnly: boolean
   mode: BookMapMode
+  /** R7-02 §6.4: bu bölüm yeni bir Parça'nın ilki mi? */
+  startsNewPart?: boolean
 }) {
   const progress = useMemo(() => sectionPageProgress(section), [section])
 
@@ -129,10 +145,25 @@ function SectionRow({
   const outOfScope = !isSectionInTarget(section, book.target)
 
   const selectedCount = section.tests.filter((t) => selectedTestIds.has(t.id)).length
+  // R7: sepet seçimden ayrı sayılır — "8 sayfa seçili · 12 sayfa planda".
+  const basketCount = basketTestIds
+    ? section.tests.filter((t) => basketTestIds.has(t.id)).length
+    : 0
   const scope = sectionScopeLabel(section)
 
   return (
     <>
+      {startsNewPart && (
+        <tr>
+          <th
+            scope="colgroup"
+            colSpan={6}
+            className="border-b bg-muted/60 px-4 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
+          >
+            {section.partTitle}
+          </th>
+        </tr>
+      )}
       <tr className="align-top">
         <td className="border-b px-4 py-2.5">
           {/* R5.3: müfredat sinyali YALNIZ konu başlığında; sayfa
@@ -158,17 +189,26 @@ function SectionRow({
               <span className={cn(signalActive && 'font-semibold')}>{section.title}</span>
             </button>
           )}
-          {/* R6-17: fasikül/tema üst grup metadata'sıdır; varsa gösterilir,
-              yoksa satır bugünkü gibi sade kalır. */}
-          {(section.groupLabel || section.themeLabel || outOfScope) && (
+          {/* R7-02 §6.4: Parça adı; R6-17'den kalan fasikül/tema etiketleri
+              eski kayıtlarda hâlâ görünür. Hiçbiri yoksa satır bugünkü gibi
+              sade kalır. */}
+          {(section.partTitle || section.groupLabel || section.themeLabel || outOfScope) && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {[section.groupLabel, section.themeLabel, outOfScope ? 'Plan dışı' : null]
+              {[
+                section.partTitle,
+                section.groupLabel,
+                section.themeLabel,
+                outOfScope ? 'Plan dışı' : null,
+              ]
                 .filter(Boolean)
                 .join(' · ')}
             </p>
           )}
           {section.note && (
             <p className="mt-0.5 text-xs text-muted-foreground">{section.note}</p>
+          )}
+          {basketCount > 0 && (
+            <p className="mt-0.5 text-xs text-primary">{basketCount} sayfa planda</p>
           )}
           {selectedCount > 0 && (
             <p className="mt-0.5 text-xs text-primary">

@@ -20,13 +20,24 @@ import type { TrackingMode } from '@/lib/book-taxonomy'
  *  ile aynı davranış. */
 export type UnitMode = TrackingMode | string | null | undefined
 
-function isPageMode(mode: UnitMode): boolean {
-  return mode === 'page'
+/**
+ * Takip türü -> birim adı (R7-02 §6.5).
+ *
+ * R7'de üç tür eklendi. Yapı değişmedi: her birim yine bir `book_tests`
+ * satırıdır (022), yalnız adı farklıdır. Bu yüzden burada bir Record yeterli;
+ * sayım ve yüzde mantığına dokunulmaz.
+ */
+const UNIT_LABEL: Record<string, string> = {
+  test: 'test',
+  page: 'sayfa',
+  section: 'bölüm',
+  step: 'adım',
+  trial: 'deneme',
 }
 
-/** Tekil birim adı: "test" | "sayfa". */
+/** Tekil birim adı: "test" | "sayfa" | "bölüm" | "adım" | "deneme". */
 export function unitLabel(mode: UnitMode): string {
-  return isPageMode(mode) ? 'sayfa' : 'test'
+  return UNIT_LABEL[mode ?? ''] ?? 'test'
 }
 
 /** Çoğul birim adı. Türkçede bu bağlamda sayıdan sonra çoğul eki

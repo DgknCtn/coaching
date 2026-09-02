@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { Check, CheckCheck, Loader2, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, Loader2, Plus, Undo2, X } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { formatSelectedUnits } from '@/lib/book-map'
 import {
@@ -23,11 +23,19 @@ import { cn } from '@/lib/utils'
 //
 // Seçim TEK BAŞINA hiçbir statüyü değiştirmez — değişiklik yalnız buradaki
 // bir düğmeye basıldığında olur.
+//
+// R7 (R6-03 güncellemesi): "Ödeve Ekle" de bu çubuğa taşındı. Ödev verme ve
+// yönetim aynı akademik verinin farklı işlemleridir; öğretmen artık iki ayrı
+// ekran mantığı arasında geçmek yerine tek harita üzerinde seçip uygun işlemi
+// uyguluyor. onAssign VERİYE DOKUNMAZ: seçimi haftalık plan sepetine taşır.
 
 export interface BulkActionPanelProps {
   book: BookMapBook
   selectedIds: Set<string>
   onClearSelection: () => void
+  /** R7: seçimi haftalık plan sepetine taşır. Verilmezse düğme gösterilmez —
+   *  salt yönetim yüzeylerinde sepet kavramı yoktur. */
+  onAssign?: (unitIds: string[]) => void
   onComplete: (
     unitIds: string[],
     studiedOn: string
@@ -49,6 +57,7 @@ export function BulkActionPanel({
   book,
   selectedIds,
   onClearSelection,
+  onAssign,
   onComplete,
   onApprove,
   onRevert,
@@ -97,6 +106,13 @@ export function BulkActionPanel({
   function run(action: BulkAction) {
     const ids = filterApplicable(action, units)
     if (ids.length === 0) return
+
+    // Ödeve Ekle sunucuya gitmez: sepet istemci tarafında kurulur ve durum
+    // ancak "Planı Yayınla" ile değişir.
+    if (action === 'assign') {
+      onAssign?.(ids)
+      return
+    }
 
     if (action === 'revert' && !window.confirm(revertConfirmMessage(ids.length))) return
 
@@ -176,6 +192,16 @@ export function BulkActionPanel({
       {/* Her düğme kaç öğeye uygulanacağını kendi üstünde söyler; eğitmen
           karma seçimde ne olacağını tahmin etmek zorunda kalmaz. */}
       <div className="flex flex-wrap gap-2">
+        {onAssign && (
+          <ActionButton
+            label="Ödeve Ekle"
+            icon={Plus}
+            count={counts.assign}
+            busy={false}
+            disabled={isPending}
+            onClick={() => run('assign')}
+          />
+        )}
         <ActionButton
           label="Tamamlandı Olarak İşle"
           icon={Check}
@@ -183,6 +209,7 @@ export function BulkActionPanel({
           busy={isPending && pendingAction === 'complete'}
           disabled={isPending}
           onClick={() => run('complete')}
+          variant={onAssign ? 'outline' : 'default'}
         />
         <ActionButton
           label="Onayla"
