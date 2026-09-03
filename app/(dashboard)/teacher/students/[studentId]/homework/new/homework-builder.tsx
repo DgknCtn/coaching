@@ -258,7 +258,10 @@ export function HomeworkBuilder({
       byBook.set(t.bookId, group)
     }
     return [...byBook.values()]
-  }, [selectedTests])
+    // videoTasksByBookId bağımlılığı eksikti: öğretmen bir kitabın video
+    // tercihini değiştirdiğinde sepet, seçim değişene kadar eski
+    // hatırlatmayı göstermeye devam ediyordu.
+  }, [selectedTests, videoTasksByBookId])
 
   // Sepetteki kitaplar tek bir takip türünde toplanıyorsa o birimin adı
   // kullanılır (R6-01 kabul #3). Test ve sayfa kaynakları karışıksa tek bir

@@ -8,7 +8,6 @@ import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 
 export const dynamic = 'force-dynamic'
 

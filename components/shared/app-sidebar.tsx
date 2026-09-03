@@ -120,6 +120,12 @@ export function AppSidebar({
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previousOverflow
+      // Kural burada ref'i efekt içinde bir değişkene kopyalamayı öneriyor.
+      // Kasıtlı olarak yapılmıyor: hamburger düğmesi çekmece açıkken de
+      // BAĞLI KALIR, yani temizlik anında okunan .current zaten aynı
+      // düğmedir. Kopyalamak, düğme yeniden bağlanırsa ESKİ düğmeye odak
+      // vermeye çalışmak demek olurdu — canlı değeri okumak daha doğru.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       menuButtonRef.current?.focus()
     }
   }, [mobileOpen])

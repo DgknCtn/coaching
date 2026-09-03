@@ -120,7 +120,6 @@ describe.skipIf(!hasLiveCredentials)('kiracı izolasyonu · anon erişimi', () =
 describe('kiracı izolasyonu · kurulum', () => {
   it('canlı kimlik bilgisi yoksa güvenlik testi atlanır', () => {
     if (!hasLiveCredentials) {
-      // eslint-disable-next-line no-console
       console.warn(
         '[tenant-isolation] NEXT_PUBLIC_SUPABASE_URL / ANON_KEY tanımlı değil — ' +
           'anon erişim testleri ATLANDI. Bu testler P0 güvenlik bulgusunu koruyor; ' +

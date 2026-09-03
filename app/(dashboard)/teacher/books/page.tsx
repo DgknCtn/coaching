@@ -96,6 +96,10 @@ export default async function BooksPage({ searchParams }: PageProps) {
         subtitle="Tüm dönemlerde kullanılabilen kalıcı kaynak kütüphanesi"
         action={
           <div className="flex gap-2">
+            {/* Bu bir DOSYA İNDİRME uçtur (route handler), sayfa değil.
+                next/link istemci tarafı gezinme yapar ve indirmeyi bozar;
+                kural burada yanlış pozitif veriyor. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <Button size="sm" variant="outline" render={<a href="/teacher/books/export?format=json" />}>
               <Download />
               Yedek al

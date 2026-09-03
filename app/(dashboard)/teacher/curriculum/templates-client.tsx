@@ -17,7 +17,6 @@ import {
   setTemplateItemsAction,
   type TemplateItemInput,
 } from './actions'
-import { cn } from '@/lib/utils'
 
 // Müfredat şablonları ekranı (R5.2).
 //
