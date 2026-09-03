@@ -287,4 +287,8 @@ Denetimde tuhaf bir asimetri çıktı: **öğrenci kendi velisinden az bilgi gö
 
 **`lib/protection-pool-rows.ts`.** Havuz satırlarını kuran ~80 satırlık blok öğretmen sayfasından `lib/`'e taşındı; iki ekran aynı yerden beslenir. Öğretmen sayfası 197 satırdan 66 satıra indi.
 
+**Mevcut öğrenci ekranlarının açıkları da kapatıldı:** haftalık özet öğrenci ana ekranına eklendi (veli panelinin kullandığı görünümün aynısı); hiç kitap atanmamışsa ekran sessizce boş kalıyordu, artık `EmptyState` var; mobilde etiketi gizlenen tarih alanına `aria-label` eklendi; öğrenci segmentine kendi `loading.tsx`'i geldi.
+
+**Sayaç adları role duyarlı oldu.** Durum etiketleri (`testStateLabel`) role göre çevriliyordu ama sayaç adları çevrilmiyordu: öğrenci kendi kitap sayfasında "Öğrenciden Beklenen" ve "Onay Bekleyen" yazan, öğretmen ağzından kurulmuş cümleler görüyordu. `counterLabel(key, audience)` eklendi ve `StatusAudience`'a **`'parent'`** katıldı — veli ne öğretmene emir veren ne de öğrenciye seslenen bir üçüncü kişidir; önceden veli ekranı `audience="student"` ile çağrılıyor ve veliye "Yapılacak" deniyormuş gibi okunuyordu.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

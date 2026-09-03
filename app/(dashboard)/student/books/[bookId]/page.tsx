@@ -4,7 +4,7 @@ import { BookOpen, CircleCheck, UserRound, Hourglass, CircleAlert, CircleDashed 
 import { getStudentContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
 import { resolvePlanScope } from '@/lib/plan-scope'
-import { COUNTER_LABEL } from '@/lib/homework-status'
+import { counterLabel } from '@/lib/homework-status'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
@@ -79,15 +79,25 @@ export default async function StudentBookMapPage({
             value: book.totalTests,
             icon: BookOpen,
           },
-          { label: COUNTER_LABEL.completed, value: completed, tone: 'success', icon: CircleCheck },
+          {
+            label: counterLabel('completed', 'student'),
+            value: completed,
+            tone: 'success',
+            icon: CircleCheck,
+          },
           { label: 'Yapılacak', value: assigned, tone: 'warning', icon: UserRound },
           {
-            label: COUNTER_LABEL.pendingApproval,
+            label: counterLabel('pendingApproval', 'student'),
             value: pendingApproval,
             tone: 'info',
             icon: Hourglass,
           },
-          { label: COUNTER_LABEL.overdue, value: overdue, tone: 'destructive', icon: CircleAlert },
+          {
+            label: counterLabel('overdue', 'student'),
+            value: overdue,
+            tone: 'destructive',
+            icon: CircleAlert,
+          },
           {
             label: 'Kalan',
             value: Math.max(0, book.totalTests - completed),

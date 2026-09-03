@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { isOverdue } from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
+import { BookOpen } from 'lucide-react'
+import { EmptyState } from '@/components/shared/empty-state'
+import { MetricRow } from '@/components/shared/metric-row'
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
 import { CheckInCard } from './check-in-card'
@@ -16,7 +19,7 @@ export default async function StudentPage() {
 
   // Ödevler, kitap ilerlemesi ve bildirim materyalizasyonu birbirinden
   // bağımsız — tek dalgada çalışırlar.
-  const [{ data: batches }, { data: bookProgress }] = await Promise.all([
+  const [{ data: batches }, { data: bookProgress }, , { data: weekly }] = await Promise.all([
     supabase
       .from('homework_batches')
       .select(`
@@ -40,6 +43,13 @@ export default async function StudentPage() {
     // Sonucu okunmuyor ama aşağıdaki sorgudan ÖNCE bitmeli (yazdığı satırı
     // o okuyor) — bu yüzden bu dalganın içinde, sonrakinden önce.
     supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
+    // Haftalık özet: veli panelinin kullandığı görünümün aynısı.
+    supabase
+      .from('student_weekly_homework_summary_view')
+      .select('*')
+      .eq('student_id', student.id)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
   ])
 
   // Açık durum bildirimi (varsa) — süresi gelen tek kayıt.
@@ -75,6 +85,20 @@ export default async function StudentPage() {
 
       {openCheckIn && <CheckInCard checkInId={openCheckIn.id} />}
 
+      {/* Haftalık özet. Bu görünüm bugüne kadar YALNIZ veli panelindeydi;
+          öğrenci kendi haftasının toplamını göremiyordu. */}
+      {weekly && (
+        <MetricRow
+          className="grid-cols-2 md:grid-cols-4"
+          metrics={[
+            { label: 'Bu hafta verilen', value: Number(weekly.assigned_tests ?? 0) },
+            { label: 'Tamamladığın', value: Number(weekly.completed_tests ?? 0) },
+            { label: 'Onay bekleyen', value: Number(weekly.pending_approval_tests ?? 0) },
+            { label: 'Geciken', value: Number(weekly.overdue_tests ?? 0) },
+          ]}
+        />
+      )}
+
       {overdue.length > 0 && (
         <>
           <AlertBanner
@@ -100,7 +124,19 @@ export default async function StudentPage() {
         />
       ) : null}
 
-      {(bookProgress?.length ?? 0) > 0 && (
+      {/* ÖNCEDEN: hiç kitap atanmamışsa bu blok tamamen gizleniyor ve ekran
+          sessizce boş kalıyordu. Boş durum artık açıkça söyleniyor. */}
+      {(bookProgress?.length ?? 0) === 0 ? (
+        <Section title="Kitap ilerlemem">
+          <div className="rounded-lg border bg-card">
+            <EmptyState
+              icon={BookOpen}
+              title="Henüz kitabın yok"
+              description="Öğretmenin sana bir kitap atadığında ilerlemen burada görünecek."
+            />
+          </div>
+        </Section>
+      ) : (
         <Section title="Kitap ilerlemem">
           <div className="space-y-3">
             {bookProgress!.map(p => (

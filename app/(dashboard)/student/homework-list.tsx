@@ -143,9 +143,12 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
           </span>
           {pendingCount > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {/* Etiket dar ekranda gizleniyor; erişilebilir ad input'un
+                  kendisinde durmalı, aksi hâlde alan mobilde adsız kalır. */}
               <span className="hidden sm:inline">Çalıştığım gün</span>
               <input
                 type="date"
+                aria-label="Çalıştığım gün"
                 value={studiedOn}
                 max={todayDateString()}
                 onChange={e => setStudiedOn(e.target.value)}
