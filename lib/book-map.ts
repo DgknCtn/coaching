@@ -17,6 +17,7 @@ import {
 } from '@/lib/curriculum-signal'
 import type { FlowStatus } from '@/lib/curriculum-flow'
 import { formatPageRangeLabel, formatRanges, rangesFromPages } from '@/lib/page-ranges'
+import { orderLeafSections } from '@/lib/book-structure'
 
 export interface BookMapTest {
   id: string
@@ -69,6 +70,23 @@ export interface BookMapSection {
   pageEnd: number | null
   note: string | null
   videoUrl: string | null
+  /**
+   * R7-03: bu satır bir Alt Bölümse bağlı olduğu Bölüm.
+   *
+   * `book.sections` HER ZAMAN yaprak listesidir (bkz. orderLeafSections):
+   * kapsayıcı bölümler satır olarak dönmez, adları buradaki parentTitle'da
+   * taşınır ve haritada partTitle gibi ayırıcı başlık olarak çizilir.
+   * Alt bölümü olmayan kitapta ikisi de null'dır.
+   */
+  parentSectionId: string | null
+  parentTitle: string | null
+  /**
+   * R7-03: kitapta yazan test aralığı. book_tests.order_index bu aralıktan
+   * üretilir, yani bu satırlarda order_index "basılı test numarası"dır.
+   * Aralık kullanılmayan eski bölümlerde null'dır.
+   */
+  testStart: number | null
+  testEnd: number | null
 }
 
 /**
@@ -179,6 +197,7 @@ export async function loadBookMap(
         book_sections(
           id, title, order_index, status, note, video_url, page_start, page_end,
           group_label, theme_label, topic_id, part_id,
+          parent_section_id, test_start, test_end,
           book_tests(id, title, order_index, status, page_start, page_end)
         )
       )
@@ -287,9 +306,17 @@ export async function loadBookMap(
         .sort((a, b) => a.order_index - b.order_index)
         .map((p: any) => [p.id, p.title])
     )
-    const sections: BookMapSection[] = (book?.book_sections ?? [])
-      .filter((s: any) => s.status === 'active')
-      .sort((a: any, b: any) => a.order_index - b.order_index)
+    // R7-03: kapsayıcı bölümlerin adı, çocuklarının satırında başlık olarak
+    // taşınacak. Sözlük ÖNCE kurulur çünkü aşağıdaki map çocuğu işlerken
+    // ebeveynin adına ihtiyaç duyar.
+    const activeSectionRows = (book?.book_sections ?? []).filter(
+      (s: any) => s.status === 'active'
+    )
+    const sectionTitleById = new Map<string, string>(
+      activeSectionRows.map((s: any) => [s.id, s.title])
+    )
+
+    const mappedSections: BookMapSection[] = activeSectionRows
       .map((s: any) => {
         const tests: BookMapTest[] = (s.book_tests ?? [])
           .filter((t: any) => t.status === 'active')
@@ -332,9 +359,22 @@ export async function loadBookMap(
           ),
           note: s.note ?? null,
           videoUrl: s.video_url ?? null,
+          parentSectionId: s.parent_section_id ?? null,
+          parentTitle: s.parent_section_id
+            ? (sectionTitleById.get(s.parent_section_id) ?? null)
+            : null,
+          testStart: s.test_start ?? null,
+          testEnd: s.test_end ?? null,
         }
       })
-      .filter((s: BookMapSection) => s.tests.length > 0)
+
+    // Ağaç TEK yerde düzleştirilir: aşağıdaki hiçbir tüketici (plan-scope,
+    // homework-detail, share-text, bulk-actions, weekly-plan) alt bölüm
+    // katmanını bilmek zorunda değil. Kapsayıcı bölümler testleri olmadığı
+    // için burada düşer; adları parentTitle'da yaşamaya devam eder.
+    const sections = orderLeafSections(
+      mappedSections.map(s => ({ ...s, testCount: s.tests.length }))
+    ).map(({ testCount: _testCount, ...s }) => s as BookMapSection)
 
     const totalTests = sections.reduce((sum, s) => sum + s.tests.length, 0)
 

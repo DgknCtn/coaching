@@ -37,6 +37,10 @@ function section(id: string, tests: BookMapTest[], pageStart?: number, pageEnd?:
     curriculumStatus: null,
     note: null,
     videoUrl: null,
+    parentSectionId: null,
+    parentTitle: null,
+    testStart: null,
+    testEnd: null,
   }
 }
 
@@ -327,6 +331,10 @@ describe('R5.1 · Kaynak Planı kabul testleri', () => {
       pageEnd: null,
       note: null,
       videoUrl: null,
+      parentSectionId: null,
+      parentTitle: null,
+      testStart: null,
+      testEnd: null,
     }
   }
 
@@ -389,6 +397,10 @@ describe('R5.1 · Kaynak Planı kabul testleri', () => {
       pageEnd: null,
       note: null,
       videoUrl: null,
+      parentSectionId: null,
+      parentTitle: null,
+      testStart: null,
+      testEnd: null,
     }
 
     const scope = resolvePlanScope(
@@ -534,6 +546,10 @@ describe('R5.3 · MK-09', () => {
       pageEnd: null,
       note: null,
       videoUrl: null,
+      parentSectionId: null,
+      parentTitle: null,
+      testStart: null,
+      testEnd: null,
     }
   }
 
