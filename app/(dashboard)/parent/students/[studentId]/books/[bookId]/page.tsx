@@ -2,12 +2,12 @@ import { notFound } from 'next/navigation'
 import { getParentContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
 import { resolvePlanScope } from '@/lib/plan-scope'
-import { collectVideoResources } from '@/lib/book-videos'
+import { collectVideoResources, watchedKeys } from '@/lib/book-videos'
 import { BookVideoPanel } from '@/components/shared/book-video-panel'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
-import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
+import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
 import { BookMapGrid, BookMapLegend } from '@/components/shared/book-map-grid'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +41,12 @@ export default async function ParentBookMapPage({
 
   if (!book) notFound()
 
+  // Öğrencinin "izledim" işaretleri — veli bunları okuyabilir (023).
+  const { data: watchRows } = await supabase
+    .from('video_watch_marks')
+    .select('section_id')
+    .eq('student_book_assignment_id', book.assignmentId)
+
   // Öğretmenin hedef kapsamı neyse veli de onu görür.
   const scope = resolvePlanScope(book)
 
@@ -56,7 +62,9 @@ export default async function ParentBookMapPage({
         badges={book.examType ? <Badge variant="info">{book.examType}</Badge> : undefined}
       />
 
-      <PlanTempoCard
+      {/* Veliye sadeleştirilmiş tempo (R6 bekleme listesi): aynı hesap,
+          tek cümlelik anlatım. */}
+      <ParentTempoRow
         bookTitle={book.title}
         startDate={scope.startDate}
         targetEndDate={scope.targetEndDate}
@@ -65,13 +73,18 @@ export default async function ParentBookMapPage({
         trackingMode={book.trackingMode}
       />
 
-      {/* Video kaynakları veliye yalnız gösterilir; "İzledim" öğrenciye ait
-          bir aksiyondur ve plan temposuna girmez (R4 §6). */}
-      <BookVideoPanel book={book} resources={collectVideoResources(book, new Set())} />
+      {/* Video kaynakları veliye SALT OKUNUR gösterilir: işaretleme öğrenciye
+          ait bir aksiyondur ve plan temposuna girmez (R4 §6). Önceden izlenme
+          kümesi boş geçiliyordu, yani liste durumsuz ve yararsızdı; veli
+          zaten video_watch_marks üzerinde SELECT hakkına sahip (023). */}
+      <BookVideoPanel
+        book={book}
+        resources={collectVideoResources(book, watchedKeys(watchRows ?? []))}
+      />
 
       {/* Matris masaüstü içindir; dar ekranda bölüm bazlı özet kalır. */}
       <div className="hidden lg:block">
-        <BookMapGrid book={book} readOnly audience="student" />
+        <BookMapGrid book={book} readOnly audience="parent" />
       </div>
 
       <div className="lg:hidden">
@@ -81,7 +94,7 @@ export default async function ParentBookMapPage({
           variant="card"
         >
           <div className="space-y-3 p-4">
-            <BookMapLegend audience="student" book={book} />
+            <BookMapLegend audience="parent" book={book} />
             <ul className="divide-y">
               {book.sections.map(section => (
                 <li key={section.id} className="flex items-center justify-between gap-3 py-2">

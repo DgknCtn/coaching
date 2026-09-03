@@ -7,13 +7,43 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { MetricRow } from '@/components/shared/metric-row'
-import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
+import { counterLabel, OVERDUE_HINT } from '@/lib/homework-status'
+import { LinkTabs } from '@/components/shared/link-tabs'
+import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
-import { PlanTempoCard } from '@/components/shared/plan-tempo-card'
+import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
 
 export const dynamic = 'force-dynamic'
+
+// Velinin ekranı okumasını sağlayan kurallar. Diğer üç ekranla aynı kalıp.
+const EXPLAINERS: ExplainerCard[] = [
+  {
+    title: 'Sayılar ne anlama geliyor?',
+    items: [
+      { text: '"Tamamlanan" yalnız öğretmenin onayladığı çalışmaları sayar.', tone: 'positive' },
+      { text: '"Onay Bekleyen" öğrencinin gönderdiği ama henüz onaylanmamış çalışmadır; tamamlanan sayısına girmez.', tone: 'negative' },
+      { text: '"Süresi Geçen" ayrı bir toplam değildir — bekleyenlerin içindeki teslim tarihi geçmiş kısımdır.' },
+    ],
+  },
+  {
+    title: 'Tempo nasıl okunur?',
+    items: [
+      { text: 'Her kaynak için hedef tarihe göre haftada ne kadar gerektiği yazar.' },
+      { text: 'Hedef tarihi belirlenmemiş bir kaynakta tempo hesaplanamaz; o satırda yalnız kalan miktar görünür.' },
+      { text: 'Video çalışmaları tempoya dahil edilmez.' },
+    ],
+  },
+  {
+    title: 'Bu panel ne yapmaz?',
+    items: [
+      { text: 'Buradan ödev verilemez, hedef değiştirilemez; panel yalnız görüntülemedir.' },
+      { text: 'Öğrencinin konu planı ve tekrar listesi öğretmen ile öğrenci arasındadır, bu panelde yer almaz.' },
+      { text: 'Bir gecikme gördüğünüzde öğretmenle iletişime geçmek en hızlı yoldur.' },
+    ],
+  },
+]
 
 /** Supabase iç içe select'i tek kayıt için de dizi tipinde çözebiliyor. */
 type Nested<T> = T | T[] | null
@@ -21,15 +51,37 @@ function one<T>(value: Nested<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
-export default async function ParentPage() {
+export default async function ParentPage({
+  searchParams,
+}: {
+  /** Seçili öğrenci URL'de tutulur: paylaşılabilir ve geri tuşuyla gezilebilir. */
+  searchParams: Promise<{ student?: string }>
+}) {
+  const { student: requestedStudentId } = await searchParams
   const { supabase, workspaceId, linkedStudents } = await getParentContext()
 
 
+  // ÖNCEDEN: bağlı tüm öğrenciler tek sayfada alt alta diziliyordu. Üç
+  // çocuklu bir velide sayfa taranamaz hâle geliyordu ve her çocuk için
+  // üç sorgu birden çalışıyordu. Artık tek çocuğun detayı gösterilir;
+  // geçiş sekmelerle yapılır ve tek çocukta sekme hiç görünmez.
+  const activeStudentId =
+    requestedStudentId && linkedStudents.some(l => l.students.id === requestedStudentId)
+      ? requestedStudentId
+      : (linkedStudents[0]?.students.id ?? null)
+
+  const activeLinks = linkedStudents.filter(l => l.students.id === activeStudentId)
+
   const studentData = await Promise.all(
-    linkedStudents.map(async (link) => {
+    activeLinks.map(async (link) => {
       const studentId = link.students.id
 
-      const [{ data: bookProgress }, { data: batches }, { data: weeklySummary }] = await Promise.all([
+      const [
+        { data: bookProgress },
+        { data: batches },
+        { data: weeklySummary },
+        { data: teacherRow },
+      ] = await Promise.all([
         supabase
           .from('student_book_progress_view')
           .select('*')
@@ -57,6 +109,14 @@ export default async function ParentPage() {
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
           .maybeSingle(),
+        // Gecikme uyarısında "kime yazayım?" sorusunu yanıtlamak için.
+        // profiles RLS'i veliye kapalıysa isim null döner ve uyarı genel
+        // metne düşer — ekran bozulmaz.
+        supabase
+          .from('students')
+          .select('profiles:primary_teacher_profile_id(full_name)')
+          .eq('id', studentId)
+          .maybeSingle(),
       ])
 
       return {
@@ -64,6 +124,9 @@ export default async function ParentPage() {
         bookProgress: bookProgress ?? [],
         batches: batches ?? [],
         weekly: weeklySummary,
+        teacherName:
+          one((teacherRow as { profiles: Nested<{ full_name: string }> } | null)?.profiles ?? null)
+            ?.full_name ?? null,
       }
     })
   )
@@ -72,8 +135,24 @@ export default async function ParentPage() {
     <div className="mx-auto max-w-3xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Veli Paneli"
-        subtitle="Öğrencilerinizin gelişimini takip edin"
+        subtitle={
+          linkedStudents.length > 1
+            ? 'Öğrencilerinizin gelişimini takip edin'
+            : 'Öğrencinizin gelişimini takip edin'
+        }
       />
+
+      {/* Tek çocukta sekme hiç çizilmez — gereksiz bir seçim sunmaz. */}
+      {linkedStudents.length > 1 && activeStudentId && (
+        <LinkTabs
+          tabs={linkedStudents.map(l => ({
+            key: l.students.id,
+            label: l.students.full_name,
+            href: `/parent?student=${l.students.id}`,
+          }))}
+          activeKey={activeStudentId}
+        />
+      )}
 
       {studentData.length === 0 && (
         <Section variant="card">
@@ -85,7 +164,7 @@ export default async function ParentPage() {
         </Section>
       )}
 
-      {studentData.map(({ student, bookProgress, batches, weekly }) => {
+      {studentData.map(({ student, bookProgress, batches, weekly, teacherName }) => {
         const overdueBatches = batches.filter((b) => {
           return (
             isOverdue(b.due_date) &&
@@ -112,7 +191,11 @@ export default async function ParentPage() {
               <AlertBanner
                 tone="warning"
                 title={`${overdueBatches.length} gecikmiş ödev grubu`}
-                description="Öğretmeninizle iletişime geçin."
+                description={
+                  teacherName
+                    ? `Teslim tarihi geçmiş çalışmalar var. ${teacherName} ile iletişime geçebilirsiniz.`
+                    : 'Teslim tarihi geçmiş çalışmalar var. Öğretmenle iletişime geçebilirsiniz.'
+                }
               />
             )}
 
@@ -129,15 +212,15 @@ export default async function ParentPage() {
                 <MetricRow
                   className="md:grid-cols-5"
                   metrics={[
-                    { label: COUNTER_LABEL.assigned, value: weekly.assigned_tests ?? 0 },
-                    { label: COUNTER_LABEL.completed, value: weekly.completed_tests ?? 0 },
-                    { label: COUNTER_LABEL.pending, value: weekly.pending_tests ?? 0 },
+                    { label: counterLabel('assigned', 'parent'), value: weekly.assigned_tests ?? 0 },
+                    { label: counterLabel('completed', 'parent'), value: weekly.completed_tests ?? 0 },
+                    { label: counterLabel('pending', 'parent'), value: weekly.pending_tests ?? 0 },
                     {
-                      label: COUNTER_LABEL.pendingApproval,
+                      label: counterLabel('pendingApproval', 'parent'),
                       value: weekly.pending_approval_tests ?? 0,
                     },
                     {
-                      label: COUNTER_LABEL.overdue,
+                      label: counterLabel('overdue', 'parent'),
                       value: weekly.overdue_tests ?? 0,
                       hint: OVERDUE_HINT,
                     },
@@ -166,11 +249,11 @@ export default async function ParentPage() {
             {bookProgress.length > 0 && (
               <Section
                 title="Plan ve tempo"
-                description="Hedef tarihe göre nerede olunduğu ve bugün gereken ortalama tempo."
+                description="Her kaynakta hedefe göre nerede olunduğu."
               >
                 <div className="space-y-3">
                   {bookProgress.map((p) => (
-                    <PlanTempoCard
+                    <ParentTempoRow
                       key={p.student_book_assignment_id}
                       bookTitle={p.book_title}
                       startDate={p.start_date}
@@ -268,6 +351,8 @@ export default async function ParentPage() {
           </div>
         )
       })}
+
+      {studentData.length > 0 && <ExplainerCards cards={EXPLAINERS} />}
     </div>
   )
 }

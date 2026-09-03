@@ -291,4 +291,18 @@ Denetimde tuhaf bir asimetri çıktı: **öğrenci kendi velisinden az bilgi gö
 
 **Sayaç adları role duyarlı oldu.** Durum etiketleri (`testStateLabel`) role göre çevriliyordu ama sayaç adları çevrilmiyordu: öğrenci kendi kitap sayfasında "Öğrenciden Beklenen" ve "Onay Bekleyen" yazan, öğretmen ağzından kurulmuş cümleler görüyordu. `counterLabel(key, audience)` eklendi ve `StatusAudience`'a **`'parent'`** katıldı — veli ne öğretmene emir veren ne de öğrenciye seslenen bir üçüncü kişidir; önceden veli ekranı `audience="student"` ile çağrılıyor ve veliye "Yapılacak" deniyormuş gibi okunuyordu.
 
-**R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
+### Veli paneli — sadeleştirme (bekleme listesi maddesi kapandı)
+
+Veli **salt okunur kalır**; hiçbir server action eklenmedi ve RLS'te veliye yazma hakkı verilmedi.
+
+**Tempo göstergeleri sadeleşti.** Veli bugüne kadar öğretmenle BİREBİR aynı `PlanTempoCard`'ı görüyordu: başlangıç temposu, gerekli tempo, kalan hafta, hedef tarih, yüzde. Oysa veli bu sayılarla bir karar vermiyor — ödev atamıyor, hedef değiştirmiyor. Sorusu tek: "iyi gidiyor mu, gitmiyorsa ne kadar geride?" `ParentTempoRow` **aynı hesabı** (`calculatePlanTempo`) kullanır ama çıktı tek cümleye iner: "Hedefe göre iyi gidiyor · 4 test/hafta yeterli" ya da "Hedefe yetişmek için 9 test/hafta gerekiyor". Kart yığını yerine kitap başına bir satır.
+
+**Çoklu çocuk.** `parent_student_links` N öğrenciye izin veriyor ama arayüz hepsini alt alta diziyordu; üç çocuklu bir velide sayfa taranamaz hâle geliyor ve her çocuk için üç sorgu birden çalışıyordu. Artık tek çocuğun detayı gösterilir, geçiş `LinkTabs` ile yapılır ve seçim `?student=` ile URL'de tutulur (paylaşılabilir, geri tuşuyla gezilebilir). **Tek çocukta sekme hiç çizilmez.**
+
+*Not: plan `StudentSwitcher`'ı bağlamayı öngörüyordu; o bileşen `/teacher/students/<id>` yolunu yeniden yazmak üzere kurulmuş ve veli rotasına uymuyor. `LinkTabs` zaten "URL tabanlı seçim" kalıbının kendisi ve diğer üç ekranda kullanılıyor — ikinci bir mod eklemek yerine o kullanıldı.*
+
+**Video paneli artık durum gösteriyor.** İzlenenler kümesi `new Set()` olarak geçiliyordu, yani liste durumsuzdu. Veli `video_watch_marks` üzerinde zaten SELECT hakkına sahip (023); işaretler gerçekten yükleniyor ve **salt okunur** gösteriliyor ("İzlendi" / "Henüz izlenmedi"). İşaretleme yalnız öğrencinin eylemi olarak kalır.
+
+**Dil.** Veli ekranları `audience="student"` ile çağrılıyor ve veliye "Yapılacak" deniyormuş gibi okunuyordu; artık `audience="parent"`. Gecikme uyarısındaki "Öğretmeninizle iletişime geçin" düz metni öğretmenin adıyla anlamlı bir cümleye dönüştü. Ekranın nasıl okunacağını anlatan açıklama kartları eklendi (diğer üç ekranla aynı kalıp).
+
+**R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

@@ -88,7 +88,10 @@ function VideoRow({
         <span className="truncate">{resource.label}</span>
       </a>
 
-      {onMarkWatched && (
+      {/* İşaretleme yalnız öğrencinin yapabileceği bir eylem; onMarkWatched
+          verilmeyen bağlamlarda (veli paneli) durum SALT OKUNUR gösterilir.
+          Önceden veli hiçbir şey görmüyordu ve liste durumsuz kalıyordu. */}
+      {onMarkWatched ? (
         watched ? (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-success-foreground">
             <Check className="size-3.5" />
@@ -99,6 +102,17 @@ function VideoRow({
             İzledim
           </Button>
         )
+      ) : (
+        <span
+          className={
+            watched
+              ? 'flex shrink-0 items-center gap-1.5 text-xs text-success-foreground'
+              : 'shrink-0 text-xs text-muted-foreground'
+          }
+        >
+          {watched && <Check className="size-3.5" />}
+          {watched ? 'İzlendi' : 'Henüz izlenmedi'}
+        </span>
       )}
     </li>
   )
