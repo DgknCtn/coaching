@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–046
+supabase/migrations/ 001–048
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 46 veritabanı migration'ı çalıştırılmıştır (001–046).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 48 veritabanı migration'ı çalıştırılmıştır (001–048).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -304,5 +304,25 @@ Veli **salt okunur kalır**; hiçbir server action eklenmedi ve RLS'te veliye ya
 **Video paneli artık durum gösteriyor.** İzlenenler kümesi `new Set()` olarak geçiliyordu, yani liste durumsuzdu. Veli `video_watch_marks` üzerinde zaten SELECT hakkına sahip (023); işaretler gerçekten yükleniyor ve **salt okunur** gösteriliyor ("İzlendi" / "Henüz izlenmedi"). İşaretleme yalnız öğrencinin eylemi olarak kalır.
 
 **Dil.** Veli ekranları `audience="student"` ile çağrılıyor ve veliye "Yapılacak" deniyormuş gibi okunuyordu; artık `audience="parent"`. Gecikme uyarısındaki "Öğretmeninizle iletişime geçin" düz metni öğretmenin adıyla anlamlı bir cümleye dönüştü. Ekranın nasıl okunacağını anlatan açıklama kartları eklendi (diğer üç ekranla aynı kalıp).
+
+### R7-03 — Alt Bölüm ve Test Aralığı (047, 048)
+
+Gerçek vaka: 3D TYT Matematik'te **01. Bölüm tek başına ~200 sayfa** ve içinde Temel Kavramlar, Üslü Sayılar, Problemler gibi ~30 ayrı ödev birimi var. Test numarası bölüm içinde 1-96 ilerliyor ama TÜMEVARIM bloklarında yeniden 1'den başlıyor. "Bölüm + Test Sayısı" modeli bunu temsil edemiyordu: öğretmen **"Üslü Sayılar Test 44-48"** ödevi veremiyordu.
+
+**Hiyerarşi:** `Kaynak → Parça? → Bölüm → Alt Bölüm? → test`. Alt Bölüm opsiyoneldir; alt bölümü olmayan kitaplar bugünkü gibi çalışır.
+
+**Test adedi girilmez**, `Son - İlk + 1` olarak hesaplanır. `test_start/test_end` yalnız bilgi değil **üretim girdisidir**: `book_tests.order_index = n`, `title = n || '. Test'` bu aralıktan üretilir. Böylece `order_index` bu kayıtlarda "kitapta yazan test numarası" anlamını kazandı; bugüne kadar hem sıra hem numara olarak çift anlamlıydı.
+
+**Neden ayrı tablo değil, `book_sections.parent_section_id`:** belirleyici olan `book_tests` üzerindeki `UNIQUE (section_id, order_index)` kısıtıdır. Şartname "aynı basılı numara farklı alt bölümlerde kullanılabilir, sistem bunu çakışma görmez" diyor; alt bölüm kendi `section_id`'si olduğu için TÜMEVARIM I Test 1 ile Temel Kavramlar Test 1 **zaten ayrı satırlardır**. Ayrıca alt bölüm, bölümün sahip olduğu her şeye ihtiyaç duyar (topic_id, çoklu müfredat eşlemesi, sayfa aralığı, not, parça) — ayrı tabloda hepsi yeniden yazılırdı. Sonuç: `book_tests.section_id` hâlâ yaprağı gösterir ve `homework_items`, `test_completions`, `plan-scope`, `plan-pace`, `weekly-plan`, `bulk-actions` **hiç değişmedi**.
+
+**Ağaç TEK yerde düzleşir.** `lib/book-structure.ts` içindeki `orderLeafSections` haritaya her zaman yaprak listesi verir; kapsayıcı bölümler satır olarak dönmez, adları `parentTitle`'da başlığa taşınır. "Bölümler düzdür" varsayımı taşıyan onlarca tüketiciye bu sayede dokunulmadı.
+
+**Kitap Haritası:** satır artık en alt takip birimidir, Bölüm adı üstünde ayırıcı başlıktır (Parça ile aynı desen; ikisi de varsa parça üstte). Sütun başlığı **düzeltildi** — "1.Test" yazıyordu ve artık yanlış: numara yerel olduğu için tek bir başlık "Üslü Sayılar 44'ten başlar" ile "TÜMEVARIM I 1'den başlar"ı birden doğru gösteremez. Başlık sıra numarasına indi, basılı numara satır etiketindeki aralıkta ve hücrenin kendi başlığında duruyor.
+
+**048:** `duplicate_book_as_edition` bölümleri artık **iki geçişte** kopyalar (önce üst düzey, sonra `v_section_map` ile alt bölümler) ve test aralığını taşır. 044'ün kendisi bu fonksiyonun güncellenmesi unutulduğunda ne olduğunun kayıtlı örneğiydi; aynı hata tekrarlanmadı.
+
+**Testler:** `tests/book-structure.test.ts` 17 test. Şartnamenin kendi kontrol sayıları fixture olarak duruyor — **Bölüm 1 = 104**, kitap toplamı **177**. Alt bölümü olmayan kitabın listesinin birebir aynı kaldığı da burada kanıtlanıyor.
+
+**R7-03 sınırı** korundu: yeni otomasyon, kaynak önerisi, konu eşiği veya pedagojik sınıflandırma eklenmedi. Bire Bir ÖSYM ve TÜMEVARIM için ayrı kaynak türü/kategori **açılmadı** — bunlar yalnızca alt bölüm adlarıdır.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

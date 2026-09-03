@@ -264,6 +264,57 @@ export const sectionPartSchema = z.object({
   partId: uuid.nullable(),
 })
 
+/**
+ * R7-03: Alt Bölüm ve test aralığı.
+ *
+ * Test ADEDİ girilmez, `son - ilk + 1` olarak hesaplanır — şartnamenin
+ * açık kuralı. Bu yüzden burada bir "count" alanı yoktur.
+ *
+ * ÇAKIŞMA KONTROLÜ YOK, bilinçli: aynı bölümdeki iki alt bölümün
+ * aralıkları kesişebilir. 3D TYT'de "Temel Kavramlar Test 1-4" ile
+ * "TÜMEVARIM I Test 1-4" aynı bölümde birlikte durur ve şartname bunu
+ * çakışma saymaz — doğrulama da saymamalı.
+ */
+const testNumber = z
+  .number()
+  .int('Test numarası tam sayı olmalı.')
+  .min(1, 'Test numarası 1 veya daha büyük olmalı.')
+  .max(999, 'Test numarası en fazla 999 olabilir.')
+
+function withRangeRules<T extends z.ZodObject<z.ZodRawShape>>(schema: T) {
+  return schema
+    .refine((v: any) => v.testEnd >= v.testStart, {
+      message: 'Son test numarası ilkinden küçük olamaz.',
+      path: ['testEnd'],
+    })
+    .refine((v: any) => v.testEnd - v.testStart + 1 <= 200, {
+      message: 'Bir alt bölüm en fazla 200 test içerebilir.',
+      path: ['testEnd'],
+    })
+}
+
+export const subsectionSchema = withRangeRules(
+  z.object({
+    sectionId: uuid,
+    title: z.string().trim().min(1, 'Alt bölüm adı boş olamaz.').max(200),
+    testStart: testNumber,
+    testEnd: testNumber,
+  })
+)
+
+export const subsectionRenameSchema = z.object({
+  subsectionId: uuid,
+  title: z.string().trim().min(1, 'Alt bölüm adı boş olamaz.').max(200),
+})
+
+export const subsectionTestRangeSchema = withRangeRules(
+  z.object({
+    subsectionId: uuid,
+    testStart: testNumber,
+    testEnd: testNumber,
+  })
+)
+
 /** R7-02 §8: bölüm birden fazla müfredat konusuna bağlanabilir. Boş liste
  *  eşlemeyi kaldırır — yanlış eşleme geri alınabilmeli (040 ilkesi). */
 export const sectionTopicsSchema = z.object({

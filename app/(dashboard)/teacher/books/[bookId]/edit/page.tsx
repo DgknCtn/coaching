@@ -24,7 +24,7 @@ export default async function BookEditPage({
       book_parts(id, title, order_index),
       book_sections(
         id, title, order_index, group_label, theme_label, topic_id,
-        part_id, page_start, page_end,
+        part_id, page_start, page_end, parent_section_id, test_start, test_end,
         book_tests(id),
         book_section_topics(topic_id)
       )
@@ -104,13 +104,34 @@ export default async function BookEditPage({
     .sort((a, b) => a.order_index - b.order_index)
     .map((p) => ({ id: p.id, title: p.title }))
 
-  const sections = (book.book_sections ?? [])
+  // R7-03: alt bölümler ayrı bir liste değil, ait oldukları bölümün
+  // altında taşınır. Böylece düzenleme arayüzü ağacı olduğu gibi görür
+  // (haritanın aksine — orası yaprak listesi ister).
+  const allSectionRows = (book.book_sections ?? [])
     .slice()
     .sort((a, b) => a.order_index - b.order_index)
+
+  const subsectionsByParent = new Map<string, typeof allSectionRows>()
+  for (const row of allSectionRows) {
+    if (!row.parent_section_id) continue
+    const list = subsectionsByParent.get(row.parent_section_id) ?? []
+    list.push(row)
+    subsectionsByParent.set(row.parent_section_id, list)
+  }
+
+  const sections = allSectionRows
+    .filter((s) => !s.parent_section_id)
     .map((s) => ({
       id: s.id,
       title: s.title,
       testCount: (s.book_tests ?? []).length,
+      subsections: (subsectionsByParent.get(s.id) ?? []).map((sub) => ({
+        id: sub.id,
+        title: sub.title,
+        testStart: sub.test_start ?? null,
+        testEnd: sub.test_end ?? null,
+        testCount: (sub.book_tests ?? []).length,
+      })),
       // R6-17 etiketleri artık düzenlenmiyor; yalnız eski kayıtlarda
       // Parça'ya taşınabilsin diye okunur ipucu olarak gösteriliyor.
       groupLabel: s.group_label ?? null,

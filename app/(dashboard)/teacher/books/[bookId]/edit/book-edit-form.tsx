@@ -30,6 +30,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TopicMultiSelect, type TopicOption } from '@/components/shared/topic-multi-select'
+import { SubsectionList, type SubsectionRow } from './subsection-list'
 import { unitLabel } from '@/lib/unit-labels'
 import {
   SUBJECTS,
@@ -75,7 +76,11 @@ export interface SectionRow {
   pageEnd: number | null
   /** R7-02 §8: bölüm birden fazla müfredat konusuna bağlanabilir. */
   topicIds: string[]
+  /** R7-03: bölümün alt bölümleri. Boşsa bölüm testlerini doğrudan taşır. */
+  subsections: SubsectionRow[]
 }
+
+
 
 export interface PartRow {
   id: string
@@ -544,6 +549,11 @@ function SectionRowForm({
   const [topicIds, setTopicIds] = useState<string[]>(section.topicIds)
   const [isPending, startTransition] = useTransition()
 
+  // R7-03: alt bölüm varsa testleri onlar üretir ve bölümün kendi test
+  // sayısı alanı anlamını yitirir.
+  const hasSubsections = section.subsections.length > 0
+  const subsectionTotal = section.subsections.reduce((sum, sub) => sum + sub.testCount, 0)
+
   const pageRangeChanged =
     isPageBook &&
     (Number(pageStart) || 0) !== (section.pageStart ?? 0) &&
@@ -685,6 +695,16 @@ function SectionRowForm({
               />
             </div>
           </>
+        ) : hasSubsections ? (
+          /* R7-03: alt bölüm varsa testleri onlar üretir. Aynı bölümde iki
+             ayrı üretim yolu iki doğruluk kaynağı demek olurdu; toplam
+             salt okunur gösterilir. */
+          <div className="w-28 space-y-1.5">
+            <Label>Toplam {unitTitle}</Label>
+            <p className="flex h-9 items-center px-1 text-sm tabular-nums">
+              {subsectionTotal}
+            </p>
+          </div>
         ) : (
           <div className="w-28 space-y-1.5">
             <Label htmlFor={`count-${section.id}`}>{unitTitle} sayısı</Label>
@@ -713,6 +733,16 @@ function SectionRowForm({
         <p className="text-xs text-muted-foreground">
           Eski etiket: {legacyLabels} — bu bilgiyi yukarıdaki Parça alanına taşıyabilirsiniz.
         </p>
+      )}
+
+      {!isPageBook && (
+        <SubsectionList
+          bookId={bookId}
+          sectionId={section.id}
+          subsections={section.subsections}
+          sectionTestCount={section.testCount}
+          hasProgress={hasProgress}
+        />
       )}
 
       <div className="space-y-1.5">

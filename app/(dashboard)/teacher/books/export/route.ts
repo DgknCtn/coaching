@@ -16,6 +16,10 @@ interface ExportSection {
   order_index: number
   note: string | null
   video_url: string | null
+  /** R7-03: alt bölüm hiyerarşisi ve basılı test aralığı. */
+  parent_section_id: string | null
+  test_start: number | null
+  test_end: number | null
   book_tests: { id: string; title: string; order_index: number; page_start: number | null; page_end: number | null }[]
 }
 
@@ -52,7 +56,10 @@ function toCsv(books: ExportBook[]): string {
   const header = [
     'kitap_id', 'kitap_adi', 'ders', 'yayin', 'seviye_sinav', 'baski_yili',
     'takip_turu', 'video_modu', 'video_baglantisi', 'aciklama', 'durum',
-    'bolum_adi', 'bolum_sirasi', 'bolum_notu', 'birim_adi', 'birim_sirasi',
+    'bolum_adi', 'bolum_sirasi', 'bolum_notu',
+    // R7-03: yedek, alt bölüm hiyerarşisini ve basılı aralığı kaybetmemeli.
+    'ust_bolum_adi', 'ilk_test', 'son_test',
+    'birim_adi', 'birim_sirasi',
     'sayfa_baslangic', 'sayfa_bitis',
   ]
   const rows: string[] = [header.join(',')]
@@ -63,23 +70,32 @@ function toCsv(books: ExportBook[]): string {
       book.tracking_mode, book.video_mode, book.video_url, book.description, book.status,
     ]
     const sections = [...(book.book_sections ?? [])].sort((a, b) => a.order_index - b.order_index)
+    const titleById = new Map(sections.map(s => [s.id, s.title]))
 
     if (sections.length === 0) {
-      rows.push([...bookCells, '', '', '', '', '', '', ''].map(csvCell).join(','))
+      rows.push([...bookCells, '', '', '', '', '', '', '', '', '', ''].map(csvCell).join(','))
       continue
     }
 
     for (const section of sections) {
+      const sectionCells = [
+        section.title,
+        section.order_index,
+        section.note,
+        section.parent_section_id ? (titleById.get(section.parent_section_id) ?? '') : '',
+        section.test_start,
+        section.test_end,
+      ]
       const tests = [...(section.book_tests ?? [])].sort((a, b) => a.order_index - b.order_index)
       if (tests.length === 0) {
-        rows.push([...bookCells, section.title, section.order_index, section.note, '', '', '', ''].map(csvCell).join(','))
+        rows.push([...bookCells, ...sectionCells, '', '', '', ''].map(csvCell).join(','))
         continue
       }
       for (const test of tests) {
         rows.push(
           [
             ...bookCells,
-            section.title, section.order_index, section.note,
+            ...sectionCells,
             test.title, test.order_index, test.page_start, test.page_end,
           ].map(csvCell).join(',')
         )
@@ -104,6 +120,7 @@ export async function GET(request: NextRequest) {
       tracking_mode, video_mode, video_url, description, status,
       book_sections(
         id, title, order_index, note, video_url,
+        parent_section_id, test_start, test_end,
         book_tests(id, title, order_index, page_start, page_end)
       )
     `)

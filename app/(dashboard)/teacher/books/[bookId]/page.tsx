@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { formatUnitCount } from '@/lib/unit-labels'
+import { formatTestRange } from '@/lib/book-structure'
+import { cn } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, BookOpen, Pencil, Users } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
@@ -24,7 +26,7 @@ export default async function BookDetailPage({
       id, title, subject, publisher, exam_type, level_exam, description, status,
       tracking_mode,
       book_sections(
-        id, title, order_index, status,
+        id, title, order_index, status, parent_section_id, test_start, test_end,
         book_tests(id, title, order_index, status)
       )
     `)
@@ -118,11 +120,28 @@ export default async function BookDetailPage({
             <div className="divide-y">
               {sections.map((section) => {
                 const activeTests = (section.book_tests ?? []).filter(t => t.status === 'active')
+                // R7-03: alt bölümler ait oldukları bölümün altında girintili
+                // görünür; kendi test aralıklarını da taşırlar.
+                const isSubsection = !!section.parent_section_id
+                const range = formatTestRange(section.test_start, section.test_end)
                 return (
-                  <div key={section.id} className="flex items-center justify-between py-2.5 text-sm">
-                    <span>{section.title}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {formatUnitCount(activeTests.length, book.tracking_mode)}
+                  <div
+                    key={section.id}
+                    className={cn(
+                      'flex items-center justify-between gap-3 py-2.5 text-sm',
+                      isSubsection && 'pl-4'
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="truncate">{section.title}</span>
+                      {range && (
+                        <span className="ml-2 text-[11px] text-muted-foreground">{range}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground text-xs">
+                      {activeTests.length === 0 && isSubsection === false
+                        ? '—'
+                        : formatUnitCount(activeTests.length, book.tracking_mode)}
                     </span>
                   </div>
                 )

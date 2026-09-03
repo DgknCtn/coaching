@@ -18,6 +18,9 @@ import {
   bookPartSchema,
   bookPartRenameSchema,
   sectionPartSchema,
+  subsectionSchema,
+  subsectionRenameSchema,
+  subsectionTestRangeSchema,
   sectionTopicsSchema,
 } from '@/lib/validation'
 
@@ -440,6 +443,105 @@ export async function setSectionTopicsAction(
 
   if (error) return { error: dbErrorToTr(error.message) }
 
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+// ---------------------------------------------------------------
+// R7-03: Alt Bölüm ve test aralığı
+//
+// Parça action'larıyla aynı kalıp. Fark: alt bölüm kitap değil BÖLÜM
+// düzeyinde yaşar ve testlerin gerçek sahibidir — bu yüzden aralık
+// değişimi birim satırlarını yeniden kurar (RPC tarafında).
+// ---------------------------------------------------------------
+
+export async function addSubsectionAction(
+  bookId: string,
+  sectionId: string,
+  title: string,
+  testStart: number,
+  testEnd: number
+) {
+  const parsed = subsectionSchema.safeParse({ sectionId, title, testStart, testEnd })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('add_book_subsection', {
+    p_section_id: parsed.data.sectionId,
+    p_title: parsed.data.title,
+    p_test_start: parsed.data.testStart,
+    p_test_end: parsed.data.testEnd,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+export async function renameSubsectionAction(
+  bookId: string,
+  subsectionId: string,
+  title: string
+) {
+  const parsed = subsectionRenameSchema.safeParse({ subsectionId, title })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('rename_book_subsection', {
+    p_subsection_id: parsed.data.subsectionId,
+    p_title: parsed.data.title,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+export async function setSubsectionTestRangeAction(
+  bookId: string,
+  subsectionId: string,
+  testStart: number,
+  testEnd: number
+) {
+  const parsed = subsectionTestRangeSchema.safeParse({ subsectionId, testStart, testEnd })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  // RPC birim satırlarını siler ve aralıktan yeniden üretir; ödevde ya da
+  // tamamlama kaydında kullanılmış bir teste denk gelirse reddeder.
+  const { error } = await supabase.rpc('set_subsection_test_range', {
+    p_subsection_id: parsed.data.subsectionId,
+    p_test_start: parsed.data.testStart,
+    p_test_end: parsed.data.testEnd,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
+export async function deleteSubsectionAction(bookId: string, subsectionId: string) {
+  const parsed = uuidSchema.safeParse(subsectionId)
+  if (!parsed.success) return { error: 'Geçersiz alt bölüm.' }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('delete_book_subsection', {
+    p_subsection_id: parsed.data,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
   revalidatePath(`/teacher/books/${bookId}/edit`)
   revalidatePath(`/teacher/books/${bookId}`)
   return { success: true }
