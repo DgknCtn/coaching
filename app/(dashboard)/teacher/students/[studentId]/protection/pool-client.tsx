@@ -17,12 +17,16 @@ import {
 } from '@/lib/protection-pool'
 import { todayDateString } from '@/lib/homework-status'
 import { addTopicContactAction, setTopicKeepActiveAction } from './actions'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MetricRow } from '@/components/shared/metric-row'
+import { DetailPanel } from '@/components/shared/detail-panel'
+import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
+import { Legend } from '@/components/shared/legend'
+import { LinkTabs } from '@/components/shared/link-tabs'
 import { cn } from '@/lib/utils'
 
 // Koruma Havuzu ekranı (R5.4).
@@ -37,6 +41,55 @@ const PRIORITY_STYLE: Record<PoolPriority, string> = {
   watch: 'bg-warning-subtle text-warning-foreground border-warning-border',
   normal: 'bg-muted text-muted-foreground border-border',
 }
+
+const PRIORITY_BADGE: Record<PoolPriority, 'destructive' | 'warning' | 'neutral'> = {
+  priority: 'destructive',
+  watch: 'warning',
+  normal: 'neutral',
+}
+
+const LEGEND_ENTRIES = [
+  { label: `${POOL_PRIORITY_LABEL.priority} (30+ gün)`, className: 'bg-destructive-border' },
+  { label: `${POOL_PRIORITY_LABEL.watch} (14-29 gün)`, className: 'bg-warning-border' },
+  { label: `${POOL_PRIORITY_LABEL.normal} (0-13 gün)`, className: 'bg-muted-foreground/40' },
+]
+
+// Havuzun üç kuralı: temas ne sayılır, sıra neye göre kurulur, aktif
+// çalışmayla ilişkisi nedir. Bunlar ekranın altında tek paragraftı ve
+// okunmuyordu; metinler lib/protection-pool.ts'teki davranışı anlatır.
+const EXPLAINERS: ExplainerCard[] = [
+  {
+    title: 'Son temas ne sayılır?',
+    description: 'Sıralama yalnız bu olaylardan türetilir.',
+    items: [
+      { text: 'Öğrencinin tamamladığı ve eğitmenin onayladığı test/sayfa çalışması', tone: 'positive' },
+      { text: 'Gerçekleşmiş ve konuya bağlanmış ders', tone: 'positive' },
+      { text: 'Öğrencinin kendi çalışmasının eğitmen tarafından doğrulanması', tone: 'positive' },
+      { text: 'Ödev verilmesi (henüz çözülmemişse) temas değildir', tone: 'negative' },
+      { text: 'Müfredat zamanının gelmesi temas değildir', tone: 'negative' },
+      { text: 'Planlanmış ama yapılmamış ders temas değildir', tone: 'negative' },
+    ],
+  },
+  {
+    title: 'Sıralama mantığı',
+    description: 'Konular son doğrudan temas tarihine göre en eskiden en yeniye sıralanır.',
+    items: [
+      { text: 'Gün sayısı arttıkça konu listenin üstüne çıkar.' },
+      { text: 'Elle yönetilen bir öncelik alanı yoktur; yeni doğrulanmış temas geldiğinde konu kendiliğinden aşağı iner.' },
+      { text: 'Renk bandı eşik değildir: hiçbir davranışı tetiklemez, yalnız uzun aralığı görünür kılar.' },
+    ],
+  },
+  {
+    title: 'Aktif çalışma ile ilişkisi',
+    items: [
+      { text: 'Bir konuda açık çalışma varsa konu aktif çalışmadadır ve havuzda gösterilmez.' },
+      { text: 'Açık çalışma kalmadığında ve doğrulanmış geçmiş temas varsa konu havuzda görünür.' },
+      { text: 'Yeni çalışma verildiğinde konu tekrar aktif çalışma durumuna geçer.' },
+      { text: '"Aktif tut" ile bir konuyu havuz dışında manuel olarak tutabilirsiniz.' },
+      { text: 'Koruma Havuzu bir tekrar programı değildir: sistem test seçmez, ödev atamaz. Tekrar kararını siz verirsiniz.' },
+    ],
+  },
+]
 
 export interface ScopeTab {
   id: string
@@ -58,6 +111,13 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
   const active = useMemo(() => activeWorkTopics(rows), [rows])
   const summary = useMemo(() => summarizePool(rows, pool), [rows, pool])
 
+  // Seçim görünüm durumudur. Konu havuzdan çıkarsa (yeni temas geldi,
+  // "Aktif tut" işaretlendi) panel kendiliğinden kapanır.
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
+  const selected = selectedTopicId
+    ? (pool.find(r => r.topicId === selectedTopicId) ?? null)
+    : null
+
   if (scopes.length === 0) {
     return (
       <div className="rounded-lg border bg-card">
@@ -72,25 +132,17 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
 
   return (
     <div className="space-y-4">
-      <nav className="flex flex-wrap gap-2">
-        {scopes.map(scope => (
-          <Link
-            key={scope.id}
-            href={`/teacher/students/${studentId}/protection?scope=${scope.id}`}
-            className={cn(
-              'rounded-md border px-3 py-1.5 text-sm transition-colors',
-              scope.id === activeScopeId
-                ? 'border-transparent bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent'
-            )}
-          >
-            {scope.name}
-          </Link>
-        ))}
-      </nav>
+      <LinkTabs
+        tabs={scopes.map(scope => ({
+          key: scope.id,
+          label: scope.name,
+          href: `/teacher/students/${studentId}/protection?scope=${scope.id}`,
+        }))}
+        activeKey={activeScopeId ?? ''}
+      />
 
       <MetricRow
-        className="md:grid-cols-4"
+        className="md:grid-cols-3 xl:grid-cols-5"
         metrics={[
           { label: 'İzlenen konu', value: summary.trackedTopics },
           { label: 'Havuzdaki konu', value: summary.inPool },
@@ -99,6 +151,11 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
             label: 'En uzun temas',
             value: summary.longestDays === null ? '—' : `${summary.longestDays} gün`,
             hint: summary.longestTopicName ?? undefined,
+          },
+          {
+            label: 'Ortalama temas süresi',
+            value: summary.averageDays === null ? '—' : `${summary.averageDays} gün`,
+            hint: 'Havuzdaki konuların ortalaması',
           },
         ]}
       />
@@ -112,65 +169,144 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
           />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Konu</th>
-                <th className="px-3 py-2 font-medium">Son temas</th>
-                <th className="px-3 py-2 font-medium">Üzerinden</th>
-                <th className="px-3 py-2 font-medium">Kaynak</th>
-                <th className="px-3 py-2 font-medium">Durum</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {pool.map((r, index) => (
-                <tr key={r.topicId}>
-                  <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
-                    {index + 1}
-                  </td>
-                  <td className="px-3 py-2">
-                    <p className="text-sm">{r.topicName}</p>
-                    {r.bookTitles.length > 0 && (
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {r.bookTitles.join(' · ')}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-xs tabular-nums">
-                    {new Date(`${r.lastContactDate}T00:00:00Z`).toLocaleDateString('tr-TR')}
-                    {contactAmountLabel(r) && (
-                      <span className="ml-1 text-muted-foreground">· {contactAmountLabel(r)}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-sm tabular-nums">{r.daysSinceContact} gün</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {contactSourceLabel(r.lastContactSource)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={cn(
-                        'inline-flex rounded-md border px-1.5 py-0.5 text-[11px]',
-                        PRIORITY_STYLE[r.priority]
-                      )}
+        <div
+          className={cn(
+            'grid gap-4',
+            selected && 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start'
+          )}
+        >
+          <div className="min-w-0 space-y-3">
+            <Legend entries={LEGEND_ENTRIES} />
+
+            <div className="overflow-hidden rounded-lg border bg-card">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">#</th>
+                    <th className="px-3 py-2 font-medium">Konu</th>
+                    <th className="px-3 py-2 font-medium">Son temas</th>
+                    <th className="px-3 py-2 font-medium">Üzerinden</th>
+                    <th className="px-3 py-2 font-medium">Kaynak</th>
+                    <th className="px-3 py-2 font-medium">Durum</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {pool.map((r, index) => (
+                    <tr
+                      key={r.topicId}
+                      className={cn(r.topicId === selectedTopicId && 'bg-muted/50')}
                     >
-                      {POOL_PRIORITY_LABEL[r.priority]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <KeepActiveButton
-                      studentId={studentId}
-                      topicId={r.topicId}
-                      keepActive={false}
-                      onDone={() => router.refresh()}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
+                        {index + 1}
+                      </td>
+                      <td className="px-3 py-2">
+                        {/* Konu adı detay panelini açar; satırın tamamı tıklanabilir
+                            değil, çünkü sağdaki "Aktif tut" ayrı bir eylemdir. */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedTopicId(current =>
+                              current === r.topicId ? null : r.topicId
+                            )
+                          }
+                          className="rounded text-left text-sm hover:underline"
+                        >
+                          {r.topicName}
+                        </button>
+                        {r.bookTitles.length > 0 && (
+                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                            {r.bookTitles.join(' · ')}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs tabular-nums">
+                        {new Date(`${r.lastContactDate}T00:00:00Z`).toLocaleDateString('tr-TR')}
+                        {contactAmountLabel(r) && (
+                          <span className="ml-1 text-muted-foreground">· {contactAmountLabel(r)}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-sm tabular-nums">{r.daysSinceContact} gün</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {contactSourceLabel(r.lastContactSource)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={cn(
+                            'inline-flex rounded-md border px-1.5 py-0.5 text-[11px]',
+                            PRIORITY_STYLE[r.priority]
+                          )}
+                        >
+                          {POOL_PRIORITY_LABEL[r.priority]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <KeepActiveButton
+                          studentId={studentId}
+                          topicId={r.topicId}
+                          keepActive={false}
+                          onDone={() => router.refresh()}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {selected && (
+            <DetailPanel
+              title={selected.topicName}
+              badge={{
+                label: POOL_PRIORITY_LABEL[selected.priority],
+                variant: PRIORITY_BADGE[selected.priority],
+              }}
+              rows={[
+                {
+                  label: 'Son temas tarihi',
+                  value: new Date(`${selected.lastContactDate}T00:00:00Z`).toLocaleDateString(
+                    'tr-TR',
+                    { day: 'numeric', month: 'long', year: 'numeric' }
+                  ),
+                },
+                { label: 'Son temas üzerinden', value: `${selected.daysSinceContact} gün` },
+                {
+                  label: 'Son temasta yapılan',
+                  value: contactAmountLabel(selected) || '—',
+                },
+                {
+                  label: 'Son temasın türü',
+                  value: contactSourceLabel(selected.lastContactSource),
+                },
+                {
+                  label: 'Çalışılan kaynaklar',
+                  value:
+                    selected.bookTitles.length > 0 ? (
+                      selected.bookTitles.join(' · ')
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                },
+              ]}
+              actions={
+                <>
+                  <Link
+                    href={`/teacher/students/${studentId}/homework/new`}
+                    className={buttonVariants()}
+                  >
+                    <Plus className="size-4" />
+                    Bu konu için çalışma ver
+                  </Link>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tekrar kararını sistem değil siz verirsiniz. Havuz yalnızca uzun
+                    aralıkları görünür kılar.
+                  </p>
+                </>
+              }
+              onClose={() => setSelectedTopicId(null)}
+            />
+          )}
         </div>
       )}
 
@@ -207,11 +343,7 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
         topics={rows.map(r => ({ id: r.topicId, name: r.topicName }))}
       />
 
-      <p className="text-xs text-muted-foreground">
-        Koruma Havuzu bir tekrar programı değildir. Zorunlu tekrar aralığı yoktur; sistem
-        test seçmez veya ödev atamaz. Tekrar kararını siz verirsiniz. Bir test bile temas
-        sayılır; miktar yalnız yorum içindir.
-      </p>
+      <ExplainerCards cards={EXPLAINERS} />
     </div>
   )
 }

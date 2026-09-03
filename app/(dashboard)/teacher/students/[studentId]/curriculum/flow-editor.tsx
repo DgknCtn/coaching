@@ -36,6 +36,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { EmptyState } from '@/components/shared/empty-state'
+import { DetailPanel } from '@/components/shared/detail-panel'
+import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
+import { FlowTimeline } from '@/components/shared/flow-timeline'
+import { Legend } from '@/components/shared/legend'
 import { CalendarRange } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +58,54 @@ const STATUS_STYLE: Record<FlowStatus, string> = {
   current: 'bg-info-subtle text-info-foreground border-info-border',
   upcoming: 'bg-muted text-muted-foreground border-border',
 }
+
+/** Durum rozeti için Badge varyantı — STATUS_STYLE'ın rozet karşılığı. */
+const STATUS_BADGE: Record<FlowStatus, 'success' | 'info' | 'neutral'> = {
+  passed: 'success',
+  current: 'info',
+  upcoming: 'neutral',
+}
+
+const LEGEND_ENTRIES = [
+  { label: FLOW_STATUS_LABEL.passed, className: 'bg-success-border' },
+  { label: FLOW_STATUS_LABEL.current, className: 'bg-info-border' },
+  { label: FLOW_STATUS_LABEL.upcoming, className: 'bg-muted-foreground/40' },
+]
+
+// Ekranın kuralları, altta tek paragraf yerine madde madde. Metinler
+// R5.2'nin davranışını anlatır; bir kuralı değiştirirken buradaki karşılığı
+// da güncelleyin.
+const EXPLAINERS: ExplainerCard[] = [
+  {
+    title: 'Müfredat Akışı nasıl çalışır?',
+    items: [
+      { text: 'Bu akış öğrencinin kişisel akademik yol haritasıdır; genel şablonu etkilemez.' },
+      { text: 'Konuyu ileri/geri taşıdığınızda aynı dersteki devam blokları da kayar.' },
+      { text: 'Süreyi değiştirdiğinizde takip eden konular otomatik olarak kayar.' },
+      { text: 'İstediğiniz yere yeni konu ekleyebilir veya konu çıkarabilirsiniz; geçmiş çalışma silinmez.' },
+      { text: 'Değişiklikler "Akışı Kaydet" ile toplu kaydedilir.' },
+    ],
+  },
+  {
+    title: 'Renk anlamları',
+    description: 'Renk tek başına anlam taşımaz; her blokta konu adı ve durumu da yazar.',
+    items: [
+      { text: `${FLOW_STATUS_LABEL.passed}: konu "Geçildi" olarak işaretlendi.`, tone: 'positive' },
+      { text: `${FLOW_STATUS_LABEL.current}: bugün bu konunun planlanan aralığındasınız.` },
+      { text: `${FLOW_STATUS_LABEL.upcoming}: konunun zamanı henüz gelmedi ya da aralığı geçti.` },
+    ],
+  },
+  {
+    title: 'Önemli notlar',
+    items: [
+      { text: 'Müfredat zamanı yalnızca sinyal verir; çalışma ve ödev kararı öğretmenindir.' },
+      { text: 'Önden çalışmak için beklemeye gerek yok — istediğiniz konuya ödev verilebilir.' },
+      { text: 'Planlanan bitiş tarihinin geçmesi konuyu kendiliğinden "Geçildi" yapmaz.', tone: 'negative' },
+      { text: 'Aynı haftaya denk gelen iki konu hata değildir.' },
+      { text: 'Müfredat zamanı koruma havuzuna otomatik giriş sağlamaz.', tone: 'negative' },
+    ],
+  },
+]
 
 export interface ScopeOption {
   id: string
@@ -82,6 +134,15 @@ function formatDate(value: string): string {
   })
 }
 
+/** Detay panelinde tarih kısaltma yerine tam yazılır: "29 Eylül 2025". */
+function formatLongDate(value: string): string {
+  return new Date(`${value}T00:00:00Z`).toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 export function CurriculumFlowEditor({
   studentId,
   scopes,
@@ -97,9 +158,14 @@ export function CurriculumFlowEditor({
   const [newTopic, setNewTopic] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [templateStart, setTemplateStart] = useState(todayDateString())
+  // Seçim yalnız GÖRÜNÜM durumudur: detay panelini açar, veriyi etkilemez.
+  // Kaydedilmemiş yeni konuların id'si yoktur; onlar seçilemez.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const today = todayDateString()
   const summary = useMemo(() => summarizeFlow(items, today), [items, today])
+  // Silinen/şablonla değişen konu seçili kalmışsa panel kendiliğinden kapanır.
+  const selected = selectedId ? (items.find(i => i.id === selectedId) ?? null) : null
   const scopeTemplates = templates.filter(t => t.scopeId === activeScopeId)
 
   function update(next: FlowItem[]) {
@@ -267,124 +333,211 @@ export function CurriculumFlowEditor({
           />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Konu</th>
-                <th className="px-3 py-2 font-medium">Süre</th>
-                <th className="px-3 py-2 font-medium">Başlangıç</th>
-                <th className="px-3 py-2 font-medium">Bitiş</th>
-                <th className="px-3 py-2 font-medium">Durum</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {items.map((item, index) => {
-                const status = deriveFlowStatus(item, today)
-                const weeks = durationWeeks(item)
-                const key = item.id ?? `yeni-${index}`
+        // Seçili konu varsa masaüstünde sağda detay paneli açılır; `lg` altında
+        // panel drawer'a döndüğü için ızgara tek kolon kalır.
+        <div
+          className={cn(
+            'grid gap-4',
+            selected && 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start'
+          )}
+        >
+          <div className="min-w-0 space-y-3">
+            <Legend entries={LEGEND_ENTRIES} />
 
-                return (
-                  <tr key={key} className="align-middle">
-                    <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
-                      {index + 1}
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        value={item.name}
-                        onChange={e =>
-                          update(
-                            items.map((it, i) =>
-                              i === index ? { ...it, name: e.target.value } : it
-                            )
-                          )
-                        }
-                        className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none hover:border-input focus-visible:border-ring"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min={1}
-                          max={104}
-                          value={weeks}
-                          onChange={e =>
-                            update(
-                              resizeItem(
-                                items,
-                                item.id ?? '',
-                                Number(e.target.value) || 1
-                              )
-                            )
-                          }
-                          disabled={!item.id}
-                          title={
-                            item.id
-                              ? undefined
-                              : 'Süreyi değiştirmek için önce akışı kaydedin'
-                          }
-                          className="h-7 w-14 rounded-md border border-input bg-card px-1.5 text-xs tabular-nums outline-none focus-visible:border-ring disabled:opacity-50"
-                        />
-                        <span className="text-xs text-muted-foreground">hf</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.startDate)}</td>
-                    <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.endDate)}</td>
-                    <td className="px-3 py-2">
-                      <span
+            {/* Zaman çizelgesi salt görünümdür: tıklamak yalnız seçer.
+                Taşıma/süre değişimi satırdaki kontrollerle yapılır — bkz.
+                components/shared/flow-timeline.tsx başlığı. */}
+            <FlowTimeline
+              items={items}
+              today={today}
+              selectedId={selectedId}
+              onSelect={item => setSelectedId(item.id ?? null)}
+            />
+
+            <div className="overflow-hidden rounded-lg border bg-card">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">#</th>
+                    <th className="px-3 py-2 font-medium">Konu</th>
+                    <th className="px-3 py-2 font-medium">Süre</th>
+                    <th className="px-3 py-2 font-medium">Başlangıç</th>
+                    <th className="px-3 py-2 font-medium">Bitiş</th>
+                    <th className="px-3 py-2 font-medium">Durum</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {items.map((item, index) => {
+                    const status = deriveFlowStatus(item, today)
+                    const weeks = durationWeeks(item)
+                    const key = item.id ?? `yeni-${index}`
+
+                    return (
+                      <tr
+                        key={key}
                         className={cn(
-                          'inline-flex rounded-md border px-1.5 py-0.5 text-[11px]',
-                          STATUS_STYLE[status]
+                          'align-middle',
+                          !!item.id && item.id === selectedId && 'bg-muted/50'
                         )}
                       >
-                        {FLOW_STATUS_LABEL[status]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-0.5">
-                        <IconButton
-                          title="1 hafta geri taşı (devamı da kayar)"
-                          onClick={() => update(moveItem(items, item.id ?? '', -1))}
-                          disabled={!item.id}
-                        >
-                          <ArrowLeft className="size-3.5" />
-                        </IconButton>
-                        <IconButton
-                          title="1 hafta ileri taşı (devamı da kayar)"
-                          onClick={() => update(moveItem(items, item.id ?? '', 1))}
-                          disabled={!item.id}
-                        >
-                          <ArrowRight className="size-3.5" />
-                        </IconButton>
-                        <IconButton
-                          title={item.passed ? 'Geçildi işaretini kaldır' : 'Geçildi yap'}
-                          onClick={() => update(setPassed(items, item.id ?? '', !item.passed))}
-                          disabled={!item.id}
-                          active={item.passed}
-                        >
-                          <Check className="size-3.5" />
-                        </IconButton>
-                        <IconButton
-                          title="Konuyu akıştan çıkar"
-                          onClick={() => {
-                            if (window.confirm(`"${item.name}" akıştan çıkarılacak. Geçmiş çalışma silinmez. Devam edilsin mi?`)) {
-                              update(removeItem(items, item.id ?? ''))
+                        <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
+                          {index + 1}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            value={item.name}
+                            onChange={e =>
+                              update(
+                                items.map((it, i) =>
+                                  i === index ? { ...it, name: e.target.value } : it
+                                )
+                              )
                             }
-                          }}
-                          disabled={!item.id}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                            className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none hover:border-input focus-visible:border-ring"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              max={104}
+                              value={weeks}
+                              onChange={e =>
+                                update(
+                                  resizeItem(
+                                    items,
+                                    item.id ?? '',
+                                    Number(e.target.value) || 1
+                                  )
+                                )
+                              }
+                              disabled={!item.id}
+                              title={
+                                item.id
+                                  ? undefined
+                                  : 'Süreyi değiştirmek için önce akışı kaydedin'
+                              }
+                              className="h-7 w-14 rounded-md border border-input bg-card px-1.5 text-xs tabular-nums outline-none focus-visible:border-ring disabled:opacity-50"
+                            />
+                            <span className="text-xs text-muted-foreground">hf</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.startDate)}</td>
+                        <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.endDate)}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={cn(
+                              'inline-flex rounded-md border px-1.5 py-0.5 text-[11px]',
+                              STATUS_STYLE[status]
+                            )}
+                          >
+                            {FLOW_STATUS_LABEL[status]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <IconButton
+                              title="1 hafta geri taşı (devamı da kayar)"
+                              onClick={() => update(moveItem(items, item.id ?? '', -1))}
+                              disabled={!item.id}
+                            >
+                              <ArrowLeft className="size-3.5" />
+                            </IconButton>
+                            <IconButton
+                              title="1 hafta ileri taşı (devamı da kayar)"
+                              onClick={() => update(moveItem(items, item.id ?? '', 1))}
+                              disabled={!item.id}
+                            >
+                              <ArrowRight className="size-3.5" />
+                            </IconButton>
+                            <IconButton
+                              title={item.passed ? 'Geçildi işaretini kaldır' : 'Geçildi yap'}
+                              onClick={() => update(setPassed(items, item.id ?? '', !item.passed))}
+                              disabled={!item.id}
+                              active={item.passed}
+                            >
+                              <Check className="size-3.5" />
+                            </IconButton>
+                            <IconButton
+                              title="Konuyu akıştan çıkar"
+                              onClick={() => {
+                                if (window.confirm(`"${item.name}" akıştan çıkarılacak. Geçmiş çalışma silinmez. Devam edilsin mi?`)) {
+                                  update(removeItem(items, item.id ?? ''))
+                                }
+                              }}
+                              disabled={!item.id}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </IconButton>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {selected && (
+            <DetailPanel
+              title={selected.name}
+              badge={{
+                label: FLOW_STATUS_LABEL[deriveFlowStatus(selected, today)],
+                variant: STATUS_BADGE[deriveFlowStatus(selected, today)],
+              }}
+              rows={[
+                { label: 'Planlanan süre', value: `${durationWeeks(selected)} hafta` },
+                { label: 'Planlanan başlangıç', value: formatLongDate(selected.startDate) },
+                { label: 'Planlanan bitiş', value: formatLongDate(selected.endDate) },
+                { label: 'Sıra', value: `${items.indexOf(selected) + 1}. konu` },
+                {
+                  label: 'Not',
+                  value: selected.note ? (
+                    selected.note
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  ),
+                },
+              ]}
+              actions={
+                <>
+                  <Button
+                    variant={selected.passed ? 'outline' : 'default'}
+                    onClick={() => update(setPassed(items, selected.id ?? '', !selected.passed))}
+                  >
+                    <Check className="size-4" />
+                    {selected.passed ? 'Geçildi işaretini kaldır' : 'Geçildi yap'}
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => update(moveItem(items, selected.id ?? '', -1))}
+                    >
+                      <ArrowLeft className="size-4" />
+                      Geri taşı
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => update(moveItem(items, selected.id ?? '', 1))}
+                    >
+                      İleri taşı
+                      <ArrowRight className="size-4" />
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Taşıma ve süre değişimi devam bloklarını da kaydırır. Değişiklikler
+                    &quot;Akışı Kaydet&quot; ile kaydedilir.
+                  </p>
+                </>
+              }
+              onClose={() => setSelectedId(null)}
+            />
+          )}
         </div>
       )}
 
@@ -428,11 +581,7 @@ export function CurriculumFlowEditor({
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Bir konuyu taşımak veya süresini değiştirmek, aynı dersteki devam bloklarını da
-        kaydırır. Başka dersler etkilenmez. Aynı haftaya denk gelen iki konu hata değildir.
-        Planlanan bitiş tarihinin geçmesi konuyu kendiliğinden &quot;Geçildi&quot; yapmaz.
-      </p>
+      <ExplainerCards cards={EXPLAINERS} />
     </div>
   )
 }

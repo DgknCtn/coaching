@@ -201,6 +201,16 @@ Denetimde çıkan beş boşluk kapatıldı:
 - **Yeni baskı kopyalama (044)** — `duplicate_book_as_edition` 021'den beri güncellenmemişti; öğretim programı, Kaynak Türü/Yapısı, Parça hiyerarşisi, müfredat eşlemeleri ve bölümlerin sayfa kapsamı kopyalanmıyordu. Hepsi kopyalanıyor; öğrenci ilerlemesi hâlâ kopyalanmıyor.
 - **Müfredat filtresi kaçışı** — kitabın ders/seviyesine uyan kapsam yoksa konu listesi boş kalıyor ve eşleme imkânsız hâle geliyordu. Artık tüm konulara düşülüyor ve kullanıcıya bildiriliyor (R6-15'in "filtre kısıtlamaz" ilkesi).
 
+### UI referans uyarlaması — Müfredat Akışı ve Koruma Havuzu
+
+Her iki ekran da kurallarını kullanıcıya anlatmak zorunda ("son temas ne sayılır?", "sıralama neye göre?", "renk ne demek?") ve bu bilgiler altta tek bir uzun paragraf olarak duruyordu. İkisi de aynı kalıba bağlandı:
+
+- **Renk açıklaması** (`components/shared/legend.tsx`) tablonun üstünde; renk tek başına anlam taşımaz, her örnek noktanın yanında adı yazar. Koruma Havuzunda banda gün aralığı da eklendi (30+ / 14-29 / 0-13).
+- **Detay paneli** (`components/shared/detail-panel.tsx`) — listede bir satır seçilince masaüstünde sağda sticky kart, `lg` altında alttan drawer. Seçim yalnız görünüm durumudur; kayıt havuzdan/akıştan çıkarsa panel kendiliğinden kapanır.
+- **Açıklama kartları** (`components/shared/explainer-cards.tsx`) alt paragrafın yerine geçti; kurallar madde madde, olumlu/olumsuz ayrımı ikon tonuyla.
+- **Müfredat Akışı zaman çizelgesi** (`components/shared/flow-timeline.tsx`) — konuların birbirine göre nerede durduğunu gösteren hafta ızgarası. SALT GÖRÜNÜMDÜR: sürükleme yoktur, çünkü taşıma zincirleme kaydırma yapar ve piksel sürüklemesi yanlış beklenti yaratır.
+- **Koruma Havuzu ders sekmeleri** elle yazılmış nav+Link yerine `components/shared/link-tabs.tsx`; sekmeler gerçek bağlantı olduğu için paylaşılabilir ve geri tuşuyla gezilebilir. Havuz özetine "Ortalama temas süresi" eklendi (`summarizePool` zaten hesaplıyordu, ekranda yoktu).
+
 R7'den sonra çağrılmayan iki sunucu eylemi (`setSectionGroupingAction`, `setSectionTopicAction`) kaldırıldı; karşılık gelen RPC'ler geri alma yolu için veritabanında kaldı.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

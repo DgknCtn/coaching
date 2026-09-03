@@ -173,7 +173,7 @@ export default async function StudentProtectionPoolPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6 md:p-8">
+    <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
         title={`${student.full_name} — Koruma Havuzu`}
