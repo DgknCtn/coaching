@@ -30,7 +30,7 @@ export function ResourceMap({ studentId, book }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <BookMapLegend audience="teacher" />
+        <BookMapLegend audience="teacher" book={book} />
         <Button
           size="sm"
           render={

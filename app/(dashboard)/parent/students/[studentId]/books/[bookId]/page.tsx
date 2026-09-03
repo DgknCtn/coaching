@@ -81,7 +81,7 @@ export default async function ParentBookMapPage({
           variant="card"
         >
           <div className="space-y-3 p-4">
-            <BookMapLegend audience="student" />
+            <BookMapLegend audience="student" book={book} />
             <ul className="divide-y">
               {book.sections.map(section => (
                 <li key={section.id} className="flex items-center justify-between gap-3 py-2">

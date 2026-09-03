@@ -1,11 +1,12 @@
 'use client'
 
 import { Fragment } from 'react'
-import { Check, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
+import { Check, Circle, Clock3, AlertTriangle, Undo2, Hourglass, Lightbulb } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, type BookMapMode } from '@/lib/book-map'
 import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
 import { SectionTitle } from '@/components/shared/section-title'
+import { hasActiveSignal } from '@/lib/curriculum-signal'
 import { isSectionInTarget } from '@/lib/plan-scope'
 import {
   testStateLabel,
@@ -56,10 +57,23 @@ const LEGEND_LABEL: Partial<Record<HomeworkTestState, string>> = {
 export function BookMapLegend({
   className,
   audience = 'teacher',
+  book,
 }: {
   className?: string
   audience?: StatusAudience
+  /**
+   * Verilirse lejant bu kitapta GERÇEKTEN görünen bölüm işaretlerini de
+   * açıklar. Bölüm başlığındaki ● ve "Plan dışı" bugüne kadar hiçbir yerde
+   * tanımlanmıyordu: kullanıcı işareti görüyor ama karşılığını bilmiyordu.
+   *
+   * Koşullu gösterilirler — müfredat eşlemesi olmayan ya da hedefi tüm kitap
+   * olan bir kaynakta o satırlar hiç çizilmez ve lejantta yer kaplamamalı.
+   */
+  book?: BookMapBook
 }) {
+  const hasSignal = !!book?.sections.some(s => hasActiveSignal(s.curriculumStatus))
+  const hasOutOfScope = !!book?.sections.some(s => !isSectionInTarget(s, book.target))
+
   return (
     <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1.5', className)}>
       {LEGEND.map(state => (
@@ -71,6 +85,41 @@ export function BookMapLegend({
           {LEGEND_LABEL[state] ?? testStateLabel(state, audience)}
         </span>
       ))}
+
+      {/* Bölüm işaretleri hücre durumlarından AYRI bir kavramdır: konuya
+          aittir, teste değil. Ayırıcı çizgiyle ayrılırlar. */}
+      {(hasSignal || hasOutOfScope) && (
+        <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+      )}
+
+      {/* Sinyalin GÖRÜNÜMÜ iki haritada farklı: test haritasında ● (bkz.
+          section-title.tsx), sayfa haritasında kalın bölüm adı. Lejant
+          örneği hangisi çiziliyorsa onu göstermeli, yoksa kullanıcı
+          olmayan bir işareti arar. */}
+      {hasSignal && (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          {book?.trackingMode === 'page' ? (
+            <span aria-hidden className="shrink-0 text-xs font-semibold text-foreground">
+              Konu
+            </span>
+          ) : (
+            <Circle aria-hidden className="size-2 shrink-0 fill-primary text-primary" />
+          )}
+          Müfredat sinyali (konunun zamanı geldi)
+        </span>
+      )}
+
+      {hasOutOfScope && (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            aria-hidden
+            className="shrink-0 rounded border px-1 text-[10px] leading-4 text-muted-foreground"
+          >
+            Plan dışı
+          </span>
+          Hedef kapsamının dışında
+        </span>
+      )}
     </div>
   )
 }
@@ -141,7 +190,7 @@ export function BookMapGrid({
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b px-4 py-3">
         <h2 className="text-sm font-semibold">Kitap Haritası</h2>
-        <BookMapLegend audience={audience} />
+        <BookMapLegend audience={audience} book={book} />
       </div>
 
       <div className="overflow-x-auto">

@@ -220,4 +220,8 @@ R7'den sonra çağrılmayan iki sunucu eylemi (`setSectionGroupingAction`, `setS
 - **Açıklama kartları** alt paragrafın yerine: "İki yüzde neden farklı?", "Neler plana girmez?", "Tempo ve hedefler".
 - **Kaynak Ekle** ekranın kendi başlığına taşındı; eksik kaynak burada fark ediliyor, öğretmen genel bakışa dönmek zorunda kalmıyor. Atanabilir kitap sorgusu iki ekranda kopyalanmasın diye `lib/assignable-books.ts`'e çıkarıldı (öğrenci genel bakışı da artık oradan besleniyor).
 
+### Kitap Haritası lejantı — bölüm işaretleri
+
+Bölüm başlığındaki ● müfredat sinyali (R5.3 §5.2) ve "Plan dışı" etiketi hiçbir yerde tanımlanmıyordu: kullanıcı işareti görüyor ama karşılığını bilmiyordu. `BookMapLegend` artık isteğe bağlı `book` alır ve bu iki işareti, **yalnız o kitapta gerçekten çiziliyorlarsa**, test durumlarından ayırıcı bir çizgiyle ayrılmış olarak açıklar. Sinyalin görünümü iki haritada farklı olduğu için lejant örneği de farklıdır: test haritasında ●, sayfa haritasında kalın bölüm adı.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
