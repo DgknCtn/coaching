@@ -1,5 +1,6 @@
 import { Circle } from 'lucide-react'
 import type { BookMapSection } from '@/lib/book-map'
+import { formatTestRange } from '@/lib/book-structure'
 import { hasActiveSignal, signalLabel } from '@/lib/curriculum-signal'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +30,13 @@ export function SectionTitle({
 }: {
   section: Pick<
     BookMapSection,
-    'title' | 'groupLabel' | 'themeLabel' | 'curriculumStatus' | 'partTitle'
+    | 'title'
+    | 'groupLabel'
+    | 'themeLabel'
+    | 'curriculumStatus'
+    | 'partTitle'
+    | 'testStart'
+    | 'testEnd'
   >
   /** Bölüm bu kitabın hedef kapsamı dışında mı? (R5.3 §5.4) */
   outOfScope?: boolean
@@ -42,7 +49,12 @@ export function SectionTitle({
   // kendisidir (§1.4: F2 sf.5 ile F3 sf.5 aynı şey değildir).
   // groupLabel/themeLabel R6-17'den kalan eski etiketlerdir; yeni kayıtlarda
   // boştur ve Parça onların yerini alır.
-  const meta = [section.partTitle, section.groupLabel, section.themeLabel]
+  // R7-03: basılı test aralığı meta satırında durur. Izgara sütun
+  // başlıkları artık yalnız sıra numarası gösterdiği için, "bu satır
+  // kitabın hangi testleri?" sorusunun tek cevabı burasıdır.
+  const testRange = formatTestRange(section.testStart, section.testEnd)
+
+  const meta = [section.partTitle, testRange, section.groupLabel, section.themeLabel]
     .filter(Boolean)
     .join(' · ')
 

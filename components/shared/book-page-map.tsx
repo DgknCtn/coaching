@@ -23,6 +23,7 @@ import { isSectionInTarget } from '@/lib/plan-scope'
 import { Circle } from 'lucide-react'
 import { sectionPageProgress, sectionScopeLabel } from '@/lib/plan-scope'
 import { formatRanges, parseRanges, pagesFromRanges } from '@/lib/page-ranges'
+import { formatTestRange } from '@/lib/book-structure'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProgressBar } from '@/components/shared/progress-bar'
@@ -92,6 +93,16 @@ export function BookPageMap({
                   !!section.partTitle &&
                   section.partTitle !== (book.sections[sectionIndex - 1]?.partTitle ?? null)
                 }
+                // R7-03: Bölüm ayırıcısı. Sayfa bazlı kaynaklarda alt bölüm
+                // ihtiyacı en az test kitaplarındaki kadar gerçek (MÖF gibi
+                // 150 sayfalık fasiküllerde), bu yüzden aynı desen burada da.
+                startsNewParent={
+                  !!section.parentTitle &&
+                  (section.parentTitle !== (book.sections[sectionIndex - 1]?.parentTitle ?? null) ||
+                    (!!section.partTitle &&
+                      section.partTitle !==
+                        (book.sections[sectionIndex - 1]?.partTitle ?? null)))
+                }
                 open={openSectionId === section.id}
                 onOpenChange={(open) => setOpenSectionId(open ? section.id : null)}
                 selectedTestIds={selectedTestIds}
@@ -132,6 +143,7 @@ function SectionRow({
   readOnly,
   mode,
   startsNewPart,
+  startsNewParent,
   studentId,
   keepActiveTopicIds,
 }: {
@@ -146,6 +158,8 @@ function SectionRow({
   mode: BookMapMode
   /** R7-02 §6.4: bu bölüm yeni bir Parça'nın ilki mi? */
   startsNewPart?: boolean
+  /** R7-03: bu alt bölüm yeni bir Bölüm'ün ilki mi? */
+  startsNewParent?: boolean
   studentId?: string
   keepActiveTopicIds?: Set<string>
 }) {
@@ -155,6 +169,8 @@ function SectionRow({
   const signalActive = hasActiveSignal(section.curriculumStatus)
   const signalText = signalLabel(section.curriculumStatus)
   const outOfScope = !isSectionInTarget(section, book.target)
+  // R7-03: alt bölüm kullanılan kaynaklarda basılı aralık; kullanılmayanda null.
+  const testRange = formatTestRange(section.testStart, section.testEnd)
 
   const selectedCount = section.tests.filter((t) => selectedTestIds.has(t.id)).length
   // R7: sepet seçimden ayrı sayılır — "8 sayfa seçili · 12 sayfa planda".
@@ -173,6 +189,17 @@ function SectionRow({
             className="border-b bg-muted/60 px-4 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
           >
             {section.partTitle}
+          </th>
+        </tr>
+      )}
+      {startsNewParent && (
+        <tr>
+          <th
+            scope="colgroup"
+            colSpan={6}
+            className="border-b bg-muted/40 px-4 py-1.5 pl-6 text-left text-[11px] font-medium text-foreground"
+          >
+            {section.parentTitle}
           </th>
         </tr>
       )}
@@ -215,10 +242,15 @@ function SectionRow({
           {/* R7-02 §6.4: Parça adı; R6-17'den kalan fasikül/tema etiketleri
               eski kayıtlarda hâlâ görünür. Hiçbiri yoksa satır bugünkü gibi
               sade kalır. */}
-          {(section.partTitle || section.groupLabel || section.themeLabel || outOfScope) && (
+          {(section.partTitle ||
+            section.groupLabel ||
+            section.themeLabel ||
+            testRange ||
+            outOfScope) && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {[
                 section.partTitle,
+                testRange,
                 section.groupLabel,
                 section.themeLabel,
                 outOfScope ? 'Plan dışı' : null,

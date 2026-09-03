@@ -219,13 +219,19 @@ export function BookMapGrid({
               >
                 Bölümler
               </th>
+              {/* Sütun başlıkları artık sıra numarasıdır, basılı test
+                  numarası DEĞİL. R7-03 ile numara en alt takip birimine
+                  göre yerel oldu: "Üslü Sayılar" 44'ten başlar, aynı
+                  ızgaradaki "TÜMEVARIM I" 1'den. Tek bir sütun başlığı
+                  ikisini birden doğru gösteremez; gerçek numara satır
+                  etiketindeki aralıkta ve hücrenin kendi başlığındadır. */}
               {columns.map(i => (
                 <th
                   key={i}
                   scope="col"
                   className="border-b bg-card px-1 py-2.5 text-center text-xs font-medium tabular-nums text-muted-foreground"
                 >
-                  {i + 1}.Test
+                  {i + 1}
                 </th>
               ))}
             </tr>
@@ -245,6 +251,15 @@ export function BookMapGrid({
               const previousPart = book.sections[sectionIndex - 1]?.partTitle ?? null
               const startsNewPart = !!section.partTitle && section.partTitle !== previousPart
 
+              // R7-03 §3: satır artık EN ALT takip birimidir (alt bölüm),
+              // Bölüm adı onun üstünde ayırıcı başlık olarak çizilir. Parça
+              // ile aynı desen; ikisi de varsa parça üstte kalır çünkü daha
+              // geniş bir gruplamadır.
+              const previousParent = book.sections[sectionIndex - 1]?.parentTitle ?? null
+              const startsNewParent =
+                !!section.parentTitle &&
+                (section.parentTitle !== previousParent || startsNewPart)
+
               return (
                 <Fragment key={section.id}>
                 {startsNewPart && (
@@ -255,6 +270,17 @@ export function BookMapGrid({
                       className="sticky left-0 border-b bg-muted/60 px-4 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
                     >
                       {section.partTitle}
+                    </th>
+                  </tr>
+                )}
+                {startsNewParent && (
+                  <tr>
+                    <th
+                      scope="colgroup"
+                      colSpan={columns.length + 1}
+                      className="sticky left-0 border-b bg-muted/40 px-4 py-1.5 pl-6 text-left text-[11px] font-medium text-foreground"
+                    >
+                      {section.parentTitle}
                     </th>
                   </tr>
                 )}
