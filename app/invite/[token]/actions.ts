@@ -4,11 +4,17 @@ import { createClient } from '@/lib/supabase/server'
 import { hashToken } from '@/lib/invite'
 import { authErrorToTr, inviteErrorToTr } from '@/lib/auth-errors'
 import { acceptInviteSchema, firstIssue } from '@/lib/validation'
+import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 import { redirect } from 'next/navigation'
 
 export async function acceptInviteAction(token: string, fullName: string, email: string, password: string) {
   const parsed = acceptInviteSchema.safeParse({ fullName, email, password })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  // Token 256 bit entropiye sahip, yani tahmin edilemez; sınır asıl olarak
+  // bu uç üzerinden yapılan hesap oluşturma denemelerini kısıtlar.
+  const limit = await checkRateLimit('inviteAccept', parsed.data.email)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const tokenHash = await hashToken(token)
   const supabase = await createClient()

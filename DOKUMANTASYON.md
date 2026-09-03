@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–048
+supabase/migrations/ 001–050
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 48 veritabanı migration'ı çalıştırılmıştır (001–048).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 50 veritabanı migration'ı çalıştırılmıştır (001–050).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -324,5 +324,21 @@ Gerçek vaka: 3D TYT Matematik'te **01. Bölüm tek başına ~200 sayfa** ve iç
 **Testler:** `tests/book-structure.test.ts` 17 test. Şartnamenin kendi kontrol sayıları fixture olarak duruyor — **Bölüm 1 = 104**, kitap toplamı **177**. Alt bölümü olmayan kitabın listesinin birebir aynı kaldığı da burada kanıtlanıyor.
 
 **R7-03 sınırı** korundu: yeni otomasyon, kaynak önerisi, konu eşiği veya pedagojik sınıflandırma eklenmedi. Bire Bir ÖSYM ve TÜMEVARIM için ayrı kaynak türü/kategori **açılmadı** — bunlar yalnızca alt bölüm adlarıdır.
+
+### Faz 1 — Güvenlik kapanışı (049, 050)
+
+Satış öncesi denetimde çıkan P0 ve P1 güvenlik bulguları kapatıldı.
+
+**049 — View'ların RLS baypası (P0).** Depodaki sekiz view'ın hiçbirinde `security_invoker` yoktu ve hiçbirinde GRANT/REVOKE tanımı yoktu. View'lar PostgreSQL'de varsayılan olarak *sahibinin* haklarıyla çalışır ve alttaki tabloların RLS'ini atlar; Supabase de `public` şemasına varsayılan SELECT izni verir. Sonuç: tarayıcıda zaten görünen anon anahtarıyla `teacher_student_overview_view` çağıran biri **tüm workspace'lerin** öğrenci adlarını, sınav türlerini ve ilerlemelerini okuyabiliyordu. 003, 026 ve 046'daki RLS çalışması bu yolla tamamen aşılıyordu.
+
+İki katman birden uygulandı: `security_invoker = on` (view artık çağıranın haklarıyla çalışır) ve `REVOKE anon` + `GRANT authenticated` (oturum açmamış istemci kapıda kesilir). İkincisi savunmanın ikinci katmanıdır — yarın bir tabloya gevşek politika yazılırsa anon yine de giremez.
+
+**Zorunlu yan düzeltme:** `topic_contacts`'a öğrenci self-SELECT politikası eklendi. Öğrencinin Tekrar ekranı bugüne kadar çalışıyordu **çünkü view RLS'i baypas ediyordu** — yani sızıntı, eksik bir politikayı örtüyordu. 046 bu tabloyu "zaten view üzerinden geliyor" gerekçesiyle açmamıştı; o gerekçe view kapanınca geçersiz kaldı.
+
+`tests/tenant-isolation.test.ts` bu açığı otomatik yakalar: anon anahtarla sekiz view ve `students` tablosu sorgulanır, satır dönerse test kırılır. Canlı kimlik bilgisi yoksa atlanır — CI kırılmasın ama anahtar tanımlandığı anda korumaya başlasın. **Yeni bir view eklendiğinde testteki listeye de eklenmelidir**, aksi hâlde aynı açık sessizce geri gelir.
+
+**050 — Hız sınırı (P1).** Giriş, kayıt, şifre sıfırlama ve davet kabulünde uygulama katmanında hiçbir savunma yoktu. Sayaç veritabanında tutulur; bellekte tutmak sunucusuz ortamda işe yaramazdı çünkü her örnek kendi sayacını sıfırdan başlatır. Sayma ve sınır kararı tek atomik adımda yapılır — "sor, sonra artır" iki eşzamanlı denemenin ikisinin de geçmesine izin verirdi. IP ve e-posta tabloya **ham gitmez**, SHA-256 özeti tutulur. Sayaç altyapısı bozulursa istek **engellenmez**, loglanır: kimsenin giriş yapamaması hız sınırının olmamasından kötü bir arızadır.
+
+**Diğer sertleştirmeler.** Güvenlik başlıkları eklendi (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS; `poweredByHeader` kapatıldı). CSP **bilinçli olarak eklenmedi**: doğru CSP nonce ile middleware'de kurulur ve rapor modunda izlenmeden zorlayıcıya çevrilmemelidir. `next` sürümü hattın en güncel yamasına pinlendi (15.5.25) — pinlemenin amacı gözetimsiz sürüklenmeyi durdurmak, açık bir sürümde kalmak değil; `npm audit` 14 açıktan 2'ye indi. React tip paketleri çalışma zamanıyla aynı majora indirildi. `.env.example`'daki iki sahte sır silindi.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

@@ -10,10 +10,16 @@ import {
   passwordResetSchema,
   firstIssue,
 } from '@/lib/validation'
+import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 
 export async function loginAction(email: string, password: string) {
   const parsed = loginSchema.safeParse({ email, password })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  // Kaba kuvvet savunması (050). Doğrulamadan SONRA, kimlik denemesinden
+  // ÖNCE: biçimsel olarak geçersiz girdiler sayacı boşa harcamasın.
+  const limit = await checkRateLimit('login', parsed.data.email)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
 
@@ -31,6 +37,11 @@ export async function registerAction(
 ) {
   const parsed = registerSchema.safeParse({ fullName, email, password, workspaceName })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  // Otomatik hesap üretimine karşı. Her kayıt bir workspace açtığı için
+  // sınırsız kayıt, sınırsız kiracı demek.
+  const limit = await checkRateLimit('register', parsed.data.email)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
 
@@ -60,6 +71,11 @@ export async function registerAction(
 export async function requestPasswordResetAction(email: string) {
   const parsed = forgotPasswordSchema.safeParse({ email })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  // E-posta bombardımanına karşı. Sınır mesajı kullanıcı numaralandırması
+  // yaratmaz: adres kayıtlı olsun olmasın aynı şekilde tetiklenir.
+  const limit = await checkRateLimit('passwordReset', parsed.data.email)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
 
