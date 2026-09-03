@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–044
+supabase/migrations/ 001–045
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 44 veritabanı migration'ı çalıştırılmıştır (001–044).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 45 veritabanı migration'ı çalıştırılmıştır (001–045).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -254,5 +254,25 @@ Menü `readOnly`ye BAĞLANMADI: `readOnly` "hücre seçilemez" demektir (ödev a
 **Satır menüsü** dört ikon düğmenin yerine geçti (İleri/Geri taşı · Böl · Birleştir · Konu ekle öncesine/sonrasına · Tamamlandı yap · Konuyu çıkar). Böl ve Birleştir eklenince satırda altı düğme olacaktı; menü ayrıca her komutun adını yazar. **Durum kolonu kaldırıldı**, durum noktası konu adının başına geldi. Başlık şeridine "Toplam süre" kartı, sağ kolona beş durumun hafta toplamını veren "Akış özeti" kartı eklendi; detay paneline "Bu hafta" ve "İlerleme" satırları geldi.
 
 `tests/curriculum-flow.test.ts` 20'den 44 teste çıktı: MA-05…MA-11 kabulleri değişmeden geçiyor (yeniden adlandırmanın regresyon güvencesi), yeni durum türetmesi ile Böl/Birleştir sınır değerleriyle test edildi.
+
+### Davet sistemi — yaşam döngüsü ve güvenlik (045)
+
+Davet akışı çalışıyordu ama üç boşluğu vardı; ikisi güvenlik.
+
+**1. Veli daveti hiçbir kimliğe bağlı değildi.** `invite-actions.ts` veli için `invited_email: null` yazıyordu ve `024`'teki e-posta doğrulaması `invited_email IS NOT NULL` koşuluna bağlı olduğu için veli davetinde hiç çalışmıyordu: linki eline geçiren herkes kendi e-postasıyla hesap açıp öğrencinin verisine `parent` olarak erişebiliyordu.
+
+Öğretmen çoğu zaman veli e-postasını bilmediği için alan **zorunlu yapılmadı**; girilirse davet o adrese kilitlenir. Girilmediğinde tek koruma penceredir, bu yüzden **veli daveti 48 saat**, öğrenci daveti (zaten öğrencinin kayıtlı e-postasına kilitli) 7 gün geçerlidir. Dialog hangi durumda olduğunu açıkça yazar: "yalnız belirtilen e-posta ile kullanılabilir" ya da "herhangi bir e-postayla kullanılabilir — yalnız doğru kişiye gönderin".
+
+**2. İptal (revoke) uygulanmamıştı.** `'revoked'` statüsü 001'den beri CHECK'te ve `/invite/[token]` sayfasında mesajı hazırdı ama bu değeri yazan tek satır kod yoktu — yanlış kişiye giden link 7 gün geri alınamıyordu. Artık `revokeInviteAction` var ve **yeni davet eskisini otomatik iptal eder**; 045'teki partial unique index (`(student_id, role) WHERE status='pending'`) bunu veritabanı düzeyinde de zorunlu kılar. Migration, index'ten önce mevcut çoklu `pending` kayıtları temizler (her çift için en yenisi kalır).
+
+**3. Bekleyen davetler görünmüyordu.** `invitations` tablosunu okuyan hiçbir öğretmen ekranı yoktu; "davet gönderdim mi, kaç tane açık, kabul edildi mi?" sorusunun arayüzde cevabı yoktu. Öğrenci detayındaki Veliler sekmesine davet listesi eklendi: rol, kilitli olup olmadığı, gönderim tarihi, kalan süre, durum rozeti ve iptal düğmesi.
+
+**PII sızıntısı kapatıldı.** `get_invitation_by_token` filtresizdi ve kullanılmış/süresi dolmuş bir link bile öğrencinin tam adını anonim çağırana döndürüyordu. `024` bunu bilinçli olarak düzeltmemiş ve gerekçesini yazmıştı (ekran `status` alanına bakıp mesaj ayrımı yapıyor). O itiraz **karşılandı**: `status`, `role` ve `expires_at` her zaman döner, yalnız kimlik alanları davet gerçekten kullanılabilir durumdayken dolu gelir.
+
+**Görünen durum türetmesi** `lib/invite-status.ts`'te ve testlidir. Gerekçe: `expired` statüsünü yazan tek yer `accept_invitation`'dır ve o da ancak biri linki açmayı denediğinde çalışır — süresi dolmuş davetler tabloda `pending` durur, liste bunu kendi başına anlamak zorundadır.
+
+**Kabul akışı hata mesajı.** Hesabı olan davetli yanlış şifre girdiğinde "E-posta veya şifre hatalı." görüyor ve davetin mi bozuk olduğunu yoksa şifresini mi yanlış yazdığını anlayamıyordu. Artık ayrı mesaj ve şifre sıfırlama bağlantısı gösterilir.
+
+Ölü klasör `app/(auth)/invite/[token]/` silindi (boştu, kullanılmıyordu).
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

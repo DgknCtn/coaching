@@ -25,6 +25,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
+import { InviteList, type InviteListRow } from './invite-list'
+import { deriveInviteStatus } from '@/lib/invite-status'
 import { loadAssignableBooks } from '@/lib/assignable-books'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
@@ -92,6 +94,7 @@ export default async function StudentDetailPage({
     { data: homeworkBatches },
     { data: pendingApprovalItems },
     { data: parentLinks },
+    { data: inviteRows },
     { data: weeklySummary },
     { data: pendingApprovalSummary },
     { data: overdueSummary },
@@ -152,6 +155,15 @@ export default async function StudentDetailPage({
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .neq('status', 'removed'),
+    // Davet geçmişi: "gönderdim mi, açık mı, kabul edildi mi?" sorusunun
+    // arayüzdeki tek cevabı. Son 10 kayıt yeter — eskisi arşiv değeri taşımaz.
+    supabase
+      .from('invitations')
+      .select('id, role, status, expires_at, created_at, accepted_at, invited_email')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(10),
     supabase
       .from('student_weekly_homework_summary_view')
       .select('*')
@@ -365,6 +377,32 @@ export default async function StudentDetailPage({
   })
 
   const hasAccount = !!student.profile_id
+
+  const invites: InviteListRow[] = (
+    (inviteRows ?? []) as {
+      id: string
+      role: string
+      status: string
+      expires_at: string
+      created_at: string
+      accepted_at: string | null
+      invited_email: string | null
+    }[]
+  ).map(r => ({
+    id: r.id,
+    role: r.role === 'student' ? 'student' : 'parent',
+    status: r.status,
+    expiresAt: r.expires_at,
+    createdAt: r.created_at,
+    acceptedAt: r.accepted_at,
+    invitedEmail: r.invited_email,
+    createdByName: null,
+  }))
+
+  // "Yeni link eskisini iptal eder" uyarısı yalnız gerçekten açık davet
+  // varken gösterilmeli; süresi dolmuş bir davet uyarıyı hak etmez.
+  const hasPendingInvite = (role: 'student' | 'parent') =>
+    invites.some(i => i.role === role && deriveInviteStatus(i) === 'active')
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
@@ -781,12 +819,14 @@ export default async function StudentDetailPage({
                     studentId={studentId}
                     studentName={student.full_name}
                     inviteType="student"
+                    hasPendingInvite={hasPendingInvite('student')}
                   />
                 )}
                 <InviteDialog
                   studentId={studentId}
                   studentName={student.full_name}
                   inviteType="parent"
+                  hasPendingInvite={hasPendingInvite('parent')}
                 />
               </div>
             }
@@ -836,6 +876,15 @@ export default async function StudentDetailPage({
               </ul>
             )}
           </Section>
+
+          {invites.length > 0 && (
+            <Section
+              title="Davetler"
+              description="Gönderilen davetlerin durumu. Açık bir daveti iptal ederseniz link hemen çalışmaz olur."
+            >
+              <InviteList studentId={studentId} invites={invites} />
+            </Section>
+          )}
         </TabsContent>
 
         <TabsContent value="notes">

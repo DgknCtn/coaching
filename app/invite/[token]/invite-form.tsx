@@ -25,6 +25,9 @@ interface Props {
 export function InviteForm({ token, defaultEmail }: Props) {
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
+  // Hesabı olan davetli yanlış şifre girdiğinde çıkışsız kalmasın: sunucu
+  // bir sıfırlama yolu döndürüyorsa hatanın altında bağlantı gösterilir.
+  const [resetHref, setResetHref] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -33,9 +36,13 @@ export function InviteForm({ token, defaultEmail }: Props) {
 
   const onSubmit = (data: FormData) => {
     setServerError(null)
+    setResetHref(null)
     startTransition(async () => {
       const result = await acceptInviteAction(token, data.fullName, data.email, data.password)
-      if (result?.error) setServerError(result.error)
+      if (result?.error) {
+        setServerError(result.error)
+        setResetHref(result.passwordResetHref ?? null)
+      }
     })
   }
 
@@ -59,6 +66,14 @@ export function InviteForm({ token, defaultEmail }: Props) {
       {serverError && (
         <div className="rounded-lg bg-destructive/8 border border-destructive/20 px-3.5 py-2.5">
           <p className="text-xs text-destructive">{serverError}</p>
+          {resetHref && (
+            <a
+              href={resetHref}
+              className="mt-1 inline-block text-xs font-medium text-destructive underline underline-offset-2"
+            >
+              Şifremi sıfırla
+            </a>
+          )}
         </div>
       )}
       <Button type="submit" className="w-full h-11 font-medium" disabled={isPending}>

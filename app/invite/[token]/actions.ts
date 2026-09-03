@@ -21,12 +21,27 @@ export async function acceptInviteAction(token: string, fullName: string, email:
 
   let authUserId = signUpData?.user?.id
 
+  // Bu e-postayla zaten bir hesap var mı? signUp'ın yuttuğumuz hatası tek
+  // bilgi kaynağı — aşağıdaki mesajı doğru seçmek için tutuluyor.
+  const accountExists = signUpError?.message === 'User already registered'
+
   // Session yoksa (e-posta onayı gerekiyor ya da kullanıcı zaten kayıtlı) → giriş yap
   if (!signUpData?.session || !authUserId) {
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     if (signInError) {
       if (signInError.message.toLowerCase().includes('email not confirmed')) {
         return { error: 'E-posta adresinizi onaylayın, ardından tekrar deneyin.' }
+      }
+      // ÖNCEKİ DAVRANIŞ: her iki durumda da "E-posta veya şifre hatalı."
+      // deniyordu. Hesabı olan davetli bunu görünce davetin mi bozuk
+      // olduğunu yoksa şifresini mi yanlış yazdığını anlayamıyordu ve
+      // şifre sıfırlamaya giden bir yol da yoktu.
+      if (accountExists) {
+        return {
+          error:
+            'Bu e-postayla zaten bir hesabınız var. Mevcut şifrenizle devam edin ya da şifrenizi sıfırlayın.',
+          passwordResetHref: '/forgot-password',
+        }
       }
       return { error: 'E-posta veya şifre hatalı.' }
     }
