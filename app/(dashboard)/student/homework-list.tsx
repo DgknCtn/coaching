@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { formatUnitCount } from '@/lib/unit-labels'
+import { buildHomeworkDetail } from '@/lib/homework-detail'
 import { CheckCircle2, RotateCcw, Loader2, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   submitHomeworkItemAction,
@@ -28,8 +29,10 @@ interface HomeworkItem {
   submitted_at: string | null
   book_id: string | null
   books: { title: string; subject: string; tracking_mode?: string | null } | null
-  book_sections: { title: string } | null
-  book_tests: { title: string } | null
+  book_sections: { id: string; title: string } | null
+  /** order_index test/sayfa numarasıdır; sayfa kitabında page_start ile aynı
+   *  fiziksel sayfayı gösterir (022). Aralık özeti bundan türetilir. */
+  book_tests: { title: string; order_index?: number | null; page_start?: number | null } | null
 }
 
 interface HomeworkBatch {
@@ -208,12 +211,25 @@ function BookGroup({
   const [expanded, setExpanded] = useState(!multipleBooks)
   const pendingCount = group.items.filter(i => i.status === 'pending').length
 
+  // R6-06: "0/71 neydi?" sorusu öğrencide de tek bakışta yanıtlanmalı.
+  // Özet lib/homework-detail.ts'ten gelir — öğretmen ve veli ekranlarıyla
+  // AYNI formatter: 71 sayfa 71 satıra değil "sf. 6-26, 61-81"e iner.
+  // İkinci bir gruplama mantığı kurulmaz.
+  const summary = summarizeGroup(group)
+
   if (!multipleBooks) {
     return (
-      <div className="divide-y">
-        {group.items.map(item => (
-          <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} studiedOn={studiedOn} />
-        ))}
+      <div>
+        {summary && (
+          <p className="border-b bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+            {summary}
+          </p>
+        )}
+        <div className="divide-y">
+          {group.items.map(item => (
+            <HomeworkItemRow key={item.id} item={item} dueDate={dueDate} studiedOn={studiedOn} />
+          ))}
+        </div>
       </div>
     )
   }
@@ -243,6 +259,12 @@ function BookGroup({
           </Button>
         )}
       </div>
+      {/* Kapalıyken de görünür: kabul #40, kart kompakt kalır ama içeriğin
+          ne olduğu okunur. Aç/kapa hiçbir ödev durumunu değiştirmez (#44). */}
+      {summary && (
+        <p className="border-b px-4 pb-2 text-xs text-muted-foreground">{summary}</p>
+      )}
+
       {expanded && (
         <div className="divide-y">
           {group.items.map(item => (
@@ -252,6 +274,40 @@ function BookGroup({
       )}
     </div>
   )
+}
+
+/**
+ * Kitap grubunun bölüm > aralık özeti (R6-06).
+ *
+ * Kalemleri lib/homework-detail.ts'in beklediği biçime çevirir ve tek satır
+ * üretir: "Polinomlar → 3-5. Test · Üslü Sayılar → sf. 6-26, 61-81".
+ * Aralık sıkıştırması ve birim etiketi orada, tek yerde tanımlı.
+ */
+function summarizeGroup(group: {
+  title: string
+  trackingMode: string
+  items: HomeworkItem[]
+}): string | null {
+  const [detail] = buildHomeworkDetail(
+    group.items.map(item => ({
+      bookId: item.book_id,
+      bookTitle: group.title,
+      trackingMode: group.trackingMode,
+      sectionId: item.book_sections?.id ?? null,
+      sectionTitle: item.book_sections?.title ?? null,
+      // Sayfa kitabında birim tek bir fiziksel sayfadır (022): gerçek sayfa
+      // numarası page_start'tadır, order_index ile aynıdır.
+      orderIndex: item.book_tests?.order_index ?? item.book_tests?.page_start ?? null,
+    }))
+  )
+
+  if (!detail) return null
+
+  const parts = detail.sections
+    .filter(section => section.units)
+    .map(section => `${section.title} → ${section.units}`)
+
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 function HomeworkItemRow({

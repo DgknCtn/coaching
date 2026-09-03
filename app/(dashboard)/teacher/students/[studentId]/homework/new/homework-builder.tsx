@@ -32,6 +32,7 @@ import { BulkActionPanel } from '@/components/shared/bulk-action-panel'
 import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
 import { buildShareText } from '@/lib/share-text'
+import { resolveBasketItems, toHomeworkItems, type BasketUnit } from '@/lib/weekly-plan'
 import { COUNTER_LABEL, todayDateString } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,16 +65,15 @@ import { cn } from '@/lib/utils'
 //                  ancak "Planı Yayınla" ile değişir. Taslak (019) bu kümeyi
 //                  saklar.
 
-interface SelectedTest {
-  student_book_assignment_id: string
-  book_test_id: string
-  bookId: string
-  bookTitle: string
-  sectionId: string
-  sectionTitle: string
+/**
+ * Sepet kaleminin harita bağlamı.
+ *
+ * Alanların tanımı lib/weekly-plan.ts'te (BasketUnit): sepetten yayına giden
+ * dönüşüm orada, saf ve test edilebilir biçimde duruyor. Burada yalnız
+ * arayüzün ihtiyaç duyduğu tek alan ekleniyor.
+ */
+interface SelectedTest extends BasketUnit {
   testTitle: string
-  orderIndex: number
-  trackingMode: string
 }
 
 interface Props {
@@ -167,11 +167,12 @@ export function HomeworkBuilder({
   }, [books])
 
   // Sepetin içeriği: yayınlanacak ve WhatsApp metnine girecek olan küme.
+  //
+  // Taslak (019) yazıldıktan sonra bir kitap havuzdan kaldırılmış veya
+  // ataması silinmiş olabilir; o id'lerin haritada karşılığı yoktur ve
+  // elenir (lib/weekly-plan.ts, R6-18 kabul #95).
   const selectedTests = useMemo(
-    () =>
-      [...basketIds]
-        .map(id => testIndex.get(id))
-        .filter((t): t is SelectedTest => Boolean(t)),
+    () => resolveBasketItems(basketIds, testIndex).units as SelectedTest[],
     [basketIds, testIndex]
   )
 
@@ -276,10 +277,7 @@ export function HomeworkBuilder({
         studentId,
         dueDate || undefined,
         title || undefined,
-        selectedTests.map(t => ({
-          student_book_assignment_id: t.student_book_assignment_id,
-          book_test_id: t.book_test_id,
-        })),
+        toHomeworkItems(selectedTests),
         note || undefined
       )
     }, 500)
@@ -409,10 +407,7 @@ export function HomeworkBuilder({
         studentId,
         dueDate,
         title || undefined,
-        selectedTests.map(t => ({
-          student_book_assignment_id: t.student_book_assignment_id,
-          book_test_id: t.book_test_id,
-        })),
+        toHomeworkItems(selectedTests),
         note || undefined
       )
       if (result?.error) {

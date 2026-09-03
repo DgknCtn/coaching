@@ -6,6 +6,8 @@ import type {
   ResourcePlanSummary,
 } from '@/lib/student-overview'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { Badge } from '@/components/ui/badge'
+import { bookPlanStatusLabel, bookRoleLabel } from '@/lib/resource-plan'
 
 // R5 Öğrenci Genel Bakış — üç özet kart (R5.5 §7.1).
 //
@@ -69,30 +71,38 @@ export function R5SummaryCards({ studentId, flow, resources, pool }: Props) {
               {resources.completedCount} tamamlandı
             </p>
 
-            {/* Ana gösterge PLAN %'dir; Kitap % detay ekranında kalır. */}
-            {resources.averagePlanPercentage !== null && (
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-muted-foreground">Ortalama plan</span>
-                  <span className="font-semibold tabular-nums">
-                    %{resources.averagePlanPercentage}
-                  </span>
-                </div>
-                <ProgressBar
-                  value={resources.averagePlanPercentage}
-                  label="Aktif kaynakların ortalama plan ilerlemesi"
-                />
-              </div>
-            )}
-
-            <ul className="space-y-1">
+            {/* Kaynak başına iki ayrı yüzde: PLAN (karar verici) ve KİTAP
+                (fiziksel kapsam). İkisi yan yana durur çünkü plan %100
+                olsa bile kitap kapsamı daha düşük olabilir (R6-04 #34). */}
+            <ul className="divide-y">
               {resources.topActive.map(r => (
-                <li key={r.bookId} className="flex items-baseline justify-between gap-2 text-xs">
-                  <span className="truncate text-muted-foreground">{r.title}</span>
-                  <span className="shrink-0 tabular-nums">%{r.planPercentage}</span>
+                <li key={r.bookId} className="space-y-1.5 py-2 first:pt-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 truncate text-sm">{r.title}</span>
+                    {r.role && bookRoleLabel(r.role) && (
+                      <Badge variant="neutral" className="shrink-0">
+                        {bookRoleLabel(r.role)}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <PercentBar label="Plan" value={r.planPercentage} />
+                    <PercentBar label="Kitap" value={r.bookPercentage} muted />
+                  </div>
+                  {(r.scopeLabel || r.status) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {[r.scopeLabel, r.status ? bookPlanStatusLabel(r.status) : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
+
+            <p className="text-[11px] text-muted-foreground">
+              Plan %100 tamamlanmış olsa bile kitap kapsamı daha düşük olabilir.
+            </p>
           </div>
         )}
       </SummaryCard>
@@ -175,6 +185,31 @@ function SummaryCard({
         <ArrowRight className="size-3" />
       </Link>
     </section>
+  )
+}
+
+/** Etiket + ince ilerleme çubuğu + yüzde. Kaynak satırında iki kez kullanılır. */
+function PercentBar({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string
+  value: number
+  muted?: boolean
+}) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-baseline justify-between gap-1 text-[11px]">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="tabular-nums">%{value}</span>
+      </div>
+      <ProgressBar
+        value={value}
+        label={`${label} ilerlemesi`}
+        className={muted ? 'opacity-60' : undefined}
+      />
+    </div>
   )
 }
 

@@ -134,6 +134,46 @@ describe('R6-18 · R2 onay akışı zinciri', () => {
     expect(deriveTestState({ hasActiveCompletion: true, dueDate: due, today })).toBe('completed')
   })
 
+  // Kabul #94'ün ikinci yarısı: "Öğrenci reddedilen çalışmada ÖĞRETMEN
+  // NOTUNU görmeli". Notun yazılması ve yeniden gönderimde temizlenmesi
+  // tamamen DB tarafındadır (014: reject_homework_item teacher_note'u yazar,
+  // 014/020: yeniden gönderim ve toplu onay rejected_at + teacher_note'u
+  // NULL'lar) — TS birim testiyle doğrulanamaz, doğrulama listesinde manuel
+  // adım olarak duruyor.
+  //
+  // Burada test edilebilen kısım GÖRÜNÜRLÜK SÖZLEŞMESİDİR: öğrenci ekranı
+  // notu yalnız "İade Edildi" durumunda gösterir
+  // (app/(dashboard)/student/homework-list.tsx:300). Durum türetmesi
+  // kaymışsa not sessizce görünmez olur; aşağıdaki test bunu yakalar.
+  it('kabul #94: öğretmen notu yalnız iade edilmiş çalışmada görünür', () => {
+    const due = '2026-08-30'
+    const today = new Date('2026-08-25T09:00:00Z')
+
+    // Öğrenci ekranının koşulu: durum 'returned' VE not dolu.
+    const notGosterilir = (state: string, note: string | null) =>
+      state === 'returned' && !!note
+
+    const reddedilen = deriveTestState({
+      itemStatus: 'pending',
+      dueDate: due,
+      rejectedAt: '2026-08-25T10:00:00Z',
+      today,
+    })
+    expect(notGosterilir(reddedilen, 'Son iki soruyu tekrar çöz.')).toBe(true)
+
+    // Yeniden gönderimden sonra kayıt onay bekliyordur; not artık ilgili
+    // değildir ve gösterilmez (DB'de de NULL'lanır).
+    const yenidenGonderildi = deriveTestState({
+      itemStatus: 'pending_approval',
+      dueDate: due,
+      today,
+    })
+    expect(notGosterilir(yenidenGonderildi, null)).toBe(false)
+
+    // Not hiç yazılmadan reddedilmişse ekranda boş bir kutu açılmaz.
+    expect(notGosterilir(reddedilen, null)).toBe(false)
+  })
+
   it('süresi geçmiş çalışma onaya gönderildiğinde aktif durum Onay Bekliyor olur', () => {
     // pending_approval, overdue'nun ÖNÜNDE gelir: öğrenci işi teslim
     // ettiyse bu "geciken" değil "onay bekleyen"dir.

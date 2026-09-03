@@ -119,6 +119,17 @@ export interface ResourceSummaryItem {
   planPercentage: number
   /** Kitabın fiziksel kapsamı — ikinci seviye bilgi. */
   bookPercentage: number
+  /**
+   * Aşağıdakiler yalnız SUNUM içindir ve hepsi opsiyoneldir: özet
+   * fonksiyonlarının hesabına girmezler. Genel Bakış'taki kaynak tablosu
+   * (Tür/Rol · Seçili kapsam) bunlarla dolar; verilmezlerse tablo o
+   * hücreleri boş bırakır ve hiçbir şey kırılmaz.
+   */
+  role?: string | null
+  /** "156 test" / "32 sayfa" — kapsamdaki birim sayısı, birimiyle. */
+  scopeLabel?: string
+  /** DB durumu; rozet etiketi lib/resource-plan.ts'ten türetilir. */
+  status?: string | null
 }
 
 export interface ResourcePlanSummary {
@@ -186,4 +197,135 @@ export function summarizeProtectionPool(
     top: items.slice(0, limit),
     total: items.length,
   }
+}
+
+// ============================================================
+// Son Akademik İz (Genel Bakış zaman çizgisi)
+//
+// "Geçen hafta ne oldu, nerede kaldık?" sorusunun tek bakışta cevabı.
+// R6-07'nin akademik notu bu sorunun BİR parçasıydı; öğretmenin gerçekte
+// hatırlamak istediği şey notlarla birlikte SON ÇALIŞMALARDIR.
+//
+// YENİ VERİ YOK: girdiler Genel Bakış sayfasının zaten çektiği kümelerden
+// gelir (academic_notes + homework_batches). Bu fonksiyon yalnız ikisini
+// tek bir zaman çizgisinde birleştirir ve sıralar.
+//
+// YORUM ÜRETMEZ (§7.2): "geride kalmış", "iyi gidiyor" gibi bir yargı
+// yoktur; yalnız ne olduğu ve ne zaman olduğu yazar.
+// ============================================================
+
+export type TrailKind = 'note' | 'homework'
+
+export interface TrailEntry {
+  id: string
+  kind: TrailKind
+  /** ISO tarih (YYYY-MM-DD veya tam zaman damgası). */
+  date: string
+  text: string
+  /** İkincil bağlam: ödevde kaynak sayısı, notta yazar adı. */
+  detail?: string | null
+}
+
+export interface TrailInput {
+  notes: { id: string; note_text: string; created_at: string; author_name?: string | null }[]
+  homework: {
+    id: string
+    title: string | null
+    due_date: string
+    itemCount: number
+    completedCount: number
+  }[]
+}
+
+/**
+ * İki kaynağı birleştirip en yeniden eskiye sıralar.
+ *
+ * `limit` varsayılan 6: bu bir arşiv değil, dersin başında bakılacak kısa
+ * bir hafıza şerididir. Tamamı ilgili sekmelerde zaten var.
+ */
+export function buildAcademicTrail(input: TrailInput, limit = 6): TrailEntry[] {
+  const entries: TrailEntry[] = [
+    ...input.notes.map(note => ({
+      id: `note-${note.id}`,
+      kind: 'note' as const,
+      date: note.created_at,
+      text: note.note_text,
+      detail: note.author_name ?? null,
+    })),
+    ...input.homework.map(batch => ({
+      id: `hw-${batch.id}`,
+      kind: 'homework' as const,
+      date: batch.due_date,
+      text: batch.title?.trim() || 'Haftalık plan',
+      detail: `${batch.completedCount}/${batch.itemCount} tamamlandı`,
+    })),
+  ]
+
+  return entries
+    .filter(entry => !Number.isNaN(Date.parse(entry.date)))
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, limit)
+}
+
+// ============================================================
+// Bu Hafta Odak
+//
+// Mockup'ta bir "hedef listesi" var. Sistem hedef UYDURMAZ: buradaki
+// maddelerin hepsi MEVCUT sinyallerden türer (onay bekleyen, süresi geçen,
+// koruma havuzunun en eski konusu, plan ilerlemesi düşük kaynak). Hiçbir
+// sinyal yoksa liste boş döner ve arayüz bloğu hiç göstermez — sistem
+// gereksiz görev üretmemelidir (R6-07 kabul #49 ile aynı ilke).
+// ============================================================
+
+export interface FocusItem {
+  id: string
+  text: string
+  href?: string
+}
+
+export function buildWeeklyFocus(input: {
+  studentId: string
+  pendingApproval: number
+  overdue: number
+  pool: { top: PoolSummaryItem[] }
+  resources: ResourcePlanSummary
+}): FocusItem[] {
+  const { studentId, pendingApproval, overdue, pool, resources } = input
+  const items: FocusItem[] = []
+
+  if (overdue > 0) {
+    items.push({
+      id: 'overdue',
+      text: `${overdue} çalışmanın süresi geçti`,
+      href: `/teacher/tasks?filter=overdue&student=${studentId}`,
+    })
+  }
+
+  if (pendingApproval > 0) {
+    items.push({
+      id: 'approval',
+      text: `${pendingApproval} çalışma onay bekliyor`,
+      href: `/teacher/tasks?filter=approval&student=${studentId}`,
+    })
+  }
+
+  const oldest = pool.top[0]
+  if (oldest) {
+    items.push({
+      id: `pool-${oldest.topicId}`,
+      text: `${oldest.topicName} ${oldest.daysSinceContact} gündür temas edilmedi`,
+      href: `/teacher/students/${studentId}/protection`,
+    })
+  }
+
+  const slowest = resources.topActive[0]
+  if (slowest) {
+    items.push({
+      id: `resource-${slowest.bookId}`,
+      text: `${slowest.title} planında %${slowest.planPercentage}`,
+      href: `/teacher/students/${studentId}/books/${slowest.bookId}`,
+    })
+  }
+
+  return items
 }

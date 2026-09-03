@@ -255,82 +255,18 @@ export async function deleteSectionAction(bookId: string, sectionId: string) {
   return { success: true }
 }
 
-/**
- * Bölümün fasikül / tema etiketlerini günceller (R6-17).
- *
- * Bunlar TAKİP BİRİMİ DEĞİL, üst grup metadata'sıdır: değiştirmek hiçbir
- * tamamlanma kaydını etkilemez (kabul #90).
- */
-export async function setSectionGroupingAction(
-  bookId: string,
-  sectionId: string,
-  groupLabel: string,
-  themeLabel: string
-) {
-  const parsed = uuidSchema.safeParse(sectionId)
-  if (!parsed.success) return { error: firstIssue(parsed.error) }
-
-  const labels = z.string().trim().max(120)
-  const parsedGroup = labels.safeParse(groupLabel)
-  const parsedTheme = labels.safeParse(themeLabel)
-  if (!parsedGroup.success) return { error: 'Fasikül adı en fazla 120 karakter olabilir.' }
-  if (!parsedTheme.success) return { error: 'Tema adı en fazla 120 karakter olabilir.' }
-
-  await getTeacherContext()
-  const supabase = await createClient()
-
-  const { error } = await supabase.rpc('set_section_grouping', {
-    p_section_id: parsed.data,
-    p_group_label: parsedGroup.data || null,
-    p_theme_label: parsedTheme.data || null,
-  })
-
-  if (error) return { error: dbErrorToTr(error.message) }
-
-  revalidatePath(`/teacher/books/${bookId}/edit`)
-  revalidatePath(`/teacher/books/${bookId}`)
-  return { success: true }
-}
-
-/**
- * Kitap bölümünü canonical topic'e bağlar (R5.3 §5.1).
- *
- * Mapping GLOBALDİR: kitabın yapısal bilgisidir, öğrenciye özel değildir.
- * Boş gönderilirse eşleme kaldırılır ve bölüm R4 davranışına döner —
- * yanlış eşleme geri alınabilmeli.
- *
- * Eşleme müfredat sinyalinden başka HİÇBİR ŞEYİ etkilemez: ödev
- * oluşturmaz, kapsamı değiştirmez, temas üretmez (§5.5).
- */
-export async function setSectionTopicAction(
-  bookId: string,
-  sectionId: string,
-  topicId: string | null
-) {
-  const parsedSection = uuidSchema.safeParse(sectionId)
-  if (!parsedSection.success) return { error: firstIssue(parsedSection.error) }
-
-  let parsedTopicId: string | null = null
-  if (topicId) {
-    const parsedTopic = uuidSchema.safeParse(topicId)
-    if (!parsedTopic.success) return { error: 'Geçersiz konu.' }
-    parsedTopicId = parsedTopic.data
-  }
-
-  await getTeacherContext()
-  const supabase = await createClient()
-
-  const { error } = await supabase.rpc('set_book_section_topic', {
-    p_section_id: parsedSection.data,
-    p_topic_id: parsedTopicId,
-  })
-
-  if (error) return { error: dbErrorToTr(error.message) }
-
-  revalidatePath(`/teacher/books/${bookId}/edit`)
-  revalidatePath(`/teacher/books/${bookId}`)
-  return { success: true }
-}
+// ---------------------------------------------------------------
+// KALDIRILAN İKİ ACTION (R6 denetimi)
+//
+// setSectionGroupingAction (R6-17 fasikül/tema) ve setSectionTopicAction
+// (R5.3 tekil müfredat eşlemesi) R7'den sonra hiçbir arayüzden çağrılmıyor:
+// fasikül/tema alanlarının yerini gerçek Parça nesnesi, tekil eşlemenin
+// yerini setSectionTopicsAction (çoklu) aldı.
+//
+// Karşılık gelen RPC'ler (set_section_grouping, set_book_section_topic)
+// veritabanında KALIR: eski etiket verisi duruyor ve 040/035'in geri alma
+// yolu korunmalı. Kaldırılan yalnız çağrılmayan iki sunucu eylemidir.
+// ---------------------------------------------------------------
 
 /**
  * Takip türünü düzeltir (R7-02 §6.5, kabul #1).

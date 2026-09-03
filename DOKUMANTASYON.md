@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–043
+supabase/migrations/ 001–044
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 43 veritabanı migration'ı çalıştırılmıştır (001–043).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 44 veritabanı migration'ı çalıştırılmıştır (001–044).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -188,5 +188,19 @@ R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası +
 **Tek Kitap Haritası (R6-03 güncellemesi).** Ödev verme ve yönetim aynı akademik verinin farklı işlemleridir; ikisi `/teacher/students/[id]/homework/new` yüzeyinde birleşti. Harita `manage` modunda çalışır (altı durum da seçilebilir), altındaki işlem çubuğunda **Ödeve Ekle / Tamamlandı Olarak İşle / Onayla / Tamamlanmayı Geri Al** vardır ve her düğme kaç öğeye uygulanacağını söyler. Kritik ayrım: **seçim tek başına veri durumunu değiştirmez** — harita seçimi (`mapSelection`) ile plan sepeti (`basketIds`) ayrı kümelerdir. Yayından sonra aynı haritada kalınır. Kitap detayındaki Kaynak Haritası salt görünüme indi ve "Bu kitapta çalış" ile bu yüzeye yönlendirir.
 
 **WhatsApp çıktısı (R7-01…04).** Teslim tarihi "31 Ağustos 2026 Pazartesi (7 gün sonra)" (Bugün/Yarın destekli, R6-02'nin yerel gün semantiğiyle); kitap başlıkları miktar taşır ("345 Matematik (1 test)"); hiyerarşi öğrenci → tarih → kitap + miktar → çalışma → not → hatırlatma. Haftalık plan sepeti `lg` kırılımından itibaren sticky ve kendi içinde kayar; "Planı Yayınla" uzun listede erişilebilir kalır.
+
+### R6 denetimi (R7 sonrası)
+
+R6 Teknik Teslim Dokümanı'nın 18 maddesi R7 sonrası kod üzerinde yeniden denetlendi. 12 madde (R6-01, 02, 04, 05, 07, 08, 09, 10, 11, 12, 14, 15, 16) uygulanmış durumda; **R6-03 ve R6-17 R7 ile değiştirildi** (tek Kitap Haritası ve `book_parts` — R7 dokümanı R6-03'ün yerine geçtiğini açıkça yazar). **R6-13 (kitap kapağı) kullanıcı kararıyla kapsam dışıdır** ve bu denetimde de kapsam dışı bırakıldı.
+
+Denetimde çıkan beş boşluk kapatıldı:
+
+- **R6-06 öğrenci tarafı** — `lib/homework-detail.ts` öğretmen ve velide kullanılıyordu ama öğrencinin kendi ödev listesi kendi gruplamasını kurup 71 sayfayı 71 satıra açıyordu. Artık aynı merkezî formatter'dan tek satırlık aralık özeti üretiliyor ("Polinomlar → 3-5. Test · Üslü Sayılar → sf. 6-26, 61-81"); kalem satırları ve tek tek "Tamamladım" davranışı korundu.
+- **R6-18 kabul #95** — sepet kalıcılığının hiç testi yoktu. Taslak şeması `lib/validation.ts`'e (`weeklyPlanDraftSchema`), sepet→yayın dönüşümü `lib/weekly-plan.ts`'e (`resolveBasketItems`, `toHomeworkItems`) taşındı ve test edildi. Silinmiş kitaptan kalan hayalet id artık yayına gitmiyor, tekrarlı id tek kalem üretiyor.
+- **R6-18 kabul #94** — reddetme notunun görünürlük sözleşmesi teste eklendi (not yalnız "İade Edildi" durumunda görünür). Notun yazılması/temizlenmesi DB tarafındadır (`014`/`020`) ve manuel kabul adımıdır.
+- **Yeni baskı kopyalama (044)** — `duplicate_book_as_edition` 021'den beri güncellenmemişti; öğretim programı, Kaynak Türü/Yapısı, Parça hiyerarşisi, müfredat eşlemeleri ve bölümlerin sayfa kapsamı kopyalanmıyordu. Hepsi kopyalanıyor; öğrenci ilerlemesi hâlâ kopyalanmıyor.
+- **Müfredat filtresi kaçışı** — kitabın ders/seviyesine uyan kapsam yoksa konu listesi boş kalıyor ve eşleme imkânsız hâle geliyordu. Artık tüm konulara düşülüyor ve kullanıcıya bildiriliyor (R6-15'in "filtre kısıtlamaz" ilkesi).
+
+R7'den sonra çağrılmayan iki sunucu eylemi (`setSectionGroupingAction`, `setSectionTopicAction`) kaldırıldı; karşılık gelen RPC'ler geri alma yolu için veritabanında kaldı.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

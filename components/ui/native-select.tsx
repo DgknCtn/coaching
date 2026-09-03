@@ -14,7 +14,10 @@ function NativeSelect({ className, children, ...props }: React.ComponentProps<'s
       <select
         data-slot="native-select"
         className={cn(
-          'h-9 w-full appearance-none rounded-md border border-input bg-card px-3 py-1 pr-9 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20',
+          // text-base md:text-sm: iOS Safari 16px'in altındaki alanlara
+          // odaklanınca sayfayı otomatik yakınlaştırıyor. Input ve textarea
+          // aynı deseni zaten kullanıyor.
+          'h-9 w-full appearance-none rounded-md border border-input bg-card px-3 py-1 pr-9 text-base md:text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20',
           className
         )}
         {...props}

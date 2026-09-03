@@ -14,7 +14,12 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
-import { navByRole, type NavItem, type Role } from '@/components/nav-config'
+import {
+  navByRole,
+  studentContextNav,
+  type NavItem,
+  type Role,
+} from '@/components/nav-config'
 import { StudentSwitcher, type SwitcherStudent } from '@/components/shared/student-switcher'
 import {
   DropdownMenu,
@@ -144,32 +149,56 @@ export function AppSidebar({
       </div>
     )
 
-    const nav = items.length > 0 && (
-      <nav aria-label="Ana menü" className="flex flex-col gap-1 px-3">
-        {items.map((item) => {
-          const active = isActive(item)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? 'page' : undefined}
-              aria-label={compact ? item.label : undefined}
-              title={compact ? item.label : undefined}
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                'flex items-center gap-3 rounded-lg py-2 text-sm transition-colors',
-                compact ? 'justify-center px-0' : 'px-3',
-                active
-                  ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              )}
-            >
-              <item.icon className="size-4 shrink-0" />
-              {!compact && item.label}
-            </Link>
-          )
-        })}
-      </nav>
+    // Tek bir nav bloğu. İki yerde kullanılıyor (ana menü ve öğrenci
+    // bağlamı), bu yüzden link görünümü tek yerde tanımlı.
+    function navBlock(navItems: NavItem[], label: string, heading?: string) {
+      if (navItems.length === 0) return null
+      return (
+        <nav aria-label={label} className="flex flex-col gap-1 px-3">
+          {heading && !compact && (
+            <p className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/40">
+              {heading}
+            </p>
+          )}
+          {navItems.map((item) => {
+            const active = isActive(item)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                aria-label={compact ? item.label : undefined}
+                title={compact ? item.label : undefined}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  // py-2.5 md:py-2 — mobil çekmecede dokunma hedefini büyütür,
+                  // masaüstü rail (md ve üzeri) eski yoğunluğunda kalır.
+                  'flex items-center gap-3 rounded-lg py-2.5 text-sm transition-colors md:py-2',
+                  compact ? 'justify-center px-0' : 'px-3',
+                  active
+                    ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                )}
+              >
+                <item.icon className="size-4 shrink-0" />
+                {!compact && item.label}
+              </Link>
+            )
+          })}
+        </nav>
+      )
+    }
+
+    const nav = navBlock(items, 'Ana menü')
+
+    // Öğrenci bağlamı: bir öğrencinin herhangi bir ekranı açıkken o
+    // öğrencinin bütün ekranları tek tıkla erişilebilir olmalı. Öğrenci
+    // dışındaki sayfalarda blok hiç render edilmez — menü bugünkü hâlinde
+    // kalır. Dar rail'de başlık gizlenir, ikonlar kalır (title ile).
+    const studentNavBlock = role === 'teacher' && activeStudentId && (
+      <div className="mt-4 border-t border-sidebar-border pt-4">
+        {navBlock(studentContextNav(activeStudentId), 'Öğrenci menüsü', 'Öğrenci')}
+      </div>
     )
 
     const panelBlock = !compact && panel && panel.items.length > 0 && (
@@ -235,6 +264,7 @@ export function AppSidebar({
         {brand}
         {switcher}
         {nav}
+        {studentNavBlock}
         {panelBlock}
         {footer}
       </>
@@ -333,7 +363,9 @@ export function AppSidebar({
           <aside
             ref={drawerRef}
             id="mobile-nav"
-            className="relative flex h-full w-72 flex-col bg-sidebar py-6"
+            // 85vw tavanı: 320px'lik telefonlarda çekmece ekranı tamamen
+            // kaplayıp arkadaki perdeyi görünmez bırakıyordu.
+            className="relative flex h-full w-[min(18rem,85vw)] flex-col overflow-y-auto bg-sidebar py-6"
           >
             {inner(false)}
           </aside>

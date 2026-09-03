@@ -25,7 +25,7 @@ const statusTone: Record<string, string> = {
 
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden border-b bg-background pt-32 pb-24">
+    <section className="relative overflow-hidden border-b bg-background pt-28 pb-20 sm:pt-32 sm:pb-24">
       {/*
         Zemin ışığı. Renk `--primary` token'ından türetiliyor (ham hex yok),
         böylece koyu temada da marka rengiyle uyumlu kalıyor.

@@ -294,6 +294,34 @@ export const homeworkBatchSchema = z.object({
   items: z.array(homeworkItemSchema).min(1, 'En az bir çalışma seçin.').max(500),
 })
 
+/**
+ * Haftalık plan taslağı (019_weekly_plan_drafts, R6-18 kabul #95).
+ *
+ * Taslak yayınlanmış ödev DEĞİLDİR: ilerlemeye sayılmaz, öğrenciye görünmez.
+ * Tek işi sepetin sayfa yenilemesinde ve cihaz değişiminde korunmasıdır.
+ *
+ * Şema draft-actions.ts içinde yereldi; sepet kalıcılığı R6-18'in zorunlu
+ * regresyon kabullerinden biri olduğu için buraya taşındı ve test edilebilir
+ * hale getirildi. Sınırlar bilinçli olarak yayınlama şemasından (500 kalem)
+ * daha geniş: taslak henüz yayınlanmamış bir çalışma alanıdır.
+ */
+export const weeklyPlanDraftSchema = z.object({
+  workspaceId: uuid,
+  studentId: uuid,
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir teslim tarihi seçin.').optional().or(z.literal('')),
+  title: z.string().trim().max(200).optional().or(z.literal('')),
+  /** Ödev notu (R6-05). Sınır homeworkBatchSchema ile aynı. */
+  note: z.string().trim().max(2000, 'Ödev notu en fazla 2000 karakter olabilir.').optional().or(z.literal('')),
+  items: z
+    .array(
+      z.object({
+        student_book_assignment_id: uuid,
+        book_test_id: uuid,
+      })
+    )
+    .max(1000, 'Taslakta en fazla 1000 çalışma tutulabilir.'),
+})
+
 export const CHECK_IN_MOODS = ['iyi', 'idare_eder', 'zorlaniyorum'] as const
 
 export const checkInSchema = z.object({

@@ -24,8 +24,8 @@ export default async function StudentPage() {
         homework_items(
           id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
           books(title, subject, tracking_mode),
-          book_sections(title),
-          book_tests(title)
+          book_sections(id, title),
+          book_tests(title, order_index, page_start)
         )
       `)
       .eq('student_id', student.id)

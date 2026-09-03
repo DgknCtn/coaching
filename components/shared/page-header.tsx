@@ -14,7 +14,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, backHref, action, badges, className }: PageHeaderProps) {
   return (
-    <div className={cn('mb-8 flex items-start justify-between gap-4', className)}>
+    // Dar ekranda başlık ile eylem butonu yan yana sıkışıyordu; mobilde
+    // alt alta, sm'den itibaren yan yana.
+    <div
+      className={cn(
+        'mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
+        className
+      )}
+    >
       <div className="flex min-w-0 items-center gap-3">
         {backHref && (
           <Button
@@ -36,7 +43,7 @@ export function PageHeader({ title, subtitle, backHref, action, badges, classNam
           )}
         </div>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="shrink-0 [&>*]:w-full sm:[&>*]:w-auto">{action}</div>}
     </div>
   )
 }

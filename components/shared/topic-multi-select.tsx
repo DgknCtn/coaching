@@ -32,6 +32,14 @@ interface Props {
   selectedIds: string[]
   onChange: (ids: string[]) => void
   disabled?: boolean
+  /**
+   * Liste kitabın ders/seviye bilgisine göre gerçekten filtrelenebildi mi?
+   *
+   * false ise eşleşen kapsam bulunamamıştır ve tüm konular listeleniyordur.
+   * Bu bir hata değil, kaçış yoludur: filtre listeyi daraltmalı, eşleştirmeyi
+   * imkânsız kılmamalı.
+   */
+  filtered?: boolean
   /** Liste boşken gösterilecek metin; kitabın dersine uygun kapsam yoksa
    *  öğretmen nedenini bilmeli. */
   emptyHint?: string
@@ -42,13 +50,14 @@ export function TopicMultiSelect({
   selectedIds,
   onChange,
   disabled,
-  emptyHint = 'Bu kitabın ders/seviye bilgisine uyan müfredat kapsamı yok.',
+  filtered = true,
+  emptyHint = 'Önce Müfredat ekranından bir kapsam ve konu tanımlayın.',
 }: Props) {
   const [query, setQuery] = useState('')
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds])
 
-  const filtered = useMemo(() => {
+  const groupedTopics = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr')
     const list = q
       ? topics.filter(
@@ -104,6 +113,13 @@ export function TopicMultiSelect({
         </div>
       )}
 
+      {!filtered && (
+        <p className="text-xs text-muted-foreground">
+          Bu kitabın ders/seviye bilgisine uyan kapsam bulunamadı; tüm konular
+          listeleniyor.
+        </p>
+      )}
+
       <div className="relative">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -117,10 +133,10 @@ export function TopicMultiSelect({
       </div>
 
       <div className="max-h-48 overflow-y-auto rounded-md border">
-        {filtered.length === 0 ? (
+        {groupedTopics.length === 0 ? (
           <p className="px-3 py-2 text-xs text-muted-foreground">Eşleşen konu yok.</p>
         ) : (
-          filtered.map(([scopeName, list]) => (
+          groupedTopics.map(([scopeName, list]) => (
             <div key={scopeName}>
               <p className="sticky top-0 bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
                 {scopeName}

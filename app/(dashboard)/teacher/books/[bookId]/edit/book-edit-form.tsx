@@ -93,6 +93,9 @@ interface Props {
   trackingMode: string
   /** R7-02 §8: kitabın ders/seviyesine göre FİLTRELENMİŞ konu listesi. */
   topics: TopicOption[]
+  /** Liste gerçekten filtrelenebildi mi? Eşleşen kapsam yoksa tüm konular
+   *  gösterilir ve kullanıcı bunu bilmelidir. */
+  topicsFiltered: boolean
   /**
    * R7-02 §6.5: kaynakta ödev veya aktif tamamlama kaydı var mı?
    *
@@ -111,6 +114,7 @@ export function BookEditForm({
   parts,
   trackingMode,
   topics,
+  topicsFiltered,
   hasProgress,
 }: Props) {
   const router = useRouter()
@@ -309,6 +313,7 @@ export function BookEditForm({
               isPageBook={trackingMode === 'page'}
               parts={isMultiPart ? parts : []}
               topics={topics}
+              topicsFiltered={topicsFiltered}
               hasProgress={hasProgress}
             />
           ))}
@@ -515,6 +520,7 @@ function SectionRowForm({
   isPageBook,
   parts,
   topics,
+  topicsFiltered,
   hasProgress,
 }: {
   bookId: string
@@ -523,6 +529,7 @@ function SectionRowForm({
   isPageBook: boolean
   parts: PartRow[]
   topics: TopicOption[]
+  topicsFiltered: boolean
   hasProgress: boolean
 }) {
   const router = useRouter()
@@ -714,6 +721,7 @@ function SectionRowForm({
           topics={topics}
           selectedIds={topicIds}
           onChange={setTopicIds}
+          filtered={topicsFiltered}
         />
       </div>
     </div>

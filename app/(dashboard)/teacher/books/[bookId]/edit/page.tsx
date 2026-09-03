@@ -63,8 +63,24 @@ export default async function BookEditPage({
   }
 
   const { data: scopeRows } = await scopeQuery
-  const scopeIds = (scopeRows ?? []).map((s) => s.id)
-  const scopeNameById = new Map((scopeRows ?? []).map((s) => [s.id, s.name]))
+  let scopes = scopeRows ?? []
+
+  // KAÇIŞ YOLU: filtre hiçbir kapsamla eşleşmezse eşleştirme imkânsız hale
+  // gelirdi. R7-02 §8 listeyi DARALTMAK istiyor, eşlemeyi engellemek değil
+  // (R6-15'in "filtre atamayı kısıtlamaz" ilkesiyle aynı mantık). Bu durumda
+  // workspace'in tüm aktif kapsamlarına düşülür ve kullanıcıya söylenir.
+  const filtered = scopes.length > 0
+  if (!filtered) {
+    const { data: allScopes } = await supabase
+      .from('academic_scopes')
+      .select('id, name, subject, level_exam')
+      .eq('workspace_id', workspaceId)
+      .eq('active', true)
+    scopes = allScopes ?? []
+  }
+
+  const scopeIds = scopes.map((s) => s.id)
+  const scopeNameById = new Map(scopes.map((s) => [s.id, s.name]))
 
   const { data: topicRows } = scopeIds.length
     ? await supabase
@@ -135,6 +151,7 @@ export default async function BookEditPage({
         sections={sections}
         parts={parts}
         topics={topics}
+        topicsFiltered={filtered}
         trackingMode={book.tracking_mode ?? 'test'}
         hasProgress={hasProgress === true}
       />

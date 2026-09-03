@@ -49,7 +49,8 @@ export function DemoTabs() {
               aria-selected={isActive}
               onClick={() => setActive(tab.id)}
               className={cn(
-                'flex flex-1 items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors',
+                // Dar ekranda üç sekme yan yana sıkışıyor; iç boşluklar küçülür.
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md border px-3 py-3 text-left transition-colors sm:gap-3 sm:px-4',
                 isActive
                   ? 'border-foreground/20 bg-muted'
                   : 'border-border bg-card hover:bg-muted/60'

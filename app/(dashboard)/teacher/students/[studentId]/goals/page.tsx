@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, CircleDashed, Gauge, Layers, Target } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap, type BookMapBook } from '@/lib/book-map'
 import { resolvePlanScope, type PlanScope } from '@/lib/plan-scope'
@@ -19,6 +19,8 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { Section } from '@/components/shared/section'
+import { MetricTiles } from '@/components/shared/metric-tiles'
+import { LinkTabs } from '@/components/shared/link-tabs'
 
 // Öğrenci Kaynak Planı (R5.1).
 //
@@ -41,10 +43,14 @@ const GROUP_ORDER: BookPlanGroup[] = ['active', 'pending', 'completed']
 
 export default async function StudentResourcePlanPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studentId: string }>
+  /** Durum filtresi URL'de tutulur: filtreli görünüm paylaşılabilir olsun. */
+  searchParams: Promise<{ group?: string }>
 }) {
   const { studentId } = await params
+  const { group: groupFilter } = await searchParams
   const { supabase, workspaceId } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -70,8 +76,78 @@ export default async function StudentResourcePlanPage({
     grouped.set(group, [...(grouped.get(group) ?? []), book])
   }
 
+  // ============================================================
+  // Üst özet şeridi
+  //
+  // Ekran bugüne kadar yalnız kaynak kartlarını listeliyordu; "bu öğrencide
+  // toplam ne kadar plan var, ne kadarı bitti?" sorusu ancak kartlar tek tek
+  // okunarak yanıtlanabiliyordu.
+  //
+  // Toplamlar AKTİF kaynaklar üzerinden alınır: bekleyen bir kaynağın
+  // kapsamı henüz çalışılmıyor, tamamlananınki ise bitmiş. İkisini toplama
+  // katmak "kalan" sayısını yanıltıcı yapardı.
+  //
+  // Birimler kaynaklar arasında karışabilir (test + sayfa); bu yüzden toplam
+  // satırında nötr "çalışma" denir — tek tür varsa onun adı kullanılır
+  // (lib/unit-labels.ts ile aynı ilke).
+  // ============================================================
+  const activeBooks = books.filter(b => bookPlanGroup(b.status) === 'active')
+  const activeScopes = activeBooks.map(b => ({ book: b, scope: resolvePlanScope(b) }))
+
+  const totals = activeScopes.reduce(
+    (acc, { scope }) => ({
+      planned: acc.planned + scope.totalUnits,
+      completed: acc.completed + scope.completedUnits,
+      bookTotal: acc.bookTotal + scope.bookTotalUnits,
+    }),
+    { planned: 0, completed: 0, bookTotal: 0 }
+  )
+  const remainingUnits = Math.max(0, totals.planned - totals.completed)
+  const planPercentage =
+    totals.planned === 0 ? 0 : Math.round((totals.completed / totals.planned) * 100)
+
+  // Geçersiz bir ?group= değeri filtreyi sessizce kapatır: kullanıcı yanlış
+  // bir bağlantıyla boş ekran görmemeli.
+  const activeGroup = GROUP_ORDER.includes(groupFilter as BookPlanGroup)
+    ? (groupFilter as BookPlanGroup)
+    : null
+
+  const groupTabs = [
+    {
+      key: 'all',
+      label: 'Tümü',
+      href: `/teacher/students/${studentId}/goals`,
+      count: books.length,
+    },
+    ...GROUP_ORDER.map(group => ({
+      key: group,
+      label: BOOK_PLAN_GROUP_LABEL[group],
+      href: `/teacher/students/${studentId}/goals?group=${group}`,
+      count: (grouped.get(group) ?? []).length,
+    })),
+  ].filter(tab => tab.key === 'all' || tab.count > 0)
+
+  const modes = new Set(activeBooks.map(b => b.trackingMode))
+  const summaryUnit = modes.size === 1 ? unitLabel([...modes][0]) : 'çalışma'
+
+  // Haftalık tempo yalnız tek tür birimde anlamlı: 3 test/hafta ile 40
+  // sayfa/hafta toplanamaz. Karışıksa gösterilmez.
+  const weeklyTempo =
+    modes.size === 1
+      ? activeScopes.reduce((sum, { book, scope }) => {
+          const tempo = calculatePlanTempo({
+            startDate: scope.startDate,
+            targetEndDate: scope.targetEndDate,
+            totalUnits: scope.totalUnits,
+            completedUnits: scope.completedUnits,
+            trackingMode: book.trackingMode,
+          })
+          return sum + (tempo.requiredPacePerWeek ?? 0)
+        }, 0)
+      : null
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-6 md:p-8">
+    <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
         backHref={`/teacher/students/${studentId}`}
         title={`${student.full_name} — Kaynak Planı`}
@@ -84,6 +160,52 @@ export default async function StudentResourcePlanPage({
         }
       />
 
+      {activeBooks.length > 0 && (
+        <MetricTiles
+          className="xl:grid-cols-5"
+          metrics={[
+            {
+              label: 'Planlanan kapsam',
+              value: `${totals.planned.toLocaleString('tr-TR')} ${summaryUnit}`,
+              icon: Target,
+              hint: `${activeBooks.length} aktif kaynak`,
+            },
+            {
+              label: 'Tamamlanan',
+              value: totals.completed.toLocaleString('tr-TR'),
+              tone: 'success',
+              progress: planPercentage,
+              hint: 'Plana göre',
+            },
+            {
+              label: 'Kalan',
+              value: remainingUnits.toLocaleString('tr-TR'),
+              tone: 'warning',
+              icon: CircleDashed,
+            },
+            {
+              label: 'Kitap kapsamı',
+              value: totals.bookTotal.toLocaleString('tr-TR'),
+              icon: Layers,
+              hint: 'Aktif kaynakların fiziksel toplamı',
+            },
+            {
+              label: 'Haftalık tempo',
+              value:
+                weeklyTempo === null
+                  ? '—'
+                  : formatTempo(Math.round(weeklyTempo * 10) / 10, [...modes][0]),
+              icon: Gauge,
+              hint: weeklyTempo === null ? 'Karışık birim' : 'Hedeflere göre gerekli',
+            },
+          ]}
+        />
+      )}
+
+      {books.length > 1 && (
+        <LinkTabs tabs={groupTabs} activeKey={activeGroup ?? 'all'} />
+      )}
+
       {books.length === 0 ? (
         <div className="rounded-lg border bg-card">
           <EmptyState
@@ -93,7 +215,7 @@ export default async function StudentResourcePlanPage({
           />
         </div>
       ) : (
-        GROUP_ORDER.map(group => {
+        GROUP_ORDER.filter(g => !activeGroup || g === activeGroup).map(group => {
           const groupBooks = grouped.get(group) ?? []
           if (groupBooks.length === 0) return null
           return (

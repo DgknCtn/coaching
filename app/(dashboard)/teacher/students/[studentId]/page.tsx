@@ -4,7 +4,23 @@ import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-det
 import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
 import type { AssignableBook } from './assign-book-dialog'
 import { notFound } from 'next/navigation'
-import { Plus, BookOpen, ClipboardList, Users, StickyNote, FileText, Target, MessageSquareDashed, Pencil, CalendarRange, ShieldCheck } from 'lucide-react'
+import {
+  Plus,
+  BookOpen,
+  ClipboardList,
+  Users,
+  StickyNote,
+  FileText,
+  MessageSquareDashed,
+  Pencil,
+  CircleCheck,
+  CircleAlert,
+  Hourglass,
+  UserRound,
+  History,
+  Crosshair,
+  ArrowRight,
+} from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +33,7 @@ import { formatRelativeTime, moodLabel } from '@/lib/student-attention'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
-import { MetricRow } from '@/components/shared/metric-row'
+import { MetricTiles } from '@/components/shared/metric-tiles'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
@@ -27,12 +43,15 @@ import { resolvePlanScope } from '@/lib/plan-scope'
 import { bookPlanGroup } from '@/lib/resource-plan'
 import { buildProtectionPool } from '@/lib/protection-pool'
 import {
+  buildAcademicTrail,
+  buildWeeklyFocus,
   summarizeAcademicFlow,
   summarizeProtectionPool,
   summarizeResourcePlan,
   type FlowSummaryItem,
   type ResourceSummaryItem,
 } from '@/lib/student-overview'
+import { formatUnitCount } from '@/lib/unit-labels'
 
 export const dynamic = 'force-dynamic'
 
@@ -261,6 +280,11 @@ export default async function StudentDetailPage({
         group: bookPlanGroup(b.status),
         planPercentage: scope.percentage,
         bookPercentage: scope.bookPercentage,
+        // Sunum alanları (özet hesabına girmez): tablo satırındaki rozet ve
+        // kapsam metni. Birim adı kaynağın takip türünden gelir.
+        role: b.role,
+        status: b.status,
+        scopeLabel: formatUnitCount(scope.totalUnits, b.trackingMode),
       }
     })
   )
@@ -314,6 +338,35 @@ export default async function StudentDetailPage({
     }))
   )
 
+  // Son Akademik İz ve Bu Hafta Odak: ikisi de SAYFANIN ZATEN ÇEKTİĞİ
+  // kümelerden türer, yeni sorgu yoktur (lib/student-overview.ts).
+  const academicTrail = buildAcademicTrail({
+    notes: academicNotes.map(n => ({
+      id: n.id,
+      note_text: n.note_text,
+      created_at: n.created_at,
+      author_name: n.author_name,
+    })),
+    homework: (homeworkBatches ?? []).map(batch => {
+      const items = (batch.homework_items as unknown as { status: string }[]) ?? []
+      return {
+        id: batch.id,
+        title: batch.title,
+        due_date: batch.due_date,
+        itemCount: items.length,
+        completedCount: items.filter(i => i.status === 'completed').length,
+      }
+    }),
+  })
+
+  const weeklyFocus = buildWeeklyFocus({
+    studentId,
+    pendingApproval: pendingApprovalSummary?.pending_approval_items ?? 0,
+    overdue: overdueSummary?.overdue_items ?? 0,
+    pool: poolSummary,
+    resources: resourceSummary,
+  })
+
   const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
   const availableBooks: AssignableBook[] = ((termBooks ?? []) as AssignableBook[]).filter(
     b => !assignedBookIds.includes(b.id)
@@ -322,7 +375,7 @@ export default async function StudentDetailPage({
   const hasAccount = !!student.profile_id
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8">
+    <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
         backHref="/teacher/students"
         title={student.full_name}
@@ -334,6 +387,8 @@ export default async function StudentDetailPage({
         badges={
           student.exam_type ? <Badge variant="neutral">{student.exam_type}</Badge> : undefined
         }
+        // Akış / Kaynak Planı / Koruma / Rapor artık sol menünün öğrenci
+        // grubunda; başlıkta yalnız bu ekranın kendi eylemleri kalıyor.
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -343,30 +398,6 @@ export default async function StudentDetailPage({
             >
               <Pencil />
               Düzenle
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              render={<Link href={`/teacher/students/${studentId}/curriculum`} />}
-            >
-              <CalendarRange />
-              Akış
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              render={<Link href={`/teacher/students/${studentId}/protection`} />}
-            >
-              <ShieldCheck />
-              Koruma
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              render={<Link href={`/teacher/students/${studentId}/goals`} />}
-            >
-              <Target />
-              Kaynak Planı
             </Button>
             <Button
               size="sm"
@@ -388,22 +419,40 @@ export default async function StudentDetailPage({
       />
 
       {weeklySummary && (
-        <MetricRow
-          className="md:grid-cols-5"
+        <MetricTiles
+          className="xl:grid-cols-5"
           metrics={[
-            { label: COUNTER_LABEL.assigned, value: weeklySummary.assigned_tests ?? 0 },
-            { label: COUNTER_LABEL.completed, value: weeklySummary.completed_tests ?? 0 },
-            { label: COUNTER_LABEL.pending, value: weeklySummary.pending_tests ?? 0 },
+            {
+              label: COUNTER_LABEL.assigned,
+              value: weeklySummary.assigned_tests ?? 0,
+              icon: ClipboardList,
+            },
+            {
+              label: COUNTER_LABEL.completed,
+              value: weeklySummary.completed_tests ?? 0,
+              tone: 'success',
+              icon: CircleCheck,
+            },
+            {
+              label: COUNTER_LABEL.pending,
+              value: weeklySummary.pending_tests ?? 0,
+              tone: 'warning',
+              icon: UserRound,
+            },
             // R6-10: sayaçlar Görevler'i BU ÖĞRENCİYE daraltarak açar.
             // Global sayaçlar (dashboard) öğrenci parametresi taşımaz.
             {
               label: COUNTER_LABEL.pendingApproval,
               value: pendingApprovalSummary?.pending_approval_items ?? 0,
+              tone: 'info',
+              icon: Hourglass,
               href: `/teacher/tasks?filter=approval&student=${studentId}`,
             },
             {
               label: COUNTER_LABEL.overdue,
               value: overdueSummary?.overdue_items ?? 0,
+              tone: 'destructive',
+              icon: CircleAlert,
               hint: OVERDUE_HINT,
               href: `/teacher/tasks?filter=overdue&student=${studentId}`,
             },
@@ -438,6 +487,89 @@ export default async function StudentDetailPage({
             </p>
           </div>
           <p className="mt-1 line-clamp-2 text-sm">{lastAcademicNote.note_text}</p>
+        </div>
+      )}
+
+      {/* Son Akademik İz + Bu Hafta Odak.
+          İkisi de mevcut veriden türer: iz notlar ve ödevlerden, odak ise
+          onay bekleyen / süresi geçen / havuz / plan sinyallerinden. Hiçbir
+          sinyal yoksa ilgili blok HİÇ GÖSTERİLMEZ — sistem görev uydurmaz
+          (R6-07 kabul #49 ile aynı ilke). */}
+      {(academicTrail.length > 0 || weeklyFocus.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          {academicTrail.length > 0 && (
+            <section className="rounded-xl border bg-card p-4">
+              <div className="mb-3 flex items-start gap-2.5">
+                <span
+                  aria-hidden
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                >
+                  <History className="size-3.5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-medium">Son Akademik İz</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Son çalışmalar ve akademik notlar
+                  </p>
+                </div>
+              </div>
+
+              <ol className="space-y-3">
+                {academicTrail.map(entry => (
+                  <li key={entry.id} className="flex gap-3">
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" />
+                    <div className="min-w-0">
+                      <p className="text-sm">{entry.text}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {new Date(entry.date).toLocaleDateString('tr-TR', {
+                          day: 'numeric',
+                          month: 'long',
+                        })}
+                        {entry.detail ? ` · ${entry.detail}` : ''}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {weeklyFocus.length > 0 && (
+            <section className="rounded-xl border bg-card p-4">
+              <div className="mb-3 flex items-start gap-2.5">
+                <span
+                  aria-hidden
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                >
+                  <Crosshair className="size-3.5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-medium">Bu Hafta Odak</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Mevcut sinyallerden çıkan başlıklar
+                  </p>
+                </div>
+              </div>
+
+              <ul className="space-y-2">
+                {weeklyFocus.map(item => (
+                  <li key={item.id}>
+                    {item.href ? (
+                      <Link
+                        href={item.href}
+                        className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                      >
+                        <span className="min-w-0 truncate">{item.text}</span>
+                        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                      </Link>
+                    ) : (
+                      <span className="block px-2 py-1.5 text-sm">{item.text}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       )}
 

@@ -86,7 +86,8 @@ export function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="border-b bg-background px-6 pb-4 md:hidden">
+        // max-h + scroll: yatay tutulan telefonlarda panel ekranı taşıyordu.
+        <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b bg-background px-6 pb-4 md:hidden">
           <nav className="flex flex-col gap-1 pt-2">
             <a
               href="#ozellikler"

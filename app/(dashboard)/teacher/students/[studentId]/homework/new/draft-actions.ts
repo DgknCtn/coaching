@@ -1,31 +1,13 @@
 'use server'
 
-import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { uuidSchema, firstIssue } from '@/lib/validation'
+import { uuidSchema, firstIssue, weeklyPlanDraftSchema } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
 
 // Haftalık plan taslağı: seçimler sayfa yenilemede kaybolmasın diye
 // Supabase'de tutulur (019_weekly_plan_drafts). Taslak yayınlanmış ödev
 // DEĞİLDİR — ilerlemeye sayılmaz, öğrenciye görünmez.
-
-const draftSchema = z.object({
-  workspaceId: uuidSchema,
-  studentId: uuidSchema,
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
-  title: z.string().trim().max(200).optional().or(z.literal('')),
-  // Ödev notu (R6-05). Sınır lib/validation.ts'teki notes alanıyla tutarlı.
-  note: z.string().trim().max(2000).optional().or(z.literal('')),
-  items: z
-    .array(
-      z.object({
-        student_book_assignment_id: uuidSchema,
-        book_test_id: uuidSchema,
-      })
-    )
-    .max(1000),
-})
 
 export async function saveWeeklyPlanDraftAction(
   workspaceId: string,
@@ -35,7 +17,14 @@ export async function saveWeeklyPlanDraftAction(
   items: { student_book_assignment_id: string; book_test_id: string }[],
   note?: string
 ) {
-  const parsed = draftSchema.safeParse({ workspaceId, studentId, dueDate, title, note, items })
+  const parsed = weeklyPlanDraftSchema.safeParse({
+    workspaceId,
+    studentId,
+    dueDate,
+    title,
+    note,
+    items,
+  })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   // RPC'ye oturumun workspace'i gider; istemcinin gönderdiği değer değil.
