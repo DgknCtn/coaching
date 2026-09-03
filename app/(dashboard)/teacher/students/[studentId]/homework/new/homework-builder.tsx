@@ -89,6 +89,8 @@ interface Props {
   initialDueDate: string
   initialTitle: string
   initialNote: string
+  /** Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü için (041). */
+  keepActiveTopicIds: string[]
 }
 
 export function HomeworkBuilder({
@@ -102,7 +104,10 @@ export function HomeworkBuilder({
   initialDueDate,
   initialTitle,
   initialNote,
+  keepActiveTopicIds,
 }: Props) {
+  // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
+  const keepActiveTopicSet = useMemo(() => new Set(keepActiveTopicIds), [keepActiveTopicIds])
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [activeBookId, setActiveBookId] = useState(
@@ -601,6 +606,8 @@ export function HomeworkBuilder({
                   onToggleTest={toggleTest}
                   onToggleSection={toggleSection}
                   onSelectRange={selectRange}
+                  studentId={studentId}
+                  keepActiveTopicIds={keepActiveTopicSet}
                 />
                 <BulkActionPanel
                   book={activeBook}

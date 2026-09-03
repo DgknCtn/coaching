@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, AlertCircle } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
+import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
 import { Button } from '@/components/ui/button'
 import { HomeworkBuilder } from './homework-builder'
 
@@ -52,8 +53,10 @@ export default async function NewHomeworkPage({
   //
   // Taslak sorgusu haritadan bağımsız; ikisi tek dalgada çalışır. (Taslak
   // KALEMLERİ taslağın id'sine bağlı olduğu için o aşağıda sıralı kalır.)
-  const [books, { data: draft }] = await Promise.all([
+  const [books, keepActiveTopicIds, { data: draft }] = await Promise.all([
     loadBookMap(supabase, { workspaceId, studentId }),
+    // Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü (041 §6.5).
+    loadKeepActiveTopicIds(supabase, { workspaceId, studentId }),
     // Kaydedilmiş taslak (019): kitap değişiminde ve sayfa yenilemesinde
     // seçimlerin korunmasını sağlar.
     supabase
@@ -108,6 +111,7 @@ export default async function NewHomeworkPage({
         initialDueDate={draft?.due_date ?? ''}
         initialTitle={draft?.title ?? ''}
         initialNote={draft?.note ?? ''}
+        keepActiveTopicIds={[...keepActiveTopicIds]}
       />
     </div>
   )

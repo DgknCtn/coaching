@@ -224,4 +224,16 @@ R7'den sonra çağrılmayan iki sunucu eylemi (`setSectionGroupingAction`, `setS
 
 Bölüm başlığındaki ● müfredat sinyali (R5.3 §5.2) ve "Plan dışı" etiketi hiçbir yerde tanımlanmıyordu: kullanıcı işareti görüyor ama karşılığını bilmiyordu. `BookMapLegend` artık isteğe bağlı `book` alır ve bu iki işareti, **yalnız o kitapta gerçekten çiziliyorlarsa**, test durumlarından ayırıcı bir çizgiyle ayrılmış olarak açıklar. Sinyalin görünümü iki haritada farklı olduğu için lejant örneği de farklıdır: test haritasında ●, sayfa haritasında kalın bölüm adı.
 
+### Kitap Haritası bölüm satırı menüsü
+
+Bölüm satırında bugüne kadar hiçbir eylem yoktu: öğretmen haritaya bakarken "bu konuyu ders olarak işledim" demek için Koruma Havuzu ekranına gidip konuyu listede yeniden bulmak zorundaydı. Eylemler zaten vardı, erişim yeri yoktu. `components/shared/section-row-menu.tsx` üç eylem taşır:
+
+- **Aktif tut ⇄ Koruma havuzuna al** — tek toggle. Ayrı bir "havuza al" RPC'si YOKTUR; havuz temaslardan türetilir, konuyu havuzun görüş alanına sokmak `student_topic_overrides` satırını silmek demektir (041 §6.5). Bayrağın yönü `lib/topic-overrides.ts` ile yüklenir.
+- **Ders işlendi olarak işaretle** — `add_topic_contact(kind='lesson')`. Koruma havuzu sıralamasını değiştirdiği ve bu ekranda geri alma yolu olmadığı için onay sorulur.
+- **Not ekle** — öğrenciye özel BÖLÜM notu için tablo yok; not öğrencinin akademik notlarına `"{kitap} / {bölüm} — "` ön ekiyle yazılır. Ön ek de 2000 karakter sınırından düşülür.
+
+**Menüde bilinçli olarak olmayan:** "Plana dahil et / Plan dışı bırak". Hedef kapsamı bölüm id listesi olarak replace semantiğiyle saklanıyor; tek bölümü açıp kapamak "tüm kitap" hedefini önce listeye çevirmeyi ya da birim listesi hedefinde karşılığı olmayan bir dönüşümü gerektirirdi. Kapsam düzenlemesi Hedefler kartında tek yerde kalır.
+
+Menü `readOnly`ye BAĞLANMADI: `readOnly` "hücre seçilemez" demektir (ödev atama tek yüzeyde, R7), oysa menüdeki eylemler konu bazlıdır ve öğretmenin salt okunur Kaynak Haritasında da anlamlıdır. Görünürlüğü `studentId` prop'u belirler; öğrenci ve veli sayfaları bu alanı geçmez. Konusu eşlenmemiş bölümde (`topic_id` nullable, 040) konu bazlı iki eylem devre dışıdır ve nedeni menüde yazar.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

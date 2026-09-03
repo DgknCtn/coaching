@@ -24,9 +24,13 @@ import { Button } from '@/components/ui/button'
 interface Props {
   studentId: string
   book: BookMapBook
+  /** Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü (041 §6.5). */
+  keepActiveTopicIds: string[]
 }
 
-export function ResourceMap({ studentId, book }: Props) {
+export function ResourceMap({ studentId, book, keepActiveTopicIds }: Props) {
+  // Sunucudan dizi gelir (Set serileştirilemez).
+  const keepActiveTopicSet = new Set(keepActiveTopicIds)
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -44,7 +48,15 @@ export function ResourceMap({ studentId, book }: Props) {
         </Button>
       </div>
 
-      <BookMapGrid book={book} audience="teacher" readOnly />
+      {/* readOnly: hücre seçimi yok (ödev atama tek yüzeyde). Bölüm satırı
+          menüsü ise konu bazlı olduğu için burada da çalışır. */}
+      <BookMapGrid
+        book={book}
+        audience="teacher"
+        readOnly
+        studentId={studentId}
+        keepActiveTopicIds={keepActiveTopicSet}
+      />
 
       <p className="text-xs text-muted-foreground">
         Ödev verme, onaylama, tamamlandı işleme ve geri alma işlemleri tek

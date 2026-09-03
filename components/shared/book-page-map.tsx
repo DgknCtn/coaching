@@ -26,6 +26,7 @@ import { formatRanges, parseRanges, pagesFromRanges } from '@/lib/page-ranges'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { SectionRowMenu } from '@/components/shared/section-row-menu'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -38,6 +39,9 @@ interface Props {
   readOnly?: boolean
   /** plan (varsayılan) | manage — R6-03 yönetim modu. */
   mode?: BookMapMode
+  /** Bölüm satırı menüsü; verilmezse çizilmez (öğrenci/veli geçmez). */
+  studentId?: string
+  keepActiveTopicIds?: Set<string>
 }
 
 const EMPTY_SELECTION: Set<string> = new Set()
@@ -49,6 +53,8 @@ export function BookPageMap({
   onToggleSection,
   readOnly = false,
   mode = 'plan',
+  studentId,
+  keepActiveTopicIds,
 }: Props) {
   const [openSectionId, setOpenSectionId] = useState<string | null>(null)
 
@@ -93,6 +99,8 @@ export function BookPageMap({
                 onToggleSection={onToggleSection}
                 readOnly={readOnly}
                 mode={mode}
+                studentId={studentId}
+                keepActiveTopicIds={keepActiveTopicIds}
               />
             ))}
           </tbody>
@@ -124,6 +132,8 @@ function SectionRow({
   readOnly,
   mode,
   startsNewPart,
+  studentId,
+  keepActiveTopicIds,
 }: {
   book: BookMapBook
   section: BookMapSection
@@ -136,6 +146,8 @@ function SectionRow({
   mode: BookMapMode
   /** R7-02 §6.4: bu bölüm yeni bir Parça'nın ilki mi? */
   startsNewPart?: boolean
+  studentId?: string
+  keepActiveTopicIds?: Set<string>
 }) {
   const progress = useMemo(() => sectionPageProgress(section), [section])
 
@@ -166,6 +178,17 @@ function SectionRow({
       )}
       <tr className="align-top">
         <td className="border-b px-4 py-2.5">
+          {/* Menü sağ uçta; başlık ve altındaki meta satırları solda akar. */}
+          {studentId && (
+            <SectionRowMenu
+              studentId={studentId}
+              bookTitle={book.title}
+              sectionTitle={section.title}
+              topicId={section.topicId}
+              keepActive={!!section.topicId && !!keepActiveTopicIds?.has(section.topicId)}
+              className="float-right ml-2 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+            />
+          )}
           {/* R5.3: müfredat sinyali YALNIZ konu başlığında; sayfa
               hücrelerinin R4 renklerine dokunulmaz (§5.2). */}
           {signalActive && (

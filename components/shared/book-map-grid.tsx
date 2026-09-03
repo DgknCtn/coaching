@@ -14,6 +14,7 @@ import {
   type StatusAudience,
 } from '@/lib/homework-status'
 import { BookPageMap } from '@/components/shared/book-page-map'
+import { SectionRowMenu } from '@/components/shared/section-row-menu'
 import { cn } from '@/lib/utils'
 
 // Masaüstü Kitap Haritası (R3 v2 §1). Bölüm satır, test sütun.
@@ -152,6 +153,17 @@ interface Props {
    * manage — eğitmenin akademik kayıt yönetimi (R6-03): tüm durumlar seçilebilir
    */
   mode?: BookMapMode
+  /**
+   * Bölüm satırı menüsü. studentId VERİLMEZSE menü hiç çizilmez.
+   *
+   * Menü `readOnly`ye bağlanmadı bilerek: readOnly "hücre seçilemez"
+   * demektir (ödev atama tek yüzeyde, R7), oysa menüdeki eylemler konu
+   * bazlıdır ve öğretmenin salt okunur Kaynak Haritasında da anlamlıdır.
+   * Öğrenci ve veli sayfaları bu alanı GEÇMEZ; menü orada görünmez.
+   */
+  studentId?: string
+  /** "Aktif Tut" override'ı olan konular (lib/topic-overrides.ts). */
+  keepActiveTopicIds?: Set<string>
 }
 
 const EMPTY_SELECTION: Set<string> = new Set()
@@ -166,6 +178,8 @@ export function BookMapGrid({
   readOnly = false,
   audience = 'teacher',
   mode = 'plan',
+  studentId,
+  keepActiveTopicIds,
 }: Props) {
   // Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022): 400 sayfa
   // = 400 hücre olurdu. R4 §4 bunun yerine bölüm bazlı bir tablo istiyor.
@@ -180,6 +194,8 @@ export function BookMapGrid({
         onToggleSection={onToggleSection}
         readOnly={readOnly}
         mode={mode}
+        studentId={studentId}
+        keepActiveTopicIds={keepActiveTopicIds}
       />
     )
   }
@@ -247,6 +263,10 @@ export function BookMapGrid({
                     scope="row"
                     className="sticky left-0 z-10 min-w-56 max-w-72 border-b border-r bg-card px-4 py-1.5 text-left font-normal group-hover:bg-muted/40"
                   >
+                    {/* Başlık ve menü tek satırda: menü sağ uçta durur ve
+                        bölüm adı uzun olsa da yerini korur. */}
+                    <span className="flex items-start gap-1">
+                    <span className="min-w-0 flex-1">
                     {readOnly ? (
                       <span className="flex w-full items-center justify-between gap-2">
                         <SectionTitle
@@ -280,6 +300,21 @@ export function BookMapGrid({
                         </span>
                       </button>
                     )}
+                    </span>
+
+                    {studentId && (
+                      <SectionRowMenu
+                        studentId={studentId}
+                        bookTitle={book.title}
+                        sectionTitle={section.title}
+                        topicId={section.topicId}
+                        keepActive={
+                          !!section.topicId && !!keepActiveTopicIds?.has(section.topicId)
+                        }
+                        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+                      />
+                    )}
+                    </span>
 
                     {/* Durum bazlı toplu seçim yalnız yönetim modunda; plan
                         modunda bölüm başlığına tıklamak bugünkü gibi

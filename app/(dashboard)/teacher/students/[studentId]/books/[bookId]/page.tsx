@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
+import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
 import { resolveInterimScope, resolvePlanScope } from '@/lib/plan-scope'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -61,11 +62,15 @@ export default async function StudentBookDetailPage({
   // Öğrencinin TÜM kaynakları tek çağrıda gelir: hem bu sayfanın verisi hem
   // de kaynaklar arası önceki/sonraki gezinmesi aynı kümeden türer. Ayrı bir
   // sorgu açmak, iki listenin (harita ve gezinme) ayrışması riskini getirirdi.
-  const allBooks = await loadBookMap(supabase, {
-    workspaceId,
-    studentId,
-    statuses: ['active', 'pending', 'paused', 'completed'],
-  })
+  const [allBooks, keepActiveTopicIds] = await Promise.all([
+    loadBookMap(supabase, {
+      workspaceId,
+      studentId,
+      statuses: ['active', 'pending', 'paused', 'completed'],
+    }),
+    // Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü (041 §6.5).
+    loadKeepActiveTopicIds(supabase, { workspaceId, studentId }),
+  ])
 
   const bookIndex = allBooks.findIndex(b => b.bookId === bookId)
   const book = bookIndex === -1 ? undefined : allBooks[bookIndex]
@@ -279,7 +284,11 @@ export default async function StudentBookDetailPage({
             />
           </div>
         ) : (
-          <ResourceMap studentId={studentId} book={book} />
+          <ResourceMap
+            studentId={studentId}
+            book={book}
+            keepActiveTopicIds={[...keepActiveTopicIds]}
+          />
         )}
       </Section>
     </div>
