@@ -213,4 +213,11 @@ Her iki ekran da kurallarını kullanıcıya anlatmak zorunda ("son temas ne say
 
 R7'den sonra çağrılmayan iki sunucu eylemi (`setSectionGroupingAction`, `setSectionTopicAction`) kaldırıldı; karşılık gelen RPC'ler geri alma yolu için veritabanında kaldı.
 
+### UI referans uyarlaması — Kaynak Planı
+
+- **İki yüzde yan yana** (§3.2). Kart tek ilerleme barı gösterip kitap kapsamını dipnota atıyordu; bu "plan bitti = kitap bitti" yanılgısını besliyordu. Artık Plan ve Kitap kapsamı iki ayrı barla, kendi sayılarıyla yan yana duruyor. Tekrar eden "Plan kapsamı" hücresi kaldırıldı, yerine "Seçili kapsam" geldi.
+- **Durum rozeti** — kaynak durumu düz metindi, artık grup kovasıyla aynı indirgemeden gelen renkli rozet (Aktif / Bekliyor / Hedefi tamamlanan).
+- **Açıklama kartları** alt paragrafın yerine: "İki yüzde neden farklı?", "Neler plana girmez?", "Tempo ve hedefler".
+- **Kaynak Ekle** ekranın kendi başlığına taşındı; eksik kaynak burada fark ediliyor, öğretmen genel bakışa dönmek zorunda kalmıyor. Atanabilir kitap sorgusu iki ekranda kopyalanmasın diye `lib/assignable-books.ts`'e çıkarıldı (öğrenci genel bakışı da artık oradan besleniyor).
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

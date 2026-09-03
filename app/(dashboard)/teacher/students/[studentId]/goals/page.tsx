@@ -21,6 +21,9 @@ import { ProgressBar } from '@/components/shared/progress-bar'
 import { Section } from '@/components/shared/section'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { LinkTabs } from '@/components/shared/link-tabs'
+import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
+import { loadAssignableBooks } from '@/lib/assignable-books'
+import { AssignBookDialog } from '../assign-book-dialog'
 
 // Öğrenci Kaynak Planı (R5.1).
 //
@@ -41,6 +44,45 @@ export const dynamic = 'force-dynamic'
 
 const GROUP_ORDER: BookPlanGroup[] = ['active', 'pending', 'completed']
 
+/** Kaynak durumunun rozet karşılığı — grup kovasıyla aynı indirgeme. */
+const GROUP_BADGE: Record<BookPlanGroup, 'success' | 'warning' | 'neutral'> = {
+  active: 'success',
+  pending: 'warning',
+  completed: 'neutral',
+}
+
+// Ekranın iki yüzdesi ve tempo kuralı, altta tek paragraf yerine madde
+// madde. Metinler R5.1 §3.2/§3.4'ün davranışını anlatır.
+const EXPLAINERS: ExplainerCard[] = [
+  {
+    title: 'İki yüzde neden farklı?',
+    description:
+      "420 testlik kitapta 276 test hedeflendi ve 276'sı onaylandıysa Plan %100, Kitap %66'dır.",
+    items: [
+      { text: 'Plan %: hedef kapsamında onaylanan / hedef kapsam toplamı. Ana göstergedir.', tone: 'positive' },
+      { text: 'Kitap %: kitapta onaylanan / kitabın takip edilebilir toplamı. Fiziksel bilgidir.' },
+      { text: 'Plan %100 tamamlanmış olsa bile kitap kapsamı daha düşük olabilir; bu bir hata değildir.' },
+    ],
+  },
+  {
+    title: 'Neler plana girmez?',
+    items: [
+      { text: 'Onay bekleyen çalışma plan hesabına girmez; ayrı gösterilir.', tone: 'negative' },
+      { text: 'Video kaynakları plan temposuna dahil edilmez.', tone: 'negative' },
+      { text: 'Bekleyen ve hedefi tamamlanan kaynaklar üst özet toplamlarına katılmaz.', tone: 'negative' },
+    ],
+  },
+  {
+    title: 'Tempo ve hedefler',
+    items: [
+      { text: 'Gerekli tempo her zaman Kaynak Hedefinden hesaplanır; Ara Hedef onu değiştirmez.' },
+      { text: 'Haftalık tempo yalnız tek tür birimde gösterilir: 3 test/hafta ile 40 sayfa/hafta toplanamaz.' },
+      { text: 'Hedef yoksa kapsam kitabın tamamıdır ve iki yüzde birbirine eşitlenir.' },
+      { text: 'Kaynağın rolü öğrenci-kitap ilişkisinin özelliğidir; değiştirmek ilerleme verisine dokunmaz.' },
+    ],
+  },
+]
+
 export default async function StudentResourcePlanPage({
   params,
   searchParams,
@@ -51,7 +93,7 @@ export default async function StudentResourcePlanPage({
 }) {
   const { studentId } = await params
   const { group: groupFilter } = await searchParams
-  const { supabase, workspaceId } = await getTeacherContext()
+  const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
     .from('students')
@@ -68,6 +110,15 @@ export default async function StudentResourcePlanPage({
     workspaceId,
     studentId,
     statuses: ['active', 'pending', 'paused', 'completed'],
+  })
+
+  // Kaynak eklemek bu ekranın birincil eylemidir: kapsam ve tempo burada
+  // okunuyor, eksik kaynak da burada fark ediliyor. Öğrenci genel bakışına
+  // dönmek zorunda kalmamalı.
+  const availableBooks = await loadAssignableBooks(supabase, {
+    workspaceId,
+    termId: activeTerm?.id ?? null,
+    assignedBookIds: books.map(b => b.bookId),
   })
 
   const grouped = new Map<BookPlanGroup, BookMapBook[]>()
@@ -158,6 +209,11 @@ export default async function StudentResourcePlanPage({
             {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
           </>
         }
+        action={
+          availableBooks.length > 0 ? (
+            <AssignBookDialog studentId={studentId} books={availableBooks} />
+          ) : undefined
+        }
       />
 
       {activeBooks.length > 0 && (
@@ -230,11 +286,7 @@ export default async function StudentResourcePlanPage({
         })
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Plan % hedef kapsamı üzerinden hesaplanır ve ana göstergedir. Kitap % kaynağın
-        fiziksel kapsamını gösterir; plan tamamlanmış olsa bile daha düşük olabilir.
-        Onay bekleyen çalışma plan hesabına girmez.
-      </p>
+      <ExplainerCards cards={EXPLAINERS} />
     </div>
   )
 }
@@ -268,32 +320,58 @@ function ResourceCard({ studentId, book }: { studentId: string; book: BookMapBoo
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{book.title}</p>
           <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span>{bookPlanStatusLabel(book.status)}</span>
-            {role && (
-              <>
-                <span aria-hidden>·</span>
-                <span>{role}</span>
-              </>
-            )}
+            {/* Durum artık düz metin değil rozet: kart listesinde hangi
+                kaynağın aktif olduğu tek bakışta okunmalı. */}
+            <Badge variant={GROUP_BADGE[bookPlanGroup(book.status)]}>
+              {bookPlanStatusLabel(book.status)}
+            </Badge>
+            {role && <span>{role}</span>}
             <span aria-hidden>·</span>
             <span>{targetTypeLabel(scope.scopeType)}</span>
           </p>
         </div>
+      </div>
 
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums">%{scope.percentage}</p>
-          <p className="text-[11px] text-muted-foreground">Plan</p>
+      {/* İki yüzde YAN YANA gösterilir (§3.2). Tek bar gösterip kitap
+          kapsamını dipnota atmak, "plan bitti = kitap bitti" yanılgısını
+          besliyordu: 276/276 hedef Plan %100'dür ama kitap %66'dır. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="font-medium">Plan</span>
+            <span className="tabular-nums">
+              %{scope.percentage}
+              <span className="ml-1.5 text-muted-foreground">
+                {scope.completedUnits}/{scope.totalUnits}
+              </span>
+            </span>
+          </div>
+          <ProgressBar value={scope.percentage} label={`${book.title} plan ilerlemesi`} />
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="text-muted-foreground">Kitap kapsamı</span>
+            <span className="tabular-nums text-muted-foreground">
+              %{scope.bookPercentage}
+              <span className="ml-1.5">
+                {scope.bookCompletedUnits}/{scope.bookTotalUnits}
+              </span>
+            </span>
+          </div>
+          <ProgressBar
+            value={scope.bookPercentage}
+            label={`${book.title} kitap kapsamı ilerlemesi`}
+          />
         </div>
       </div>
 
-      <ProgressBar value={scope.percentage} label={`${book.title} plan ilerlemesi`} />
-
+      {/* "Plan kapsamı" satırı kaldırıldı: aynı x/y artık Plan barının
+          başlığında duruyordu. */}
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
         <div>
-          <dt className="text-muted-foreground">Plan kapsamı</dt>
-          <dd className="mt-0.5 tabular-nums">
-            {scope.completedUnits} / {scope.totalUnits} {unitLabel(book.trackingMode)}
-          </dd>
+          <dt className="text-muted-foreground">Seçili kapsam</dt>
+          <dd className="mt-0.5">{scope.label}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Planda kalan</dt>
@@ -319,18 +397,14 @@ function ResourceCard({ studentId, book }: { studentId: string; book: BookMapBoo
         </div>
       </dl>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
-        <span>
-          Kitap kapsamı: {scope.bookCompletedUnits} / {scope.bookTotalUnits} ·{' '}
-          <span className="tabular-nums">%{scope.bookPercentage}</span>
-        </span>
-        {pendingApproval > 0 && (
-          <span className="text-info-foreground">
-            {formatUnitCount(pendingApproval, book.trackingMode)} onay bekliyor
-          </span>
-        )}
-        {scope.scopeType !== 'whole_book' && <span>Kapsam: {scope.label}</span>}
-      </div>
+      {/* Kapsam etiketi yukarıdaki "Seçili kapsam" hücresine taşındı; burada
+          yalnız plana GİRMEYEN çalışma kalır (§3.4). */}
+      {pendingApproval > 0 && (
+        <p className="mt-3 border-t pt-2 text-[11px] text-info-foreground">
+          {formatUnitCount(pendingApproval, book.trackingMode)} onay bekliyor — plan
+          hesabına girmez
+        </p>
+      )}
     </Link>
   )
 }

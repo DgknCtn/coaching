@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
-import type { AssignableBook } from './assign-book-dialog'
 import { notFound } from 'next/navigation'
 import {
   Plus,
@@ -26,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AssignBookDialog } from './assign-book-dialog'
+import { loadAssignableBooks } from '@/lib/assignable-books'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
 import { CheckInScheduleForm } from './check-in-panel'
@@ -92,7 +92,6 @@ export default async function StudentDetailPage({
     { data: homeworkBatches },
     { data: pendingApprovalItems },
     { data: parentLinks },
-    { data: termBooks },
     { data: weeklySummary },
     { data: pendingApprovalSummary },
     { data: overdueSummary },
@@ -153,16 +152,6 @@ export default async function StudentDetailPage({
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .neq('status', 'removed'),
-    // Aktif dönem yoksa sorgu hiç yapılmaz (önceki davranışla aynı).
-    activeTerm
-      ? supabase
-          .from('books')
-          // R6-15: arama ve filtre için ek metadata.
-          .select('id, title, subject, publisher, level_exam, edition_year, curriculum_program')
-          .eq('workspace_id', workspaceId)
-          .eq('academic_term_id', activeTerm.id)
-          .eq('status', 'active')
-      : Promise.resolve({ data: null }),
     supabase
       .from('student_weekly_homework_summary_view')
       .select('*')
@@ -367,10 +356,13 @@ export default async function StudentDetailPage({
     resources: resourceSummary,
   })
 
-  const assignedBookIds = (bookProgress ?? []).map(p => p.book_id)
-  const availableBooks: AssignableBook[] = ((termBooks ?? []) as AssignableBook[]).filter(
-    b => !assignedBookIds.includes(b.id)
-  )
+  // Atanabilir kitap listesi Kaynak Planı ekranıyla ORTAK yükleyiciden gelir;
+  // iki ekran aynı listeyi göstermek zorunda (lib/assignable-books.ts).
+  const availableBooks = await loadAssignableBooks(supabase, {
+    workspaceId,
+    termId: activeTerm?.id ?? null,
+    assignedBookIds: (bookProgress ?? []).map(p => p.book_id),
+  })
 
   const hasAccount = !!student.profile_id
 
