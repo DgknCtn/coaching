@@ -341,4 +341,20 @@ Satış öncesi denetimde çıkan P0 ve P1 güvenlik bulguları kapatıldı.
 
 **Diğer sertleştirmeler.** Güvenlik başlıkları eklendi (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS; `poweredByHeader` kapatıldı). CSP **bilinçli olarak eklenmedi**: doğru CSP nonce ile middleware'de kurulur ve rapor modunda izlenmeden zorlayıcıya çevrilmemelidir. `next` sürümü hattın en güncel yamasına pinlendi (15.5.25) — pinlemenin amacı gözetimsiz sürüklenmeyi durdurmak, açık bir sürümde kalmak değil; `npm audit` 14 açıktan 2'ye indi. React tip paketleri çalışma zamanıyla aynı majora indirildi. `.env.example`'daki iki sahte sır silindi.
 
+### Faz 2 — Mühendislik hijyeni
+
+**ESLint kuruldu.** Bu katman hiç yoktu: config dosyası, script ve CI adımı bulunmuyordu; 80'den fazla bileşenlik bir kod tabanında `react-hooks/exhaustive-deps` ve `@next/next/*` kuralları hiç çalışmamıştı. Kural seçimi bilinçli olarak dar tutuldu — lint ilk açılırken sıkı kurallar yüzlerce uyarı üretir, uyarılar görmezden gelinir ve lint fiilen yine çalışmamış olur.
+
+İlk koşu **gerçek bir bug** ortaya çıkardı: `homework-builder`'daki sepet memo'su `videoTasksByBookId`'yi kullanıyor ama bağımlılığa almamıştı; öğretmen bir kitabın video tercihini değiştirdiğinde sepet, seçim değişene kadar eski hatırlatmayı gösteriyordu. İki yanlış pozitif gerekçesiyle susturuldu (kitap yedeği bir dosya indirme ucudur, `next/link` indirmeyi bozar; sidebar'daki ref temizliği kasıtlı olarak canlı değeri okur).
+
+**Sağlık kontrolü veritabanına bağlandı.** Önceden sabit `{status:'ok'}` dönüyordu — Supabase tamamen düşse bile yeşil kalıyordu. İlk yazılan yoklama da yanlıştı: kilitli bir tabloyu sorgulayıp izin hatasının kodunu tahmin etmeye dayanıyordu ve canlıda sağlıklı durumda "degraded" verdi. Doğrusu, sağlıklı durumda **hatasız** dönen bir sorgudur.
+
+**Hata raporlama server action'lara ulaştı.** `reportError` yalnız iki hata sınırında çağrılıyordu; server action hataları kullanıcıya çevrilip dönüyor, iz hiçbir yere kaydolmuyordu. Raporlama üç çeviri fonksiyonuna kondu — uygulamanın tek hata boğaz noktası, 84 çağrı. Alternatif 19 ayrı dosyaya elle log eklemekti; biri unutulunca sessizce kör kalırdı.
+
+**Segment hata sınırları** eklendi (teacher, student, parent, auth, invite). Sınır yalnız kökte ve `(dashboard)` düzeyindeydi; tek bir alt bileşen hatası tüm paneli düşürüyor, kullanıcı kenar çubuğunu bile kaybediyordu.
+
+**CI beş adıma çıktı**: lint, typecheck, test, güvenlik taraması, derleme — artı ayrı bir uçtan uca işi. E2E bugüne kadar CI'da **hiç koşmamıştı**; `playwright.config.ts`'teki CI dalları ölü koddu. Node sürümü `.nvmrc` ve `engines` ile sabitlendi, Dependabot eklendi.
+
+*Bilinçli ve geçici bir taviz:* `npm audit` eşiği `critical`. Bugün tek bir bilinen `high` açık var (postcss, next üzerinden) ve yalnız Next 16 majör yükseltmesiyle kapanıyor. Eşiği `high` bırakmak boru hattını ilk günden kalıcı kırmızıya çevirirdi — kalıcı kırmızı boru hattı da görmezden gelinir. **Next 16 yükseltmesinden sonra eşik `high`a çıkarılmalı.**
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

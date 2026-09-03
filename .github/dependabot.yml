@@ -1,0 +1,31 @@
+# Bağımlılık güncellemeleri (Faz 2).
+#
+# Bugüne kadar hiçbir otomatik izleme yoktu: npm audit adımı, Dependabot
+# veya Renovate config'i bulunmuyordu. Açık bir bağımlılık ancak birisi
+# elle `npm audit` çalıştırırsa fark ediliyordu.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Yama ve minor güncellemeler tek PR'da toplansın: haftada beş ayrı
+      # PR incelenmez, incelenmeyen PR da birikir.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # next bilinçli olarak PINLI (Faz 1): auth tamamen middleware'e
+      # bağlı ve bu hatta geçmişte middleware bypass açığı çıktı. Sürüm
+      # yükseltmesi elle ve gözden geçirilerek yapılmalı.
+      - dependency-name: "next"
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies

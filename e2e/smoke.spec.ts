@@ -4,11 +4,28 @@ import { test, expect } from '@playwright/test'
 // Amaç: uygulama boot oluyor, middleware public rotaları engellemiyor,
 // health endpoint 200 dönüyor.
 
-test('health endpoint returns ok', async ({ request }) => {
+// Sağlık ucu artık VERİTABANINA bakıyor (Faz 2). Bu ortamda Supabase
+// kimlik bilgileri sahte olduğu için "ok" beklemek YANLIŞ bir iddia olurdu.
+//
+// Testin amacı değişmedi: uygulama boot oluyor mu, uç yanıt veriyor mu?
+// Ama iddia sözleşmeye uydurulmalı — testi zayıflatmamak için durum ile
+// HTTP kodunun tutarlılığı da doğrulanıyor: sağlıklıysa 200, değilse 503.
+test('health endpoint yanıt veriyor ve durumu tutarlı', async ({ request }) => {
   const res = await request.get('/api/health')
-  expect(res.status()).toBe(200)
   const body = await res.json()
-  expect(body.status).toBe('ok')
+
+  expect(['ok', 'degraded', 'down']).toContain(body.status)
+  expect(typeof body.latencyMs).toBe('number')
+  expect(typeof body.time).toBe('string')
+
+  // Sözleşme: yalnız veritabanı da sağlıklıysa 200 dönülür.
+  if (body.status === 'ok') {
+    expect(res.status()).toBe(200)
+    expect(body.database).toBe('ok')
+  } else {
+    expect(res.status()).toBe(503)
+    expect(body.database).not.toBe('ok')
+  }
 })
 
 test('landing page renders', async ({ page }) => {

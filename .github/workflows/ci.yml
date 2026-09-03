@@ -5,28 +5,110 @@ on:
     branches: [master]
   pull_request:
 
+# Aynı dal için üst üste gelen koşular birbirini iptal etsin: eski bir
+# commit'in sonucunu beklemek hem zaman hem koşucu israfı.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  quality:
+    name: Kalite kapısı
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # .nvmrc tek doğruluk kaynağı: yerel, CI ve dağıtım aynı sürümde.
+          node-version-file: .nvmrc
           cache: npm
 
-      - name: Install dependencies
+      - name: Bağımlılıkları kur
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
+      - name: Birim testleri
         run: npm test
+        env:
+          # Kiracı izolasyonu testleri (tests/tenant-isolation.test.ts) bu
+          # değerler tanımlıysa CANLI projeye karşı koşar ve P0 güvenlik
+          # bulgusunu korur. Tanımlı değilse atlanır — depo gizli anahtarları
+          # kurulana kadar boru hattı kırılmasın.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Build
+      - name: Bağımlılık güvenlik taraması
+        # `|| true` YOK: sessizce geçen bir güvenlik adımı, olmayan bir
+        # güvenlik adımıdır.
+        #
+        # EŞİK NEDEN "critical", "high" DEĞİL — geçici ve belgeli:
+        # Bugün tek bir bilinen "high" açık var (postcss, next üzerinden
+        # geliyor) ve YALNIZCA Next 16 majör yükseltmesiyle kapanıyor.
+        # Derleme zamanı CSS işlemeyi ilgilendiriyor, çalışan uygulamanın
+        # istek yolunu değil.
+        #
+        # Eşiği "high" bırakmak, boru hattını ilk günden kalıcı kırmızıya
+        # çevirirdi — kalıcı kırmızı bir boru hattı da görmezden gelinir ve
+        # gerçek bir açık geldiğinde kimse fark etmez.
+        #
+        # YAPILACAK: Next 16 yükseltmesinden sonra eşiği "high"a çıkar.
+        run: npm audit --audit-level=critical
+
+      - name: Derleme
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  e2e:
+    name: Uçtan uca
+    runs-on: ubuntu-latest
+    # Kalite kapısı geçmeden e2e koşmanın anlamı yok; hem yavaş hem yanıltıcı.
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Playwright tarayıcısını kur
+        # Yalnız Chromium: tek proje tanımlı, diğerlerini indirmek boşuna.
+        run: npx playwright install --with-deps chromium
+
+      - name: Derleme
+        # playwright.config.ts `next start` çalıştırıyor, yani ÜRETİM
+        # derlemesi gerekiyor. Bu iş ayrı bir koşucuda çalıştığı için
+        # kalite kapısındaki derlemeden yararlanamaz; kendi derlemesini
+        # yapmak zorunda.
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: E2E testleri
+        # playwright.config.ts kendi web sunucusunu ayağa kaldırıyor.
+        # Bu adım bugüne kadar CI'da HİÇ koşmamıştı; config'deki CI dalları
+        # ölü koddu.
+        run: npm run e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Başarısız koşunun izlerini yükle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
