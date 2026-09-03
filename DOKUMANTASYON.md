@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–045
+supabase/migrations/ 001–046
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 45 veritabanı migration'ı çalıştırılmıştır (001–045).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 46 veritabanı migration'ı çalıştırılmıştır (001–046).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -274,5 +274,17 @@ Davet akışı çalışıyordu ama üç boşluğu vardı; ikisi güvenlik.
 **Kabul akışı hata mesajı.** Hesabı olan davetli yanlış şifre girdiğinde "E-posta veya şifre hatalı." görüyor ve davetin mi bozuk olduğunu yoksa şifresini mi yanlış yazdığını anlayamıyordu. Artık ayrı mesaj ve şifre sıfırlama bağlantısı gösterilir.
 
 Ölü klasör `app/(auth)/invite/[token]/` silindi (boştu, kullanılmıyordu).
+
+### Öğrenci ekranları — Akışım ve Tekrar (046)
+
+Denetimde tuhaf bir asimetri çıktı: **öğrenci kendi velisinden az bilgi görüyordu.** Veli haftalık özeti ve plan/tempo kartlarını görebiliyor, öğrenci ise yalnız "bu hafta ne yapacağım"ı görüyordu; müfredat akışı, koruma havuzu ve kaynak planının hiçbirinin öğrenci karşılığı yoktu.
+
+**046 — RLS.** 038/039/041'de kurulan tablolar `FOR ALL` + teacher-only politikayla açılmıştı; o gün yalnız öğretmen ekranları vardı. Migration mevcut politikalara **dokunmadan** yalnızca SELECT veren ayrı politikalar ekler (permissive politikalar OR'lanır). Kapsam bilinçli olarak dar: yalnız `SELECT`, yalnız kendi satırları, **veliye verilmez**. `topics` ve `academic_scopes` erişimi de öğrencinin kendi akışında ya da kendi kitaplarında geçen kayıtlarla sınırlandı — çalışma alanının tüm müfredat sözlüğü açılmadı.
+
+**`/student/curriculum` — "Akışım".** Öğretmen ekranıyla **aynı veri, aynı türetme** (`deriveFlowStatuses` + `lib/open-work.ts`): iki ekranın birinde "İşleniyor" diğerinde "Zamanı Geldi" demesi kabul edilemez. `FlowTimeline`'a `onChange` verilmez → sürükleme kapalı; satır menüsü ve süre kontrolü hiç render edilmez. Akış eğitmenin planıdır (R5.2 §4.4); arayüz RLS'in çizdiği sınırın aynısını çizer.
+
+**`/student/review` — "Tekrar".** Koruma Havuzunun öğrenci sürümü: aynı satırlar, aynı `buildProtectionPool`, farklı dil. Bant etiketleri "Öncelikli / Takipte / Normal" yerine "Uzun süredir dokunmadın / Yaklaşıyor / Yeni çalıştın"; "radar" metaforu "unutmamak için" diye anlatılır. Bant **eşik değildir** ve öğrencide de değildir — hiçbir şeyi tetiklemez, "bunu yapmak zorundasın" demez. Tek eylem, konunun çalışıldığı kitabın haritasına gitmektir.
+
+**`lib/protection-pool-rows.ts`.** Havuz satırlarını kuran ~80 satırlık blok öğretmen sayfasından `lib/`'e taşındı; iki ekran aynı yerden beslenir. Öğretmen sayfası 197 satırdan 66 satıra indi.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

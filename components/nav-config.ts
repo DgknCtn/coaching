@@ -55,6 +55,10 @@ export function studentContextNav(studentId: string): NavItem[] {
 
 export const studentNav: NavItem[] = [
   { href: '/student', label: 'Ödevlerim', icon: ClipboardList, exact: true },
+  // R8: öğrenci artık kendi akademik planını da görebiliyor. Kitap haritası
+  // menüye alınmadı — kitaba ödev kartından girilir, bağlam orada.
+  { href: '/student/curriculum', label: 'Akışım', icon: CalendarRange },
+  { href: '/student/review', label: 'Tekrar', icon: ShieldCheck },
 ]
 
 // Veli panelinde tek ekran var; gezinme listesi bilinçli olarak boş.
