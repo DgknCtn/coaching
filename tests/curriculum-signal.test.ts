@@ -33,7 +33,7 @@ describe('sectionCurriculumStatus', () => {
     const byTopic = index([{ topic_id: 'trigonometri', start_date: '2026-12-01' }])
 
     const status = sectionCurriculumStatus('trigonometri', byTopic, BUGUN)
-    expect(status).toBe('upcoming')
+    expect(status).toBe('later')
     expect(hasActiveSignal(status)).toBe(false)
   })
 
@@ -65,12 +65,12 @@ describe('sectionCurriculumStatus', () => {
     ])
 
     expect(sectionCurriculumStatus('tyt-fonksiyonlar', byTopic, BUGUN)).toBe('current')
-    expect(sectionCurriculumStatus('ayt-fonksiyonlar', byTopic, BUGUN)).toBe('upcoming')
+    expect(sectionCurriculumStatus('ayt-fonksiyonlar', byTopic, BUGUN)).toBe('later')
   })
 
   it('MK-08: kişisel tarih değişince sinyal ona göre güncellenir', () => {
     const once = index([{ topic_id: 'parabol', start_date: '2026-11-01' }])
-    expect(sectionCurriculumStatus('parabol', once, BUGUN)).toBe('upcoming')
+    expect(sectionCurriculumStatus('parabol', once, BUGUN)).toBe('later')
 
     // Eğitmen konuyu öne çekti.
     const sonra = index([{ topic_id: 'parabol', start_date: '2026-10-05' }])
@@ -121,7 +121,7 @@ describe('buildCurriculumIndex', () => {
 describe('signalLabel', () => {
   it('yalnız aktif sinyalde metin üretir', () => {
     expect(signalLabel('current')).toBe('Müfredat zamanı geldi')
-    expect(signalLabel('upcoming')).toBeNull()
+    expect(signalLabel('later')).toBeNull()
     expect(signalLabel('passed')).toBeNull()
     expect(signalLabel(null)).toBeNull()
   })

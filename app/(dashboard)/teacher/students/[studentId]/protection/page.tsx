@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
+import { loadOpenWorkByTopic } from '@/lib/open-work'
 import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
 import type { PoolRowInput } from '@/lib/protection-pool'
@@ -80,7 +81,7 @@ export default async function StudentProtectionPoolPage({
     const topicIds = [...new Set(topicsInScope.map(f => f.topic_id))]
 
     if (topicIds.length > 0) {
-      const [{ data: contactRows }, { data: openRows }, { data: overrideRows }, { data: bookRows }] =
+      const [{ data: contactRows }, openByTopic, { data: overrideRows }, { data: bookRows }] =
         await Promise.all([
           // Son temas: onaylı çalışmadan TÜRETİLEN + elle girilen ders /
           // serbest çalışma birleşimi (041 view'ı).
@@ -91,12 +92,9 @@ export default async function StudentProtectionPoolPage({
             .eq('workspace_id', workspaceId)
             .in('topic_id', topicIds),
           // Açık çalışma: konu "Aktif Çalışma" ise havuzda görünmez.
-          supabase
-            .from('student_topic_open_work_view')
-            .select('topic_id, open_items')
-            .eq('student_id', studentId)
-            .eq('workspace_id', workspaceId)
-            .in('topic_id', topicIds),
+          // Sorgu Müfredat Akışıyla ORTAK (lib/open-work.ts) — iki ekran
+          // "bu konuda açık çalışma var mı?" sorusuna aynı yanıtı vermeli.
+          loadOpenWorkByTopic(supabase, { workspaceId, studentId, topicIds }),
           supabase
             .from('student_topic_overrides')
             .select('topic_id, keep_active')
@@ -120,13 +118,6 @@ export default async function StudentProtectionPoolPage({
             last_contact_amount: number
           }[]
         ).map(r => [r.topic_id, r])
-      )
-
-      const openByTopic = new Map(
-        ((openRows ?? []) as { topic_id: string; open_items: number }[]).map(r => [
-          r.topic_id,
-          r.open_items,
-        ])
       )
 
       const overrideByTopic = new Map(

@@ -31,26 +31,97 @@ export interface FlowItem {
 /**
  * Müfredat durumu (§4.4).
  *
- * İkisi tarihten TÜRETİLİR, biri saklanır:
- *   upcoming (Yaklaşıyor) — başlangıç tarihi henüz gelmedi
- *   current  (Zamanı Geldi) — başlangıç geldi, eğitmen Geçildi yapmadı
- *   passed   (Geçildi) — eğitmen işaretledi
+ * BEŞ DURUM, İKİ KATMAN. Ayrım kasıtlıdır:
+ *
+ *   Kalem bazında türetilen (deriveFlowStatus — SAF, tek kaleme bakar)
+ *     passed  (Tamamlandı)    — eğitmen işaretledi, tek SAKLANAN durum
+ *     current (Zamanı Geldi)  — başlangıç geldi, eğitmen tamamlamadı
+ *     later   (Sonrasında)    — başlangıç tarihi henüz gelmedi
+ *
+ *   Liste bazında yükseltilen (deriveFlowStatuses — listeye ve dış veriye bakar)
+ *     in_progress (İşleniyor) — konuda AÇIK çalışma var; tarihten bağımsızdır,
+ *                               öğrenci planın önünde de olabilir
+ *     soon        (Yaklaşan)  — başlamamış konulardan SIRADAKİ İLKİ; yalnız
+ *                               bir satır bu duruma girer
+ *
+ * Neden iki katman: `deriveFlowStatus` saf ve kalem bazında kalmak zorunda,
+ * çünkü lib/curriculum-signal.ts onu Kitap Haritasındaki müfredat sinyali
+ * için kullanıyor ve orada liste bağlamı yok. Sinyal yalnız 'current'e
+ * bakar — yeni durumlar o davranışı DEĞİŞTİRMEZ.
  *
  * `endDate` hiçbir duruma girmez: planlanan bitiş tarihinin geçmesi konuyu
- * otomatik Geçildi YAPMAZ (MA-08). Bu, kuralın kod düzeyindeki garantisi.
+ * otomatik Tamamlandı YAPMAZ (MA-08). Bu, kuralın kod düzeyindeki garantisi.
  */
-export type FlowStatus = 'upcoming' | 'current' | 'passed'
+export type FlowStatus = 'passed' | 'in_progress' | 'current' | 'soon' | 'later'
+
+/** deriveFlowStatus'un döndürebileceği alt küme — liste yükseltmesi öncesi. */
+export type BaseFlowStatus = Extract<FlowStatus, 'passed' | 'current' | 'later'>
 
 export const FLOW_STATUS_LABEL: Record<FlowStatus, string> = {
-  upcoming: 'Yaklaşıyor',
+  passed: 'Tamamlandı',
+  in_progress: 'İşleniyor',
   current: 'Zamanı Geldi',
-  passed: 'Geçildi',
+  soon: 'Yaklaşan',
+  later: 'Sonrasında',
 }
 
-export function deriveFlowStatus(item: FlowItem, today?: string): FlowStatus {
+export function deriveFlowStatus(item: FlowItem, today?: string): BaseFlowStatus {
   if (item.passed) return 'passed'
   const day = today ?? todayDateString()
-  return item.startDate > day ? 'upcoming' : 'current'
+  return item.startDate > day ? 'later' : 'current'
+}
+
+/**
+ * Listenin tamamının durumu.
+ *
+ * İki yükseltme yapar, sırası önemlidir:
+ *   1. `activeTopicIds` içindeki konu → 'in_progress'. Açık çalışma tarihi
+ *      yener: öğrenci planın önünde çalışıyorsa satır "İşleniyor" görünür.
+ *      'passed' bunu da yener — tamamlanmış konu geri açılmaz.
+ *   2. Kalan 'later'lardan LİSTE SIRASINDA ilki → 'soon'. Yalnız bir satır.
+ *      Hafta eşiği kullanılmadı: 40 haftalık akışta "önümüzdeki 4 hafta"
+ *      bazen hiçbir satırı, bazen üçünü yakalar; "sıradaki konu" ise her
+ *      akışta tam olarak bir sonrakini gösterir.
+ *
+ * Anahtar: kalemin `id`'si, yoksa liste indeksi ("yeni-N") — kaydedilmemiş
+ * bloklar da haritada yer alır.
+ */
+export function flowItemKey(item: FlowItem, index: number): string {
+  return item.id ?? `yeni-${index}`
+}
+
+export function deriveFlowStatuses(
+  items: FlowItem[],
+  today?: string,
+  activeTopicIds?: ReadonlySet<string>
+): Map<string, FlowStatus> {
+  const out = new Map<string, FlowStatus>()
+  let soonAssigned = false
+
+  items.forEach((item, index) => {
+    const key = flowItemKey(item, index)
+    const base = deriveFlowStatus(item, today)
+
+    if (base === 'passed') {
+      out.set(key, 'passed')
+      return
+    }
+
+    if (item.topicId && activeTopicIds?.has(item.topicId)) {
+      out.set(key, 'in_progress')
+      return
+    }
+
+    if (base === 'later' && !soonAssigned) {
+      soonAssigned = true
+      out.set(key, 'soon')
+      return
+    }
+
+    out.set(key, base)
+  })
+
+  return out
 }
 
 // ============================================================
@@ -186,41 +257,125 @@ export function setPassed(items: FlowItem[], itemId: string, passed: boolean): F
   return items.map(i => (i.id === itemId ? { ...i, passed } : i))
 }
 
+/**
+ * Bir bloğu ikiye BÖLER.
+ *
+ * "Fonksiyonlar 3 hafta" bloğu, öğrenci ilk 2 haftayı bitirip ara verdiğinde
+ * "2 hafta (tamamlandı) + 1 hafta" olarak ayrılabilmeli. Bugün bunun tek
+ * yolu konuyu silip iki kez elle eklemekti — geçmiş de kaybolurdu.
+ *
+ * TOPLAM SÜRE VE ZAMAN ARALIĞI DEĞİŞMEZ: ikinci parça, ilkinin bittiği günün
+ * ertesinde başlar ve orijinal bitişte biter. Bu yüzden devam blokları
+ * KAYMAZ — bölme zincirleme etki yaratmaz.
+ *
+ * İkinci parça `id: null` ile eklenir ve ADI AYNI KALIR. Kayıtta
+ * save_student_curriculum_flow her kalem için upsert_topic çağırdığı için
+ * iki satır AYNI topic_id'yi alır; 039 `(student_id, scope_id, topic_id)`
+ * unique kısıtını tam da bunun için koymamıştır.
+ *
+ * `passed` yalnız İLK parçaya taşınır: bölmenin amacı "bir kısmı bitti"
+ * demektir; ikinci parça yeni bir iştir.
+ */
+export function splitItem(items: FlowItem[], itemId: string, firstWeeks: number): FlowItem[] {
+  const index = items.findIndex(i => i.id === itemId)
+  if (index === -1) return items
+
+  const item = items[index]
+  const total = durationWeeks(item)
+  // 1 haftalık blok bölünemez ve parçalardan biri boş kalamaz.
+  const first = Math.round(firstWeeks)
+  if (total < 2 || first < 1 || first >= total) return items
+
+  const firstEnd = endDateFor(item.startDate, first)
+  const secondStart = addDays(firstEnd, 1)
+
+  const head: FlowItem = { ...item, endDate: firstEnd }
+  const tail: FlowItem = {
+    ...item,
+    id: null,
+    startDate: secondStart,
+    endDate: item.endDate,
+    passed: false,
+    note: null,
+  }
+
+  return [...items.slice(0, index), head, tail, ...items.slice(index + 1)]
+}
+
+/**
+ * Bir bloğu KENDİNDEN SONRAKİYLE birleştirir.
+ *
+ * Bölmenin tersi; ayrıca şablondan gelen fazla ayrıntılı akışı sadeleştirmek
+ * için de kullanılır ("Sayılar" + "Sayı Basamakları" tek blok olsun).
+ *
+ * Aralık ilkinin başlangıcından ikincinin bitişine uzar — arada boşluk varsa
+ * o da yutulur ve devam blokları KAYMAZ. Ad ilkinden gelir: birleştirme
+ * "bunu şunun içine al" demektir, yeni bir konu adı üretmez.
+ *
+ * `passed` yalnız İKİSİ DE tamamlanmışsa korunur; yarısı bitmiş bir blok
+ * bütün olarak "Tamamlandı" görünmemeli.
+ */
+export function mergeWithNext(items: FlowItem[], itemId: string): FlowItem[] {
+  const index = items.findIndex(i => i.id === itemId)
+  // Son satırın birleşeceği bir sonraki blok yok.
+  if (index === -1 || index >= items.length - 1) return items
+
+  const first = items[index]
+  const second = items[index + 1]
+
+  const merged: FlowItem = {
+    ...first,
+    endDate: second.endDate > first.endDate ? second.endDate : first.endDate,
+    passed: first.passed && second.passed,
+    note: [first.note, second.note].filter(Boolean).join(' · ') || null,
+  }
+
+  return [...items.slice(0, index), merged, ...items.slice(index + 2)]
+}
+
 // ============================================================
 // Özet
 // ============================================================
 
 export interface FlowSummary {
   totalWeeks: number
-  passedWeeks: number
-  currentWeeks: number
-  upcomingWeeks: number
+  /** Beş durumun her biri için hafta toplamı. */
+  weeksByStatus: Record<FlowStatus, number>
   firstStart: string | null
   lastEnd: string | null
 }
 
-/** Akış özeti — ekranın sağ panelindeki toplamlar. */
-export function summarizeFlow(items: FlowItem[], today?: string): FlowSummary {
-  let passedWeeks = 0
-  let currentWeeks = 0
-  let upcomingWeeks = 0
-
-  for (const item of items) {
-    const weeks = durationWeeks(item)
-    const status = deriveFlowStatus(item, today)
-    if (status === 'passed') passedWeeks += weeks
-    else if (status === 'current') currentWeeks += weeks
-    else upcomingWeeks += weeks
+/**
+ * Akış özeti — ekranın sağ panelindeki toplamlar.
+ *
+ * Durum haritası DIŞARIDAN alınır (deriveFlowStatuses). Özetin kendi
+ * türetmesini yapması, tabloda "İşleniyor" görünen bir satırın özette
+ * "Zamanı Geldi" haftasına sayılmasına yol açardı; iki gösterge aynı
+ * kaynaktan beslenmek zorunda.
+ */
+export function summarizeFlow(
+  items: FlowItem[],
+  statuses: Map<string, FlowStatus>
+): FlowSummary {
+  const weeksByStatus: Record<FlowStatus, number> = {
+    passed: 0,
+    in_progress: 0,
+    current: 0,
+    soon: 0,
+    later: 0,
   }
+
+  items.forEach((item, index) => {
+    const status = statuses.get(flowItemKey(item, index)) ?? 'later'
+    weeksByStatus[status] += durationWeeks(item)
+  })
 
   const starts = items.map(i => i.startDate).sort()
   const ends = items.map(i => i.endDate).sort()
 
   return {
-    totalWeeks: passedWeeks + currentWeeks + upcomingWeeks,
-    passedWeeks,
-    currentWeeks,
-    upcomingWeeks,
+    totalWeeks: Object.values(weeksByStatus).reduce((a, b) => a + b, 0),
+    weeksByStatus,
     firstStart: starts[0] ?? null,
     lastEnd: ends[ends.length - 1] ?? null,
   }

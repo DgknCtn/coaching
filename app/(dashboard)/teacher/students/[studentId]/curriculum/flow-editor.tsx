@@ -5,23 +5,28 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronDown,
+  Combine,
   Loader2,
+  MoreVertical,
   Plus,
   Save,
+  SplitSquareHorizontal,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
   FLOW_STATUS_LABEL,
-  deriveFlowStatus,
+  deriveFlowStatuses,
   durationWeeks,
+  flowItemKey,
+  mergeWithNext,
   insertItem,
   moveItem,
   removeItem,
   resizeItem,
   setPassed,
+  splitItem,
   summarizeFlow,
   type FlowItem,
   type FlowStatus,
@@ -40,6 +45,13 @@ import { DetailPanel } from '@/components/shared/detail-panel'
 import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
 import { FlowTimeline } from '@/components/shared/flow-timeline'
 import { Legend } from '@/components/shared/legend'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { CalendarRange } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -53,24 +65,30 @@ import { cn } from '@/lib/utils'
 // gitmek, zincirleme kaydırmayı yavaş ve yarım kaydedilmiş hâllere açık
 // hale getirirdi.
 
-const STATUS_STYLE: Record<FlowStatus, string> = {
-  passed: 'bg-success-subtle text-success-foreground border-success-border',
-  current: 'bg-info-subtle text-info-foreground border-info-border',
-  upcoming: 'bg-muted text-muted-foreground border-border',
+/** Durum noktası — tabloda konu adının başında (referans tasarım). */
+const STATUS_DOT: Record<FlowStatus, string> = {
+  passed: 'bg-success-border',
+  in_progress: 'bg-info-border',
+  current: 'bg-primary',
+  soon: 'bg-warning-border',
+  later: 'bg-muted-foreground/40',
 }
 
-/** Durum rozeti için Badge varyantı — STATUS_STYLE'ın rozet karşılığı. */
-const STATUS_BADGE: Record<FlowStatus, 'success' | 'info' | 'neutral'> = {
+/** Durum rozeti için Badge varyantı — STATUS_DOT'un rozet karşılığı. */
+const STATUS_BADGE: Record<FlowStatus, 'success' | 'info' | 'warning' | 'neutral'> = {
   passed: 'success',
+  in_progress: 'info',
   current: 'info',
-  upcoming: 'neutral',
+  soon: 'warning',
+  later: 'neutral',
 }
 
-const LEGEND_ENTRIES = [
-  { label: FLOW_STATUS_LABEL.passed, className: 'bg-success-border' },
-  { label: FLOW_STATUS_LABEL.current, className: 'bg-info-border' },
-  { label: FLOW_STATUS_LABEL.upcoming, className: 'bg-muted-foreground/40' },
-]
+const STATUS_ORDER: FlowStatus[] = ['passed', 'in_progress', 'current', 'soon', 'later']
+
+const LEGEND_ENTRIES = STATUS_ORDER.map(status => ({
+  label: FLOW_STATUS_LABEL[status],
+  className: STATUS_DOT[status],
+}))
 
 // Ekranın kuralları, altta tek paragraf yerine madde madde. Metinler
 // R5.2'nin davranışını anlatır; bir kuralı değiştirirken buradaki karşılığı
@@ -82,6 +100,8 @@ const EXPLAINERS: ExplainerCard[] = [
       { text: 'Bu akış öğrencinin kişisel akademik yol haritasıdır; genel şablonu etkilemez.' },
       { text: 'Konuyu ileri/geri taşıdığınızda aynı dersteki devam blokları da kayar.' },
       { text: 'Süreyi değiştirdiğinizde takip eden konular otomatik olarak kayar.' },
+      { text: 'Çizelgede blokları sürükleyerek taşıyabilir, sağ kenarından süreyi değiştirebilirsiniz.' },
+      { text: 'Bir konuyu ikiye bölebilir ya da sonrakiyle birleştirebilirsiniz; toplam aralık değişmez.' },
       { text: 'İstediğiniz yere yeni konu ekleyebilir veya konu çıkarabilirsiniz; geçmiş çalışma silinmez.' },
       { text: 'Değişiklikler "Akışı Kaydet" ile toplu kaydedilir.' },
     ],
@@ -90,9 +110,13 @@ const EXPLAINERS: ExplainerCard[] = [
     title: 'Renk anlamları',
     description: 'Renk tek başına anlam taşımaz; her blokta konu adı ve durumu da yazar.',
     items: [
-      { text: `${FLOW_STATUS_LABEL.passed}: konu "Geçildi" olarak işaretlendi.`, tone: 'positive' },
+      { text: `${FLOW_STATUS_LABEL.passed}: konu tamamlandı olarak işaretlendi.`, tone: 'positive' },
+      {
+        text: `${FLOW_STATUS_LABEL.in_progress}: konuda açık çalışma var. Tarihten bağımsızdır — öğrenci planın önünde olabilir.`,
+      },
       { text: `${FLOW_STATUS_LABEL.current}: bugün bu konunun planlanan aralığındasınız.` },
-      { text: `${FLOW_STATUS_LABEL.upcoming}: konunun zamanı henüz gelmedi ya da aralığı geçti.` },
+      { text: `${FLOW_STATUS_LABEL.soon}: başlamamış konulardan sıradaki ilki. Her akışta tek satır.` },
+      { text: `${FLOW_STATUS_LABEL.later}: konunun zamanı daha sonra gelecek.` },
     ],
   },
   {
@@ -100,7 +124,7 @@ const EXPLAINERS: ExplainerCard[] = [
     items: [
       { text: 'Müfredat zamanı yalnızca sinyal verir; çalışma ve ödev kararı öğretmenindir.' },
       { text: 'Önden çalışmak için beklemeye gerek yok — istediğiniz konuya ödev verilebilir.' },
-      { text: 'Planlanan bitiş tarihinin geçmesi konuyu kendiliğinden "Geçildi" yapmaz.', tone: 'negative' },
+      { text: 'Planlanan bitiş tarihinin geçmesi konuyu kendiliğinden "Tamamlandı" yapmaz.', tone: 'negative' },
       { text: 'Aynı haftaya denk gelen iki konu hata değildir.' },
       { text: 'Müfredat zamanı koruma havuzuna otomatik giriş sağlamaz.', tone: 'negative' },
     ],
@@ -125,6 +149,8 @@ interface Props {
   activeScopeId: string | null
   templates: TemplateOption[]
   initialItems: FlowItem[]
+  /** Açık çalışması olan konular — "İşleniyor" durumu (lib/open-work.ts). */
+  openWorkTopicIds: string[]
 }
 
 function formatDate(value: string): string {
@@ -132,6 +158,16 @@ function formatDate(value: string): string {
     day: 'numeric',
     month: 'short',
   })
+}
+
+/**
+ * Bugün konunun kaçıncı haftasında? Aralık dışındaysa null.
+ * Hafta 1'den başlar: başlangıç günü "1. hafta"dır.
+ */
+function weekWithin(item: FlowItem, today: string): number | null {
+  if (today < item.startDate || today > item.endDate) return null
+  const ms = Date.parse(`${today}T00:00:00Z`) - Date.parse(`${item.startDate}T00:00:00Z`)
+  return Math.floor(ms / (7 * 24 * 60 * 60 * 1000)) + 1
 }
 
 /** Detay panelinde tarih kısaltma yerine tam yazılır: "29 Eylül 2025". */
@@ -149,6 +185,7 @@ export function CurriculumFlowEditor({
   activeScopeId,
   templates,
   initialItems,
+  openWorkTopicIds,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -163,9 +200,30 @@ export function CurriculumFlowEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const today = todayDateString()
-  const summary = useMemo(() => summarizeFlow(items, today), [items, today])
+  const activeTopicIds = useMemo(() => new Set(openWorkTopicIds), [openWorkTopicIds])
+  // Durum haritası TEK yerde üretilir; çizelge, tablo, panel ve özet aynı
+  // haritadan okur — biri "İşleniyor" derken diğeri "Zamanı Geldi" diyemez.
+  const statuses = useMemo(
+    () => deriveFlowStatuses(items, today, activeTopicIds),
+    [items, today, activeTopicIds]
+  )
+  const summary = useMemo(() => summarizeFlow(items, statuses), [items, statuses])
   // Silinen/şablonla değişen konu seçili kalmışsa panel kendiliğinden kapanır.
-  const selected = selectedId ? (items.find(i => i.id === selectedId) ?? null) : null
+  const selectedIndex = selectedId ? items.findIndex(i => i.id === selectedId) : -1
+  const selected = selectedIndex === -1 ? null : items[selectedIndex]
+  const selectedStatus: FlowStatus =
+    selected ? (statuses.get(flowItemKey(selected, selectedIndex)) ?? 'later') : 'later'
+
+  // "Bu hafta" ve "İlerleme": konunun kendi aralığında bugün neredeyiz?
+  // Aralık dışındaysa (henüz başlamadı ya da bitti) null döner — uydurma
+  // bir hafta numarası göstermek yanıltıcı olurdu.
+  const selectedWeek = selected ? weekWithin(selected, today) : null
+  const selectedProgress =
+    selected && selectedWeek !== null
+      ? Math.min(100, Math.round(((selectedWeek - 1) / durationWeeks(selected)) * 100))
+      : selected?.passed
+        ? 100
+        : 0
   const scopeTemplates = templates.filter(t => t.scopeId === activeScopeId)
 
   function update(next: FlowItem[]) {
@@ -273,7 +331,20 @@ export function CurriculumFlowEditor({
           </NativeSelect>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Toplam süre başlık şeridinde: "bu akış ne kadar sürüyor?"
+              sorusu ekranı aşağı kaydırmadan yanıtlanmalı. */}
+          {items.length > 0 && (
+            <div className="rounded-lg border bg-card px-3 py-1.5 text-right">
+              <p className="text-[11px] text-muted-foreground">Toplam süre</p>
+              <p className="text-sm font-semibold tabular-nums">{summary.totalWeeks} hafta</p>
+              {summary.firstStart && summary.lastEnd && (
+                <p className="text-[11px] tabular-nums text-muted-foreground">
+                  {formatDate(summary.firstStart)} – {formatDate(summary.lastEnd)}
+                </p>
+              )}
+            </div>
+          )}
           {dirty && <span className="text-xs text-warning-foreground">Kaydedilmedi</span>}
           <Button onClick={save} disabled={isPending || !dirty || !activeScopeId}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -344,14 +415,17 @@ export function CurriculumFlowEditor({
           <div className="min-w-0 space-y-3">
             <Legend entries={LEGEND_ENTRIES} />
 
-            {/* Zaman çizelgesi salt görünümdür: tıklamak yalnız seçer.
-                Taşıma/süre değişimi satırdaki kontrollerle yapılır — bkz.
-                components/shared/flow-timeline.tsx başlığı. */}
+            {/* Çizelgede blok sürüklenebilir: taşıma ve süre değişimi
+                zincirleme etkiyi CANLI gösterir (bkz. flow-timeline.tsx
+                başlığı). Aynı işlemler satır menüsünde de duruyor —
+                sürükleme tek yol değil. */}
             <FlowTimeline
               items={items}
               today={today}
+              statuses={statuses}
               selectedId={selectedId}
               onSelect={item => setSelectedId(item.id ?? null)}
+              onChange={update}
             />
 
             <div className="overflow-hidden rounded-lg border bg-card">
@@ -363,15 +437,14 @@ export function CurriculumFlowEditor({
                     <th className="px-3 py-2 font-medium">Süre</th>
                     <th className="px-3 py-2 font-medium">Başlangıç</th>
                     <th className="px-3 py-2 font-medium">Bitiş</th>
-                    <th className="px-3 py-2 font-medium">Durum</th>
                     <th className="px-3 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {items.map((item, index) => {
-                    const status = deriveFlowStatus(item, today)
+                    const key = flowItemKey(item, index)
+                    const status = statuses.get(key) ?? 'later'
                     const weeks = durationWeeks(item)
-                    const key = item.id ?? `yeni-${index}`
 
                     return (
                       <tr
@@ -385,6 +458,16 @@ export function CurriculumFlowEditor({
                           {index + 1}
                         </td>
                         <td className="px-3 py-2">
+                          {/* Durum kolonu kaldırıldı: nokta konunun yanında
+                              durur (referans tasarım). Renk tek başına anlam
+                              taşımasın diye title/sr-only karşılığı var. */}
+                          <span className="flex items-center gap-2">
+                          <span
+                            title={FLOW_STATUS_LABEL[status]}
+                            className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[status])}
+                          >
+                            <span className="sr-only">{FLOW_STATUS_LABEL[status]}</span>
+                          </span>
                           <input
                             value={item.name}
                             onChange={e =>
@@ -396,6 +479,7 @@ export function CurriculumFlowEditor({
                             }
                             className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none hover:border-input focus-visible:border-ring"
                           />
+                          </span>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">
@@ -427,50 +511,15 @@ export function CurriculumFlowEditor({
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.startDate)}</td>
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.endDate)}</td>
                         <td className="px-3 py-2">
-                          <span
-                            className={cn(
-                              'inline-flex rounded-md border px-1.5 py-0.5 text-[11px]',
-                              STATUS_STYLE[status]
-                            )}
-                          >
-                            {FLOW_STATUS_LABEL[status]}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-end gap-0.5">
-                            <IconButton
-                              title="1 hafta geri taşı (devamı da kayar)"
-                              onClick={() => update(moveItem(items, item.id ?? '', -1))}
-                              disabled={!item.id}
-                            >
-                              <ArrowLeft className="size-3.5" />
-                            </IconButton>
-                            <IconButton
-                              title="1 hafta ileri taşı (devamı da kayar)"
-                              onClick={() => update(moveItem(items, item.id ?? '', 1))}
-                              disabled={!item.id}
-                            >
-                              <ArrowRight className="size-3.5" />
-                            </IconButton>
-                            <IconButton
-                              title={item.passed ? 'Geçildi işaretini kaldır' : 'Geçildi yap'}
-                              onClick={() => update(setPassed(items, item.id ?? '', !item.passed))}
-                              disabled={!item.id}
-                              active={item.passed}
-                            >
-                              <Check className="size-3.5" />
-                            </IconButton>
-                            <IconButton
-                              title="Konuyu akıştan çıkar"
-                              onClick={() => {
-                                if (window.confirm(`"${item.name}" akıştan çıkarılacak. Geçmiş çalışma silinmez. Devam edilsin mi?`)) {
-                                  update(removeItem(items, item.id ?? ''))
-                                }
-                              }}
-                              disabled={!item.id}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </IconButton>
+                          <div className="flex items-center justify-end">
+                            <FlowRowMenu
+                              item={item}
+                              index={index}
+                              isLast={index === items.length - 1}
+                              weeks={weeks}
+                              onAction={update}
+                              items={items}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -485,14 +534,27 @@ export function CurriculumFlowEditor({
             <DetailPanel
               title={selected.name}
               badge={{
-                label: FLOW_STATUS_LABEL[deriveFlowStatus(selected, today)],
-                variant: STATUS_BADGE[deriveFlowStatus(selected, today)],
+                label: FLOW_STATUS_LABEL[selectedStatus],
+                variant: STATUS_BADGE[selectedStatus],
               }}
               rows={[
                 { label: 'Planlanan süre', value: `${durationWeeks(selected)} hafta` },
                 { label: 'Planlanan başlangıç', value: formatLongDate(selected.startDate) },
                 { label: 'Planlanan bitiş', value: formatLongDate(selected.endDate) },
-                { label: 'Sıra', value: `${items.indexOf(selected) + 1}. konu` },
+                { label: 'Sıra', value: `${selectedIndex + 1}. konu` },
+                {
+                  label: 'Bu hafta',
+                  value:
+                    selectedWeek === null
+                      ? '—'
+                      : `${selectedWeek}. hafta / ${durationWeeks(selected)}`,
+                },
+                {
+                  label: 'İlerleme',
+                  value: `%${selectedProgress} (${
+                    selectedWeek === null ? 0 : Math.max(0, selectedWeek - 1)
+                  }/${durationWeeks(selected)} hafta)`,
+                },
                 {
                   label: 'Not',
                   value: selected.note ? (
@@ -538,6 +600,36 @@ export function CurriculumFlowEditor({
               onClose={() => setSelectedId(null)}
             />
           )}
+
+          {/* Akış Özeti: hafta toplamları. Detay paneli açıkken sağ kolonda
+              onun altında, kapalıyken tablonun altında tam genişlikte durur —
+              özet için ekranın sağ yarısını boş tutmaya değmez. */}
+          <div
+            className={cn(
+              'rounded-xl border bg-card p-4',
+              selected ? 'lg:col-start-2' : 'lg:col-span-full'
+            )}
+          >
+            <h2 className="text-sm font-medium">Akış özeti</h2>
+            <dl className="mt-3 space-y-1.5">
+              {STATUS_ORDER.map(status => (
+                <div key={status} className="flex items-center justify-between gap-3 text-xs">
+                  <dt className="flex items-center gap-2 text-muted-foreground">
+                    <span
+                      aria-hidden
+                      className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[status])}
+                    />
+                    {FLOW_STATUS_LABEL[status]}
+                  </dt>
+                  <dd className="tabular-nums">{summary.weeksByStatus[status]} hafta</dd>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3 border-t pt-1.5 text-xs font-medium">
+                <dt>Toplam</dt>
+                <dd className="tabular-nums">{summary.totalWeeks} hafta</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       )}
 
@@ -565,53 +657,122 @@ export function CurriculumFlowEditor({
         </Button>
       </div>
 
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-lg border bg-card px-4 py-3 text-xs text-muted-foreground">
-          <span>
-            Toplam <span className="font-medium tabular-nums">{summary.totalWeeks}</span> hafta
-          </span>
-          <span>Geçildi: {summary.passedWeeks} hf</span>
-          <span>Zamanı geldi: {summary.currentWeeks} hf</span>
-          <span>Yaklaşıyor: {summary.upcomingWeeks} hf</span>
-          {summary.firstStart && summary.lastEnd && (
-            <span>
-              {formatDate(summary.firstStart)} – {formatDate(summary.lastEnd)}
-            </span>
-          )}
-        </div>
-      )}
 
       <ExplainerCards cards={EXPLAINERS} />
     </div>
   )
 }
 
-function IconButton({
-  children,
-  title,
-  onClick,
-  disabled,
-  active,
+/**
+ * Satır menüsü — dört ikon düğmesinin yerine geçti.
+ *
+ * Neden menü: satırda taşıma, süre, tamamlama ve silme için dört düğme
+ * vardı; Böl ve Birleştir eklenince altı olacaktı ve tablo okunmaz hâle
+ * gelirdi. Menü ayrıca her komutun ADINI yazar — ikonların tahmin
+ * edilmesi gerekmiyor.
+ *
+ * Kaydedilmemiş blokta (id yok) menü kapalıdır: lib fonksiyonlarının
+ * hepsi id ile çalışır.
+ */
+function FlowRowMenu({
+  item,
+  index,
+  isLast,
+  weeks,
+  items,
+  onAction,
 }: {
-  children: React.ReactNode
-  title: string
-  onClick: () => void
-  disabled?: boolean
-  active?: boolean
+  item: FlowItem
+  index: number
+  isLast: boolean
+  weeks: number
+  items: FlowItem[]
+  onAction: (next: FlowItem[]) => void
 }) {
+  const id = item.id
+
+  function split() {
+    if (!id) return
+    const raw = window.prompt(
+      `"${item.name}" ${weeks} hafta. İlk parça kaç hafta olsun? (1-${weeks - 1})`,
+      String(Math.max(1, Math.floor(weeks / 2)))
+    )
+    if (raw === null) return
+    const first = Number(raw)
+    if (!Number.isFinite(first)) return
+    onAction(splitItem(items, id, first))
+  }
+
+  function remove() {
+    if (!id) return
+    if (
+      window.confirm(
+        `"${item.name}" akıştan çıkarılacak. Geçmiş çalışma silinmez. Devam edilsin mi?`
+      )
+    ) {
+      onAction(removeItem(items, id))
+    }
+  }
+
   return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-30',
-        active && 'bg-success-subtle text-success-foreground'
-      )}
-    >
-      {children}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`${item.name} işlemleri`}
+        disabled={!id}
+        title={id ? undefined : 'İşlem yapmak için önce akışı kaydedin'}
+        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-30"
+      >
+        <MoreVertical className="size-3.5" />
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem onClick={() => id && onAction(moveItem(items, id, 1))}>
+          <ArrowRight className="size-4 shrink-0" />
+          İleri taşı (devamı da kayar)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => id && onAction(moveItem(items, id, -1))}>
+          <ArrowLeft className="size-4 shrink-0" />
+          Geri taşı (devamı da kayar)
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* 1 haftalık blok bölünemez; parçalardan biri boş kalırdı. */}
+        <DropdownMenuItem disabled={weeks < 2} onClick={split}>
+          <SplitSquareHorizontal className="size-4 shrink-0" />
+          Böl
+        </DropdownMenuItem>
+        {/* Son satırın birleşeceği bir sonraki blok yok. */}
+        <DropdownMenuItem
+          disabled={isLast}
+          onClick={() => id && onAction(mergeWithNext(items, id))}
+        >
+          <Combine className="size-4 shrink-0" />
+          Sonrakiyle birleştir
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem onClick={() => onAction(insertItem(items, index, 'Yeni konu', 1))}>
+          <Plus className="size-4 shrink-0" />
+          Konu ekle (öncesine)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(insertItem(items, index + 1, 'Yeni konu', 1))}>
+          <Plus className="size-4 shrink-0" />
+          Konu ekle (sonrasına)
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem onClick={() => id && onAction(setPassed(items, id, !item.passed))}>
+          <Check className="size-4 shrink-0" />
+          {item.passed ? 'Tamamlandı işaretini kaldır' : 'Tamamlandı yap'}
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={remove}>
+          <Trash2 className="size-4 shrink-0" />
+          Konuyu çıkar
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

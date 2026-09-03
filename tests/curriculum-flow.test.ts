@@ -3,13 +3,16 @@ import {
   addWeeks,
   buildFlowFromTemplate,
   deriveFlowStatus,
+  deriveFlowStatuses,
   durationWeeks,
   endDateFor,
   insertItem,
+  mergeWithNext,
   moveItem,
   removeItem,
   resizeItem,
   setPassed,
+  splitItem,
   summarizeFlow,
   type FlowItem,
 } from '@/lib/curriculum-flow'
@@ -197,7 +200,7 @@ describe('MA-08 / MA-09 · müfredat durumu', () => {
 
   it('başlangıç gelmediyse Yaklaşıyor', () => {
     const ileride = item({ id: 'x', name: 'Trigonometri', startDate: '2026-11-01', endDate: '2026-11-21' })
-    expect(deriveFlowStatus(ileride, bugun)).toBe('upcoming')
+    expect(deriveFlowStatus(ileride, bugun)).toBe('later')
   })
 
   it('başlangıç günü gelince Zamanı Geldi', () => {
@@ -288,17 +291,157 @@ describe('MA-11 · scope izolasyonu', () => {
 describe('summarizeFlow', () => {
   it('haftaları duruma göre toplar', () => {
     const flow = setPassed(ornekAkis(), 'i0', true)
-    const ozet = summarizeFlow(flow, '2026-10-01')
+    const ozet = summarizeFlow(flow, deriveFlowStatuses(flow, '2026-10-01'))
 
     expect(ozet.totalWeeks).toBe(9) // 2 + 2 + 3 + 2
-    expect(ozet.passedWeeks).toBe(2)
+    expect(ozet.weeksByStatus.passed).toBe(2)
     expect(ozet.firstStart).toBe('2026-09-01')
     expect(ozet.lastEnd).toBe('2026-11-02')
   })
 
   it('boş akışta sıfır döner', () => {
-    const ozet = summarizeFlow([], '2026-10-01')
+    const ozet = summarizeFlow([], deriveFlowStatuses([], '2026-10-01'))
     expect(ozet.totalWeeks).toBe(0)
     expect(ozet.firstStart).toBeNull()
+  })
+
+  // Özet ve tablo AYNI durum haritasından beslendiği için "İşleniyor"
+  // haftaları "Zamanı Geldi"ye sayılmaz.
+  it('liste yükseltmelerini toplamlara yansıtır', () => {
+    const flow = ornekAkis().map((f, i) => ({ ...f, topicId: `t${i}` }))
+    // t2 = Fonksiyonlar; 2026-10-01'de zamanı gelmiş ama açık çalışması var.
+    const statuses = deriveFlowStatuses(flow, '2026-10-01', new Set(['t2']))
+    const ozet = summarizeFlow(flow, statuses)
+
+    expect(ozet.weeksByStatus.in_progress).toBeGreaterThan(0)
+    expect(ozet.totalWeeks).toBe(9)
+  })
+})
+
+describe('deriveFlowStatuses · liste yükseltmeleri', () => {
+  const flow = () => ornekAkis().map((f, i) => ({ ...f, topicId: `t${i}` }))
+
+  it('açık çalışması olan konu tarihten bağımsız İşleniyor olur', () => {
+    // t3 = Polinomlar, 2026-10-20'de başlıyor; bugün 1 Ekim, yani henüz
+    // başlamamış. Açık çalışma tarihi yener (öğrenci planın önünde).
+    const statuses = deriveFlowStatuses(flow(), '2026-10-01', new Set(['t3']))
+    expect(statuses.get('i3')).toBe('in_progress')
+  })
+
+  it('tamamlanmış konu açık çalışması olsa da Tamamlandı kalır', () => {
+    const items = setPassed(flow(), 'i0', true)
+    const statuses = deriveFlowStatuses(items, '2026-10-01', new Set(['t0']))
+    expect(statuses.get('i0')).toBe('passed')
+  })
+
+  it('başlamamış konulardan yalnız sıradaki ilki Yaklaşan olur', () => {
+    const statuses = deriveFlowStatuses(flow(), '2026-10-01')
+    const soon = [...statuses.values()].filter(s => s === 'soon')
+    expect(soon).toHaveLength(1)
+    // i0, i1, i2 başlamış (Zamanı Geldi); i3 sıradaki ilk.
+    expect(statuses.get('i3')).toBe('soon')
+  })
+
+  it('sıradaki ilkin ardındakiler Sonrasında kalır', () => {
+    const items = [
+      ...flow(),
+      ...buildFlowFromTemplate([{ name: 'Trigonometri', durationWeeks: 2 }], '2026-11-03').map(
+        f => ({ ...f, id: 'i4', topicId: 't4' })
+      ),
+    ]
+    const statuses = deriveFlowStatuses(items, '2026-10-01')
+    expect(statuses.get('i3')).toBe('soon')
+    expect(statuses.get('i4')).toBe('later')
+  })
+
+  it('kaydedilmemiş blok liste indeksiyle anahtarlanır', () => {
+    const items = insertItem(flow(), 4, 'Yeni Konu', 1)
+    const statuses = deriveFlowStatuses(items, '2026-10-01')
+    expect(statuses.has('yeni-4')).toBe(true)
+  })
+
+  it('boş akışta boş harita döner', () => {
+    expect(deriveFlowStatuses([], '2026-10-01').size).toBe(0)
+  })
+})
+
+describe('splitItem · konu bölme', () => {
+  it('toplam süreyi ve zaman aralığını korur', () => {
+    const once = ornekAkis()
+    // i2 = Fonksiyonlar, 3 hafta: 29 Eyl – 19 Eki.
+    const sonra = splitItem(once, 'i2', 2)
+
+    expect(sonra).toHaveLength(5)
+    expect(durationWeeks(sonra[2])).toBe(2)
+    expect(durationWeeks(sonra[3])).toBe(1)
+    expect(sonra[2].startDate).toBe(once[2].startDate)
+    expect(sonra[3].endDate).toBe(once[2].endDate)
+  })
+
+  it('devam bloklarını kaydırmaz', () => {
+    const once = ornekAkis()
+    const sonra = splitItem(once, 'i2', 2)
+    // Polinomlar aynı gün başlamalı: bölme zincirleme etki yaratmaz.
+    expect(sonra[4].startDate).toBe(once[3].startDate)
+  })
+
+  it('ikinci parça yeni kayıttır ve adı aynı kalır', () => {
+    const sonra = splitItem(ornekAkis(), 'i2', 2)
+    expect(sonra[3].id).toBeNull()
+    expect(sonra[3].name).toBe('Fonksiyonlar')
+  })
+
+  it('Tamamlandı işareti yalnız ilk parçada kalır', () => {
+    const once = setPassed(ornekAkis(), 'i2', true)
+    const sonra = splitItem(once, 'i2', 2)
+    expect(sonra[2].passed).toBe(true)
+    expect(sonra[3].passed).toBe(false)
+  })
+
+  it('1 haftalık blok bölünemez', () => {
+    const once = buildFlowFromTemplate([{ name: 'Tek', durationWeeks: 1 }], '2026-09-01').map(
+      f => ({ ...f, id: 'i0' })
+    )
+    expect(splitItem(once, 'i0', 1)).toEqual(once)
+  })
+
+  it('sınır dışı hafta değeri akışı değiştirmez', () => {
+    const once = ornekAkis()
+    expect(splitItem(once, 'i2', 0)).toEqual(once)
+    expect(splitItem(once, 'i2', 3)).toEqual(once)
+    expect(splitItem(once, 'yok', 1)).toEqual(once)
+  })
+})
+
+describe('mergeWithNext · konu birleştirme', () => {
+  it('aralığı ilkin başlangıcından ikincinin bitişine uzatır', () => {
+    const once = ornekAkis()
+    const sonra = mergeWithNext(once, 'i1')
+
+    expect(sonra).toHaveLength(3)
+    expect(sonra[1].name).toBe('Sayılar')
+    expect(sonra[1].startDate).toBe(once[1].startDate)
+    expect(sonra[1].endDate).toBe(once[2].endDate)
+    expect(durationWeeks(sonra[1])).toBe(5) // 2 + 3
+  })
+
+  it('devam bloklarını kaydırmaz', () => {
+    const once = ornekAkis()
+    const sonra = mergeWithNext(once, 'i1')
+    expect(sonra[2].startDate).toBe(once[3].startDate)
+  })
+
+  it('Tamamlandı yalnız ikisi de tamamlanmışsa korunur', () => {
+    const yarim = setPassed(ornekAkis(), 'i1', true)
+    expect(mergeWithNext(yarim, 'i1')[1].passed).toBe(false)
+
+    const ikisi = setPassed(setPassed(ornekAkis(), 'i1', true), 'i2', true)
+    expect(mergeWithNext(ikisi, 'i1')[1].passed).toBe(true)
+  })
+
+  it('son satırda ve bilinmeyen id ile akışı değiştirmez', () => {
+    const once = ornekAkis()
+    expect(mergeWithNext(once, 'i3')).toEqual(once)
+    expect(mergeWithNext(once, 'yok')).toEqual(once)
   })
 })

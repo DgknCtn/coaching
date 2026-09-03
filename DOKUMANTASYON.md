@@ -236,4 +236,23 @@ Bölüm satırında bugüne kadar hiçbir eylem yoktu: öğretmen haritaya bakar
 
 Menü `readOnly`ye BAĞLANMADI: `readOnly` "hücre seçilemez" demektir (ödev atama tek yüzeyde, R7), oysa menüdeki eylemler konu bazlıdır ve öğretmenin salt okunur Kaynak Haritasında da anlamlıdır. Görünürlüğü `studentId` prop'u belirler; öğrenci ve veli sayfaları bu alanı geçmez. Konusu eşlenmemiş bölümde (`topic_id` nullable, 040) konu bazlı iki eylem devre dışıdır ve nedeni menüde yazar.
 
+### Müfredat Akışı — beş durum, satır menüsü, sürükleme
+
+**Durum kümesi 3'ten 5'e çıktı** ve iki katmana ayrıldı. Ayrım kasıtlıdır:
+
+- `deriveFlowStatus(item, today)` SAF ve kalem bazında kalır; yalnız `passed` / `current` / `later` döndürür. `lib/curriculum-signal.ts` onu Kitap Haritasındaki müfredat sinyali için kullanıyor ve orada liste bağlamı yok — sinyal yalnız `current`e baktığı için yeni durumlar o davranışı **değiştirmez**.
+- `deriveFlowStatuses(items, today, activeTopicIds)` liste düzeyinde iki yükseltme yapar: konuda **açık çalışma** varsa `in_progress` (tarihten bağımsız — öğrenci planın önünde olabilir), başlamamış konulardan **sıradaki ilki** `soon`. Öncelik `passed` > `in_progress` > tarih. "Yaklaşan" için hafta eşiği kullanılmadı: 40 haftalık akışta "önümüzdeki 4 hafta" bazen hiçbir satırı, bazen üçünü yakalar; "sıradaki konu" her akışta tam olarak bir sonrakini gösterir.
+
+`upcoming` → `later` olarak yeniden adlandırıldı, etiketler referansa göre güncellendi (Tamamlandı / İşleniyor / Zamanı Geldi / Yaklaşan / Sonrasında). `passed_at` alanı ve `setPassed` fonksiyon adı **değişmedi** — veri sözleşmesine dokunulmadı.
+
+**"İşleniyor" verisi** `lib/open-work.ts` ile gelir; sorgu Koruma Havuzu ile ORTAK. İki ekran "bu konuda açık çalışma var mı?" sorusuna farklı yanıt veremez: havuzda "aktif çalışmada" sayılan konu akışta da "İşleniyor" görünür.
+
+**Böl ve Birleştir** (`splitItem`, `mergeWithNext`) eklendi. İkisi de toplam zaman aralığını korur, bu yüzden **devam bloklarını kaydırmazlar** — bölme/birleştirme zincirleme etki yaratmaz. Bölmede ikinci parça `id: null` ile eklenir ve adı aynı kalır; kayıtta `upsert_topic` aynı topic id'yi döndürür ve aynı konu iki satır olur. 039 migration'ı `(student_id, scope_id, topic_id)` unique kısıtını tam da bunun için koymamıştı. `passed` yalnız ilk parçada kalır; birleştirmede ise ancak ikisi de tamamlanmışsa korunur.
+
+**Çizelgede sürükleme.** `flow-timeline.tsx` önce bilinçli olarak sürüklemesizdi; gerekçe "zincirleme kaydırma var, piksel sürüklemesi yanlış beklenti yaratır" idi. Gerekçe geçersiz kılınmadı, **karşılandı**: sürüklerken zincirleme sonucun kendisi canlı çizilir ve alt şeritte "+3 hafta — devam blokları da kayıyor" yazar. Gövde taşır, sağ kenar süreyi değiştirir; ikisi de hafta sütununa snap eder. Sonuç yalnız bırakınca uygulanır ve "Akışı Kaydet" ile kaydedilir. Sürükleme **tek yol değildir**: aynı işlemler satır menüsünde durur, klavye kullanıcısı onlarla çalışır. Kaydedilmemiş blok sürüklenemez.
+
+**Satır menüsü** dört ikon düğmenin yerine geçti (İleri/Geri taşı · Böl · Birleştir · Konu ekle öncesine/sonrasına · Tamamlandı yap · Konuyu çıkar). Böl ve Birleştir eklenince satırda altı düğme olacaktı; menü ayrıca her komutun adını yazar. **Durum kolonu kaldırıldı**, durum noktası konu adının başına geldi. Başlık şeridine "Toplam süre" kartı, sağ kolona beş durumun hafta toplamını veren "Akış özeti" kartı eklendi; detay paneline "Bu hafta" ve "İlerleme" satırları geldi.
+
+`tests/curriculum-flow.test.ts` 20'den 44 teste çıktı: MA-05…MA-11 kabulleri değişmeden geçiyor (yeniden adlandırmanın regresyon güvencesi), yeni durum türetmesi ile Böl/Birleştir sınır değerleriyle test edildi.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; veli panelindeki tempo göstergelerinin sadeleştirilmesi; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

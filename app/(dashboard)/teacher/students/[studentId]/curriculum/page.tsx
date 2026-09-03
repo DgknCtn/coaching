@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
+import { loadOpenWorkTopicIds } from '@/lib/open-work'
 import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
 import type { FlowItem } from '@/lib/curriculum-flow'
@@ -87,6 +88,10 @@ export default async function StudentCurriculumPage({
     rawScope && scopes.some(s => s.id === rawScope) ? rawScope : (scopes[0]?.id ?? null)
 
   let initialItems: FlowItem[] = []
+  // "İşleniyor" durumu için: konuda açık ödev kalemi var mı? Koruma Havuzu
+  // ile ORTAK yükleyici (lib/open-work.ts).
+  let openWorkTopicIds: string[] = []
+
   if (activeScopeId) {
     const { data: itemRows } = await supabase
       .from('student_curriculum_items')
@@ -116,6 +121,14 @@ export default async function StudentCurriculumPage({
       passed: row.passed_at !== null,
       note: row.note,
     }))
+
+    openWorkTopicIds = [
+      ...(await loadOpenWorkTopicIds(supabase, {
+        workspaceId,
+        studentId,
+        topicIds: initialItems.map(i => i.topicId).filter((t): t is string => !!t),
+      })),
+    ]
   }
 
   return (
@@ -138,6 +151,7 @@ export default async function StudentCurriculumPage({
         activeScopeId={activeScopeId}
         templates={templates}
         initialItems={initialItems}
+        openWorkTopicIds={openWorkTopicIds}
       />
     </div>
   )

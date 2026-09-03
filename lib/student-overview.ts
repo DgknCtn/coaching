@@ -79,7 +79,7 @@ export function summarizeAcademicFlow(
   if (items.length === 0) return empty
 
   const active = items.filter(i => statusOf(i, day) === 'current')
-  const upcoming = items.filter(i => statusOf(i, day) === 'upcoming')
+  const upcoming = items.filter(i => statusOf(i, day) === 'later')
 
   // Odaklanılacak ders: zamanı gelmiş konusu olan; yoksa en yakın başlayan.
   const byStart = (a: FlowSummaryItem, b: FlowSummaryItem) =>
@@ -93,7 +93,7 @@ export function summarizeAcademicFlow(
   const scopeId = anchor.scopeId
   const scopeItems = items.filter(i => i.scopeId === scopeId)
   const scopeActive = scopeItems.filter(i => statusOf(i, day) === 'current').sort(byStart)
-  const scopeUpcoming = scopeItems.filter(i => statusOf(i, day) === 'upcoming').sort(byStart)
+  const scopeUpcoming = scopeItems.filter(i => statusOf(i, day) === 'later').sort(byStart)
 
   const allScopes = new Set(items.map(i => i.scopeId))
 
