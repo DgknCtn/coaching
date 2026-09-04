@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
+import { BookOutlineImport } from '@/components/shared/book-outline-import'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TopicMultiSelect, type TopicOption } from '@/components/shared/topic-multi-select'
 import { SubsectionList, type SubsectionRow } from './subsection-list'
@@ -305,8 +306,11 @@ export function BookEditForm({
       <NewEditionCard bookId={bookId} currentYear={defaultValues.editionYear} />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">Bölümler</CardTitle>
+          {/* Sayfa takipli kitapta bölümler test değil sayfa aralığı taşır;
+              içindekiler aktarımı orada anlamsız olurdu. */}
+          {trackingMode !== 'page' && <BookOutlineImport bookId={bookId} />}
         </CardHeader>
         <CardContent className="space-y-3">
           {sections.map((section) => (

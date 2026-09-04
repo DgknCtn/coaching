@@ -23,6 +23,7 @@ export type TrackedFeature =
   | 'curriculum_flow.save'
   | 'book.create'
   | 'book.subsection_add'
+  | 'book.outline_import'
   | 'share_text.copy'
   | 'student.create'
   | 'invite.create'

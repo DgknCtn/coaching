@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { trackFeature } from '@/lib/telemetry'
 import {
   uuidSchema,
   firstIssue,
@@ -545,4 +546,46 @@ export async function deleteSubsectionAction(bookId: string, subsectionId: strin
   revalidatePath(`/teacher/books/${bookId}/edit`)
   revalidatePath(`/teacher/books/${bookId}`)
   return { success: true }
+}
+
+/**
+ * Toplu içe aktarma (055).
+ *
+ * Ayrıştırma İSTEMCİDE yapılır (lib/book-import.ts) çünkü öğretmen sonucu
+ * yazmadan ÖNCE görmeli: 60 satırlık bir yapıştırmanın ne üreteceğini
+ * ancak önizleme gösterebilir. Buraya gelen şey artık ham metin değil,
+ * öğretmenin onayladığı ağaçtır.
+ *
+ * Ama doğrulama yine de sunucuda TEKRAR yapılır (RPC içinde): istemcinin
+ * gönderdiğine güvenmek, ayrıştırıcıyı atlayan bir isteğin kitaba
+ * istediğini yazması demek olurdu.
+ */
+export async function importBookOutlineAction(
+  bookId: string,
+  outline: { title: string; subsections: { title: string; testStart: number; testEnd: number }[] }[]
+) {
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  if (outline.length === 0) return { error: 'İçe aktarılacak bölüm yok.' }
+
+  const { data, error } = await supabase.rpc('import_book_outline', {
+    p_book_id: bookId,
+    p_outline: outline.map(chapter => ({
+      title: chapter.title,
+      subsections: chapter.subsections.map(sub => ({
+        title: sub.title,
+        test_start: sub.testStart,
+        test_end: sub.testEnd,
+      })),
+    })),
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await trackFeature(supabase, workspaceId, 'book.outline_import')
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true, result: data as { chapters: number; subsections: number; tests: number } }
 }

@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–054
+supabase/migrations/ 001–055
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 54 veritabanı migration'ı çalıştırılmıştır (001–054).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 55 veritabanı migration'ı çalıştırılmıştır (001–055).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -396,5 +396,19 @@ Deneme süresi (14 gün) **sorgu anında** değerlendirilir, zamanlanmış iş y
 **Hukuki metinler** (`/gizlilik`, `/kosullar`) taslak olarak eklendi ve footer'a bağlandı. Sayılar koddan okunuyor. **Hukuki incelemeden geçmemiştir**; yayına çıkmadan önce bir hukukçu tarafından gözden geçirilmeli.
 
 Ayrıca vitrindeki iki bayat ifade düzeltildi: "yardımcı hesaplar" (assistant rolü 051'de kaldırıldı) ve kayıt ekranındaki "15–20 öğrenciye kadar ücretsiz" (gerçek limit 10; artık deneme süresi koddan okunuyor).
+
+### Faz 5 — Toplu kitap içe aktarma (055)
+
+Öğretmenin ürüne girerken ödediği en büyük bedel buydu: 3D TYT gibi bir kitabın ~60 alt bölümü tek tek, ayrı formlarla açılıyordu. İlk kurulumun yarım kalmasının bir numaralı sebebi.
+
+**Dosya değil metin.** CSV ya da Excel yüklemek dosya ayrıştırma, kodlama (Türkçe karakter), sütun eşleme ve hata raporlama demek. Öğretmenin elindeki şey ise zaten kitabın içindekiler sayfası — yazabilir ya da PDF'ten kopyalayabilir. Öğrenilecek hiçbir format olmadan aynı iş görülüyor.
+
+**Kural tek cümle:** satırın sonunda test aralığı varsa alt bölüm, yoksa bölüm başlığıdır. Girinti, numaralandırma, ayraç, nokta dolgusu — hepsi serbest ve temizleniyor. İki tuzak özellikle kapatıldı: `01. Bölüm` başta sayı taşıdığı için aralık sanılmıyor, `Bölüm 2` ise sonda sayı taşımasına rağmen 1 testlik alt bölüme çevrilmiyor — aksi hâlde numaralı bölüm başlıkları sessizce test üretirdi.
+
+**Ayrıştırıcı hoşgörülü, veritabanı katı.** 60 satırlık bir yapıştırmada tek bozuk satır yüzünden her şeyi reddetmek öğretmeni en baştan başlatır; sorunlu satırlar numarasıyla raporlanıp gerisi geçiyor. Ama veritabanında iş **atomik**: 60 ayrı çağrı 60 ayrı işlemdir ve 43'üncüde ağ koparsa kitap yarım kalır. Tek RPC ya hepsini açar ya hiçbirini.
+
+**Silmez, ekler.** İçe aktarma dolu bir kitabı sıfırlasaydı, yanlış metni yapıştıran öğretmen aylarca işlediği yapıyı ve ona bağlı tüm ilerlemeyi tek tıkla kaybederdi. Yeni bölümler mevcutların ardına ekleniyor.
+
+Doğrulama kuralları `add_book_subsection` (047) ile **birebir aynı**: ikinci bir giriş yolu, ikinci bir kural kümesi demek olmamalı. Ayrıştırma istemcide çalışıyor çünkü öğretmen yazmadan önce sonucu görmeli, ama sunucu istemciye güvenmiyor ve aynı doğrulamayı tekrar yapıyor.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
