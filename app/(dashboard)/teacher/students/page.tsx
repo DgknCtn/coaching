@@ -3,6 +3,7 @@ import { Plus, Users } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
+import { QuotaNotice } from '@/components/shared/quota-notice'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
@@ -23,7 +24,7 @@ type StudentRow = {
 }
 
 export default async function StudentsPage() {
-  const { supabase, workspaceId } = await getTeacherContext()
+  const { supabase, workspaceId, usage } = await getTeacherContext()
 
   const { data: students } = await supabase
     .from('teacher_student_overview_view')
@@ -121,6 +122,10 @@ export default async function StudentsPage() {
           </Button>
         }
       />
+
+      {/* Kota göstergesi burada: yeni öğrenci düğmesinin hemen altında,
+          yani sınıra dayanmış bir öğretmen düğmeye basmadan ÖNCE görüyor. */}
+      {usage && <QuotaNotice usage={usage} />}
 
       <Section variant="card">
         <DataTable

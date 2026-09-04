@@ -6,7 +6,8 @@ interface ProgressBarProps {
   className?: string
   label?: string
   /** Dolgu rengi. Varsayılan 'primary' — mevcut kullanımlar değişmez. */
-  tone?: 'primary' | 'success'
+  /** R? / Faz 4: kota göstergesi uyarı ve sınır tonlarını da kullanıyor. */
+  tone?: 'primary' | 'success' | 'warning' | 'destructive'
 }
 
 export function ProgressBar({ value, className, label, tone = 'primary' }: ProgressBarProps) {
@@ -24,7 +25,13 @@ export function ProgressBar({ value, className, label, tone = 'primary' }: Progr
       <div
         className={cn(
           'h-full rounded-full transition-all',
-          tone === 'success' ? 'bg-success' : 'bg-primary'
+          tone === 'success'
+            ? 'bg-success'
+            : tone === 'warning'
+              ? 'bg-warning'
+              : tone === 'destructive'
+                ? 'bg-destructive'
+                : 'bg-primary'
         )}
         style={{ width: `${pct}%` }}
       />

@@ -112,14 +112,22 @@ export async function middleware(request: NextRequest) {
       const hasAccess = userRoles.some((r) => area.roles.includes(r as never))
 
       if (!hasAccess) {
-        // Kullanıcıyı sahip olduğu role uygun panele yönlendir
+        // Kullanıcıyı sahip olduğu role uygun panele yönlendir.
+        //
+        // HİÇ ROL YOKSA /erisim'e gidilir, /login'e değil: 052'den sonra
+        // askıya alınmış ya da denemesi dolmuş bir çalışma alanının
+        // üyelikleri RLS tarafından süzülüyor ve buraya boş bir rol
+        // listesi olarak düşüyor. Bu kullanıcı yetkisiz değil,
+        // ENGELLENMİŞ; giriş ekranına atmak ona doğru şifreyle tekrar
+        // tekrar denemekten başka bir şey bırakmaz. /erisim sayfası
+        // gerçekten yetkisizse zaten /login'e geri gönderir.
         const home = userRoles.includes('student')
           ? '/student'
           : userRoles.includes('parent')
             ? '/parent'
             : userRoles.some((r) => ['owner', 'teacher'].includes(r))
               ? '/teacher'
-              : '/login'
+              : '/erisim'
         const url = request.nextUrl.clone()
         url.pathname = home
         return NextResponse.redirect(url)
