@@ -137,8 +137,32 @@ ALTER TABLE public.workspace_licenses
   DROP COLUMN IF EXISTS customer_reference_code,
   DROP COLUMN IF EXISTS period;
 
+-- 057'de tanımlı olan abonelik durumları ('trialing', 'past_due') ön
+-- ödemeli lisansta anlamsız. Kısıtı eklemeden ÖNCE mevcut satırlar
+-- taşınmalı, yoksa ADD CONSTRAINT ihlal yüzünden patlar.
+--
+--   trialing  -> cancelled : kart alınmış ama ÖDEME YAPILMAMIŞ. Lisans
+--                sayılamaz. Erişim kaybı olmaz; kullanıcı hâlâ
+--                workspaces.plan='trial' üzerinden deneme hakkını
+--                kullanır (workspace_access_ok).
+--   past_due  -> active    : geçmişte ödenmiş bir dönem var ve
+--                `ends_at` hâlâ geçerli olabilir. Süresi dolmuşsa
+--                zaten `ends_at > NOW()` kontrolüne takılır.
+UPDATE public.workspace_licenses SET status = 'cancelled' WHERE status = 'trialing';
+UPDATE public.workspace_licenses SET status = 'active'    WHERE status = 'past_due';
+
+-- İKİ ADI DA DÜŞÜR.
+--
+-- Yalnız eski adı (billing_subscriptions_status_check) düşürmek YETMEZ:
+-- migration bir kez çalıştıktan sonra kısıt YENİ adıyla duruyor ve
+-- dosyayı tekrar çalıştırmak "already exists" ile patlıyor. Yarıda kalan
+-- bir çalıştırmadan sonra baştan çalıştırmak bu dosyanın açık vaadi,
+-- dolayısıyla her iki ad da düşürülmeli.
 ALTER TABLE public.workspace_licenses
   DROP CONSTRAINT IF EXISTS billing_subscriptions_status_check;
+
+ALTER TABLE public.workspace_licenses
+  DROP CONSTRAINT IF EXISTS workspace_licenses_status_check;
 
 ALTER TABLE public.workspace_licenses
   ADD CONSTRAINT workspace_licenses_status_check
