@@ -54,6 +54,28 @@ const LOCKED_VIEWS = [
   'student_topic_open_work_view',
 ] as const
 
+/**
+ * TİCARİ VE DESTEK TABLOLARI — anon'a tamamen kapalı olmalı.
+ *
+ * Bunlar view değil tablo ama aynı kural geçerli: oturumsuz bir istemci
+ * hiçbirinden satır okuyamamalı. Lisans ve ödeme kayıtları kiracının
+ * ticari verisi; destek yazışmaları serbest metin ve kişisel bilgi
+ * içerebilir; partner tabloları başka partnerlerin kazancını gösterir.
+ *
+ * 060'ta eklenen `support_*` tabloları özellikle riskli: kullanıcı destek
+ * mesajına ekran görüntüsü tarifi, e-posta, hatta şifre yazabilir.
+ */
+const LOCKED_TABLES = [
+  'workspace_licenses',
+  'billing_orders',
+  'support_tickets',
+  'support_messages',
+  'partners',
+  'partner_commissions',
+  'audit_events',
+  'usage_counters',
+] as const
+
 async function anonSelect(view: string) {
   const url = `${SUPABASE_URL}/rest/v1/${view}?select=workspace_id&limit=100`
   const response = await fetch(url, {
@@ -92,6 +114,54 @@ describe.skipIf(!hasLiveCredentials)('kiracı izolasyonu · anon erişimi', () =
     }
   })
 
+  it.each(LOCKED_TABLES)('%s anon anahtarla veri döndürmez', async table => {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id&limit=10`, {
+      headers: {
+        apikey: ANON_KEY as string,
+        Authorization: `Bearer ${ANON_KEY}`,
+      },
+    })
+
+    if (response.status === 200) {
+      const rows = await response.json()
+      expect(Array.isArray(rows)).toBe(true)
+      expect(rows, `${table} anon anahtarla okunabiliyor.`).toHaveLength(0)
+    } else {
+      expect([401, 403, 404]).toContain(response.status)
+    }
+  })
+
+  it.each([
+    'admin_list_workspaces',
+    'admin_list_tickets',
+    'admin_list_partners',
+    'admin_overview',
+  ])('%s admin olmayan çağrıyı reddeder', async fn => {
+    // Admin fonksiyonları girişinde is_platform_admin() kontrol ediyor
+    // (060). Anon çağrı ya yetkisiz döner ya da hata verir; ASLA veri
+    // döndürmemeli. Bu, "yönetici her şeyi görür" varsayılanının
+    // kazara açılmadığının kanıtı.
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: ANON_KEY as string,
+        Authorization: `Bearer ${ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    })
+
+    if (response.status === 200) {
+      const rows = await response.json()
+      expect(
+        Array.isArray(rows) ? rows : [],
+        `${fn} anon anahtarla veri döndürdü.`
+      ).toHaveLength(0)
+    } else {
+      expect([400, 401, 403, 404]).toContain(response.status)
+    }
+  })
+
   it('anon anahtar students tablosunu da okuyamaz', async () => {
     // View'lar kapatılırken tablonun kendisi unutulmasın diye.
     const response = await fetch(
@@ -127,6 +197,7 @@ describe('kiracı izolasyonu · kurulum', () => {
       )
     }
     expect(LOCKED_VIEWS).toHaveLength(8)
+    expect(LOCKED_TABLES.length).toBeGreaterThanOrEqual(8)
   })
 })
 

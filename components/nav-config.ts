@@ -4,6 +4,7 @@ import {
   CalendarRange,
   ClipboardList,
   CreditCard,
+  LifeBuoy,
   UserPlus,
   FileBarChart,
   LayoutDashboard,
@@ -73,6 +74,7 @@ export const teacherNav: NavEntry[] = [
   // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
   // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
   { href: '/teacher/ayarlar/abonelik', label: 'Lisans', icon: CreditCard },
+  { href: '/teacher/destek', label: 'Destek', icon: LifeBuoy },
 ]
 
 /**

@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–059
+supabase/migrations/ 001–060
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 59 veritabanı migration'ı çalıştırılmıştır (001–059).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 60 veritabanı migration'ı çalıştırılmıştır (001–060).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -556,5 +556,25 @@ Mobilde yapışkan CTA eklendi (yalnız `sm` altında; masaüstünde navbar zate
 **Menü gruplaması `<details>` ile.** Depoda accordion primitifi yoktu ve `NavItem` düzdü. Yeni bir bağımlılık ya da elle yazılmış açılır kapanır mantığı yerine tarayıcının kendi öğesi kullanıldı: klavye desteği, ekran okuyucu davranışı ve JavaScript kapalıyken çalışması yerleşik geliyor. Grup, içinde aktif bir sayfa varken açık başlıyor — kullanıcı bulunduğu yeri menüde göremezse kaybolur; bir kez dokununca tercihi kazanıyor. Dar rail'de grup açılmıyor, alt öğeler doğrudan listeleniyor.
 
 **Kitap Havuzu ve Müfredat Şablonları gruba alınmadı.** Adları öğrenci ekranlarındakilere benzese de bunlar çalışma alanı seviyesi — bir kez kurulur, bütün öğrenciler için geçerlidir. Gruba almak, "öğrenciye kitap atama" ile "havuza kitap ekleme"yi aynı iş gibi gösterirdi.
+
+### Faz 10 — Destek merkezi ve yönetim paneli (060)
+
+**En kritik karar: admin her şeyi görmez.** Bu ürün reşit olmayan öğrencilerin akademik verisini işliyor; "yönetici her şeyi görür" varsayılanı burada savunulabilir değil.
+
+Admin ekranları **blanket RLS bypass ile beslenmiyor**. Her görünüm, yalnız ihtiyacı olan alanları döndüren ayrı bir `SECURITY DEFINER` fonksiyonla besleniyor ve her biri girişinde `is_platform_admin()` kontrol ediyor. Admin şunları görür: çalışma alanı adı, sahibi, kayıt tarihi, aktif öğrenci **sayısı**, lisans durumu, toplam ödeme. Görmediği: öğrenci adı, ödevi, ilerlemesi, notları. Kısıt arayüzde değil RPC'de — arayüzde saklamak, veriyi tarayıcıya göndermiş olmak demekti. 049'daki P0 sızıntısının dersi bu: geniş bir okuma yolu açmak, o yolun bir gün yanlış elde olacağı anlamına gelir.
+
+**Admin bayrağı hiçbir arayüzden değiştirilemez.** `profiles.is_platform_admin` yalnız veritabanından elle atanıyor. Kendi kendini admin yapabilen bir uç, tanımı gereği bir güvenlik açığıdır.
+
+**Yetki kontrolü layout'ta, middleware'de değil.** Middleware Edge'de koşuyor ve her istekte bir veritabanı sorgusu daha eklemek uygulamanın tamamını yavaşlatırdı; admin sayfaları nadir açılıyor. Asıl savunma zaten orada da değil — her RPC kendi içinde kontrol ediyor. Layout yalnız yetkisiz kullanıcıyı boş ekranla baş başa bırakmamak için var.
+
+**`is_staff` istemciden gelmiyor.** Hem kullanıcı hem admin aynı `reply_support_ticket` fonksiyonunu kullanıyor; mesajın destek ekibinden olup olmadığını sunucu çağıranın yetkisine bakarak türetiyor. İstemciye bırakılsaydı bir kullanıcı kendi mesajını "Destek Ekibi" gibi gösterebilirdi.
+
+**Talep durumu otomatik.** Destek yanıtladıysa `answered`, kullanıcı yazdıysa `open`. Elle durum yönetmek, kimsenin güncellemediği ve bu yüzden yalan söyleyen bir alan üretir.
+
+**Talep ve ilk mesaj tek işlemde açılıyor** — ikisi ayrı çağrı olsaydı, mesaj yazılamadığında gövdesi boş bir talep kalırdı.
+
+**Partner kodları arayüzden oluşturulmuyor.** Yeni partner bir anlaşma sonucu ve nadir bir işlem; arayüzden eklenebilseydi yanlışlıkla oluşturulan bir kod komisyon yükümlülüğü doğururdu. "Ödendi işaretle" iki adımlı ve tutarı tekrar gösteriyor: yanlışlıkla tıklanan tek bir düğme, ödenmemiş bir hakedişi ödenmiş gösterir ve partner parasını hiç alamaz — üstelik kayıt onu haklı çıkarmaz.
+
+**Kiracı izolasyon testi genişletildi.** `workspace_licenses`, `billing_orders`, `support_tickets`, `support_messages`, `partners`, `partner_commissions`, `audit_events`, `usage_counters` anon anahtarla okunamıyor; dört admin RPC'sinin anon çağrıyı reddettiği de test ediliyor. Destek tabloları özellikle riskli: kullanıcı destek mesajına e-posta, ekran görüntüsü tarifi, hatta şifre yazabilir.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
