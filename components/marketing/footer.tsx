@@ -72,6 +72,27 @@ export function Footer() {
             >
               Kullanım Koşulları
             </Link>
+            {/* Mesafeli satış üçlüsü (056): internet üzerinden tüketiciye
+                satış yapıldığı sürece bu üçünün her sayfadan erişilebilir
+                olması zorunlu. */}
+            <Link
+              href="/mesafeli-satis"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Mesafeli Satış
+            </Link>
+            <Link
+              href="/on-bilgilendirme"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Ön Bilgilendirme
+            </Link>
+            <Link
+              href="/iade"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              İade ve İptal
+            </Link>
           </nav>
         </div>
 

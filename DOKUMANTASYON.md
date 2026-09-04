@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–055
+supabase/migrations/ 001–056
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 55 veritabanı migration'ı çalıştırılmıştır (001–055).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 56 veritabanı migration'ı çalıştırılmıştır (001–056).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -442,5 +442,27 @@ Bugüne kadar erişilebilirlik hiçbir yerde **ölçülmüyordu**. Kontrast boza
 Erişilebilirlik testi **ayrı bir CI işi olarak eklenmedi**: ayrı koşan bir denetim, atlanabilir bir denetimdir. Mevcut e2e adımının içinde koşuyor, yani bir kontrast regresyonu artık derlemeyi kırar.
 
 Kapsam herkese açık rotalarla sınırlı çünkü panel ekranları oturum ister. Buradaki değer kapsamın genişliğinden değil, **bugünkü seviyenin kilitlenmesinden** geliyor.
+
+### Faz 6 — Ödeme entegrasyonu (056)
+
+**Sağlayıcı seçimi bir varsayım değil, üç cevabın sonucu.** Yurtiçi satış, taksit ihtiyacı ve şahıs şirketi. Taksit şartı merchant-of-record seçeneğini (Paddle, Lemon Squeezy) eliyor: Türk kredi kartı taksiti yalnız yurtiçi acquiring üzerinden çalışır. Stripe Türkiye'ye resmî ödeme yapmıyor. Geriye yerel PSP kalıyor; içlerinden **iyzico**, en olgun REST API'si ve açık sandbox'ı nedeniyle seçildi.
+
+**Model: aylık + yıllık, taksit yalnız yıllıkta.** Bu bir tercih değil teknik zorunluluk: taksit tek seferlik bir çekimi böler, yinelenen tahsilatta taksit yapılamaz. Yıllık paket zaten tek çekim olduğu için taksit oraya doğal oturuyor ve nakit akışını da öne alıyor. iyzico'nun Abonelik API'si hâlâ **beta** ve taksit desteklemiyor — bu da aynı ayrımı doğruluyor.
+
+**Sağlayıcıya özel kod tek dosyada.** Şemada, iş mantığında ve ekranlarda "iyzico" geçmiyor; `provider` bir sütun değeri. Ödeme sağlayıcısı değiştirmek bir SaaS'ın hayatında olağan bir olaydır ve şemaya gömülmüş bir sağlayıcı adı o günü bir göç projesine çevirir.
+
+**Para tam sayı.** Tutarlar kuruş cinsinden `BIGINT` ve uygulama katmanı da kuruş tam sayısıyla çalışıyor. `1499.90 * 12`'nin `17998.800000000001` çıktığı bir dünyada faturaya yanlış rakam yazılmamalı. `splitVat` matrah ile KDV'yi ayırırken toplamın brüte eşit kalmasını garanti ediyor — ayrı yuvarlayıp toplamak faturada bir kuruşluk tutarsızlık bırakırdı.
+
+**Kart verisi hiçbir yerde yok.** Barındırılan ödeme sayfası kullanılıyor; kart alanları bizim DOM'umuza hiç girmiyor. Gömülü form PCI-DSS kapsamını genişletirdi.
+
+**Callback üç katmanlı savunma.** Bu uç herkese açık ve içeriği tamamen istemci kontrolünde; "status=success" yazan bir isteğe inanmak bedava abonelik dağıtmaktır. Sırasıyla: (1) gövdeden yalnız belirteç alınır, (2) sonuç sağlayıcıya sorulur, (3) yanıtın HMAC-SHA256 imzası sabit zamanlı karşılaştırmayla doğrulanır. Üçü de geçse bile **ödenen tutar sipariş tutarıyla ayrıca karşılaştırılır**. `settle_billing_order` idempotent: sağlayıcılar callback'i tekrar gönderir, tekrar gönderim bir yıl daha abonelik hediye etmemeli.
+
+**Servis rolü anahtarı geri geldi — dar kapsamla.** `.env.example` onu 049'da kaldırırken "gerçekten gerekirse yalnız o zaman ve dar kapsamla eklenmeli" notunu bırakmıştı; burası tam o an. Callback oturumsuz gelir ve `settle_billing_order` bilinçli olarak `authenticated` rolüne kapalıdır. `lib/supabase/service.ts` `server-only` ile korunuyor ve kullanım kuralları dosyanın başında yazılı.
+
+**İptal zorlaştırılmıyor:** tek adım, gerekçe sorusu yok, erişim ödenen dönem sonuna kadar sürüyor. Zorlaştırılmış iptal mesafeli satış mevzuatına aykırı ve zaten müşteriyi elde tutmuyor.
+
+**Yasal metinler:** mesafeli satış sözleşmesi, ön bilgilendirme formu ve iade koşulları eklendi — internet üzerinden tüketiciye satışta üçü de zorunlu ve ayrı belgeler. İade politikası yasal asgarinin üstünde: hizmet sözleşmelerinde cayma hakkı kullanılamıyor, yani hiç iade vermemek mevzuata uygun olurdu; 14 günlük koşulsuz iade satın alma önündeki en büyük engeli kaldırıyor.
+
+**SATIŞA AÇILMADAN ÖNCE:** satıcı kimlik bilgileri (unvan, adres, vergi dairesi, MERSİS) her iki sözleşmede de boş; eksik satıcı bilgisi sözleşmeyi tüketici lehine sakatlar. Metinler hukuki incelemeden geçmemiştir. iyzico anahtarları sandbox'tır.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

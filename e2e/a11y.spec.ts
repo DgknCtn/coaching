@@ -34,6 +34,9 @@ const PUBLIC_ROUTES = [
   { path: '/register', name: 'Kayıt' },
   { path: '/gizlilik', name: 'Gizlilik metni' },
   { path: '/kosullar', name: 'Kullanım koşulları' },
+  { path: '/mesafeli-satis', name: 'Mesafeli satış sözleşmesi' },
+  { path: '/on-bilgilendirme', name: 'Ön bilgilendirme formu' },
+  { path: '/iade', name: 'İade ve iptal koşulları' },
 ]
 
 for (const route of PUBLIC_ROUTES) {

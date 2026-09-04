@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
+  CreditCard,
   FileBarChart,
   LayoutDashboard,
   Library,
@@ -29,6 +30,10 @@ export const teacherNav: NavItem[] = [
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
+  // Abonelik yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
+  // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
+  // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
+  { href: '/teacher/ayarlar/abonelik', label: 'Abonelik', icon: CreditCard },
 ]
 
 /**

@@ -28,6 +28,7 @@ export type TrackedFeature =
   | 'student.create'
   | 'invite.create'
   | 'report.view'
+  | 'billing.checkout_start'
 
 export async function trackFeature(
   supabase: SupabaseClient,
