@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:a11y": "playwright test e2e/a11y.spec.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -34,12 +35,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "axe-core": "^4.13.0",
     "codebase-memory-mcp": "^0.10.8",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.25",

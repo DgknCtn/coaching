@@ -82,10 +82,10 @@ export function StudentSwitcher({
             {active.fullName}
           </span>
           {subtitle && (
-            <span className="block truncate text-xs text-sidebar-foreground/50">{subtitle}</span>
+            <span className="block truncate text-xs text-sidebar-foreground/60">{subtitle}</span>
           )}
         </span>
-        <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/50" />
+        <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/60" />
       </button>
 
       {open && (

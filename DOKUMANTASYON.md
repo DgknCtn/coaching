@@ -431,4 +431,16 @@ Genişletme yalnız `@media (pointer: coarse)` altında açılıyor: farede geni
 
 **Yol boyunca bulunan gerçek hata:** `app/favicon.ico`, Next şablonunun 25 KB'lık varsayılanıydı ve head'de ilk sırada duruyordu — yani sekmede hâlâ Next.js logosu görünüyordu. Satılacak bir üründe bu küçük bir kusur değil. Kaldırıldı; `public/` içindeki beş şablon SVG artığı (`next.svg`, `vercel.svg`, …) da hiçbir yerden referanslanmadığı doğrulanıp silindi.
 
+### Faz 5 — Erişilebilirlik otomasyonu
+
+Bugüne kadar erişilebilirlik hiçbir yerde **ölçülmüyordu**. Kontrast bozan bir renk ya da etiketsiz bir form alanı sessizce girebilir ve kimse fark etmezdi. Ticari tarafı da var: kurumsal ve kamu bağlantılı müşteriler erişilebilirlik beyanı ister, ölçülmeyen bir şey beyan edilemez.
+
+`e2e/a11y.spec.ts` altı herkese açık rotayı axe ile WCAG 2.1 AA'ya karşı denetliyor; koyu tema ayrıca taranıyor (açık temada geçen kontrast koyuda düşebilir) ve axe'ın göremediği bir şey elle kontrol ediliyor: Tab ile odaklanan öğrenin **görünür** bir odak göstergesi olup olmadığı. "best-practice" kuralları bilinçli olarak dışarıda — görüş bildirirler, standart değildirler ve karışınca ciddi ihlaller gürültüde kaybolur.
+
+**Denetim gerçek bir ihlal buldu.** `text-sidebar-foreground/40` kontrastı 3.01:1 idi, gereken 4.5:1. Bağımsız hesap axe'ın ölçümünü doğruladı (3.02) ve bulgunun tek satırdan büyük olduğunu gösterdi: aynı çiftte `/50` de kalıyor (4.04). Yani panel kenar çubuğundaki **tüm** ikincil metin — bölüm başlıkları, rol etiketi, öğrenci seçici alt satırı, çıkış düğmesi — AA'yı geçmiyordu. Yedi kullanımın hepsi `/60`'a (5.28:1) çıkarıldı.
+
+Erişilebilirlik testi **ayrı bir CI işi olarak eklenmedi**: ayrı koşan bir denetim, atlanabilir bir denetimdir. Mevcut e2e adımının içinde koşuyor, yani bir kontrast regresyonu artık derlemeyi kırar.
+
+Kapsam herkese açık rotalarla sınırlı çünkü panel ekranları oturum ister. Buradaki değer kapsamın genişliğinden değil, **bugünkü seviyenin kilitlenmesinden** geliyor.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

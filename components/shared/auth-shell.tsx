@@ -32,7 +32,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
           </p>
         </div>
 
-        <p className="text-xs text-sidebar-foreground/40">
+        <p className="text-xs text-sidebar-foreground/60">
           © {BRAND.since} {BRAND.name}
         </p>
       </div>

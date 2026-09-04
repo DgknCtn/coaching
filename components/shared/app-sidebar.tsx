@@ -185,7 +185,7 @@ export function AppSidebar({
       return (
         <nav aria-label={label} className="flex flex-col gap-1 px-3">
           {heading && !compact && (
-            <p className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/40">
+            <p className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/60">
               {heading}
             </p>
           )}
@@ -232,7 +232,7 @@ export function AppSidebar({
 
     const panelBlock = !compact && panel && panel.items.length > 0 && (
       <div className="mt-6 px-6">
-        <p className="text-xs text-sidebar-foreground/50">{panel.label}</p>
+        <p className="text-xs text-sidebar-foreground/60">{panel.label}</p>
         <div className="mt-2 space-y-1">
           {panel.items.map((value) => (
             <p key={value} className="truncate text-sm text-sidebar-foreground/80">
@@ -262,7 +262,7 @@ export function AppSidebar({
           {!compact && (
             <div className="min-w-0">
               <p className="truncate text-sm text-sidebar-foreground">{userName}</p>
-              <p className="text-xs text-sidebar-foreground/50">{roleLabel}</p>
+              <p className="text-xs text-sidebar-foreground/60">{roleLabel}</p>
             </div>
           )}
         </div>
@@ -321,7 +321,7 @@ export function AppSidebar({
             aria-label={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
             title={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
             className={cn(
-              'flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground',
+              'flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground',
               collapsed ? 'justify-center px-0' : 'px-3'
             )}
           >

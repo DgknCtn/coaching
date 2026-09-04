@@ -96,10 +96,14 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
-      - name: E2E testleri
+      - name: E2E ve erişilebilirlik testleri
         # playwright.config.ts kendi web sunucusunu ayağa kaldırıyor.
         # Bu adım bugüne kadar CI'da HİÇ koşmamıştı; config'deki CI dalları
         # ölü koddu.
+        #
+        # e2e/a11y.spec.ts de buradan koşar: erişilebilirlik ayrı bir iş
+        # olarak eklenmedi, çünkü ayrı koşan bir denetim atlanabilir bir
+        # denetimdir. Kontrast regresyonu artık derlemeyi kırar.
         run: npm run e2e
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
