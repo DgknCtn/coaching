@@ -45,6 +45,19 @@ export async function middleware(request: NextRequest) {
     pathname === '/demo' ||
     pathname === '/forgot-password' ||
     pathname === '/api/health' ||
+    // HUKUKİ METİNLER: bunların herkese açık olması yasal zorunluluk ve
+    // zaten alıcı ADAYI okur — oturumu olmayan ziyaretçi. Footer'dan
+    // tıklayan ziyaretçi /login'e düşüyordu.
+    pathname === '/gizlilik' ||
+    pathname === '/kosullar' ||
+    pathname === '/mesafeli-satis' ||
+    pathname === '/on-bilgilendirme' ||
+    pathname === '/iade' ||
+    // ÖDEME UÇLARI: sağlayıcı OTURUMSUZ POST atar. Buraya oturum şartı
+    // koymak, callback'i /login'e yönlendirip hiçbir ödemenin
+    // kapanmaması demekti. Kimlik doğrulaması bu uçların İÇİNDE
+    // yapılıyor: imza doğrulaması ve sağlayıcıya sorma.
+    pathname.startsWith('/api/billing/') ||
     // Supabase auth e-posta bağlantılarının döndüğü callback; oturumu burada
     // kuruyoruz, dolayısıyla giriş kontrolünden muaf olmalı.
     pathname.startsWith('/auth/') ||

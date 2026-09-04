@@ -7,10 +7,13 @@ import type { PlanId } from '@/lib/plans'
 // faturaya yanlış rakam yazmaktır. Tüm hesap tam sayıyla yapılır, yalnız
 // gösterim ve iyzico'ya gönderim anında ondalığa çevrilir.
 //
-// MODEL (kullanıcı kararı): aylık + yıllık, TAKSİT YALNIZ YILLIKTA.
-// Sebep teknik: taksit tek seferlik bir çekimi böler; yinelenen aylık
-// tahsilatta taksit yapılamaz. Yıllık paket zaten tek çekim olduğu için
-// taksit oraya doğal oturuyor ve nakit akışını da öne alıyor.
+// MODEL: aylık + yıllık, İKİSİ DE TEK ÇEKİM.
+//
+// TAKSİT KALDIRILDI (057). Ürün kararı olmasının yanında teknik zorunluluk
+// hâline de geldi: abonelik artık yinelenen bir tahsilat ve taksit tek
+// seferlik bir çekimi böler — yinelenen tahsilatta uygulanamaz.
+// Yıllık paket indirimiyle KALIYOR; indirim taksitten bağımsız ve nakit
+// akışını öne alıyor.
 
 /** Satın alınabilir planlar. `trial` ücretsiz, `institution` görüşmeye tabi. */
 export type PayablePlanId = Extract<PlanId, 'starter' | 'coach'>
@@ -53,18 +56,6 @@ export const PLAN_PRICING: Record<PayablePlanId, PlanPricing> = {
 
 /** KDV oranı. SaaS hizmeti Türkiye'de genel orana tabidir. */
 export const VAT_RATE = 0.20
-
-/**
- * Yıllık pakette sunulacak taksit seçenekleri.
- *
- * 1 = tek çekim ve LİSTEDE OLMAK ZORUNDA: yalnız taksitli seçenek sunmak,
- * taksit istemeyen alıcıyı da komisyona ortak eder.
- *
- * 12'ye çıkmıyoruz: yüksek taksitte banka komisyonu ürün marjını yiyor ve
- * bu kararın rakamları ancak gerçek komisyon oranları belli olduğunda
- * (canlı sözleşme sonrası) verilebilir. 9 makul bir başlangıç.
- */
-export const ENABLED_INSTALLMENTS = [1, 3, 6, 9] as const
 
 /** Kuruşu iyzico'nun beklediği ondalık string'e çevirir: 49900 -> "499.0" */
 export function kurusToPriceString(kurus: number): string {
@@ -109,17 +100,6 @@ export function yearlyDiscountPercent(plan: PayablePlanId): number {
 /** Yıllık paketin aya bölünmüş hâli — vitrinde "ayda X ₺" için. */
 export function yearlyPerMonthKurus(plan: PayablePlanId): number {
   return Math.round(PLAN_PRICING[plan].yearlyKurus / 12)
-}
-
-/**
- * Taksit yalnız yıllık pakette.
- *
- * Bu fonksiyon tek satır ama TEK YERDE duruyor: taksit seçeneklerini
- * aylık akışta da göstermek, iyzico'nun reddedeceği bir istek üretir ve
- * hata kullanıcıya "ödeme başarısız" olarak yansır.
- */
-export function installmentsFor(period: BillingPeriod): number[] {
-  return period === 'yearly' ? [...ENABLED_INSTALLMENTS] : [1]
 }
 
 /**

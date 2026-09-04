@@ -1,40 +1,39 @@
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 import { Check, ArrowRight } from 'lucide-react'
-import { buttonVariants } from '@/components/ui/button'
+import { buttonVariants, Button } from '@/components/ui/button'
 import { BRAND, contactMailto } from '@/lib/brand'
 import { PLANS as PLAN_DEFS, TRIAL_DAYS } from '@/lib/plans'
 import {
   PLAN_PRICING,
-  ENABLED_INSTALLMENTS,
   formatKurus,
   yearlyDiscountPercent,
   yearlyPerMonthKurus,
+  type BillingPeriod,
 } from '@/lib/billing/pricing'
 import { cn } from '@/lib/utils'
 import { SectionHeading } from './section-heading'
+import { GuaranteeStrip } from './guarantee-strip'
 
 // Fiyatlandırma (SaaS vitrini).
 //
 // ============================================================
-// FİYAT ARTIK GİZLİ DEĞİL (056)
+// TAKSİT KALDIRILDI (057), GEÇİŞ DÜĞMESİ GELDİ
 //
-// Bu bölüm daha önce bilinçli olarak rakamsızdı: fiyat netleşmemişti ve
-// yanlış bir rakamı vitrine koyup sonra yükseltmek ilk müşterilerde güven
-// kaybı yaratırdı. Ödeme entegrasyonuyla birlikte fiyat belirlendi, satın
-// alma self-servis çalışıyor; rakamı saklamak artık şeffaflık değil
-// sürtünme olurdu — "fiyat için görüşelim" satın almaya hazır kullanıcıyı
-// e-posta kuyruğuna sokar.
+// Önceden aylık ve yıllık fiyat aynı anda, statik olarak yazılıydı;
+// okuyucu iki sayıyı kendi kafasında karşılaştırmak zorundaydı. Geçiş
+// düğmesi indirimi ETKİLEŞİMLİ hâle getiriyor: kullanıcı "Yıllık"a
+// bastığında rakamın düştüğünü GÖRÜYOR. Bu, aynı bilgiyi vermenin
+// belirgin biçimde daha ikna edici yolu.
 //
 // RAKAMLAR KODDAN OKUNUYOR: lib/billing/pricing.ts. Elle yazılsalardı
-// ödeme ekranıyla vitrin ayrışabilirdi ve müşteri, gördüğünden başka bir
+// ödeme ekranıyla vitrin ayrışabilir ve müşteri gördüğünden başka bir
 // tutarla karşılaşırdı.
 //
-// ÖĞRENCİ SINIRLARI GERÇEKTEN UYGULANIYOR (052): workspaces.student_limit
-// ve students üzerindeki tetikleyici.
-//
-// YAYINA ÇIKMADAN ÖNCE: buradaki rakamlar lib/billing/pricing.ts'te
-// tanımlı ve HENÜZ ONAYLANMADI. Yayınlanmış bir fiyatı değiştirmek
-// mevcut abonelerin yenileme bedelini de değiştirir.
+// YAYINA ÇIKMADAN ÖNCE: bu rakamlar HENÜZ ONAYLANMADI. Yayınlanmış bir
+// fiyatı değiştirmek mevcut abonelerin yenileme bedelini de değiştirir.
 // ============================================================
 
 interface Plan {
@@ -89,9 +88,9 @@ const PLANS: Plan[] = [
   },
 ]
 
-const maxInstallment = Math.max(...ENABLED_INSTALLMENTS)
-
 export function PricingSection() {
+  const [period, setPeriod] = useState<BillingPeriod>('yearly')
+
   return (
     <section
       id="fiyatlar"
@@ -101,17 +100,55 @@ export function PricingSection() {
         <SectionHeading
           eyebrow="Fiyatlandırma"
           title="Öğrenci sayınıza göre"
-          description={`${TRIAL_DAYS} gün boyunca ürünün tamamını ücretsiz deneyin — kredi kartı istemiyoruz. Sonrasında öğrenci sayınıza uyan planı seçersiniz.`}
+          description={`${TRIAL_DAYS} gün boyunca ürünün tamamını ücretsiz deneyin. Sonrasında öğrenci sayınıza uyan planı seçersiniz.`}
         />
 
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 flex justify-center">
+          <div
+            className="inline-flex items-center rounded-md border bg-card p-0.5"
+            role="group"
+            aria-label="Ödeme dönemi"
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant={period === 'monthly' ? 'default' : 'ghost'}
+              onClick={() => setPeriod('monthly')}
+            >
+              Aylık
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={period === 'yearly' ? 'default' : 'ghost'}
+              onClick={() => setPeriod('yearly')}
+            >
+              Yıllık
+              {/* Seçiliyken arka plan tonu YOK: mor düğmenin üstüne %15
+                  beyaz katman koymak zemini açıyor ve beyaz metinle
+                  kontrast 4.14'e düşüyordu (AA için 4.5 gerekli). Metni
+                  doğrudan mor üzerine bırakmak hem daha okunaklı hem de
+                  seçili durumu zaten düğmenin kendisi anlatıyor. */}
+              <span
+                className={cn(
+                  'ml-1.5 rounded-sm text-[11px] font-medium',
+                  period === 'yearly'
+                    ? 'text-primary-foreground'
+                    : 'bg-success-subtle px-1.5 py-0.5 text-success-foreground'
+                )}
+              >
+                %{yearlyDiscountPercent('coach')} indirim
+              </span>
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
           {PLANS.map((plan) => {
-            // Kurum planının fiyatı yok. Daraltmayı `pricing` üzerinden
-            // yapmak TypeScript'e yetmiyor; anahtarın kendisini daraltıyoruz
+            // Kurum planının fiyatı yok. Anahtarın kendisini daraltıyoruz
             // ki fiyat fonksiyonlarına 'institution' geçme ihtimali
             // derleme zamanında imkânsız olsun.
             const payableKey = plan.key === 'institution' ? null : plan.key
-            const pricing = payableKey ? PLAN_PRICING[payableKey] : null
 
             return (
               <div
@@ -134,32 +171,30 @@ export function PricingSection() {
 
                 <p className="mt-1.5 text-sm text-muted-foreground">{plan.audience}</p>
 
-                {payableKey && pricing ? (
+                {payableKey ? (
                   <div className="mt-5">
-                    <p className="text-2xl font-semibold tracking-tight tabular-nums">
-                      {formatKurus(pricing.monthlyKurus)}
+                    <p className="text-3xl font-semibold tracking-tight tabular-nums">
+                      {formatKurus(
+                        period === 'yearly'
+                          ? yearlyPerMonthKurus(payableKey)
+                          : PLAN_PRICING[payableKey].monthlyKurus
+                      )}
                       <span className="text-sm font-normal text-muted-foreground">
                         {' '}
                         / ay
                       </span>
                     </p>
-                    {/* Yıllık seçenek burada gizlenmiyor: indirim, satın alma
-                        kararının bir parçası ve ödeme ekranında sürpriz
-                        olarak çıkmamalı. */}
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Yıllık ödemede ayda{' '}
-                      <strong className="font-medium text-foreground tabular-nums">
-                        {formatKurus(yearlyPerMonthKurus(payableKey))}
-                      </strong>{' '}
-                      — %{yearlyDiscountPercent(payableKey)} indirim
+                      {period === 'yearly'
+                        ? `Yılda tek çekim ${formatKurus(PLAN_PRICING[payableKey].yearlyKurus)}`
+                        : 'Her ay yenilenir'}
+                      {' · KDV dahil'}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      KDV dahil · {plan.limit}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{plan.limit}</p>
                   </div>
                 ) : (
                   <div className="mt-5">
-                    <p className="text-2xl font-semibold tracking-tight">{plan.limit}</p>
+                    <p className="text-3xl font-semibold tracking-tight">{plan.limit}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Fiyat için görüşelim
                     </p>
@@ -203,26 +238,15 @@ export function PricingSection() {
           })}
         </div>
 
-        <div className="mt-8 space-y-2 text-center text-sm text-muted-foreground">
-          <p>
-            <strong className="text-foreground">
-              Yıllık pakette {maxInstallment} taksite kadar
-            </strong>{' '}
-            ödeme yapabilirsiniz. Aylık abonelikte taksit yapılamaz; tutar her ay tek
-            seferde tahsil edilir.
-          </p>
-          <p>
-            Tüm planlarda öğrenci ve veli hesapları ücretsizdir — yalnızca öğretmen
-            tarafı ücretlendirilir.
-          </p>
-          <p>
-            Dilediğiniz zaman tek adımda iptal edebilirsiniz; ilk ödemenizden itibaren{' '}
-            <Link href="/iade" className="underline underline-offset-4 hover:text-foreground">
-              14 gün koşulsuz iade
-            </Link>{' '}
-            hakkınız var.
-          </p>
-        </div>
+        <GuaranteeStrip className="mt-8" />
+
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Öğrenci ve veli hesapları tüm planlarda ücretsizdir — yalnızca öğretmen
+          tarafı ücretlendirilir.{' '}
+          <Link href="/iade" className="underline underline-offset-4 hover:text-foreground">
+            İade koşulları
+          </Link>
+        </p>
       </div>
     </section>
   )

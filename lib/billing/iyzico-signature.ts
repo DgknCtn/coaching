@@ -98,14 +98,21 @@ export function verifyResponseSignature(params: {
   fields: (string | number | null | undefined)[]
   /** Yanıttaki `signature` değeri. */
   expected: string | null | undefined
+  /**
+   * Hazır hesaplanmış imza. Farklı bir alan birleştirme kuralı kullanan
+   * uçlar (ör. abonelik webhook'u) bunu geçer; böylece sabit zamanlı
+   * karşılaştırma tek yerde kalır ve iki ayrı yerde tekrarlanmaz.
+   */
+  precomputed?: string
 }): boolean {
-  const { secretKey, fields, expected } = params
+  const { secretKey, fields, expected, precomputed } = params
 
   if (!expected) return false
 
   const hashString = fields.map(f => (f == null ? '' : String(f))).join(':')
 
-  const actual = createHmac('sha256', secretKey).update(hashString).digest('hex')
+  const actual =
+    precomputed ?? createHmac('sha256', secretKey).update(hashString).digest('hex')
 
   // Sabit zamanlı karşılaştırma: '===' karakter karakter erken çıkar ve
   // imzayı byte byte tahmin etmeye açık kapı bırakır.
@@ -145,4 +152,49 @@ export function checkoutFormRetrieveSignatureFields(response: {
     response.price == null ? null : trailingZero(response.price),
     response.token,
   ]
+}
+
+/**
+ * Abonelik webhook imzasını doğrular (V3).
+ *
+ * NEDEN BURADA: bu dosya saf ve test edilebilir. İmza hesabı
+ * `server-only` bir modülde kalsaydı testten geçemezdi — ve webhook
+ * imzası, ödeme yolundaki en kritik kontrol.
+ *
+ * Sağlayıcı belgesindeki alan sırası:
+ *   merchantId + secretKey + eventType +
+ *   subscriptionReferenceCode + orderReferenceCode + customerReferenceCode
+ * HMAC-SHA256, secretKey ile, hex.
+ *
+ * Bu uç herkese açık ve gövdesi tamamen istemci kontrolünde: imza
+ * doğrulanmadan gelen bir "ödeme başarılı" bildirimine inanmak, herkese
+ * bedava abonelik dağıtmaktır.
+ */
+export function verifySubscriptionWebhookSignature(params: {
+  merchantId: string
+  secretKey: string
+  eventType: string | null | undefined
+  subscriptionReferenceCode: string | null | undefined
+  orderReferenceCode: string | null | undefined
+  customerReferenceCode: string | null | undefined
+  expected: string | null | undefined
+}): boolean {
+  const hashString =
+    params.merchantId +
+    params.secretKey +
+    (params.eventType ?? '') +
+    (params.subscriptionReferenceCode ?? '') +
+    (params.orderReferenceCode ?? '') +
+    (params.customerReferenceCode ?? '')
+
+  const actual = createHmac('sha256', params.secretKey).update(hashString).digest('hex')
+
+  // Sabit zamanlı karşılaştırma için mevcut yardımcı yeniden kullanılıyor:
+  // uzunluk kontrolü ve timingSafeEqual tek yerde dursun.
+  return verifyResponseSignature({
+    secretKey: params.secretKey,
+    fields: [],
+    expected: params.expected,
+    precomputed: actual,
+  })
 }

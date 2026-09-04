@@ -35,13 +35,17 @@ const roles = [
   {
     id: 'veli',
     role: 'Veli',
-    tagline: 'Çocuğunuzla her an bağlı kalın',
+    tagline: 'Çocuğunuzun ilerlemesini kendiniz görün',
     Icon: Users,
+    // BİLDİRİM SİSTEMİ YOK — kod tabanında e-posta ya da push gönderen
+    // hiçbir şey bulunmuyor. Önceki metin "geciken ödev bildirimleri" ve
+    // "kritik anlarda haberdar olun" diyerek olmayan bir özelliği vaat
+    // ediyordu. Veli panele girip bakar; dil buna göre.
     description:
-      'Çocuğunuzun gelişimini anlık takip edin. Koçla uyum içinde kalın, kritik anlarda haberdar olun.',
+      'Çocuğunuzun gelişimini kendi panelinizden izleyin. Geciken ödevleri ve ilerlemeyi öğretmenle aynı veriden görün.',
     features: [
       'Haftalık performans kartları',
-      'Geciken ödev bildirimleri',
+      'Geciken ödevleri panelde görme',
       'Kitap ilerleme takibi',
       'Birden fazla öğrenci desteği',
       'Davet linki ile kolay kayıt',

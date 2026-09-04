@@ -3,6 +3,7 @@ import { ArrowRight, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { TRIAL_DAYS } from '@/lib/plans'
+import { GuaranteeStrip } from './guarantee-strip'
 
 const previewStats = [
   { label: 'Öğrenci', value: '24' },
@@ -40,16 +41,22 @@ export function HeroSection() {
         <div className="mx-auto max-w-2xl text-center">
           <p className="mx-auto inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="size-3.5 text-primary" />
-            {TRIAL_DAYS} gün ücretsiz deneme
+            {TRIAL_DAYS} gün ücretsiz · Kurulum 10 dakika
           </p>
 
+          {/* BAŞLIK KAZANCI SÖYLÜYOR, acıyı değil. Önceki başlık
+              ("20 öğrenci, 20 ayrı Excel dosyası olmasın") sorunu doğru
+              adlandırıyordu ama okuyucuya ne KAZANACAĞINI söylemiyordu.
+              Acı, hemen altındaki cümlede duruyor — kaybolmadı, sıraya
+              girdi. */}
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-            20 öğrenci, 20 ayrı Excel dosyası olmasın
+            Her öğrencinin nerede kaldığını 10 saniyede görün
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride
-            kaldı — hepsi tek ekranda. Veliler kendi panelinden izler, siz her hafta
-            aynı soruları cevaplamazsınız.
+            20 öğrenci, 20 ayrı Excel dosyası olmasın. Hangi öğrenci hangi kitabın
+            neresinde, bu hafta ne verildi, kim geride kaldı — hepsi tek ekranda.
+            Veliler kendi panelinden izler, siz her hafta aynı soruları
+            cevaplamazsınız.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -62,15 +69,12 @@ export function HeroSection() {
             </Link>
           </div>
 
-          {/* "Kredi kartı istemiyoruz" DOĞRU ve korunuyor: deneme için
-              ödeme bilgisi gerçekten istenmiyor. Kaldırılan kısım
-              "10 öğrenciye kadar ücretsiz" idi — 056'dan sonra ücretsiz
-              kademe yok, 14 günlük deneme var. Vitrinde olmayan bir
-              kademe vaat etmek, kayıt olan kullanıcıyı 15. günde
-              beklemediği bir duvara çarptırır. */}
-          <p className="mt-4 text-sm text-muted-foreground">
-            {TRIAL_DAYS} gün ücretsiz deneme · Kredi kartı istemiyoruz
-          </p>
+          {/* "Kredi kartı istemiyoruz" KALDIRILDI: 057'den sonra kart
+              kayıtta isteniyor, yani cümle artık yanlış. Yerine kartın
+              yarattığı endişeyi doğrudan karşılayan güvence şeridi
+              geliyor — itirazı saklamak, kaybı kart ekranına, yani en
+              pahalı yere ertelemek olurdu. */}
+          <GuaranteeStrip className="mt-5" />
         </div>
 
         {/* Ürün önizlemesi — gerçek arayüzün sadeleştirilmiş bir temsili. */}

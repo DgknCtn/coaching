@@ -107,7 +107,6 @@ export interface InitializeCheckoutParams {
   /** Bizim sipariş kimliğimiz — sonucu buna bağlıyoruz. */
   orderId: string
   grossKurus: number
-  installments: number[]
   planName: string
   callbackUrl: string
   buyer: {
@@ -145,12 +144,11 @@ export async function initializeCheckoutForm(
     price,
     paidPrice: price,
     currency: 'TRY',
-    // SUBSCRIPTION grubu, banka tarafında yinelenen ödeme olarak
-    // işaretlenir ve bazı taksit kampanyalarını devre dışı bırakır.
-    // Burada tek çekim satıyoruz; grup PRODUCT.
     paymentGroup: 'PRODUCT',
     callbackUrl: params.callbackUrl,
-    enabledInstallments: params.installments,
+    // TAKSİT YOK (057): tek çekim. enabledInstallments gönderilmiyor;
+    // boş ya da [1] göndermekle aynı sonucu verir ama niyeti daha açık
+    // anlatır.
     buyer: {
       id: params.buyer.id,
       name: params.buyer.name,

@@ -37,11 +37,21 @@ const PUBLIC_ROUTES = [
   { path: '/mesafeli-satis', name: 'Mesafeli satış sözleşmesi' },
   { path: '/on-bilgilendirme', name: 'Ön bilgilendirme formu' },
   { path: '/iade', name: 'İade ve iptal koşulları' },
+  // /kurulum/odeme burada YOK: oturum gerektiriyor ve bu testler kimlik
+  // bilgisi olmadan koşuyor. Oturumlu e2e kurulduğunda eklenmeli —
+  // kart adımı huninin en kritik ekranı.
 ]
 
 for (const route of PUBLIC_ROUTES) {
   test(`${route.name} (${route.path}) WCAG 2.1 AA ihlali içermiyor`, async ({ page }) => {
     await page.goto(route.path)
+
+    // ROTADA KALDIĞIMIZI DOĞRULA. Bu iddia olmadan test YANLIŞ GEÇİYORDU:
+    // middleware oturumsuz ziyaretçiyi /login'e yönlendiriyordu ve axe
+    // her seferinde aynı giriş sayfasını tarayıp "ihlal yok" diyordu.
+    // Erişilebilirlik testi, ölçtüğünü sandığı sayfayı ölçtüğünden emin
+    // olmalı.
+    expect(new URL(page.url()).pathname).toBe(route.path)
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze()
 

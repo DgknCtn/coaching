@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { LegalShell, LegalHeading } from '@/components/marketing/legal-shell'
 import { BRAND } from '@/lib/brand'
 import { PLANS, TRIAL_DAYS } from '@/lib/plans'
-import { PLAN_PRICING, ENABLED_INSTALLMENTS, formatKurus, VAT_RATE } from '@/lib/billing/pricing'
+import { PLAN_PRICING, formatKurus, VAT_RATE } from '@/lib/billing/pricing'
 
 // ÖN BİLGİLENDİRME FORMU — TASLAK.
 //
@@ -87,23 +87,39 @@ export default function PreliminaryInfoPage() {
         </li>
       </ul>
 
-      <LegalHeading>Ödeme ve taksit</LegalHeading>
+      <LegalHeading>Ödeme</LegalHeading>
       <p>
         Ödeme, kredi veya banka kartı ile ödeme kuruluşunun güvenli sayfası üzerinden
-        alınır. Kart bilgileriniz {BRAND.name} sistemlerine iletilmez ve saklanmaz.
+        <strong className="text-foreground"> tek çekim</strong> olarak alınır; taksit
+        seçeneği bulunmamaktadır. Kart bilgileriniz {BRAND.name} sistemlerine iletilmez
+        ve saklanmaz; kart, ödeme kuruluşunda saklanır.
+      </p>
+
+      <LegalHeading>Otomatik yenileme — önemli</LegalHeading>
+      <p>
+        Denemeye başlarken kart bilgilerinizi kaydedersiniz.{' '}
+        <strong className="text-foreground">
+          Deneme süresi boyunca kartınızdan tahsilat yapılmaz.
+        </strong>{' '}
+        Kartın geçerliliği, ödeme kuruluşu tarafından 1 TL&apos;lik bir provizyon alınıp
+        anında iade edilerek doğrulanır.
       </p>
       <p>
-        <strong className="text-foreground">Taksit yalnız yıllık pakette</strong>{' '}
-        kullanılabilir ({ENABLED_INSTALLMENTS.filter(n => n > 1).join(', ')} taksit).
-        Aylık abonelikte taksit yapılamaz; tutar her ay tek seferde tahsil edilir.
-        Taksitli işlemlerde bankanızın uygulayabileceği vade farkı bu tutarlara dahil
-        değildir.
+        {TRIAL_DAYS} günlük deneme süresinin sonunda, seçtiğiniz planın bedeli{' '}
+        <strong className="text-foreground">otomatik olarak</strong> kayıtlı kartınızdan
+        tahsil edilir ve abonelik, siz iptal edene kadar seçtiğiniz dönemde (aylık ya da
+        yıllık) kendiliğinden yenilenir. Yenileme öncesinde e-posta ile hatırlatma
+        gönderilir.
+      </p>
+      <p>
+        Tahsilat istemiyorsanız, deneme süresi dolmadan önce panelden tek adımda iptal
+        etmeniz yeterlidir; iptal ettiğinizde hiçbir ücret alınmaz.
       </p>
 
       <LegalHeading>Abonelik süresi ve yenileme</LegalHeading>
       <p>
-        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar; deneme için ödeme
-        bilgisi istenmez. Aylık abonelik her ay, yıllık paket her yıl yenilenir.
+        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar. Aylık abonelik her
+        ay, yıllık paket her yıl yenilenir.
         Aboneliğinizi dilediğiniz zaman panelden iptal edebilirsiniz; iptalde erişiminiz
         ödediğiniz dönemin sonuna kadar devam eder.
       </p>

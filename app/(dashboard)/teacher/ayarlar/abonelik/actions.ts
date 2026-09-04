@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { trackFeature } from '@/lib/telemetry'
 import { logAudit } from '@/lib/audit'
-import { installmentsFor, type PayablePlanId, type BillingPeriod } from '@/lib/billing/pricing'
+import type { PayablePlanId, BillingPeriod } from '@/lib/billing/pricing'
 import { PLANS } from '@/lib/plans'
 import { initializeCheckoutForm } from '@/lib/billing/iyzico'
 
@@ -25,8 +25,7 @@ const VALID_PERIODS: BillingPeriod[] = ['monthly', 'yearly']
 
 export async function startCheckoutAction(
   plan: string,
-  period: string,
-  installment: number
+  period: string
 ): Promise<{ error?: string; paymentPageUrl?: string }> {
   if (!VALID_PLANS.includes(plan as PayablePlanId)) {
     return { error: 'Geçersiz plan seçildi.' }
@@ -38,14 +37,6 @@ export async function startCheckoutAction(
   const typedPlan = plan as PayablePlanId
   const typedPeriod = period as BillingPeriod
 
-  // Taksit yalnız yıllıkta — kural üç yerde birden duruyor (burada,
-  // veritabanı kısıtında ve pricing.ts'te). Fazlalık değil: her katman
-  // kendi başına doğru olmalı, çünkü her biri ayrı ayrı atlanabilir.
-  const allowed = installmentsFor(typedPeriod)
-  if (!allowed.includes(installment)) {
-    return { error: 'Bu ödeme dönemi için seçilen taksit sayısı kullanılamaz.' }
-  }
-
   const { workspaceId, profile, workspace } = await getTeacherContext()
   const supabase = await createClient()
 
@@ -53,7 +44,6 @@ export async function startCheckoutAction(
     p_workspace_id: workspaceId,
     p_plan: typedPlan,
     p_period: typedPeriod,
-    p_installment: installment,
   })
 
   if (orderError) return { error: dbErrorToTr(orderError.message) }
@@ -84,7 +74,6 @@ export async function startCheckoutAction(
     session = await initializeCheckoutForm({
       orderId: created.order_id,
       grossKurus: created.gross_kurus,
-      installments: [installment],
       planName: `${PLANS[typedPlan].name} — ${typedPeriod === 'yearly' ? 'Yıllık' : 'Aylık'}`,
       callbackUrl: `${appUrl.replace(/\/$/, '')}/api/billing/callback`,
       buyer: {
@@ -122,7 +111,7 @@ export async function startCheckoutAction(
     action: 'billing.checkout_started',
     entityType: 'billing_order',
     entityId: created.order_id,
-    detail: { plan: typedPlan, period: typedPeriod, installment },
+    detail: { plan: typedPlan, period: typedPeriod },
   })
   await trackFeature(supabase, workspaceId, 'billing.checkout_start')
 

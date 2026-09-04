@@ -70,7 +70,7 @@ export default async function SubscriptionPage({
       .maybeSingle(),
     supabase
       .from('billing_orders')
-      .select('id, plan, period, gross_kurus, installment, status, created_at, paid_at')
+      .select('id, plan, period, gross_kurus, status, created_at, paid_at')
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(10),
@@ -178,8 +178,7 @@ export default async function SubscriptionPage({
                         <td className="py-2">
                           {PLANS[order.plan as keyof typeof PLANS]?.name ?? order.plan}{' '}
                           <span className="text-muted-foreground">
-                            ({order.period === 'yearly' ? 'Yıllık' : 'Aylık'}
-                            {order.installment > 1 && `, ${order.installment} taksit`})
+                            ({order.period === 'yearly' ? 'Yıllık' : 'Aylık'})
                           </span>
                         </td>
                         <td className="py-2 tabular-nums">{formatKurus(order.gross_kurus)}</td>

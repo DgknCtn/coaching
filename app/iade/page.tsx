@@ -30,9 +30,10 @@ export default function RefundPage() {
 
       <LegalHeading>Önce deneyin, sonra ödeyin</LegalHeading>
       <p>
-        Her yeni hesap {TRIAL_DAYS} gün boyunca ürünün tamamına ücretsiz erişir ve
-        deneme için ödeme bilgisi istenmez. Ödeme yapmadan önce ürünün işinize yarayıp
-        yaramadığını görebilirsiniz.
+        Her yeni hesap {TRIAL_DAYS} gün boyunca ürünün tamamına ücretsiz erişir.
+        Denemeye başlarken kart bilgilerinizi kaydedersiniz ama{' '}
+        <strong className="text-foreground">deneme boyunca hiçbir tahsilat yapılmaz</strong> —
+        ürünün işinize yarayıp yaramadığını ödeme yapmadan görürsünüz.
       </p>
 
       <LegalHeading>İptal</LegalHeading>
@@ -79,12 +80,16 @@ export default function RefundPage() {
         karşılaşırsanız bu bir hatadır ve düzeltiriz.
       </p>
 
-      <LegalHeading>Taksitli ödemelerde iade</LegalHeading>
+      <LegalHeading>Deneme süresi biterken</LegalHeading>
       <p>
-        Taksitli alınan yıllık paketlerde iade, ödeme kuruluşu üzerinden kartınıza
-        yapılır. Bankanız kalan taksitleri iptal eder ya da tahsil edilmiş tutarları
-        iade eder; bu süreç bankanızın işleyişine tabidir ve bizim kontrolümüzde
-        değildir.
+        Deneme süresinin sonunda tahsilat <strong className="text-foreground">otomatik</strong>{' '}
+        yapılır. Ücret ödemek istemiyorsanız, süre dolmadan panelden tek adımda iptal
+        etmeniz yeterli; iptal ettiğinizde hiçbir ücret alınmaz. Yenileme öncesinde
+        e-posta ile hatırlatma göndeririz.
+      </p>
+      <p>
+        Hatırlatmayı kaçırıp istemediğiniz bir tahsilatla karşılaştıysanız bize yazın —
+        14 günlük koşulsuz iade hakkınız zaten bu durumu kapsıyor.
       </p>
 
       <LegalHeading>İade yapmadığımız durumlar</LegalHeading>

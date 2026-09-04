@@ -4,7 +4,7 @@ const steps = [
   {
     title: 'Hesabını oluştur',
     description:
-      'Ücretsiz kaydol, çalışma alanını oluştur. Eğitim dönemini ve kitap havuzunu tanımla.',
+      'Kaydol, denemeni başlat. Eğitim dönemini ve kitap havuzunu tanımla — kitabın içindekiler listesini yapıştırman yeterli.',
   },
   {
     title: 'Öğrencilerini ekle',
@@ -14,7 +14,7 @@ const steps = [
   {
     title: 'Takip et ve yönet',
     description:
-      'Risk analiziyle kimlerin geride kaldığını gör. Gerçek zamanlı ilerlemeyi takip et.',
+      'Risk analiziyle kimlerin geride kaldığını gör. Onayladığın çalışmalar ilerlemeye işlensin.',
   },
 ]
 

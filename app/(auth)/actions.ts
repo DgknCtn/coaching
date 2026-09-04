@@ -79,7 +79,11 @@ export async function registerAction(
   })
   if (rpcError) return { error: authErrorToTr(rpcError.message) }
 
-  redirect('/')
+  // Kayıttan sonra doğrudan panele DEĞİL, kart adımına gidiliyor (057).
+  // Deneme süresi artık gerçekten doluyor ve deneme sonunda otomatik
+  // tahsilat yapılabilmesi için kartın önceden alınması gerekiyor.
+  // Adım zorunlu değil: sayfada "sonra hatırlat" bağlantısı var.
+  redirect('/kurulum/odeme')
 }
 
 /**

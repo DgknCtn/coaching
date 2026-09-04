@@ -7,6 +7,13 @@ import { SectionHeading } from './section-heading'
 // yapılmayan bir şey yok.
 
 const FAQS: { q: string; a: string }[] = [
+  // KART SORUSU EN BAŞTA — bilinçli. Kayıtta kart istemek, satın alma
+  // kararının önündeki en büyük yeni engel. Listenin dibine koymak,
+  // itirazı cevaplamak değil saklamak olurdu.
+  {
+    q: 'Neden kart bilgisi istiyorsunuz? Hemen para çekilecek mi?',
+    a: `Hayır, deneme süresi boyunca kartınızdan tahsilat yapılmaz. Kartı şimdi almamızın tek sebebi, ${TRIAL_DAYS} gün sonunda kesinti yaşamadan devam edebilmeniz. Kartın geçerliliği 1 ₺ provizyon alınıp anında iade edilerek doğrulanır. Süre dolmadan iptal ederseniz hiçbir ücret ödemezsiniz — üstelik kart adımını şimdilik atlayıp sonra da tamamlayabilirsiniz.`,
+  },
   {
     q: 'Öğrenci ve velilerim de ücret ödeyecek mi?',
     a: 'Hayır. Yalnızca öğretmen tarafı ücretlendirilir. Öğrenci ve veli hesapları sınırsız ve ücretsizdir; davet linkiyle katılırlar.',
@@ -40,16 +47,12 @@ const FAQS: { q: string; a: string }[] = [
     a: `${TRIAL_DAYS} gün sonunda bir plan seçmezseniz çalışma alanınız erişime kapanır — ama verileriniz SİLİNMEZ. Plan seçtiğiniz anda aynı verilerle kaldığınız yerden devam edersiniz.`,
   },
   {
-    q: 'Taksitle ödeyebilir miyim?',
-    a: 'Yıllık pakette evet, 9 taksite kadar. Aylık abonelikte taksit yapılamaz; bu teknik bir sınır, tercih değil — taksit tek seferlik bir çekimi böler, her ay yenilenen tahsilatta uygulanamaz. Yıllık paket zaten tek çekim olduğu için taksit orada kullanılabiliyor ve aylığa göre indirimli.',
-  },
-  {
     q: 'Kart bilgilerim sizde saklanıyor mu?',
-    a: 'Hayır. Ödeme, ödeme kuruluşunun güvenli sayfasında alınır; kart numaranız bizim sistemimize hiçbir aşamada iletilmez ve saklanmaz.',
+    a: 'Hayır. Kart bilgileriniz ödeme kuruluşunun güvenli sayfasına girilir ve orada saklanır; bizim sistemimize hiçbir aşamada iletilmez. Biz yalnızca ödeme kuruluşunun ürettiği bir referans numarasını tutarız.',
   },
   {
     q: 'İptal etmek zor mu? Param geri döner mi?',
-    a: 'İptal panelden tek adımda, gerekçe sorulmadan yapılır — bizi aramanıza gerek yok. İptalde erişiminiz hemen kesilmez, ödediğiniz dönemin sonuna kadar sürer. Ayrıca ilk ödemenizden itibaren 14 gün içinde isterseniz ücretinizi koşulsuz iade ediyoruz.',
+    a: 'İptal panelden tek adımda, gerekçe sorulmadan yapılır — bizi aramanıza gerek yok. Deneme süresi içinde iptal ederseniz hiçbir ücret alınmaz. Ödeme yaptıysanız erişiminiz hemen kesilmez, ödediğiniz dönemin sonuna kadar sürer; ayrıca ilk ödemenizden itibaren 14 gün içinde koşulsuz iade hakkınız var.',
   },
   {
     q: 'Öğrenciler telefondan kullanabilir mi?',

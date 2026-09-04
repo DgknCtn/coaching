@@ -80,15 +80,34 @@ export default function DistanceSalesPage() {
         sistemlerine iletilmez ve saklanmaz.
       </p>
       <p>
-        Taksitli işlemlerde bankanın uygulayabileceği vade farkı satış bedeline dahil
-        değildir ve ALICI&apos;nın bankası ile arasındaki ilişkiye tabidir.
+        Ödeme <strong className="text-foreground">tek çekim</strong> olarak alınır;
+        taksit seçeneği sunulmamaktadır.
+      </p>
+
+      <LegalHeading>4/A. Otomatik yenileme ve deneme sonu tahsilatı</LegalHeading>
+      <p>
+        ALICI, denemeye başlarken kart bilgilerini ödeme kuruluşunda kaydeder. Deneme
+        süresi boyunca tahsilat yapılmaz; kartın geçerliliği 1 TL&apos;lik provizyon
+        alınıp anında iade edilerek doğrulanır.
+      </p>
+      <p>
+        <strong className="text-foreground">
+          {TRIAL_DAYS} günlük deneme süresinin sonunda seçilen planın bedeli, ALICI&apos;nın
+          kayıtlı kartından otomatik olarak tahsil edilir
+        </strong>{' '}
+        ve abonelik, ALICI iptal edene kadar seçilen dönemde kendiliğinden yenilenir.
+        ALICI, ödeme adımını tamamlamakla bu otomatik tahsilata onay vermiş sayılır.
+      </p>
+      <p>
+        ALICI, deneme süresi dolmadan önce panelden tek adımda iptal ederek hiçbir ücret
+        ödemeden ayrılabilir. Her yenileme öncesinde ALICI&apos;ya e-posta ile
+        bilgilendirme yapılır.
       </p>
 
       <LegalHeading>5. Abonelik süresi, yenileme ve iptal</LegalHeading>
       <p>
-        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar ve deneme için
-        ödeme bilgisi istenmez. Abonelik, seçilen döneme göre aylık veya yıllık olarak
-        yenilenir.
+        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar. Abonelik, seçilen
+        döneme göre aylık veya yıllık olarak yenilenir.
       </p>
       <p>
         ALICI aboneliğini dilediği zaman, gerekçe göstermeksizin ve tek adımda panelden

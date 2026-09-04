@@ -5,6 +5,7 @@ import { describeStudentAttention, formatRelativeTime } from '@/lib/student-atte
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist'
+import { TrialBanner } from '@/components/shared/trial-banner'
 import { QuotaNotice } from '@/components/shared/quota-notice'
 import { MetricRow } from '@/components/shared/metric-row'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
@@ -29,6 +30,16 @@ type StudentRow = {
 
 export default async function TeacherDashboard() {
   const { supabase, workspaceId, activeTerm, profile, usage } = await getTeacherContext()
+
+  // Kart adımını atlayanlara deneme şeridi gösterilecek; abonelik varsa
+  // gösterilmez.
+  const { data: subscriptionRow } = await supabase
+    .from('billing_subscriptions')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .in('status', ['trialing', 'active', 'past_due'])
+    .maybeSingle()
+  const hasSubscription = !!subscriptionRow
 
   // Durum bildirimleri tembel materyalize edilir (cron yok): planı olup
   // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar. Idempotent.
@@ -172,6 +183,14 @@ export default async function TeacherDashboard() {
             Öğrenci Ekle
           </Button>
         }
+      />
+
+      {/* Deneme şeridi kurulum adımlarının ÜSTÜNDE: süre dolduğunda
+          çalışma alanı kapanıyor (057), yani bu diğer her şeyden daha
+          zaman duyarlı. Abonelik kurulduysa hiç görünmez. */}
+      <TrialBanner
+        trialEndsAt={usage?.trialEndsAt ?? null}
+        hasSubscription={hasSubscription}
       />
 
       {/* Kurulum adımları tek bir kartta toplandı: önceden yalnız "dönem

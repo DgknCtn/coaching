@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { GuaranteeStrip } from './guarantee-strip'
 
 export function DemoCta() {
   return (
@@ -31,6 +32,9 @@ export function DemoCta() {
               <ArrowRight />
             </Link>
           </div>
+
+          {/* Sayfadaki son CTA: kart itirazı burada da karşılanmalı. */}
+          <GuaranteeStrip className="relative mt-6" />
         </div>
       </div>
     </section>

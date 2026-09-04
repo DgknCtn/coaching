@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   PLAN_PRICING,
-  ENABLED_INSTALLMENTS,
   VAT_RATE,
   kurusToPriceString,
   formatKurus,
   priceFor,
   yearlyDiscountPercent,
   yearlyPerMonthKurus,
-  installmentsFor,
   splitVat,
 } from '@/lib/billing/pricing'
 
@@ -87,21 +85,6 @@ describe('yearlyDiscountPercent', () => {
 describe('yearlyPerMonthKurus', () => {
   it('aylık listeden düşük', () => {
     expect(yearlyPerMonthKurus('starter')).toBeLessThan(PLAN_PRICING.starter.monthlyKurus)
-  })
-})
-
-describe('installmentsFor', () => {
-  it('taksit yalnız yıllıkta', () => {
-    // Aylık akışta taksit göndermek iyzico'nun reddedeceği bir istek
-    // üretir ve hata kullanıcıya "ödeme başarısız" olarak yansır.
-    expect(installmentsFor('monthly')).toEqual([1])
-    expect(installmentsFor('yearly')).toEqual([...ENABLED_INSTALLMENTS])
-  })
-
-  it('tek çekim her zaman seçenekler arasında', () => {
-    // Yalnız taksitli sunmak, taksit istemeyen alıcıyı da komisyona
-    // ortak eder.
-    expect(installmentsFor('yearly')).toContain(1)
   })
 })
 

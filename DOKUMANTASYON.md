@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–056
+supabase/migrations/ 001–057
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 56 veritabanı migration'ı çalıştırılmıştır (001–056).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 57 veritabanı migration'ı çalıştırılmıştır (001–057).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -478,5 +478,39 @@ Kapsam herkese açık rotalarla sınırlı çünkü panel ekranları oturum iste
 **"Veli Bildirimleri: gecikmeleri anlık takip eder" — bildirim sistemi yok.** Kod tabanında e-posta/push gönderen hiçbir şey bulunmadı. Veli panele girip bakar. Başlık "Veli Paneli" oldu, zil ikonu göz ikonuyla değişti — zil, olmayan bir bildirim vaat ediyordu.
 
 SSS'e satın alma kararının bugünkü gerçek soruları eklendi: taksit, kart saklama, iptal ve iade, deneme sonu, telefon kullanımı. CTA metinleri "Ücretsiz Başla" → "Ücretsiz Dene" olarak hizalandı; "başla" kalıcı bir ücretsizlik ima ediyordu.
+
+### Faz 7 — Taksitsiz otomatik tahsilat ve kartlı onboarding (057)
+
+**Üç gerçek hata bu turda ortaya çıktı ve üçü de sessizdi.**
+
+**1. Deneme süresi hiç dolmuyordu.** `create_teacher_workspace` (024) `trial_ends_at` yazmıyordu ve sütunun varsayılanı yoktu. 052'deki RLS kontrolü `w.trial_ends_at IS NULL OR w.trial_ends_at > NOW()` diyor; `NULL` ortadaki koşulu doğrulayıp kısa devre yapıyor ve erişimi süresiz açıyordu. `TRIAL_DAYS = 14` tanımlıydı ama hiçbir yere bağlı değildi — deneme süresi ürünün hiçbir yerinde fiilen işlememişti. Mevcut deneme kullanıcılarına süre **bugünden** başlatıldı, kayıt tarihinden değil: kendi hatamızın faturasını, o güne kadar sınırsız kullanmış kullanıcıya kesmek olurdu.
+
+**2. Ödeme callback'i middleware'e takılıyordu.** `/api/billing/callback` herkese açık yollar listesinde değildi; sağlayıcının oturumsuz POST'u `/login`'e yönleniyordu. Yani 056'daki ödeme akışı canlıda **hiçbir zaman kapanmazdı**. Canlı bir ödeme hiç denenmediği için fark edilmemişti.
+
+**3. Yasal metinler oturumsuz ziyaretçiye kapalıydı.** `/gizlilik`, `/kosullar` ve diğerleri de listede yoktu; footer'dan tıklayan ziyaretçi `/login`'e düşüyordu — tam da bu metinleri okuması gereken kişi, yani alıcı adayı. Bunların herkese açık olması aynı zamanda yasal zorunluluk.
+
+Üçüncüsü dördüncüyü ortaya çıkardı: **a11y testleri yanlış geçiyordu.** `/gizlilik`'e gidip `/login`'e yönlenen test, axe'ı hep aynı giriş sayfasında çalıştırıp "ihlal yok" diyordu; altı rota testi tek bir sayfayı ölçüyordu. Teste `expect(pathname).toBe(route.path)` eklendi — ölçtüğünü sandığı sayfayı ölçtüğünden emin olmayan bir denetim, denetim değildir. Bu eklenince tanıtım sayfasında **gerçek** bir kontrast ihlali de ortaya çıktı (indirim rozeti 4.14:1) ve düzeltildi.
+
+**Taksit kaldırıldı.** Ürün kararıydı, teknik zorunluluk hâline de geldi: abonelik artık yinelenen bir tahsilat ve taksit tek seferlik bir çekimi böler. `installment` sütunu bırakılmadı, **düşürüldü** — kullanılmayan bir sütun sonraki okuyucuya hâlâ desteklenen bir özellik gibi görünür. Yıllık plan indirimiyle kalıyor.
+
+**Otomatik tahsilat: sağlayıcının abonelik ürünü.** Kartı kendi sayfamızda toplamak PCI-DSS kapsamına girmek demekti — sağlayıcının kart saklama API'si ham kart numarası istiyor. Tek PCI-güvenli yol: barındırılan formda kart alınır, sağlayıcı kartı 1 TL provizyon + iade ile doğrular, deneme bitince ve her yenilemede **kendisi çeker**. Zamanlayıcı, yeniden deneme ve batak takibi bizim kodumuz olmuyor. Bedeli: API **beta** ve ürünün kendi aylık ücreti var. Bağımlılık `lib/billing/iyzico-subscription.ts` içinde tek dosyada izole.
+
+**Webhook üç katmanlı savunma.** Uç herkese açık: (1) `X-IYZ-SIGNATURE-V3` sabit zamanlı doğrulanır, (2) gövdeden yalnız referans kodları alınır, (3) abonelik sağlayıcıya sorulur. Fiyat, sağlayıcının söylediği değil **bizim tablomuzdaki** fiyattır. İmza hesabı saf modülde (`iyzico-signature.ts`) tutuldu ki test edilebilsin — `server-only` bir dosyada kalsaydı testten geçemezdi.
+
+**Kart adımı zorunlu ama geçilebilir.** Kayıt sonrası `/kurulum/odeme` varsayılan yol; küçük bir "sonra hatırlat" bağlantısı var. Kapıyı kilitlemek, kaydolmuş bir kullanıcıyı ürünü hiç görmeden kaybetmek olurdu. Atlayanlar panelde deneme şeridi görüyor ve şeridin tonu son üç günde sertleşiyor.
+
+### Faz 7 — Vitrin: satış ve tasarım revizyonu
+
+**Kart itirazı gizlenmedi, karşılandı.** Kart istemek dönüşümün önündeki en büyük yeni engel ve saklanırsa kayıp **kart ekranında**, yani en pahalı yerde yaşanır. Bu yüzden `GuaranteeStrip` her CTA'nın altında aynı üç cümleyi söylüyor (deneme boyunca tahsilat yok · tek tıkla iptal · 14 gün koşulsuz iade) ve SSS'in **ilk sorusu** "Neden kart bilgisi istiyorsunuz?" oldu. Şerit tek bileşen: üç yerde elle yazılsaydı biri güncellenirken diğerleri bayatlardı.
+
+**Başlık kazancı söylüyor.** "20 öğrenci, 20 ayrı Excel dosyası olmasın" sorunu doğru adlandırıyordu ama okuyucuya ne kazanacağını söylemiyordu. Acı alt satıra indi, kaybolmadı.
+
+**Fiyatlandırmada aylık/yıllık geçişi.** İki fiyat statik yazılıyken okuyucu karşılaştırmayı kafasında yapmak zorundaydı; artık indirimi tıklayıp **görüyor**.
+
+**FeatureGrid sayfadan çıkarıldı** (dosya duruyor): rol kartlarıyla içerik olarak büyük ölçüde çakışıyordu ve iki ardışık kart ızgarası, fiyatlandırmaya inen yolu uzatmaktan başka işe yaramıyordu. Yerine fiyattan hemen önce `CommitmentsSection`: dürüst kanıt (uydurma rakam yok, ilerlemeyi siz onaylarsınız, veri yalıtımı, kolay iptal) ve kayıt gerektirmeyen demoya yönlendirme. **Sahte referans, logo ve kullanıcı sayısı eklenmedi** — `stats-bar.tsx`'teki karar burada da geçerli.
+
+**İki yanlış vaat daha düzeltildi:** `features-section.tsx` veli kartı "geciken ödev bildirimleri" ve "kritik anlarda haberdar olun" diyordu; kod tabanında e-posta ya da push gönderen hiçbir şey yok. Veli panele girip bakar, dil buna göre değişti.
+
+Mobilde yapışkan CTA eklendi (yalnız `sm` altında; masaüstünde navbar zaten sabit).
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

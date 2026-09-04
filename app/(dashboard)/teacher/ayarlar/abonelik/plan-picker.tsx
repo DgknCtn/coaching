@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { startCheckoutAction } from './actions'
 import {
   PLAN_PRICING,
-  ENABLED_INSTALLMENTS,
   formatKurus,
   yearlyDiscountPercent,
   yearlyPerMonthKurus,
@@ -19,22 +18,19 @@ import { PLANS } from '@/lib/plans'
 
 // PLAN SEÇİMİ VE ÖDEMEYE GEÇİŞ.
 //
-// TAKSİT YALNIZ YILLIKTA — ve bu ekranda GİZLENMİYOR, açıklanıyor.
-// Aylık seçiliyken taksit kutusunu sessizce kaldırmak, kullanıcıya
-// "taksit kayboldu" hissi verirdi. Neden olmadığı yazıyor.
+// TAKSİT YOK (057): her iki dönem de tek çekim. Yıllıkta indirim var.
 
 const PAYABLE: PayablePlanId[] = ['starter', 'coach']
 
 export function PlanPicker({ currentPlan }: { currentPlan: string }) {
   const [period, setPeriod] = useState<BillingPeriod>('yearly')
-  const [installment, setInstallment] = useState(1)
   const [pendingPlan, setPendingPlan] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   function buy(plan: PayablePlanId) {
     setPendingPlan(plan)
     startTransition(async () => {
-      const res = await startCheckoutAction(plan, period, period === 'yearly' ? installment : 1)
+      const res = await startCheckoutAction(plan, period)
       if (res.error) {
         toast.error(res.error)
         setPendingPlan(null)
@@ -72,30 +68,6 @@ export function PlanPicker({ currentPlan }: { currentPlan: string }) {
           <Badge variant="success">%{yearlyDiscountPercent('starter')} indirim</Badge>
         )}
       </div>
-
-      {period === 'yearly' ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Taksit:</span>
-          {ENABLED_INSTALLMENTS.map(n => (
-            <Button
-              key={n}
-              type="button"
-              size="sm"
-              variant={installment === n ? 'default' : 'outline'}
-              onClick={() => setInstallment(n)}
-            >
-              {n === 1 ? 'Tek çekim' : `${n} taksit`}
-            </Button>
-          ))}
-        </div>
-      ) : (
-        // Taksitin neden olmadığı YAZILIYOR. Sessizce kaldırmak,
-        // kullanıcıya "taksit kayboldu" hissi verirdi.
-        <p className="text-sm text-muted-foreground">
-          Taksit yalnız yıllık pakette kullanılabilir; aylık abonelik her ay kartınızdan
-          tek seferde tahsil edilir.
-        </p>
-      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {PAYABLE.map(plan => {

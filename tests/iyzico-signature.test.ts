@@ -6,6 +6,7 @@ import {
   generateRandomKey,
   verifyResponseSignature,
   checkoutFormRetrieveSignatureFields,
+  verifySubscriptionWebhookSignature,
 } from '@/lib/billing/iyzico-signature'
 
 describe('trailingZero', () => {
@@ -185,5 +186,90 @@ describe('checkoutFormRetrieveSignatureFields', () => {
     const fields = checkoutFormRetrieveSignatureFields({ paidPrice: 10.5, price: '10.50' })
     expect(fields[5]).toBe('10.5')
     expect(fields[6]).toBe('10.5')
+  })
+})
+
+describe('verifySubscriptionWebhookSignature', () => {
+  const base = {
+    merchantId: '123456',
+    secretKey: 'sandbox-secret',
+    eventType: 'subscription.order.success',
+    subscriptionReferenceCode: 'SUB-1',
+    orderReferenceCode: 'ORD-1',
+    customerReferenceCode: 'CUS-1',
+  }
+
+  function sign(o: typeof base, key = base.secretKey) {
+    return createHmac('sha256', key)
+      .update(
+        o.merchantId +
+          o.secretKey +
+          o.eventType +
+          o.subscriptionReferenceCode +
+          o.orderReferenceCode +
+          o.customerReferenceCode
+      )
+      .digest('hex')
+  }
+
+  it('doğru imzayı kabul eder', () => {
+    expect(
+      verifySubscriptionWebhookSignature({ ...base, expected: sign(base) })
+    ).toBe(true)
+  })
+
+  it('alan sırası dokümandaki gibi', () => {
+    // Bağımsız hesap: fonksiyonun mantığını tekrarlamak yerine
+    // sözleşmeyi kilitler. Sıra değişirse bu test kırılır.
+    const expected = createHmac('sha256', base.secretKey)
+      .update('123456sandbox-secretsubscription.order.successSUB-1ORD-1CUS-1')
+      .digest('hex')
+    expect(verifySubscriptionWebhookSignature({ ...base, expected })).toBe(true)
+  })
+
+  it('olay türü değişince reddeder', () => {
+    // Saldırganın en cazip hamlesi: failure'ı success'e çevirmek.
+    expect(
+      verifySubscriptionWebhookSignature({
+        ...base,
+        eventType: 'subscription.order.failure',
+        expected: sign(base),
+      })
+    ).toBe(false)
+  })
+
+  it('abonelik referansı değişince reddeder', () => {
+    // Başka birinin aboneliğini kendi hesabına bağlamak.
+    expect(
+      verifySubscriptionWebhookSignature({
+        ...base,
+        subscriptionReferenceCode: 'SUB-2',
+        expected: sign(base),
+      })
+    ).toBe(false)
+  })
+
+  it('yanlış secretKey ile imzalanmışı reddeder', () => {
+    expect(
+      verifySubscriptionWebhookSignature({ ...base, expected: sign(base, 'baska') })
+    ).toBe(false)
+  })
+
+  it('imza yoksa reddeder', () => {
+    // İmzasız bir webhook'a inanmak bedava abonelik dağıtmaktır.
+    expect(verifySubscriptionWebhookSignature({ ...base, expected: null })).toBe(false)
+    expect(verifySubscriptionWebhookSignature({ ...base, expected: '' })).toBe(false)
+  })
+
+  it('farklı uzunluktaki imzada patlamaz', () => {
+    expect(verifySubscriptionWebhookSignature({ ...base, expected: 'kisa' })).toBe(false)
+  })
+
+  it('eksik alanları boş string sayar', () => {
+    const o = { ...base, orderReferenceCode: null }
+    const expected = createHmac('sha256', base.secretKey)
+      .update('123456sandbox-secretsubscription.order.successSUB-1CUS-1')
+      .digest('hex')
+    expect(verifySubscriptionWebhookSignature({ ...o, expected })).toBe(true)
   })
 })
