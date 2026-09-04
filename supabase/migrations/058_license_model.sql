@@ -14,6 +14,15 @@
 -- yüzden geri alınıyor.
 --
 -- ============================================================
+-- BU DOSYA BAŞTAN SONA YENİDEN ÇALIŞTIRILABİLİR
+--
+-- Supabase SQL düzenleyicisi betiği tek işlem olarak sarmalamıyor: bir
+-- ifade patlarsa ÖNCEKİLER UYGULANMIŞ olarak kalır. Bu yüzden her ifade
+-- IF EXISTS / IF NOT EXISTS ile ya da DROP+CREATE kalıbıyla yazıldı —
+-- yarıda kalan bir çalıştırmadan sonra dosyayı baştan çalıştırmak
+-- güvenli.
+--
+-- ============================================================
 -- FİYAT TABLOLARI lib/billing/pricing.ts İLE AYNI OLMALI
 --
 -- Aşağıdaki iki tablo (süre ve adet indirimi) TypeScript tarafındaki
@@ -462,13 +471,32 @@ $fn$;
 --
 -- Süresi dolan kiracı RLS gereği kendi çalışma alanını göremez;
 -- bu fonksiyon ona NEDEN göremediğini söyler.
--- ------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.get_workspace_access_state()
+--
+-- ============================================================
+-- DROP GEREKİYOR, CREATE OR REPLACE YETMİYOR
+--
+-- Fonksiyon yeni bir sütun (license_ends_at) döndürüyor ve PostgreSQL
+-- `CREATE OR REPLACE` ile OUT parametrelerinin değişmesine izin vermiyor:
+--   "cannot change return type of existing function"
+--
+-- 052'deki YEDİ SÜTUN KORUNUYOR, kısaltılmıyor: `/erisim` sayfası
+-- status, plan ve trial_ends_at alanlarını okuyor. Dört sütuna
+-- indirseydik bu alanlar çalışma zamanında sessizce `undefined`
+-- olurdu — TypeScript tipi hâlâ var olduklarını söylediği için hata
+-- da vermezdi.
+-- ============================================================
+DROP FUNCTION IF EXISTS public.get_workspace_access_state();
+
+CREATE FUNCTION public.get_workspace_access_state()
 RETURNS TABLE (
-  workspace_id   UUID,
-  workspace_name TEXT,
-  role           TEXT,
-  blocked_reason TEXT
+  workspace_id    UUID,
+  workspace_name  TEXT,
+  role            TEXT,
+  status          TEXT,
+  plan            TEXT,
+  trial_ends_at   TIMESTAMPTZ,
+  license_ends_at TIMESTAMPTZ,
+  blocked_reason  TEXT
 )
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public, pg_temp
@@ -476,7 +504,12 @@ AS $fn$
   SELECT
     w.id,
     w.name,
-    m.role,
+    m.role::TEXT,
+    w.status::TEXT,
+    w.plan::TEXT,
+    w.trial_ends_at,
+    (SELECT l.ends_at FROM public.workspace_licenses l
+      WHERE l.workspace_id = w.id AND l.status = 'active'),
     CASE
       WHEN w.status = 'suspended' THEN 'suspended'
       WHEN w.status = 'archived'  THEN 'archived'

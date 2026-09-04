@@ -34,8 +34,12 @@ import {
 const SQL_PATH = join(process.cwd(), 'supabase/migrations/058_license_model.sql')
 
 function parityBlock(sql: string, name: string): string {
+  // `\r?\n`: depoda satır sonları KARIŞIK (CRLF ve LF bir arada) ve bir
+  // düzenleyici dosyayı yeniden yazdığında biçim değişebiliyor. Testin
+  // satır sonu biçimine takılması, ölçtüğü şeyle ilgisi olmayan bir
+  // kırılganlık olurdu — burada önemli olan sayıların aynı olması.
   const match = sql.match(
-    new RegExp(`PARITY-BEGIN ${name}\\n([\\s\\S]*?)-- PARITY-END ${name}`)
+    new RegExp(`PARITY-BEGIN ${name}\\r?\\n([\\s\\S]*?)-- PARITY-END ${name}`)
   )
   if (!match) {
     throw new Error(
