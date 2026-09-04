@@ -15,6 +15,7 @@ import {
   setSectionTopicsAction,
   setSectionPageRangeAction,
   setSectionPartAction,
+  setSectionTestRangeInfoAction,
   setBookTrackingModeAction,
   addBookPartAction,
   renameBookPartAction,
@@ -75,6 +76,10 @@ export interface SectionRow {
   /** R4/022: sayfa takipli kitapta bölümün fiziksel kapsamı. */
   pageStart: number | null
   pageEnd: number | null
+  /** R7-03 Revize: sayfa takipli kitapta OPSİYONEL, yalnız bilgi amaçlı
+   *  test aralığı. İlerlemeye katılmaz, takip birimi üretmez. */
+  testStart: number | null
+  testEnd: number | null
   /** R7-02 §8: bölüm birden fazla müfredat konusuna bağlanabilir. */
   topicIds: string[]
   /** R7-03: bölümün alt bölümleri. Boşsa bölüm testlerini doğrudan taşır. */
@@ -549,6 +554,14 @@ function SectionRowForm({
   // düzenleme yoluydu. "84-96" girilen bölüm burada 84 / 96 olarak görünür.
   const [pageStart, setPageStart] = useState(section.pageStart ? String(section.pageStart) : '')
   const [pageEnd, setPageEnd] = useState(section.pageEnd ? String(section.pageEnd) : '')
+  // Bilgi amaçlı test aralığı (R7-03 Revize). Boş bırakılabilir:
+  // ÖSYM Bakış, Son Bakış ve Kişisel Testler gibi kayıtlarda aralık yok.
+  const [testStart, setTestStart] = useState(
+    section.testStart ? String(section.testStart) : ''
+  )
+  const [testEnd, setTestEnd] = useState(
+    section.testEnd ? String(section.testEnd) : ''
+  )
   // R7-02 §8: çoklu eşleme. Boş liste eşlemeyi kaldırır.
   const [topicIds, setTopicIds] = useState<string[]>(section.topicIds)
   const [isPending, startTransition] = useTransition()
@@ -566,6 +579,14 @@ function SectionRowForm({
   const pageEndChanged =
     isPageBook && (Number(pageEnd) || 0) !== (section.pageEnd ?? 0) && Number(pageEnd) >= 1
 
+  // Bilgi amaçlı test aralığı (R7-03 Revize). Boş bırakmak da bir
+  // değişikliktir: öğretmen yanlış girdiği aralığı temizleyebilmeli.
+  const testStartValue = testStart === '' ? null : Number(testStart)
+  const testEndValue = testEnd === '' ? null : Number(testEnd)
+  const testRangeChanged =
+    isPageBook &&
+    (testStartValue !== section.testStart || testEndValue !== section.testEnd)
+
   const topicsChanged =
     topicIds.length !== section.topicIds.length ||
     topicIds.some((id) => !section.topicIds.includes(id))
@@ -576,6 +597,7 @@ function SectionRowForm({
     partId !== (section.partId ?? '') ||
     pageRangeChanged ||
     pageEndChanged ||
+    testRangeChanged ||
     topicsChanged
 
   function save() {
@@ -607,6 +629,21 @@ function SectionRowForm({
           toast.error(r.error)
           setPageStart(section.pageStart ? String(section.pageStart) : '')
           setPageEnd(section.pageEnd ? String(section.pageEnd) : '')
+          return
+        }
+      }
+      // Bilgi amaçlı test aralığı — yalnız sayfa kitaplarında.
+      if (isPageBook && testRangeChanged) {
+        const r = await setSectionTestRangeInfoAction(
+          bookId,
+          section.id,
+          testStart === '' ? null : Number(testStart),
+          testEnd === '' ? null : Number(testEnd)
+        )
+        if (r?.error) {
+          toast.error(r.error)
+          setTestStart(section.testStart ? String(section.testStart) : '')
+          setTestEnd(section.testEnd ? String(section.testEnd) : '')
           return
         }
       }
@@ -696,6 +733,28 @@ function SectionRowForm({
                 value={pageEnd}
                 disabled={hasProgress}
                 onChange={(e) => setPageEnd(e.target.value)}
+              />
+            </div>
+            <div className="w-24 space-y-1.5">
+              <Label htmlFor={`test-start-${section.id}`}>İlk test</Label>
+              <Input
+                id={`test-start-${section.id}`}
+                type="number"
+                min={1}
+                value={testStart}
+                placeholder="—"
+                onChange={(e) => setTestStart(e.target.value)}
+              />
+            </div>
+            <div className="w-24 space-y-1.5">
+              <Label htmlFor={`test-end-${section.id}`}>Son test</Label>
+              <Input
+                id={`test-end-${section.id}`}
+                type="number"
+                min={1}
+                value={testEnd}
+                placeholder="—"
+                onChange={(e) => setTestEnd(e.target.value)}
               />
             </div>
           </>

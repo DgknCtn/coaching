@@ -589,3 +589,39 @@ export async function importBookOutlineAction(
   revalidatePath(`/teacher/books/${bookId}`)
   return { success: true, result: data as { chapters: number; subsections: number; tests: number } }
 }
+
+/**
+ * Sayfa bölümüne BİLGİ AMAÇLI test aralığı (R7-03 Revize).
+ *
+ * ============================================================
+ * BU ARALIK TAKİP BİRİMİ ÜRETMEZ
+ *
+ * Şartnamenin kırmızı çizgisi: "Aynı kaynakta iki ayrı ilerleme sayacı
+ * oluşmaz." Sayfa ile takip edilen kaynakta ilerleme sayfa üzerinden
+ * yürür; test aralığı yalnız "bu bölümde hangi testler var" bilgisidir.
+ *
+ * Çağrılan RPC (`set_section_test_range_info`, 061) yalnız iki sütunu
+ * günceller ve `book_tests`'e dokunmaz — üretken olan
+ * `set_subsection_test_range` ile karıştırılmamalı.
+ * ============================================================
+ */
+export async function setSectionTestRangeInfoAction(
+  bookId: string,
+  sectionId: string,
+  testStart: number | null,
+  testEnd: number | null
+) {
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_section_test_range_info', {
+    p_section_id: sectionId,
+    p_test_start: testStart,
+    p_test_end: testEnd,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}

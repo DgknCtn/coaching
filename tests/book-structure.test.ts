@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatTestRange,
+  formatPageAndTestRange,
   orderLeafSections,
   testCountFromRange,
   type SectionNode,
@@ -220,5 +221,107 @@ describe('R7-03 kabul kriteri · 3D TYT Matematik', () => {
 
     expect(ordered).toHaveLength(bolum1.length)
     expect(ordered.reduce((sum, s) => sum + s.testCount, 0)).toBe(104)
+  })
+})
+
+// ============================================================
+// R7-03 REVİZE · Sayfa ile takipte opsiyonel test aralığı
+//
+// Gerçek vaka: Barış İntegral Fasikülü. Sayfa üzerinden ilerler ama
+// bölüm içindeki test aralıkları öğretmene ve öğrenciye referanstır.
+//
+// ŞARTNAMENİN KIRMIZI ÇİZGİSİ: "Aynı kaynakta iki ayrı ilerleme sayacı
+// oluşmaz." Bu blok o kuralın kanıtı.
+// ============================================================
+
+describe('R7-03 Revize · formatPageAndTestRange', () => {
+  it('şartnamedeki ekran örneğini birebir üretir', () => {
+    // Belgedeki satır: "Belirsiz İntegral · sf. 1-22 · Test 1-6"
+    expect(formatPageAndTestRange(1, 22, 1, 6)).toBe('sf. 1-22 · Test 1-6')
+  })
+
+  it('test aralığı yoksa yalnız sayfayı gösterir', () => {
+    // ÖSYM Bakış, Son Bakış, Kişisel Testler: aralıksız kayıtlar
+    // sorunsuz çalışmalı — şartnamenin kabul kriteri.
+    expect(formatPageAndTestRange(129, 138, null, null)).toBe('sf. 129-138')
+    expect(formatPageAndTestRange(146, 200, undefined, undefined)).toBe('sf. 146-200')
+  })
+
+  it('sayfa aralığı yoksa yalnız testi gösterir', () => {
+    expect(formatPageAndTestRange(null, null, 1, 6)).toBe('Test 1-6')
+  })
+
+  it('ikisi de yoksa boş döner', () => {
+    expect(formatPageAndTestRange(null, null, null, null)).toBe('')
+  })
+
+  it('tek sayfa ve tek test doğru yazılır', () => {
+    expect(formatPageAndTestRange(17, 17, 9, 9)).toBe('sf. 17 · Test 9')
+  })
+
+  it('geçersiz aralıkları sessizce düşürür', () => {
+    // Ters aralık bir veri hatası; etikette "sf. 22-1" göstermek
+    // kullanıcıyı yanıltırdı.
+    expect(formatPageAndTestRange(22, 1, 6, 1)).toBe('')
+  })
+
+  it('formatTestRange ile aynı biçimi üretir', () => {
+    // İki ayrı biçimlendirici olsaydı biri güncellenip diğeri
+    // unutulduğunda aynı aralık iki ekranda farklı görünürdü.
+    const combined = formatPageAndTestRange(null, null, 44, 48)
+    expect(combined).toBe(formatTestRange(44, 48))
+  })
+})
+
+describe('R7-03 Revize · Barış fasikülü · ikinci sayaç oluşmaz', () => {
+  // Şartnamedeki gerçek fasikül yapısı: sayfa aralığı + opsiyonel test
+  // aralığı. Son üç bölümde test aralığı YOK.
+  const BARIS = [
+    { title: 'Belirsiz İntegral', pageStart: 1, pageEnd: 22, testStart: 1, testEnd: 6 },
+    { title: 'Değişken Değiştirme Yöntemi', pageStart: 23, pageEnd: 36, testStart: 7, testEnd: 12 },
+    { title: 'Belirli İntegral', pageStart: 37, pageEnd: 71, testStart: 13, testEnd: 20 },
+    { title: 'Riemann Toplamı', pageStart: 72, pageEnd: 82, testStart: 21, testEnd: 22 },
+    { title: 'Belirli İntegral ile Alan Hesabı', pageStart: 83, pageEnd: 128, testStart: 23, testEnd: 33 },
+    { title: 'ÖSYM Bakış', pageStart: 129, pageEnd: 138, testStart: null, testEnd: null },
+    { title: 'Son Bakış', pageStart: 139, pageEnd: 145, testStart: null, testEnd: null },
+    { title: 'Kişisel Testler', pageStart: 146, pageEnd: 200, testStart: null, testEnd: null },
+  ]
+
+  it('takip birimi SAYFADAN gelir, test aralığından değil', () => {
+    // Bu testin varlık sebebi: test aralığı bir takip birimi ÜRETMEZ.
+    // Sayfa kitabında birim sayısı sayfa sayısıdır.
+    const totalPages = BARIS.reduce((n, s) => n + (s.pageEnd - s.pageStart + 1), 0)
+    const totalTestsIfCounted = BARIS.reduce(
+      (n, s) => n + testCountFromRange(s.testStart, s.testEnd),
+      0
+    )
+
+    expect(totalPages).toBe(200)
+    // Test aralıkları toplasa 33 eder; bu sayı HİÇBİR YERDE ilerlemeye
+    // katılmamalı. Burada yalnız "ikisi farklı sayılardır ve
+    // karıştırılamaz" olduğunu kaydediyoruz.
+    expect(totalTestsIfCounted).toBe(33)
+    expect(totalTestsIfCounted).not.toBe(totalPages)
+  })
+
+  it('her bölüm için doğru etiketi üretir', () => {
+    const labels = BARIS.map(s =>
+      formatPageAndTestRange(s.pageStart, s.pageEnd, s.testStart, s.testEnd)
+    )
+
+    expect(labels[0]).toBe('sf. 1-22 · Test 1-6')
+    expect(labels[4]).toBe('sf. 83-128 · Test 23-33')
+    // Aralıksız üç bölüm yalnız sayfa gösterir.
+    expect(labels[5]).toBe('sf. 129-138')
+    expect(labels[6]).toBe('sf. 139-145')
+    expect(labels[7]).toBe('sf. 146-200')
+  })
+
+  it('aralıksız bölümler etikette test kalıntısı bırakmaz', () => {
+    for (const s of BARIS.filter(x => x.testStart == null)) {
+      const label = formatPageAndTestRange(s.pageStart, s.pageEnd, s.testStart, s.testEnd)
+      expect(label).not.toContain('Test')
+      expect(label).not.toContain('·')
+    }
   })
 })

@@ -23,7 +23,7 @@ import { isSectionInTarget } from '@/lib/plan-scope'
 import { Circle } from 'lucide-react'
 import { sectionPageProgress, sectionScopeLabel } from '@/lib/plan-scope'
 import { formatRanges, parseRanges, pagesFromRanges } from '@/lib/page-ranges'
-import { formatTestRange } from '@/lib/book-structure'
+import { formatTestRange, formatPageAndTestRange } from '@/lib/book-structure'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProgressBar } from '@/components/shared/progress-bar'
@@ -172,12 +172,28 @@ function SectionRow({
   // R7-03: alt bölüm kullanılan kaynaklarda basılı aralık; kullanılmayanda null.
   const testRange = formatTestRange(section.testStart, section.testEnd)
 
+  // R7-03 REVİZE: sayfa ile takip edilen kaynaklarda test aralığı YALNIZ
+  // BİLGİDİR ve Kapsam sütununda "sf. 1-22 · Test 1-6" olarak gösterilir.
+  // Meta satırında AYRICA göstermek aynı bilgiyi iki yere koymak olurdu.
+  //
+  // Test kitaplarında hiçbir şey değişmiyor: aralık meta satırında kalır,
+  // Kapsam sütunu sayfa kitabına özgüdür.
+  const isPageBook = book.trackingMode === 'page'
+  const metaTestRange = isPageBook ? null : testRange
+
   const selectedCount = section.tests.filter((t) => selectedTestIds.has(t.id)).length
   // R7: sepet seçimden ayrı sayılır — "8 sayfa seçili · 12 sayfa planda".
   const basketCount = basketTestIds
     ? section.tests.filter((t) => basketTestIds.has(t.id)).length
     : 0
-  const scope = sectionScopeLabel(section)
+  const scope = isPageBook
+    ? formatPageAndTestRange(
+        section.pageStart,
+        section.pageEnd,
+        section.testStart,
+        section.testEnd
+      )
+    : sectionScopeLabel(section)
 
   return (
     <>
@@ -245,12 +261,12 @@ function SectionRow({
           {(section.partTitle ||
             section.groupLabel ||
             section.themeLabel ||
-            testRange ||
+            metaTestRange ||
             outOfScope) && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {[
                 section.partTitle,
-                testRange,
+                metaTestRange,
                 section.groupLabel,
                 section.themeLabel,
                 outOfScope ? 'Plan dışı' : null,

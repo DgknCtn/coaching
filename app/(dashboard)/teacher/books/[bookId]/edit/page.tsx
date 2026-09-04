@@ -139,6 +139,9 @@ export default async function BookEditPage({
       partId: s.part_id ?? null,
       pageStart: s.page_start ?? null,
       pageEnd: s.page_end ?? null,
+      // R7-03 Revize: sayfa kitabında bilgi amaçlı test aralığı.
+      testStart: s.test_start ?? null,
+      testEnd: s.test_end ?? null,
       topicIds: (s.book_section_topics ?? []).map((t) => t.topic_id),
     }))
 

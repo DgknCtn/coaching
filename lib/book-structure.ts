@@ -86,3 +86,49 @@ export function orderLeafSections<T extends SectionNode>(sections: T[]): T[] {
     .sort((a, b) => a.primary - b.primary || a.secondary - b.secondary)
     .map(entry => entry.section)
 }
+
+/**
+ * Sayfa ve test aralığını tek etikette birleştirir (R7-03 Revize).
+ *
+ * ============================================================
+ * NEDEN VAR
+ *
+ * Sayfa ile takip edilen kaynaklarda test aralığı OPSİYONEL ve YALNIZ
+ * BİLGİ AMAÇLIDIR. Barış İntegral Fasikülü gerçek vakası: ilerleme
+ * sayfa üzerinden yürür ama "bu bölümde Test 1-6 var" bilgisi
+ * öğretmene ve öğrenciye referans olarak değerli.
+ *
+ * Şartnamenin ekran örneğinin birebir karşılığı:
+ *   "Belirsiz İntegral · sf. 1-22 · Test 1-6"
+ *
+ * BU FONKSİYON İLERLEME HESABINA GİRMEZ. Yüzdeler yalnız `book_tests`
+ * satırlarından ve `test_completions`'tan gelir; buradaki aralık hiçbir
+ * takip birimi üretmez. Şartnamenin kırmızı çizgisi: "Aynı kaynakta iki
+ * ayrı ilerleme sayacı oluşmaz."
+ *
+ * BOŞ ARALIKTA SESSİZCE KISALIR: ÖSYM Bakış, Son Bakış ve Kişisel
+ * Testler gibi kayıtlarda test aralığı yoktur ve etiket yalnız sayfayı
+ * gösterir. Şartname bunu açıkça kabul kriteri yapıyor.
+ * ============================================================
+ */
+export function formatPageAndTestRange(
+  pageStart: number | null | undefined,
+  pageEnd: number | null | undefined,
+  testStart: number | null | undefined,
+  testEnd: number | null | undefined
+): string {
+  const parts: string[] = []
+
+  if (pageStart != null && pageEnd != null && pageEnd >= pageStart) {
+    parts.push(pageStart === pageEnd ? `sf. ${pageStart}` : `sf. ${pageStart}-${pageEnd}`)
+  }
+
+  // formatTestRange YENİDEN KULLANILIYOR: "Test 44-48" biçimi tek yerde
+  // tanımlı kalsın. İkinci bir biçimlendirici, bir gün biri güncellenip
+  // diğeri unutulduğunda aynı aralığın iki ekranda farklı görünmesi
+  // demekti.
+  const testLabel = formatTestRange(testStart, testEnd)
+  if (testLabel) parts.push(testLabel)
+
+  return parts.join(' · ')
+}

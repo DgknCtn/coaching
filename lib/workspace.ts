@@ -57,7 +57,7 @@ export const getTeacherContext = cache(async function getTeacherContext() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'id, full_name, email, default_workspace_id, workspace_members(role, workspace_id, status)'
+      'id, full_name, email, default_workspace_id, is_platform_admin, workspace_members(role, workspace_id, status)'
     )
     .eq('auth_user_id', user.id)
     .single()
@@ -121,6 +121,8 @@ export const getTeacherContext = cache(async function getTeacherContext() {
       full_name: string
       email: string | null
       default_workspace_id: string
+      /** Platform yöneticisi (060). Yalnız veritabanından atanır. */
+      is_platform_admin?: boolean
     },
     workspace,
     workspaceId,

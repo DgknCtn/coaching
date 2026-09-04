@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–060
+supabase/migrations/ 001–061
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 60 veritabanı migration'ı çalıştırılmıştır (001–060).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 61 veritabanı migration'ı çalıştırılmıştır (001–061).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -576,5 +576,27 @@ Admin ekranları **blanket RLS bypass ile beslenmiyor**. Her görünüm, yalnız
 **Partner kodları arayüzden oluşturulmuyor.** Yeni partner bir anlaşma sonucu ve nadir bir işlem; arayüzden eklenebilseydi yanlışlıkla oluşturulan bir kod komisyon yükümlülüğü doğururdu. "Ödendi işaretle" iki adımlı ve tutarı tekrar gösteriyor: yanlışlıkla tıklanan tek bir düğme, ödenmemiş bir hakedişi ödenmiş gösterir ve partner parasını hiç alamaz — üstelik kayıt onu haklı çıkarmaz.
 
 **Kiracı izolasyon testi genişletildi.** `workspace_licenses`, `billing_orders`, `support_tickets`, `support_messages`, `partners`, `partner_commissions`, `audit_events`, `usage_counters` anon anahtarla okunamıyor; dört admin RPC'sinin anon çağrıyı reddettiği de test ediliyor. Destek tabloları özellikle riskli: kullanıcı destek mesajına e-posta, ekran görüntüsü tarifi, hatta şifre yazabilir.
+
+### R7-03 Revize — Sayfa ile takipte opsiyonel test aralığı (061)
+
+`MatMuh_R7_03_REVIZE_..._04_Eylul_2026.pdf` önceki R7-03 belgesinin yerine geçiyor ama kendi ifadesiyle **"önceki R7-03 yapısı korunur"**. Korunan her şey zaten uygulanmıştı (047, 048); şartnamenin kendi kontrol sayıları da testte duruyordu. **Tek yeni şey vardı:** sayfa ile takip edilen kaynaklarda İlk/Son Test alanlarının opsiyonel ve yalnız bilgi amaçlı tutulabilmesi. Gerçek vaka Barış İntegral Fasikülü.
+
+**Belgenin kırmızı çizgisi:** *"Aynı kaynakta iki ayrı ilerleme sayacı oluşmaz."*
+
+**Keşifte iki belirleyici bulgu çıktı.** Birincisi: bugüne kadar `test_start`/`test_end` bilgi değil **üretim girdisiydi** — depodaki her `INSERT INTO book_tests` bir aralıktan `generate_series` ile satır üretiyor. Sayfa kitaplarında aynı sütunları yazmak, bu deseni yanlışlıkla tetikleyebilecek tek riskti. İkincisi: görüntüleme altyapısı **zaten vardı** — `section-title.tsx` ve `book-page-map.tsx` `formatTestRange(section.testStart, section.testEnd)` çağırıyor, `lib/book-map.ts` sütunları zaten seçiyor. Sayfa bölümlerinde veri hiç yazılmadığı için görünmüyordu. Yani iş sanıldığından küçüktü.
+
+Ayrıca ilerleme hesabı hiçbir yerde bu sütunları okumuyor; yüzdeler yalnız `book_tests` satırlarından geliyor. Bu, belgenin kırmızı çizgisinin **mimaride zaten garanti** olduğu anlamına geliyordu: satır üretmeyen bir aralık ilerlemeyi bozamaz.
+
+**Ayrı sütun açılmadı.** `info_test_start` gibi ikinci bir çift cazipti ama `test_start`/`test_end`'in anlamı zaten "kitapta yazan test aralığı" — basılı kitap hakkında bir olgu. Aralığın takip birimi üretip üretmediği sütunun değil **`tracking_mode`'un** işi. Kullanıcının seçtiği dönüşüm davranışı da bunu doğruluyor: sayfa→test geçişinde aralıklar takip verisine dönüşüyor; ayrı sütun olsaydı bu "bir sütundan diğerine kopyala" gibi yapay bir iş olurdu.
+
+**Karşılığında üretim yolu sıkıca kapatıldı.** `set_section_test_range_info` yalnız iki sütunu güncelleyen tek `UPDATE`'ten ibaret — "bilgi amaçlı" olması bir yorum vaadi değil, kodun kendisi. Fonksiyon test kitaplarını reddediyor: orada aralık girmenin tek meşru yolu üretken RPC'ler, ikisinin de aynı sütuna yazması iki doğruluk kaynağı demekti. `add_book_subsection` de artık sayfa kitaplarını **açıkça** reddediyor; bugüne kadar dolaylı olarak ("bu bölümün kendi testleri var") reddediyordu ve kazara çalışan bir korumaya güvenmek, bir gün o kazanın bozulması demektir.
+
+**Sayfa → Test dönüşümü** (kullanıcı kararı): `preview_tracking_mode_change` kaç bölümde aralık olduğunu ve kaç test oluşacağını **hiçbir şey değiştirmeden** söylüyor; `set_book_tracking_mode` aralık varken onaysız çağrıda hata veriyor. Rakamlar sunucudan geliyor — arayüzün kendi hesabını yapması, sunucunun yapacağından farklı bir sayı göstermesi riskini doğururdu. Test modundan çıkarken aralıklar **silinmiyor**: öğretmenin girdiği veri mod değişti diye kaybolmamalı.
+
+**Ekranda:** sayfa kitabında Kapsam sütunu `sf. 1-22 · Test 1-6` gösteriyor ve aralık meta satırından çıkarılıyor — aynı bilgiyi iki yere koymamak için. Test kitaplarında hiçbir şey değişmedi. Ödev satırlarına dokunulmadı; belgenin örneği açık: *"Ödev: Barış İntegral · sf. 1-22"*. Oraya test aralığı koymak öğrenciye yapmayacağı bir işi göstermek olurdu.
+
+**Testler:** Barış fasikülünün sekiz bölümü fixture olarak duruyor. En önemlisi, takip biriminin **sayfadan** geldiğini ve test aralıklarının toplamının (33) sayfa sayısıyla (200) karıştırılamayacağını kaydeden test — "ikinci sayaç yok" kuralının kanıtı. Aralıksız üç bölümün (ÖSYM Bakış, Son Bakış, Kişisel Testler) etiketinde test kalıntısı kalmadığı da kilitli. 3D TYT'nin 104/177 sayıları **değişmedi**: revizyon eskiyi bozmadı.
+
+**Yan iş:** `/admin` hiçbir yerden bağlantılı değildi, adresi elle yazmak gerekiyordu. Platform yöneticisine kenar çubuğunda "Yönetim" bağlantısı eklendi. Bu bir yetki kapısı **değil**, yalnız keşfedilebilirlik — asıl kontrol `/admin` layout'unda ve her admin RPC'sinin içinde; bayrak istemcide değiştirilse bile hiçbir veri görünmez.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

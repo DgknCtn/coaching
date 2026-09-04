@@ -36,6 +36,9 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         workspaces={workspaces}
         activeWorkspaceId={workspaceId}
         defaultCollapsed={collapsed}
+        // /admin hiçbir yerden bağlantılı değildi; adresi elle yazmak
+        // gerekiyordu. Bayrak profil satırında zaten okunuyor, ek sorgu yok.
+        isPlatformAdmin={profile.is_platform_admin === true}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         {children}

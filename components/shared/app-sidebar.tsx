@@ -9,6 +9,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  ShieldCheck,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
@@ -72,6 +73,15 @@ interface AppSidebarProps {
    * (lib/sidebar-prefs.ts) — böylece ilk boyada genişten dara zıplama olmaz.
    */
   defaultCollapsed?: boolean
+  /**
+   * Platform yöneticisi mi (060). Doğruysa menüye "Yönetim" bağlantısı
+   * eklenir.
+   *
+   * BU BİR YETKİ KONTROLÜ DEĞİL, yalnız keşfedilebilirlik: asıl savunma
+   * /admin layout'unda ve her admin RPC'sinin içinde. Bu bayrak elle
+   * true yapılsa bile hiçbir veri görünmez.
+   */
+  isPlatformAdmin?: boolean
 }
 
 export function AppSidebar({
@@ -84,6 +94,7 @@ export function AppSidebar({
   workspaces,
   activeWorkspaceId,
   defaultCollapsed = false,
+  isPlatformAdmin = false,
 }: AppSidebarProps) {
   const items = navByRole[role]
   const pathname = usePathname()
@@ -291,6 +302,18 @@ export function AppSidebar({
 
     const nav = navBlock(items, 'Ana menü')
 
+    // YÖNETİM BAĞLANTISI — yalnız keşfedilebilirlik için.
+    //
+    // /admin hiçbir yerden bağlantılı değildi; adresi elle yazmak
+    // gerekiyordu. Bu bağlantı bir YETKİ KAPISI DEĞİL: asıl kontrol
+    // /admin layout'unda ve her admin RPC'sinin içinde (060).
+    // Bayrak istemcide değiştirilse bile hiçbir veri görünmez.
+    const adminBlock = isPlatformAdmin && (
+      <div className="mt-4 border-t border-sidebar-border pt-4">
+        {navBlock([{ href: '/admin', label: 'Yönetim', icon: ShieldCheck }], 'Yönetim')}
+      </div>
+    )
+
     // Öğrenci bağlamı: bir öğrencinin herhangi bir ekranı açıkken o
     // öğrencinin bütün ekranları tek tıkla erişilebilir olmalı. Öğrenci
     // dışındaki sayfalarda blok hiç render edilmez — menü bugünkü hâlinde
@@ -366,6 +389,7 @@ export function AppSidebar({
         {switcher}
         {nav}
         {studentNavBlock}
+        {adminBlock}
         {panelBlock}
         {footer}
       </>
