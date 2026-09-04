@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { homeworkBatchSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { logAudit } from '@/lib/audit'
+import { trackFeature } from '@/lib/telemetry'
 
 interface HomeworkItem {
   student_book_assignment_id: string
@@ -50,6 +52,18 @@ export async function createHomeworkBatchAction(
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // Ödev yayınlama ürünün merkezi eylemi: hem denetim kaydına hem
+  // kullanım sayacına girer.
+  await logAudit(supabase, {
+    workspaceId: sessionWorkspaceId,
+    action: 'homework.publish',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { itemCount: parsed.data.items.length, dueDate: parsed.data.dueDate },
+  })
+  await trackFeature(supabase, sessionWorkspaceId, 'homework.publish')
+
 
   revalidatePath(`/teacher/students/${studentId}`)
   revalidatePath('/teacher')

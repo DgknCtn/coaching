@@ -4,11 +4,12 @@ import { getTeacherContext } from '@/lib/workspace'
 import { describeStudentAttention, formatRelativeTime } from '@/lib/student-attention'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
+import { OnboardingChecklist } from '@/components/shared/onboarding-checklist'
+import { QuotaNotice } from '@/components/shared/quota-notice'
 import { MetricRow } from '@/components/shared/metric-row'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
-import { AlertBanner } from '@/components/shared/alert-banner'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -27,17 +28,26 @@ type StudentRow = {
 }
 
 export default async function TeacherDashboard() {
-  const { supabase, workspaceId, activeTerm, profile } = await getTeacherContext()
+  const { supabase, workspaceId, activeTerm, profile, usage } = await getTeacherContext()
 
   // Durum bildirimleri tembel materyalize edilir (cron yok): planı olup
   // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar. Idempotent.
   await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
 
-  const { data: students } = await supabase
-    .from('teacher_student_overview_view')
-    .select('*')
-    .eq('workspace_id', workspaceId)
-    .order('student_full_name')
+  const [{ data: students }, { count: bookCount }] = await Promise.all([
+    supabase
+      .from('teacher_student_overview_view')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('student_full_name'),
+    // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
+    // gövdesi taşınmaz.
+    supabase
+      .from('books')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active'),
+  ])
 
   // Aksiyon gerektiren öğrenciler üstte: kayıp temas > geciken > onay kuyruğu.
   // (describeStudentAttention ile aynı öncelik sırası.)
@@ -164,18 +174,19 @@ export default async function TeacherDashboard() {
         }
       />
 
-      {!activeTerm && (
-        <AlertBanner
-          tone="info"
-          title="Başlamak için bir eğitim dönemi oluşturun"
-          description="Dönem tanımlamadan ödev ve ilerleme takibi yapılamaz."
-          action={
-            <Button variant="outline" size="sm" render={<Link href="/teacher/terms" />}>
-              Dönem oluştur
-            </Button>
-          }
-        />
-      )}
+      {/* Kurulum adımları tek bir kartta toplandı: önceden yalnız "dönem
+          yok" uyarısı vardı ve kullanıcı sonraki iki adımı (kitap, öğrenci)
+          kendi başına keşfetmek zorundaydı. Üçü de tamamlanınca kart
+          tamamen kaybolur. */}
+      <OnboardingChecklist
+        state={{
+          hasTerm: !!activeTerm,
+          hasBook: (bookCount ?? 0) > 0,
+          hasStudent: rows.length > 0,
+        }}
+      />
+
+      {usage && <QuotaNotice usage={usage} />}
 
       <MetricRow
         metrics={[

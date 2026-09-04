@@ -58,6 +58,20 @@ export function Footer() {
             >
               Kayıt Ol
             </Link>
+            {/* Hukuki metinler footer'da olmak zorunda: KVKK aydınlatma
+                metninin her sayfadan erişilebilir olması gerekiyor. */}
+            <Link
+              href="/gizlilik"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Gizlilik ve KVKK
+            </Link>
+            <Link
+              href="/kosullar"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Kullanım Koşulları
+            </Link>
           </nav>
         </div>
 

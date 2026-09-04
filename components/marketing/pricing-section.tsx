@@ -11,9 +11,10 @@ import { SectionHeading } from './section-heading'
 // rakamı vitrine koyup sonra yükseltmek, ilk müşterilerde güven kaybı
 // yaratır. Kademeler ve sınırlar görünür, fiyat konuşarak belirlenir.
 //
-// Buradaki öğrenci sınırları şu an YALNIZCA vitrindedir — uygulama
-// tarafında zorlanmıyor. Limitleri gerçekten uygulamak için workspaces
-// tablosuna plan/limit alanı ve öğrenci ekleme akışında kontrol gerekir.
+// Buradaki öğrenci sınırları ARTIK GERÇEKTEN UYGULANIYOR (052):
+// workspaces.student_limit kolonu ve students üzerindeki tetikleyici.
+// Bu listedeki sayılar lib/plans.ts ile aynı olmalı — vitrin ile ürünün
+// ayrışması, müşteriye verilen sözün sessizce bozulması demektir.
 
 interface Plan {
   name: string
@@ -57,7 +58,7 @@ const PLANS: Plan[] = [
     limit: 'Sınırsız öğrenci',
     features: [
       'Koç planındaki her şey',
-      'Çoklu öğretmen ve yardımcı hesaplar',
+      'Çoklu öğretmen hesabı ve çalışma alanı geçişi',
       'Kurum geneli dönem yönetimi',
       'Kitap havuzu yedeği (CSV / JSON)',
       'Öncelikli destek',

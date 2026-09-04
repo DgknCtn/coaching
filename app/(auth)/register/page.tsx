@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
+import { TRIAL_DAYS } from '@/lib/plans'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Ad en az 2 karakter olmalı'),
@@ -83,7 +84,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Hesap oluşturun"
-      description="15–20 öğrenciye kadar ücretsiz, kurulum gerektirmez"
+      description={`${TRIAL_DAYS} gün ücretsiz deneme, kurulum gerektirmez`}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Zaten hesabın var mı?{' '}

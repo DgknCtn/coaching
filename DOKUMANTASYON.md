@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–051
+supabase/migrations/ 001–054
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 51 veritabanı migration'ı çalıştırılmıştır (001–051).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 54 veritabanı migration'ı çalıştırılmıştır (001–054).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -374,5 +374,27 @@ Aktif workspace artık bir çerezde; `default_workspace_id` yalnız varsayılan.
 **Denetim kaydı eklendi.** "Bu ödevi kim onayladı, bu daveti kim iptal etti?" sorularının cevabı yoktu; `created_by_profile_id` yalnız altı tabloda, `updated_by` hiçbirinde yoktu. Tek, **ekleme-only** bir olay tablosu: `UPDATE` ve `DELETE` politikası yok — değiştirilebilen bir denetim kaydı denetim kaydı değildir. Yalnız geri alınamaz eylemler kaydedilir (onay, iade, arşivleme, davet oluşturma/iptal); her tıklamayı yazmak tabloyu okunamaz ve pahalı yapardı. Yazma **asla patlamaz**: denetim satırı yazılamadı diye ödev onayı geri alınmamalı.
 
 Ayrıca 002'deki yardımcı fonksiyonların `search_path` sabitlemesi tanımların kendisine yazıldı — 024 bunu toplu bir `ALTER` ile yapmıştı ama sıfırdan kurulan bir ortamda 002 yeniden uygulanırsa koruma sessizce kaybolurdu.
+
+### Faz 4 — Ticarileşme altyapısı (052, 053, 054)
+
+Ödeme entegrasyonu **bilinçli olarak yok**: sağlayıcı seçimi henüz doğrulanmadı ve yanlış sağlayıcıyla başlamak sonradan taşınması en pahalı karardır. Buradaki her şey sağlayıcıdan bağımsızdır.
+
+**052 — Plan, kota, deneme.** `plan` etiket, `student_limit` uygulanan sayıdır; ikisi bilinçli olarak ayrı: bir müşteriyle 40 öğrenci üzerinde anlaşıldığında plan adı değişmeden limiti tek satırlık `UPDATE` ile değişebilmeli. Sayılar `lib/plans.ts` ile pazarlama sayfasında aynı (10 / 30 / sınırsız) ve test bunu kilitliyor — vitrin ile ürünün ayrışması, müşteriye verilen sözün sessizce bozulmasıdır.
+
+Kota **veritabanı tetikleyicisiyle** zorlanıyor, uygulama katmanında değil. Bu oturumun dersi tam olarak buydu (049): uygulama katmanındaki kontrol, PostgREST'e doğrudan istek atan istemci tarafından atlanır. Faturalama bir sayıya dayanıyorsa o sayı veritabanında korunmalı. Yalnız **aktif** öğrenci sayılır — arşivlenen kotadan düşer, yoksa öğretmen arşivlemekten kaçınır ve hem veri şişer hem fatura yanlış çıkar.
+
+Deneme süresi (14 gün) **sorgu anında** değerlendirilir, zamanlanmış iş yoktur: bir cron'un gecikmesi, kapanması gereken kiracıyı açık bırakırdı. **Mevcut kiracılar korundu** — bugün var olan çalışma alanları `institution` + sınırsız olarak devralındı; ürünü kota kavramı yokken kullanmaya başlayanlara geriye dönük tavan koymak, bir sabah 12 öğrencisi olan öğretmenin 11'incisini kaybetmesi demek olurdu.
+
+**`/erisim` sayfası.** Askıya alınan ya da denemesi dolan çalışma alanı RLS gereği kendi üyelerine bile görünmez olur; bu sayfa olmasaydı kullanıcı hiçbir açıklama görmeden `/login`'e düşer ve doğru şifreyle tekrar tekrar denerdi. **Dil role göre değişir**: deneme dolumu öğrenciyi ve veliyi de kilitliyor ama ödemeyle ilgileri yok — onlara "plan seçin" denmiyor. Bu, karar alınırken belirtilen tavizin uygulamadaki karşılığıdır.
+
+**Kurulum adımları.** Kayıt bir çalışma alanı açıyor ama başka hiçbir şey oluşturmuyordu; yeni kullanıcı bütün sayaçları sıfır olan bir panele bakıyordu. Üç adımlı kart (dönem → kitap → öğrenci) eklendi; sıra **gerçek bir bağımlılık** olduğu için numaralandırma süs değil bilgidir. Tamamlanınca kart tamamen kaybolur.
+
+**053 — Veri silme talebi.** Gizlilik metni "30 gün içinde silinir" diyor; bu söz bir mekanizmayla karşılanmazsa metin yanlış beyandır. Talep 30 günlük bekleme penceresiyle açılır ve iptal edilebilir — silme geri alınamaz ve hesabı ele geçirilmiş biri tarafından da tetiklenebilir. **Silmenin yürütülmesi bilinçli olarak otomatik değil**: test edilmemiş bir yıkım aracını üretime koymak yerine önce talep akışı ve görünürlük kuruldu.
+
+**054 — Kullanım telemetrisi.** "Hangi özellik ne kadar kullanılıyor?" sorusu yanıtsızdı; yol haritası sezgiyle çiziliyordu. Üçüncü taraf analitik **kullanılmadı**: gizlilik metni takip çerezi olmadığını taahhüt ediyor ve ürün reşit olmayan öğrenci verisi işliyor. Olay değil **günlük sayaç** tutulur ve **kimin** kullandığı yazılmaz — kullanıcı bazlı davranış takibi bu ürünün işi değil.
+
+**Hukuki metinler** (`/gizlilik`, `/kosullar`) taslak olarak eklendi ve footer'a bağlandı. Sayılar koddan okunuyor. **Hukuki incelemeden geçmemiştir**; yayına çıkmadan önce bir hukukçu tarafından gözden geçirilmeli.
+
+Ayrıca vitrindeki iki bayat ifade düzeltildi: "yardımcı hesaplar" (assistant rolü 051'de kaldırıldı) ve kayıt ekranındaki "15–20 öğrenciye kadar ücretsiz" (gerçek limit 10; artık deneme süresi koddan okunuyor).
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

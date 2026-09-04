@@ -7,6 +7,7 @@ import { getTeacherContext } from '@/lib/workspace'
 import { studentSchema, assignBookSchema, uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
+import { trackFeature } from '@/lib/telemetry'
 
 export async function createStudentAction(
   fullName: string,
@@ -49,6 +50,8 @@ export async function createStudentAction(
       p_pinned: false,
     })
   }
+
+  await trackFeature(supabase, workspaceId, 'student.create')
 
   revalidatePath('/teacher/students')
   redirect(`/teacher/students/${data.id}`)
