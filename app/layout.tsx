@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { BRAND } from '@/lib/brand'
 import { ThemeProvider } from '@/components/shared/theme-provider'
 import { Inter } from 'next/font/google'
@@ -19,6 +19,32 @@ export const metadata: Metadata = {
   },
   description:
     'Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride kaldı — hepsi tek ekranda. Öğretmen, öğrenci ve veli için tek sistem.',
+
+  // Manifesto app/manifest.ts'ten geliyor; burada yalnız ikon yolları.
+  icons: {
+    icon: [
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/icons/apple-touch-icon.png',
+  },
+
+  // iOS manifest'in display alanını okumaz; tam ekran açılış için hâlâ
+  // kendi meta etiketlerini ister.
+  appleWebApp: {
+    capable: true,
+    title: BRAND.name,
+    statusBarStyle: 'default',
+  },
+}
+
+// Tarayıcı arayüzünün rengi temaya göre değişmeli: tek bir mor değer,
+// koyu temada ekranın üstünde yanan bir şerit bırakırdı.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#5a58c2' },
+    { media: '(prefers-color-scheme: dark)', color: '#1a1a2e' },
+  ],
 }
 
 export default function RootLayout({

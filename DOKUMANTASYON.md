@@ -421,4 +421,14 @@ Gerçek mobil sorun başkaydı: öğrencinin birincil eylemleri `size="xs"` (28p
 
 Genişletme yalnız `@media (pointer: coarse)` altında açılıyor: farede genişletilmiş alan, yakın duran iki düğmenin hedeflerini üst üste bindirirdi.
 
+### Faz 5 — PWA: ana ekrana eklenebilir uygulama
+
+Öğrenci bu ekranı telefonda neredeyse her gün açıyordu ama uygulama ana ekrana eklenemiyordu: her seferinde tarayıcıyı aç, sekme bul ya da adresi yaz. Ürünün günlük alışkanlığa dönüşmesinin önündeki engel teknik değil, sadece eksik bir dosyaydı.
+
+`app/manifest.ts` eklendi; ikon seti (192/512 normal + maskeli, apple-touch, favicon) marka morundan (`oklch(0.52 0.16 280)` → `#5a58c2`) üretildi. **Maskeli sürüm ayrı**: Android ikonu daireye kırpar, tek sürümle işaretin kenarları kesilirdi. `themeColor` temaya göre iki değer alıyor — tek mor değer, koyu temada ekranın üstünde yanan bir şerit bırakırdı. iOS manifest'in `display` alanını okumadığı için `appleWebApp` meta etiketleri ayrıca veriliyor.
+
+**Service worker bilinçli olarak YOK.** Çevrimdışı çalışma ayrı ve ciddi bir iştir: önbelleğe alınmış eski ödev listesi göstermek hiç göstermemekten kötüdür, çünkü öğrenci yaptığı işi kaydettiğini sanır. Burada yapılan şey yalnız "ana ekrana ekle" ve tam ekran açılış.
+
+**Yol boyunca bulunan gerçek hata:** `app/favicon.ico`, Next şablonunun 25 KB'lık varsayılanıydı ve head'de ilk sırada duruyordu — yani sekmede hâlâ Next.js logosu görünüyordu. Satılacak bir üründe bu küçük bir kusur değil. Kaldırıldı; `public/` içindeki beş şablon SVG artığı (`next.svg`, `vercel.svg`, …) da hiçbir yerden referanslanmadığı doğrulanıp silindi.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
