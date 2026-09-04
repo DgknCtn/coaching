@@ -48,3 +48,23 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# ------------------------------------------------------------
+# Şartname belgeleri ve çalışma görselleri
+#
+# Bunlar ÜRÜNÜN PARÇASI DEĞİL, üzerinde çalıştığımız kaynak dokümanlar
+# (MatMüh şartnameleri, referans ekran görüntüleri, WhatsApp'tan gelen
+# tasarım örnekleri). Depoya girdiklerinde ~5 MB ikili dosya taşıyorlar,
+# sürüm farkı üretmiyorlar ve deponun herkese açık olması hâlinde
+# müşteriye ait içeriği de yayınlamış oluyorlar.
+#
+# DİSKTE DURMAYA DEVAM EDERLER; yalnız sürüm kontrolüne girmezler.
+#
+# İSTİSNA: public/ altındaki ikonlar ve logo.png ürünün kendisi —
+# aşağıdaki kurallar onları kapsamaz.
+# ------------------------------------------------------------
+*.pdf
+image.png
+/uyelik.jpg
+WhatsApp Image *.jpeg
+WhatsApp Image *.jpg
