@@ -411,4 +411,14 @@ Ayrıca vitrindeki iki bayat ifade düzeltildi: "yardımcı hesaplar" (assistant
 
 Doğrulama kuralları `add_book_subsection` (047) ile **birebir aynı**: ikinci bir giriş yolu, ikinci bir kural kümesi demek olmamalı. Ayrıştırma istemcide çalışıyor çünkü öğretmen yazmadan önce sonucu görmeli, ama sunucu istemciye güvenmiyor ve aynı doğrulamayı tekrar yapıyor.
 
+### Faz 5 — Öğrenci mobil dokunmatik hedefleri
+
+Bekleme listesindeki iki maddeden biri **zaten kapatılmıştı**: "reddedilen ödevde geri bildirim metni yok" denetim raporunda duruyordu ama iki iade yolunun ikisinde de gerekçe alanı var, RPC notu `teacher_note`'a yazıyor ve öğrenci uyarı kutusunda görüyor (R2 Ek Revizyon §3). Liste güncel değildi; yeni kod yazılmadı.
+
+Gerçek mobil sorun başkaydı: öğrencinin birincil eylemleri `size="xs"` (28px) ve `size="sm"` (32px). Masaüstünde doğru görünüyor, ama öğrencinin bu ekranı kullandığı yer telefon — 28 piksellik hedefe parmakla basmak yanlış satırı işaretlemeye yol açıyor.
+
+**Düğme büyütülmedi.** `h-11` yapmak listeyi uzatır, ekrana sığan ödev sayısını düşürür ve masaüstünde orantısız durur. Bunun yerine görünen boyut korunup dokunulabilir alan görünmez bir `::after` katmanıyla 44 piksele çıkarıldı (`touch-target`, `app/globals.css`).
+
+Genişletme yalnız `@media (pointer: coarse)` altında açılıyor: farede genişletilmiş alan, yakın duran iki düğmenin hedeflerini üst üste bindirirdi.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

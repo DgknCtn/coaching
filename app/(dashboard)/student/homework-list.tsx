@@ -157,7 +157,7 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
             </label>
           )}
           {pendingCount > 1 && (
-            <Button size="xs" disabled={isPending} onClick={() => submitAll()}>
+            <Button size="xs" className="touch-target" disabled={isPending} onClick={() => submitAll()}>
               {isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
               Tümünü gönder ({pendingCount})
             </Button>
@@ -243,7 +243,7 @@ function BookGroup({
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="touch-target flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           {expanded ? (
             <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -256,7 +256,7 @@ function BookGroup({
           </span>
         </button>
         {pendingCount > 0 && (
-          <Button size="xs" variant="outline" disabled={groupPending} onClick={onSubmitGroup}>
+          <Button size="xs" variant="outline" className="touch-target" disabled={groupPending} onClick={onSubmitGroup}>
             {groupPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
             Tümünü gönder
           </Button>
@@ -368,7 +368,7 @@ function HomeworkItemRow({
         variant={isDone ? 'outline' : 'default'}
         disabled={isPending}
         onClick={toggle}
-        className="shrink-0"
+        className="shrink-0 touch-target"
       >
         {isPending ? (
           <Loader2 className="animate-spin" />
