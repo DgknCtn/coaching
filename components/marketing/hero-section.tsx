@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { TRIAL_DAYS } from '@/lib/plans'
 
 const previewStats = [
   { label: 'Öğrenci', value: '24' },
@@ -39,7 +40,7 @@ export function HeroSection() {
         <div className="mx-auto max-w-2xl text-center">
           <p className="mx-auto inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="size-3.5 text-primary" />
-            10 öğrenciye kadar ücretsiz
+            {TRIAL_DAYS} gün ücretsiz deneme
           </p>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
@@ -53,7 +54,7 @@ export function HeroSection() {
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/register" className={buttonVariants({ size: 'lg' })}>
-              Ücretsiz Başla
+              Ücretsiz Dene
               <ArrowRight />
             </Link>
             <Link href="/demo" className={buttonVariants({ variant: 'outline', size: 'lg' })}>
@@ -61,8 +62,14 @@ export function HeroSection() {
             </Link>
           </div>
 
+          {/* "Kredi kartı istemiyoruz" DOĞRU ve korunuyor: deneme için
+              ödeme bilgisi gerçekten istenmiyor. Kaldırılan kısım
+              "10 öğrenciye kadar ücretsiz" idi — 056'dan sonra ücretsiz
+              kademe yok, 14 günlük deneme var. Vitrinde olmayan bir
+              kademe vaat etmek, kayıt olan kullanıcıyı 15. günde
+              beklemediği bir duvara çarptırır. */}
           <p className="mt-4 text-sm text-muted-foreground">
-            10 öğrenciye kadar ücretsiz · Kredi kartı istemiyoruz
+            {TRIAL_DAYS} gün ücretsiz deneme · Kredi kartı istemiyoruz
           </p>
         </div>
 

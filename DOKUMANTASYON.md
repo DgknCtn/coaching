@@ -465,4 +465,18 @@ Kapsam herkese açık rotalarla sınırlı çünkü panel ekranları oturum iste
 
 **SATIŞA AÇILMADAN ÖNCE:** satıcı kimlik bilgileri (unvan, adres, vergi dairesi, MERSİS) her iki sözleşmede de boş; eksik satıcı bilgisi sözleşmeyi tüketici lehine sakatlar. Metinler hukuki incelemeden geçmemiştir. iyzico anahtarları sandbox'tır.
 
+### Faz 6 — Vitrin güncellemesi
+
+Ürün beş faz boyunca değişti ama tanıtım sayfası R7'de kalmıştı. Tarama, **vitrinle ürünün çeliştiği** dört nokta buldu; bunlar üslup meselesi değil, müşteriye verilmiş yanlış sözlerdi.
+
+**En ağırı: "10 öğrenciye kadar ücretsiz".** Hero rozetinde, hero dipnotunda, fiyat başlığında ve SSS'te olmak üzere dört yerde geçiyordu. 052'den sonra ücretsiz kademe yok — 14 günlük deneme var. Bu vaat, kayıt olan kullanıcıyı 15. günde beklemediği bir duvara çarptırırdı. Metin `TRIAL_DAYS`'ten okunacak biçimde değiştirildi. *"Kredi kartı istemiyoruz" ise korundu: deneme için ödeme bilgisi gerçekten istenmiyor.*
+
+**"Fiyat için görüşelim" artık sürtünme.** Fiyat bölümü bilinçli olarak rakamsızdı çünkü fiyat netleşmemişti; 056 ile fiyat belirlendi ve satın alma self-servis çalışıyor. Rakamı saklamak artık şeffaflık değil, satın almaya hazır kullanıcıyı e-posta kuyruğuna sokmak olurdu. Rakamlar **`lib/billing/pricing.ts`'ten okunuyor** — elle yazılsalardı vitrin ile ödeme ekranı ayrışır ve müşteri gördüğünden başka bir tutarla karşılaşırdı. Koç planı da artık self-servis satın alınabiliyor.
+
+**"YKS, LGS, KPSS için hazır şablonlar" — böyle bir şey hiç olmadı.** Arama ile doğrulandı: hazır kitap şablonu yok. Yerine 055'te gerçekten yapılan iş yazıldı: içindekiler listesini yapıştırarak toplu aktarma.
+
+**"Veli Bildirimleri: gecikmeleri anlık takip eder" — bildirim sistemi yok.** Kod tabanında e-posta/push gönderen hiçbir şey bulunmadı. Veli panele girip bakar. Başlık "Veli Paneli" oldu, zil ikonu göz ikonuyla değişti — zil, olmayan bir bildirim vaat ediyordu.
+
+SSS'e satın alma kararının bugünkü gerçek soruları eklendi: taksit, kart saklama, iptal ve iade, deneme sonu, telefon kullanımı. CTA metinleri "Ücretsiz Başla" → "Ücretsiz Dene" olarak hizalandı; "başla" kalıcı bir ücretsizlik ima ediyordu.
+
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

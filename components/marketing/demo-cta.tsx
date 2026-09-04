@@ -27,7 +27,7 @@ export function DemoCta() {
               href="/register"
               className={buttonVariants({ variant: 'outline', size: 'lg' })}
             >
-              Ücretsiz Başla
+              Ücretsiz Dene
               <ArrowRight />
             </Link>
           </div>

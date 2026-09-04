@@ -1,7 +1,7 @@
 import {
   ClipboardList,
   AlertTriangle,
-  Bell,
+  Eye,
   Library,
   BarChart3,
   Link2,
@@ -22,16 +22,16 @@ const features = [
       'Tamamlama oranına göre her öğrenciye otomatik risk skoru. Kritik olanları kaçırma.',
   },
   {
-    Icon: Bell,
-    title: 'Veli Bildirimleri',
+    Icon: Eye,
+    title: 'Veli Paneli',
     description:
-      'Veliler haftalık özeti görür, gecikmeleri anlık takip eder. Şeffaf iletişim her zaman.',
+      'Veli kendi panelinden çocuğunun ilerlemesini ve geciken ödevlerini görür. Salt okunur: hiçbir şeyi değiştiremez, öğretmenin akademik notlarını göremez.',
   },
   {
     Icon: Library,
     title: 'Kitap Havuzu',
     description:
-      'Bölüm ve test yapısıyla kitap ekle, öğrencilere ata. YKS, LGS, KPSS için hazır şablonlar.',
+      'Bölüm, alt bölüm ve test yapısıyla kitap ekle, öğrencilere ata. İçindekiler listesini yapıştırarak koca bir kitabı tek seferde aktar.',
   },
   {
     Icon: BarChart3,

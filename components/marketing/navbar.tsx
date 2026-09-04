@@ -69,7 +69,7 @@ export function Navbar() {
               Giriş Yap
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm' })}>
-              Ücretsiz Başla
+              Ücretsiz Dene
             </Link>
           </div>
 
@@ -124,7 +124,7 @@ export function Navbar() {
               Giriş Yap
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm', className: 'w-full' })}>
-              Ücretsiz Başla
+              Ücretsiz Dene
             </Link>
           </div>
         </div>

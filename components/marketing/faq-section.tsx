@@ -1,4 +1,5 @@
 import { BRAND, contactMailto } from '@/lib/brand'
+import { TRIAL_DAYS } from '@/lib/plans'
 import { SectionHeading } from './section-heading'
 
 // SSS — satın alma kararının önündeki gerçek soruları karşılar.
@@ -11,8 +12,8 @@ const FAQS: { q: string; a: string }[] = [
     a: 'Hayır. Yalnızca öğretmen tarafı ücretlendirilir. Öğrenci ve veli hesapları sınırsız ve ücretsizdir; davet linkiyle katılırlar.',
   },
   {
-    q: 'Elimdeki Excel dosyalarını aktarabilir miyim?',
-    a: 'Şu an otomatik içe aktarma yok. Kitapları bir kez sisteme eklersiniz: bölüm adı ve test sayısı (ya da sayfa aralığı) girmek yeterli. Kitap havuzunuzu istediğiniz zaman CSV veya JSON olarak dışa aktarıp yedekleyebilirsiniz.',
+    q: 'Kitapları tek tek elle mi gireceğim?',
+    a: 'Hayır. Kitabın içindekiler listesini kopyalayıp yapıştırırsınız; bölümleri ve alt bölümleri kendisi çıkarır. Kural tek cümle: satırın sonunda test aralığı varsa alt bölüm, yoksa bölüm başlığıdır. Eklemeden önce "kaç bölüm, kaç test açılacak" özetini görürsünüz. Kitap havuzunuzu istediğiniz zaman CSV veya JSON olarak dışa aktarıp yedekleyebilirsiniz.',
   },
   {
     q: 'Sayfa bazlı kitapları nasıl takip ediyor?',
@@ -31,8 +32,28 @@ const FAQS: { q: string; a: string }[] = [
     a: 'Her öğretmenin çalışma alanı veritabanı düzeyinde birbirinden yalıtılmıştır; kimse başkasının verisini göremez. Öğrenci yalnız kendi verisini, veli yalnız bağlı olduğu çocuğunun verisini görür.',
   },
   {
-    q: 'Ücretsiz planda 10 öğrenciyi aşarsam ne olur?',
-    a: 'Sizinle iletişime geçeriz; verileriniz silinmez. Planlar arası geçiş kayıp yaşatmadan yapılır.',
+    q: 'Plan sınırındaki öğrenci sayısını aşarsam ne olur?',
+    a: 'Mevcut verileriniz etkilenmez; yalnızca yeni öğrenci ekleme durur ve üst plana geçmeniz istenir. Arşivlediğiniz öğrenciler sınıra dahil değildir, yani mezun olan öğrenciyi arşivleyerek yer açabilirsiniz. Planlar arası geçiş veri kaybı yaşatmaz.',
+  },
+  {
+    q: 'Deneme süresi bitince ne oluyor?',
+    a: `${TRIAL_DAYS} gün sonunda bir plan seçmezseniz çalışma alanınız erişime kapanır — ama verileriniz SİLİNMEZ. Plan seçtiğiniz anda aynı verilerle kaldığınız yerden devam edersiniz.`,
+  },
+  {
+    q: 'Taksitle ödeyebilir miyim?',
+    a: 'Yıllık pakette evet, 9 taksite kadar. Aylık abonelikte taksit yapılamaz; bu teknik bir sınır, tercih değil — taksit tek seferlik bir çekimi böler, her ay yenilenen tahsilatta uygulanamaz. Yıllık paket zaten tek çekim olduğu için taksit orada kullanılabiliyor ve aylığa göre indirimli.',
+  },
+  {
+    q: 'Kart bilgilerim sizde saklanıyor mu?',
+    a: 'Hayır. Ödeme, ödeme kuruluşunun güvenli sayfasında alınır; kart numaranız bizim sistemimize hiçbir aşamada iletilmez ve saklanmaz.',
+  },
+  {
+    q: 'İptal etmek zor mu? Param geri döner mi?',
+    a: 'İptal panelden tek adımda, gerekçe sorulmadan yapılır — bizi aramanıza gerek yok. İptalde erişiminiz hemen kesilmez, ödediğiniz dönemin sonuna kadar sürer. Ayrıca ilk ödemenizden itibaren 14 gün içinde isterseniz ücretinizi koşulsuz iade ediyoruz.',
+  },
+  {
+    q: 'Öğrenciler telefondan kullanabilir mi?',
+    a: 'Evet. Arayüz telefon için tasarlandı ve uygulamayı ana ekrana ekleyebilirsiniz; tarayıcı çubuğu olmadan, uygulama gibi açılır.',
   },
 ]
 
