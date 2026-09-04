@@ -4,34 +4,39 @@ import { PageHeader } from '@/components/shared/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getTeacherContext } from '@/lib/workspace'
-import { PLANS, TRIAL_DAYS, trialDaysLeft } from '@/lib/plans'
+import {
+  daysLeft,
+  licenseState,
+  LICENSE_STATE_LABEL,
+  TRIAL_DAYS,
+  type WorkspaceUsage,
+} from '@/lib/plans'
 import { formatKurus } from '@/lib/billing/pricing'
-import { PlanPicker } from './plan-picker'
-import { CancelSubscription } from './cancel-subscription'
+import { LicensePurchase } from './license-purchase'
 
-export const metadata: Metadata = { title: 'Abonelik' }
+export const metadata: Metadata = { title: 'Lisans' }
 
-// ABONELİK EKRANI.
+// LİSANS DURUMU VE SATIN ALMA.
 //
-// ÖDEME SONUCU BURADA URL PARAMETRESİNDEN OKUNMAZ. `?odeme=tamam`
-// yalnız hangi bildirimin gösterileceğini söyler; gerçek durum her
-// zaman veritabanından gelir. Aksi hâlde adres çubuğuna `?odeme=tamam`
-// yazan herkes kendini abone sanırdı — ve daha kötüsü, gerçekten
-// ödeyip parametresi kaybolan kullanıcı ödememiş görünürdü.
+// ÖDEME SONUCU URL PARAMETRESİNDEN OKUNMAZ. `?odeme=tamam` yalnız hangi
+// bildirimin gösterileceğini söyler; gerçek durum her zaman
+// veritabanından gelir. Aksi hâlde adres çubuğuna `?odeme=tamam` yazan
+// herkes kendini lisanslı sanırdı — ve daha kötüsü, gerçekten ödeyip
+// parametresi kaybolan kullanıcı ödememiş görünürdü.
 
-const PAYMENT_NOTICES: Record<string, { text: string; tone: 'success' | 'warning' | 'destructive' }> = {
-  tamam: {
-    text: 'Ödemeniz alındı. Aboneliğiniz aşağıda görünüyor.',
-    tone: 'success',
-  },
+const PAYMENT_NOTICES: Record<
+  string,
+  { text: string; tone: 'success' | 'warning' | 'destructive' }
+> = {
+  tamam: { text: 'Ödemeniz alındı. Lisansınız aşağıda görünüyor.', tone: 'success' },
   basarisiz: {
     text: 'Ödeme tamamlanamadı. Kartınızdan tahsilat yapılmadıysa tekrar deneyebilirsiniz.',
     tone: 'destructive',
   },
   belirsiz: {
-    // Bu mesaj bilinçli olarak temkinli: "başarısız" demek, parası
-    // çekilmiş bir kullanıcıya yanlış bilgi vermek olurdu.
-    text: 'Ödemenizin sonucu henüz doğrulanamadı. Birkaç dakika içinde bu sayfayı yenileyin; tahsilat yapıldıysa aboneliğiniz otomatik açılır. Sorun sürerse bize yazın.',
+    // Bilinçli olarak temkinli: "başarısız" demek, parası çekilmiş bir
+    // kullanıcıya yanlış bilgi vermek olurdu.
+    text: 'Ödemenizin sonucu henüz doğrulanamadı. Birkaç dakika içinde bu sayfayı yenileyin; tahsilat yapıldıysa lisansınız otomatik açılır. Sorun sürerse bize yazın.',
     tone: 'warning',
   },
   gecersiz: {
@@ -40,7 +45,26 @@ const PAYMENT_NOTICES: Record<string, { text: string; tone: 'success' | 'warning
   },
 }
 
-export default async function SubscriptionPage({
+const FALLBACK_USAGE: WorkspaceUsage = {
+  plan: 'trial',
+  studentLimit: null,
+  activeStudents: 0,
+  trialEndsAt: null,
+  licenseStartsAt: null,
+  licenseEndsAt: null,
+  licenseStatus: null,
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('tr-TR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+export default async function LicensePage({
   searchParams,
 }: {
   searchParams: Promise<{ odeme?: string }>
@@ -49,40 +73,36 @@ export default async function SubscriptionPage({
   const params = await searchParams
 
   // usage, RPC boş dönerse null olabilir. `!` ile susturmak yerine makul
-  // bir varsayılana düşüyoruz: abonelik ekranının, kota bilgisi
-  // okunamadı diye tamamen çökmesi doğru davranış değil — kullanıcı
-  // buraya çoğu zaman ödeme yapmak için gelir.
-  const usage = rawUsage ?? {
-    plan: 'trial' as const,
-    studentLimit: null,
-    activeStudents: 0,
-    trialEndsAt: null,
-  }
-
+  // bir varsayılana düşüyoruz: bu sayfanın kota bilgisi okunamadı diye
+  // tamamen çökmesi doğru değil — kullanıcı buraya çoğu zaman satın
+  // almak için gelir.
+  const usage = rawUsage ?? FALLBACK_USAGE
   const notice = params.odeme ? PAYMENT_NOTICES[params.odeme] : undefined
 
-  const [{ data: subscription }, { data: orders }] = await Promise.all([
-    supabase
-      .from('billing_subscriptions')
-      .select('plan, period, status, current_period_end, cancel_at_period_end')
-      .eq('workspace_id', workspaceId)
-      .in('status', ['active', 'past_due'])
-      .maybeSingle(),
-    supabase
-      .from('billing_orders')
-      .select('id, plan, period, gross_kurus, status, created_at, paid_at')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
-      .limit(10),
-  ])
+  const { data: orders } = await supabase
+    .from('billing_orders')
+    .select('id, student_count, months, gross_kurus, status, created_at, paid_at')
+    .eq('workspace_id', workspaceId)
+    .order('created_at', { ascending: false })
+    .limit(10)
 
-  const daysLeft = trialDaysLeft(usage.trialEndsAt)
+  const state = licenseState(usage)
+  const isTrial = state === 'trialing' || state === 'trial_expired'
+  const remainingDays = daysLeft(isTrial ? usage.trialEndsAt : usage.licenseEndsAt)
+
+  const tone: Record<string, 'success' | 'warning' | 'destructive' | 'info' | 'neutral'> = {
+    licensed: 'success',
+    trialing: 'info',
+    trial_expired: 'destructive',
+    license_expired: 'destructive',
+    unlimited: 'success',
+  }
 
   return (
     <div>
       <PageHeader
-        title="Abonelik"
-        subtitle="Planınızı yönetin, ödeme geçmişinizi görün."
+        title="Lisans"
+        subtitle="Lisans durumunuzu görün, öğrenci sayınıza ve sürenize göre satın alın."
       />
 
       {notice && (
@@ -101,55 +121,96 @@ export default async function SubscriptionPage({
       )}
 
       <div className="space-y-6">
+        {/* DURUM PANELİ: dört bilgi tek bakışta — durum, dönem, kalan
+            süre, öğrenci limiti. Ayrı yerlere dağıtmak, kullanıcıyı
+            "lisansım ne zaman bitiyor" sorusu için gezdirirdi. */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Mevcut durum</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">
-                {PLANS[usage.plan as keyof typeof PLANS]?.name ?? usage.plan}
-              </span>
-              {subscription?.status === 'active' && <Badge variant="success">Aktif</Badge>}
-              {subscription?.status === 'past_due' && <Badge variant="warning">Ödeme bekliyor</Badge>}
-              {usage.plan === 'trial' && <Badge variant="info">Deneme</Badge>}
-            </div>
+          <CardContent>
+            <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Durum
+                </dt>
+                <dd className="mt-1.5">
+                  <Badge variant={tone[state] ?? 'neutral'}>
+                    {LICENSE_STATE_LABEL[state]}
+                  </Badge>
+                </dd>
+              </div>
 
-            <p className="text-muted-foreground">
-              {usage.activeStudents} aktif öğrenci
-              {usage.studentLimit != null && ` / ${usage.studentLimit} sınır`}
-            </p>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {isTrial ? 'Deneme dönemi' : 'Lisans dönemi'}
+                </dt>
+                <dd className="mt-1.5 text-sm">
+                  {isTrial ? (
+                    <>
+                      {TRIAL_DAYS} gün · bitiş {formatDate(usage.trialEndsAt)}
+                    </>
+                  ) : usage.licenseStartsAt ? (
+                    <>
+                      {formatDate(usage.licenseStartsAt)} — {formatDate(usage.licenseEndsAt)}
+                    </>
+                  ) : (
+                    'Süresiz'
+                  )}
+                </dd>
+              </div>
 
-            {subscription && (
-              <p className="text-muted-foreground">
-                {subscription.cancel_at_period_end
-                  ? 'Aboneliğiniz iptal edildi; erişiminiz '
-                  : 'Bir sonraki yenileme: '}
-                <strong className="text-foreground">
-                  {new Date(subscription.current_period_end).toLocaleDateString('tr-TR')}
-                </strong>
-                {subscription.cancel_at_period_end && ' tarihine kadar sürüyor.'}
-              </p>
-            )}
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Kalan süre
+                </dt>
+                <dd className="mt-1.5 text-sm tabular-nums">
+                  {remainingDays === null ? (
+                    'Süresiz'
+                  ) : remainingDays <= 0 ? (
+                    <span className="font-medium text-destructive-foreground">Doldu</span>
+                  ) : (
+                    <span
+                      className={
+                        remainingDays <= 7 ? 'font-medium text-warning-foreground' : ''
+                      }
+                    >
+                      {remainingDays} gün
+                    </span>
+                  )}
+                </dd>
+              </div>
 
-            {!subscription && usage.plan === 'trial' && (
-              <p className="text-muted-foreground">
-                {daysLeft != null && daysLeft > 0
-                  ? `Deneme süreniz ${daysLeft} gün sonra doluyor.`
-                  : `${TRIAL_DAYS} günlük deneme süreniz doldu.`}
-              </p>
-            )}
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Öğrenci limiti
+                </dt>
+                <dd className="mt-1.5 text-sm tabular-nums">
+                  {usage.studentLimit === null ? (
+                    'Sınırsız'
+                  ) : (
+                    <>
+                      <strong className="font-medium">{usage.activeStudents}</strong> /{' '}
+                      {usage.studentLimit}
+                    </>
+                  )}
+                </dd>
+              </div>
+            </dl>
           </CardContent>
         </Card>
 
         <div>
-          <h2 className="mb-3 text-base font-medium">Plan seçin</h2>
-          <PlanPicker currentPlan={usage.plan} />
+          <h2 className="mb-1 text-base font-medium">
+            {state === 'licensed' ? 'Lisansı uzat veya genişlet' : 'Lisans al'}
+          </h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {state === 'licensed'
+              ? 'Yeni alım mevcut lisansınızın üstüne eklenir; kalan günlerinizi kaybetmezsiniz.'
+              : 'Öğrenci sayınızı ve süreyi seçin. İkisi de arttıkça öğrenci başına maliyet düşer.'}
+          </p>
+          <LicensePurchase currentStudents={usage.activeStudents} />
         </div>
-
-        {subscription && !subscription.cancel_at_period_end && (
-          <CancelSubscription periodEnd={subscription.current_period_end} />
-        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -164,24 +225,23 @@ export default async function SubscriptionPage({
                   <thead>
                     <tr className="border-b text-left text-xs text-muted-foreground">
                       <th className="pb-2 font-medium">Tarih</th>
-                      <th className="pb-2 font-medium">Plan</th>
+                      <th className="pb-2 font-medium">Lisans</th>
                       <th className="pb-2 font-medium">Tutar</th>
                       <th className="pb-2 font-medium">Durum</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map(order => (
+                    {orders.map((order) => (
                       <tr key={order.id} className="border-b last:border-0">
                         <td className="py-2 tabular-nums">
                           {new Date(order.created_at).toLocaleDateString('tr-TR')}
                         </td>
                         <td className="py-2">
-                          {PLANS[order.plan as keyof typeof PLANS]?.name ?? order.plan}{' '}
-                          <span className="text-muted-foreground">
-                            ({order.period === 'yearly' ? 'Yıllık' : 'Aylık'})
-                          </span>
+                          {order.student_count} öğrenci · {order.months} ay
                         </td>
-                        <td className="py-2 tabular-nums">{formatKurus(order.gross_kurus)}</td>
+                        <td className="py-2 tabular-nums">
+                          {formatKurus(order.gross_kurus)}
+                        </td>
                         <td className="py-2">
                           {order.status === 'paid' ? (
                             <Badge variant="success">Ödendi</Badge>

@@ -128,20 +128,26 @@ export const getTeacherContext = cache(async function getTeacherContext() {
     activeTerm: activeTerm as { id: string; name: string; status: string } | null,
     /** Kullanıcının öğretmen olduğu tüm çalışma alanları (seçici için). */
     workspaces: (allWorkspaces ?? []) as { id: string; name: string }[],
-    /** Plan, kota ve deneme durumu (052). RPC satır dizisi döndürür. */
+    /** Lisans, kota ve deneme durumu (058). RPC satır dizisi döndürür. */
     usage: (() => {
       const row = ((usageRows ?? []) as {
         plan: string
         student_limit: number | null
         active_students: number
         trial_ends_at: string | null
+        license_starts_at: string | null
+        license_ends_at: string | null
+        license_status: string | null
       }[])[0]
       if (!row) return null
       return {
-        plan: row.plan as WorkspaceUsage['plan'],
+        plan: row.plan,
         studentLimit: row.student_limit,
         activeStudents: row.active_students,
         trialEndsAt: row.trial_ends_at,
+        licenseStartsAt: row.license_starts_at,
+        licenseEndsAt: row.license_ends_at,
+        licenseStatus: row.license_status,
       } satisfies WorkspaceUsage
     })(),
   }

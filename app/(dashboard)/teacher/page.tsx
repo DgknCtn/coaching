@@ -31,15 +31,14 @@ type StudentRow = {
 export default async function TeacherDashboard() {
   const { supabase, workspaceId, activeTerm, profile, usage } = await getTeacherContext()
 
-  // Kart adımını atlayanlara deneme şeridi gösterilecek; abonelik varsa
-  // gösterilmez.
-  const { data: subscriptionRow } = await supabase
-    .from('billing_subscriptions')
+  // Lisansı olmayanlara deneme şeridi gösterilecek.
+  const { data: licenseRow } = await supabase
+    .from('workspace_licenses')
     .select('id')
     .eq('workspace_id', workspaceId)
-    .in('status', ['trialing', 'active', 'past_due'])
+    .eq('status', 'active')
     .maybeSingle()
-  const hasSubscription = !!subscriptionRow
+  const hasLicense = !!licenseRow
 
   // Durum bildirimleri tembel materyalize edilir (cron yok): planı olup
   // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar. Idempotent.
@@ -190,7 +189,7 @@ export default async function TeacherDashboard() {
           zaman duyarlı. Abonelik kurulduysa hiç görünmez. */}
       <TrialBanner
         trialEndsAt={usage?.trialEndsAt ?? null}
-        hasSubscription={hasSubscription}
+        hasLicense={hasLicense}
       />
 
       {/* Kurulum adımları tek bir kartta toplandı: önceden yalnız "dönem

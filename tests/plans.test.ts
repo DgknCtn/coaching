@@ -1,46 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import {
   BLOCKED_MESSAGE,
-  PLANS,
+  LICENSE_STATE_LABEL,
+  PLAN_LABEL,
   TRIAL_DAYS,
+  daysLeft,
   evaluateQuota,
+  licenseState,
   trialDaysLeft,
   type WorkspaceUsage,
 } from '@/lib/plans'
 
-// Plan ve kota mantığı (Faz 4).
+// Lisans ve kota mantığı (058).
 //
 // Bu sayılar FATURAYA dönüşecek. Yanlış hesaplanan bir kota ya müşteriyi
 // haksız yere engeller ya da ödemediği kadarını kullandırır; ikisi de
 // sessizce olur. Sınır davranışları burada kilitleniyor.
 
 const usage = (over: Partial<WorkspaceUsage> = {}): WorkspaceUsage => ({
-  plan: 'coach',
+  plan: 'licensed',
   studentLimit: 30,
   activeStudents: 0,
   trialEndsAt: null,
+  licenseStartsAt: null,
+  licenseEndsAt: null,
+  licenseStatus: null,
   ...over,
 })
 
-describe('PLANS · tanımlar', () => {
-  it('vitrindeki dört kademeyi kapsar', () => {
-    expect(Object.keys(PLANS).sort()).toEqual(['coach', 'institution', 'starter', 'trial'])
+describe('TRIAL_DAYS', () => {
+  it('deneme süresi 7 gün', () => {
+    // 058'de 14'ten 7'ye indirildi. Bu sayı SQL tarafında da yazılı
+    // (create_teacher_workspace, INTERVAL '7 days'); ikisi birlikte
+    // değişmeli.
+    expect(TRIAL_DAYS).toBe(7)
   })
+})
 
-  it('limitler pazarlama sayfasıyla tutarlı', () => {
-    // Vitrin 10 / 30 / sınırsız diyor; kod ile vitrinin ayrışması
-    // müşteriye verilen sözün bozulması demek.
-    expect(PLANS.starter.studentLimit).toBe(10)
-    expect(PLANS.coach.studentLimit).toBe(30)
-    expect(PLANS.institution.studentLimit).toBeNull()
-  })
-
-  it('deneme, ödenecek kademeyle aynı sınırı gösterir', () => {
-    expect(PLANS.trial.studentLimit).toBe(PLANS.starter.studentLimit)
-  })
-
-  it('deneme süresi 14 gün', () => {
-    expect(TRIAL_DAYS).toBe(14)
+describe('PLAN_LABEL', () => {
+  it('üç durumun da etiketi var', () => {
+    expect(PLAN_LABEL.trial).toBeTruthy()
+    expect(PLAN_LABEL.licensed).toBeTruthy()
+    expect(PLAN_LABEL.institution).toBeTruthy()
   })
 })
 
@@ -60,8 +61,8 @@ describe('evaluateQuota', () => {
   })
 
   it('tavanın üstünde kalan eksiye düşmez', () => {
-    // Limit sonradan düşürülmüş olabilir (plan değişikliği); mevcut
-    // öğrenciler silinmez, kalan sıfırda durur.
+    // Limit sonradan düşmüş olabilir; mevcut öğrenciler silinmez,
+    // kalan sıfırda durur.
     const q = evaluateQuota(usage({ activeStudents: 35 }))
     expect(q.remaining).toBe(0)
     expect(q.usedPercentage).toBe(100)
@@ -73,9 +74,11 @@ describe('evaluateQuota', () => {
     expect(evaluateQuota(usage({ activeStudents: 24 })).isNearLimit).toBe(true)
   })
 
-  it('sınırsız planda çubuk ve kalan gösterilmez', () => {
+  it('sınırsız çalışma alanında çubuk ve kalan gösterilmez', () => {
     // Dolmayan bir ilerleme çubuğu göstermek yanıltıcı olurdu.
-    const q = evaluateQuota(usage({ plan: 'institution', studentLimit: null, activeStudents: 500 }))
+    const q = evaluateQuota(
+      usage({ plan: 'institution', studentLimit: null, activeStudents: 500 })
+    )
     expect(q.canAddStudent).toBe(true)
     expect(q.remaining).toBeNull()
     expect(q.usedPercentage).toBeNull()
@@ -83,42 +86,107 @@ describe('evaluateQuota', () => {
   })
 })
 
-describe('trialDaysLeft', () => {
+describe('daysLeft', () => {
   const now = new Date('2026-09-04T12:00:00Z')
 
   it('kalan günü yukarı yuvarlar', () => {
-    // Bugün bitecek deneme "0 gün" değil "son gün" olarak görünmeli.
-    expect(trialDaysLeft('2026-09-04T23:00:00Z', now)).toBe(1)
-    expect(trialDaysLeft('2026-09-18T12:00:00Z', now)).toBe(14)
+    // Bugün bitecek süre "0 gün" değil "son gün" olarak görünmeli.
+    expect(daysLeft('2026-09-04T23:00:00Z', now)).toBe(1)
+    expect(daysLeft('2026-09-11T12:00:00Z', now)).toBe(7)
   })
 
   it('süresi dolmuşsa sıfır döner', () => {
-    expect(trialDaysLeft('2026-09-04T11:59:00Z', now)).toBe(0)
-    expect(trialDaysLeft('2026-08-01T00:00:00Z', now)).toBe(0)
+    expect(daysLeft('2026-09-04T11:59:00Z', now)).toBe(0)
+    expect(daysLeft('2026-08-01T00:00:00Z', now)).toBe(0)
   })
 
-  it('deneme yoksa null döner', () => {
-    expect(trialDaysLeft(null, now)).toBeNull()
-    expect(trialDaysLeft('bozuk-tarih', now)).toBeNull()
+  it('tarih yoksa null döner', () => {
+    expect(daysLeft(null, now)).toBeNull()
+    expect(daysLeft('bozuk-tarih', now)).toBeNull()
+  })
+
+  it('trialDaysLeft aynı fonksiyon', () => {
+    expect(trialDaysLeft('2026-09-11T12:00:00Z', now)).toBe(7)
+  })
+})
+
+describe('licenseState', () => {
+  const now = new Date('2026-09-04T12:00:00Z')
+
+  it('deneme sürüyor', () => {
+    expect(
+      licenseState(usage({ plan: 'trial', trialEndsAt: '2026-09-08T12:00:00Z' }), now)
+    ).toBe('trialing')
+  })
+
+  it('deneme doldu', () => {
+    expect(
+      licenseState(usage({ plan: 'trial', trialEndsAt: '2026-09-01T12:00:00Z' }), now)
+    ).toBe('trial_expired')
+  })
+
+  it('lisans aktif', () => {
+    expect(
+      licenseState(usage({ plan: 'licensed', licenseEndsAt: '2026-12-01T12:00:00Z' }), now)
+    ).toBe('licensed')
+  })
+
+  it('lisans doldu', () => {
+    expect(
+      licenseState(usage({ plan: 'licensed', licenseEndsAt: '2026-08-01T12:00:00Z' }), now)
+    ).toBe('license_expired')
+  })
+
+  it('lisansı hiç olmayan "licensed" kiracı süresi dolmuş sayılır', () => {
+    // Ödeme kaydı silinmiş ya da callback yarım kalmış olabilir.
+    // "Aktif" varsaymak, ödemeyen kiracıya erişim vermek olurdu.
+    expect(licenseState(usage({ plan: 'licensed', licenseEndsAt: null }), now)).toBe(
+      'license_expired'
+    )
+  })
+
+  it('devralınan kiracı sınırsız', () => {
+    // 052'de grandfathered edilenler: ne denemede ne lisanslı.
+    // Kapıda bırakılmamalılar.
+    expect(licenseState(usage({ plan: 'institution' }), now)).toBe('unlimited')
+  })
+
+  it('her durumun etiketi var', () => {
+    for (const state of [
+      'trialing',
+      'trial_expired',
+      'licensed',
+      'license_expired',
+      'unlimited',
+    ] as const) {
+      expect(LICENSE_STATE_LABEL[state]).toBeTruthy()
+    }
   })
 })
 
 describe('BLOCKED_MESSAGE', () => {
-  it('üç engel nedeninin de mesajı var', () => {
+  it('dört engel nedeninin de mesajı var', () => {
     expect(Object.keys(BLOCKED_MESSAGE).sort()).toEqual([
       'archived',
+      'license_expired',
       'suspended',
       'trial_expired',
     ])
   })
 
   it('öğrenci ve veliye fatura dili kurulmaz', () => {
-    // Deneme bitince öğrenci de kilitleniyor ama ödemeyle ilgisi yok;
-    // ona "plan seçin" demek anlamsız ve kırıcı olurdu.
-    for (const reason of ['trial_expired', 'suspended'] as const) {
+    // Süre bitince öğrenci de kilitleniyor ama ödemeyle ilgisi yok;
+    // ona "lisans alın" demek anlamsız ve kırıcı olurdu.
+    for (const reason of ['trial_expired', 'license_expired', 'suspended'] as const) {
       const other = BLOCKED_MESSAGE[reason].other
-      expect(other).not.toMatch(/plan|ödeme|fatura|abonelik/i)
+      expect(other).not.toMatch(/lisans|ödeme|fatura|abonelik|plan/i)
       expect(other).toMatch(/öğretmen/i)
     }
+  })
+
+  it('deneme mesajı gün sayısını koddan alır', () => {
+    // Metne "14 gün" elle yazılmıştı; TRIAL_DAYS değişince metin
+    // sessizce yanlış olmuştu.
+    expect(BLOCKED_MESSAGE.trial_expired.teacher).toContain(`${TRIAL_DAYS} günlük`)
   })
 })

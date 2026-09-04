@@ -7,16 +7,15 @@ import { cn } from '@/lib/utils'
 // ============================================================
 // NEDEN VAR
 //
-// Kayıtta kart isteniyor. Bu, dönüşümün önündeki en büyük yeni engel ve
-// saklanırsa kayıp EN PAHALI yerde yaşanır: kullanıcı kaydolur, kart
-// ekranını görür, şaşırır ve çıkar. O noktada onu geri getirmek için
-// hiçbir şeyimiz yoktur.
+// Satın alma kararının önündeki üç endişe, CTA'ya BASILMADAN ÖNCE
+// karşılanıyor:
+//   "Denemek için kart vermem gerekiyor mu?" -> hayır
+//   "Sonra kendiliğinden para gider mi?"     -> hayır, otomatik yenileme yok
+//   "Beğenmezsem ne olur?"                   -> 14 gün koşulsuz iade
 //
-// Bu yüzden itiraz, CTA'ya BASILMADAN ÖNCE karşılanıyor. Üç cümle,
-// kullanıcının aklına gelen üç soruya birebir denk geliyor:
-//   "Şimdi para gidecek mi?"  -> deneme boyunca tahsilat yok
-//   "Ne zaman gidecek?"       -> N gün sonra, hatırlatmayla
-//   "Beğenmezsem ne olur?"    -> tek tıkla iptal + koşulsuz iade
+// 058'de otomatik tahsilat kaldırıldı; "deneme boyunca tahsilat yok"
+// cümlesi de yerini "kart istemiyoruz"a bıraktı — artık deneme için
+// gerçekten kart alınmıyor.
 //
 // TEK YERDE DURUYOR çünkü hero, fiyatlandırma ve kapanış CTA'sında aynı
 // olmalı. Üç ayrı yerde elle yazılsaydı biri güncellenirken diğerleri
@@ -24,9 +23,11 @@ import { cn } from '@/lib/utils'
 // ============================================================
 
 const ITEMS = [
-  { Icon: ShieldCheck, text: `${TRIAL_DAYS} gün ücretsiz — deneme boyunca tahsilat yok` },
-  { Icon: CreditCard, text: 'Dilediğiniz an tek tıkla iptal' },
-  { Icon: RotateCcw, text: 'İlk ödemede 14 gün koşulsuz iade' },
+  { Icon: ShieldCheck, text: `${TRIAL_DAYS} gün ücretsiz — kredi kartı istemiyoruz` },
+  { Icon: CreditCard, text: 'Tek çekim, otomatik yenileme yok' },
+  // 14 gün, DENEME süresinden ayrı bir taahhüt: ödeme yapıldıktan
+  // sonraki iade penceresi. İkisi karıştırılmamalı.
+  { Icon: RotateCcw, text: 'Ödemede 14 gün koşulsuz iade' },
 ]
 
 export function GuaranteeStrip({

@@ -84,36 +84,34 @@ export default function DistanceSalesPage() {
         taksit seçeneği sunulmamaktadır.
       </p>
 
-      <LegalHeading>4/A. Otomatik yenileme ve deneme sonu tahsilatı</LegalHeading>
+      <LegalHeading>4/A. Lisansın kapsamı ve süresi</LegalHeading>
       <p>
-        ALICI, denemeye başlarken kart bilgilerini ödeme kuruluşunda kaydeder. Deneme
-        süresi boyunca tahsilat yapılmaz; kartın geçerliliği 1 TL&apos;lik provizyon
-        alınıp anında iade edilerek doğrulanır.
+        ALICI, satın alma sırasında takip edeceği{' '}
+        <strong className="text-foreground">öğrenci sayısını</strong> ve{' '}
+        <strong className="text-foreground">kullanım süresini</strong> kendisi seçer.
+        Bedel bu iki değere göre hesaplanır ve ödemeden önce ekranda gösterilir.
       </p>
       <p>
         <strong className="text-foreground">
-          {TRIAL_DAYS} günlük deneme süresinin sonunda seçilen planın bedeli, ALICI&apos;nın
-          kayıtlı kartından otomatik olarak tahsil edilir
+          Ödeme tek çekimdir ve lisans otomatik olarak yenilenmez.
         </strong>{' '}
-        ve abonelik, ALICI iptal edene kadar seçilen dönemde kendiliğinden yenilenir.
-        ALICI, ödeme adımını tamamlamakla bu otomatik tahsilata onay vermiş sayılır.
+        SATICI, ALICI&apos;nın kart bilgisini saklamaz; süre bitiminde kendiliğinden
+        hiçbir tahsilat yapılmaz. Süre bitmeden ALICI&apos;ya hatırlatma yapılır.
       </p>
       <p>
-        ALICI, deneme süresi dolmadan önce panelden tek adımda iptal ederek hiçbir ücret
-        ödemeden ayrılabilir. Her yenileme öncesinde ALICI&apos;ya e-posta ile
-        bilgilendirme yapılır.
+        Süre dolduğunda çalışma alanı erişime kapanır; ALICI&apos;nın verileri silinmez
+        ve yeni bir lisans alındığında aynı verilerle devam edilir.
       </p>
 
-      <LegalHeading>5. Abonelik süresi, yenileme ve iptal</LegalHeading>
+      <LegalHeading>5. Deneme süresi ve iptal</LegalHeading>
       <p>
-        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar. Abonelik, seçilen
-        döneme göre aylık veya yıllık olarak yenilenir.
+        Yeni hesaplar {TRIAL_DAYS} günlük ücretsiz deneme ile başlar; deneme için ödeme
+        bilgisi istenmez.
       </p>
       <p>
-        ALICI aboneliğini dilediği zaman, gerekçe göstermeksizin ve tek adımda panelden
-        iptal edebilir. İptalde erişim hemen kesilmez; ödenen dönemin sonuna kadar
-        devam eder. İptal, o ana kadar ödenmiş bedelin iadesi anlamına gelmez; iade
-        koşulları için{' '}
+        Lisans süreli olduğu ve otomatik yenilenmediği için iptal edilecek yinelenen bir
+        ödeme bulunmamaktadır; ALICI yeni bir lisans almadığı sürece kendisinden başka
+        bir tahsilat yapılmaz. Ödenmiş bedelin iadesi için{' '}
         <Link href="/iade" className="text-primary underline underline-offset-4">
           İade ve İptal Koşulları
         </Link>{' '}

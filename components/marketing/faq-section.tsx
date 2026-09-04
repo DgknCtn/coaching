@@ -11,8 +11,8 @@ const FAQS: { q: string; a: string }[] = [
   // kararının önündeki en büyük yeni engel. Listenin dibine koymak,
   // itirazı cevaplamak değil saklamak olurdu.
   {
-    q: 'Neden kart bilgisi istiyorsunuz? Hemen para çekilecek mi?',
-    a: `Hayır, deneme süresi boyunca kartınızdan tahsilat yapılmaz. Kartı şimdi almamızın tek sebebi, ${TRIAL_DAYS} gün sonunda kesinti yaşamadan devam edebilmeniz. Kartın geçerliliği 1 ₺ provizyon alınıp anında iade edilerek doğrulanır. Süre dolmadan iptal ederseniz hiçbir ücret ödemezsiniz — üstelik kart adımını şimdilik atlayıp sonra da tamamlayabilirsiniz.`,
+    q: 'Denemek için kredi kartı gerekiyor mu?',
+    a: `Hayır. ${TRIAL_DAYS} günlük deneme için kart bilgisi istemiyoruz ve deneme sonunda kendiliğinden hiçbir tahsilat yapılmaz. Lisans almaya karar verirseniz ödemeyi siz başlatırsınız.`,
   },
   {
     q: 'Öğrenci ve velilerim de ücret ödeyecek mi?',
@@ -39,20 +39,20 @@ const FAQS: { q: string; a: string }[] = [
     a: 'Her öğretmenin çalışma alanı veritabanı düzeyinde birbirinden yalıtılmıştır; kimse başkasının verisini göremez. Öğrenci yalnız kendi verisini, veli yalnız bağlı olduğu çocuğunun verisini görür.',
   },
   {
-    q: 'Plan sınırındaki öğrenci sayısını aşarsam ne olur?',
-    a: 'Mevcut verileriniz etkilenmez; yalnızca yeni öğrenci ekleme durur ve üst plana geçmeniz istenir. Arşivlediğiniz öğrenciler sınıra dahil değildir, yani mezun olan öğrenciyi arşivleyerek yer açabilirsiniz. Planlar arası geçiş veri kaybı yaşatmaz.',
+    q: 'Lisansımdaki öğrenci sayısını aşarsam ne olur?',
+    a: 'Mevcut verileriniz etkilenmez; yalnızca yeni öğrenci ekleme durur. Arşivlediğiniz öğrenciler sınıra dahil değildir, yani mezun olan öğrenciyi arşivleyerek yer açabilirsiniz. Dilediğiniz zaman daha yüksek öğrenci sayısıyla yeni bir lisans alarak sınırı yükseltebilirsiniz; kalan süreniz kaybolmaz.',
   },
   {
     q: 'Deneme süresi bitince ne oluyor?',
-    a: `${TRIAL_DAYS} gün sonunda bir plan seçmezseniz çalışma alanınız erişime kapanır — ama verileriniz SİLİNMEZ. Plan seçtiğiniz anda aynı verilerle kaldığınız yerden devam edersiniz.`,
+    a: `${TRIAL_DAYS} gün sonunda lisans almazsanız çalışma alanınız erişime kapanır — ama verileriniz SİLİNMEZ. Lisans aldığınız anda aynı verilerle kaldığınız yerden devam edersiniz.`,
   },
   {
     q: 'Kart bilgilerim sizde saklanıyor mu?',
-    a: 'Hayır. Kart bilgileriniz ödeme kuruluşunun güvenli sayfasına girilir ve orada saklanır; bizim sistemimize hiçbir aşamada iletilmez. Biz yalnızca ödeme kuruluşunun ürettiği bir referans numarasını tutarız.',
+    a: 'Hayır. Kart bilgileriniz ödeme kuruluşunun güvenli sayfasına girilir; bizim sistemimize hiçbir aşamada iletilmez ve saklanmaz. Otomatik yenileme olmadığı için kartınızı saklamamıza gerek de yok.',
   },
   {
-    q: 'İptal etmek zor mu? Param geri döner mi?',
-    a: 'İptal panelden tek adımda, gerekçe sorulmadan yapılır — bizi aramanıza gerek yok. Deneme süresi içinde iptal ederseniz hiçbir ücret alınmaz. Ödeme yaptıysanız erişiminiz hemen kesilmez, ödediğiniz dönemin sonuna kadar sürer; ayrıca ilk ödemenizden itibaren 14 gün içinde koşulsuz iade hakkınız var.',
+    q: 'Aboneliği iptal etmem gerekir mi? Param geri döner mi?',
+    a: 'Lisans otomatik yenilenmediği için iptal edilecek yinelenen bir ödeme yok — yeni bir lisans almadığınız sürece sizden başka tahsilat yapılmaz. Ayrıca her lisans alımı için 14 gün koşulsuz iade hakkınız var.',
   },
   {
     q: 'Öğrenciler telefondan kullanabilir mi?',

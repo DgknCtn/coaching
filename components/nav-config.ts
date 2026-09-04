@@ -33,7 +33,7 @@ export const teacherNav: NavItem[] = [
   // Abonelik yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
   // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
   // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
-  { href: '/teacher/ayarlar/abonelik', label: 'Abonelik', icon: CreditCard },
+  { href: '/teacher/ayarlar/abonelik', label: 'Lisans', icon: CreditCard },
 ]
 
 /**

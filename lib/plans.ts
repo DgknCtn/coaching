@@ -1,69 +1,56 @@
-// Plan tanımları ve kota mantığı (Faz 4).
+// Lisans durumu ve kota mantığı.
 //
-// TEK DOĞRULUK KAYNAĞI DEĞİL — bilinçli. Uygulanan sayı veritabanındaki
-// `workspaces.student_limit`'tir (052) ve tetikleyici onu okur. Buradaki
-// değerler VARSAYILANLARDIR: yeni bir workspace açılırken hangi limitin
-// yazılacağını ve arayüzde hangi etiketin gösterileceğini belirler.
+// ============================================================
+// PLAN KAVRAMI KALDIRILDI (058)
 //
-// Ayrım şuna yarıyor: bir müşteriyle 40 öğrenci üzerinde anlaşıldığında
-// planı "Koç" kalır, limiti tek satırlık bir UPDATE ile değişir. Limit
-// kodda sabit olsaydı bu bir dağıtım gerektirirdi.
+// Önceden Başlangıç/Koç/Kurum planları vardı ve her biri sabit bir
+// öğrenci tavanı taşıyordu. Yeni modelde kullanıcı ÖĞRENCİ SAYISINI
+// KENDİSİ SEÇİYOR; "plan" artık yalnız çalışma alanının hangi durumda
+// olduğunu söyleyen bir etiket.
+//
+// Uygulanan sayı hâlâ veritabanındaki `workspaces.student_limit` ve
+// `students` üzerindeki tetikleyici onu okuyor — fiyatlandırma
+// değişse de bu kural değişmedi.
+// ============================================================
 
-export type PlanId = 'trial' | 'starter' | 'coach' | 'institution'
+/** Çalışma alanının faturalama durumu. */
+export type PlanId = 'trial' | 'licensed' | 'institution'
 
-export interface PlanDefinition {
-  id: PlanId
-  name: string
-  /** Varsayılan aktif öğrenci tavanı. null = sınırsız. */
-  studentLimit: number | null
-  description: string
+export const PLAN_LABEL: Record<string, string> = {
+  trial: 'Deneme',
+  licensed: 'Lisanslı',
+  institution: 'Kurumsal',
 }
 
-export const PLANS: Record<PlanId, PlanDefinition> = {
-  trial: {
-    id: 'trial',
-    name: 'Deneme',
-    // Denemede sınır vitrindeki Başlangıç ile aynı: ürünü deneyen kişi,
-    // ödeyeceği kademede ne bulacağını görmeli.
-    studentLimit: 10,
-    description: '14 gün boyunca ürünün tamamı',
-  },
-  starter: {
-    id: 'starter',
-    name: 'Başlangıç',
-    studentLimit: 10,
-    description: 'Yeni başlayan koçlar ve özel ders öğretmenleri',
-  },
-  coach: {
-    id: 'coach',
-    name: 'Koç',
-    studentLimit: 30,
-    description: 'Öğrenci portföyünü tek başına yöneten koçlar',
-  },
-  institution: {
-    id: 'institution',
-    name: 'Kurum',
-    studentLimit: null,
-    description: 'Kurs, dershane ve eğitim kurumları',
-  },
-}
+/**
+ * Ücretsiz deneme süresi.
+ *
+ * 058'de 14 günden 7 güne indirildi. Bu sayı SQL tarafında da yazılı
+ * (`create_teacher_workspace` içinde `INTERVAL '7 days'`); ikisi
+ * birlikte değiştirilmeli.
+ */
+export const TRIAL_DAYS = 7
 
-/** Deneme süresi. Karar: 14 gün, bitince çalışma alanı tamamen kapanır. */
-export const TRIAL_DAYS = 14
+/** Denemede kaç öğrenci eklenebilir. Ürünü gerçekten denemeye yeter. */
+export const TRIAL_STUDENT_LIMIT = 3
 
 export interface WorkspaceUsage {
-  plan: PlanId
+  plan: string
   studentLimit: number | null
   activeStudents: number
   trialEndsAt: string | null
+  /** Aktif lisans varsa dolu (058). */
+  licenseStartsAt: string | null
+  licenseEndsAt: string | null
+  licenseStatus: string | null
 }
 
 export interface QuotaState {
   /** Yeni öğrenci eklenebilir mi? */
   canAddStudent: boolean
-  /** Sınırsız planlarda null. */
+  /** Sınırsız çalışma alanlarında null. */
   remaining: number | null
-  /** 0-100. Sınırsız planlarda null — dolmayan bir çubuk göstermek yanıltıcı. */
+  /** 0-100. Sınırsızda null — dolmayan bir çubuk göstermek yanıltıcı. */
   usedPercentage: number | null
   /** Tavanın %80'i ve üstü: kullanıcı sürprizle karşılaşmadan önce uyarılmalı. */
   isNearLimit: boolean
@@ -97,15 +84,15 @@ export function evaluateQuota(usage: WorkspaceUsage): QuotaState {
 }
 
 /**
- * Denemenin kalan günü.
+ * Kalan gün sayısı — deneme ya da lisans için.
  *
- * Gün SAYISI yukarı yuvarlanır: bugün bitecek bir deneme "0 gün kaldı"
+ * Gün SAYISI yukarı yuvarlanır: bugün bitecek bir süre "0 gün kaldı"
  * değil "son gün" olarak görünmeli. Süresi dolmuşsa 0.
  */
-export function trialDaysLeft(trialEndsAt: string | null, now: Date = new Date()): number | null {
-  if (!trialEndsAt) return null
+export function daysLeft(endsAt: string | null, now: Date = new Date()): number | null {
+  if (!endsAt) return null
 
-  const end = Date.parse(trialEndsAt)
+  const end = Date.parse(endsAt)
   if (Number.isNaN(end)) return null
 
   const ms = end - now.getTime()
@@ -114,8 +101,52 @@ export function trialDaysLeft(trialEndsAt: string | null, now: Date = new Date()
   return Math.ceil(ms / (24 * 60 * 60 * 1000))
 }
 
-/** Erişimin neden engellendiği. 052'deki blocked_reason ile aynı küme. */
-export type BlockedReason = 'suspended' | 'archived' | 'trial_expired'
+/** Geriye dönük ad — deneme için okunabilirliği koruyor. */
+export const trialDaysLeft = daysLeft
+
+/**
+ * Çalışma alanının tek satırlık faturalama durumu.
+ *
+ * Ekranlar bu türetmeyi kendileri yapmamalı: "lisanslı mı, denemede mi,
+ * süresi mi doldu" sorusu üç ayrı yerde farklı cevaplanırsa kullanıcı
+ * bir ekranda uyarı görüp diğerinde görmez.
+ */
+export type LicenseState =
+  | 'trialing'
+  | 'trial_expired'
+  | 'licensed'
+  | 'license_expired'
+  | 'unlimited'
+
+export function licenseState(usage: WorkspaceUsage, now: Date = new Date()): LicenseState {
+  if (usage.plan === 'trial') {
+    const left = daysLeft(usage.trialEndsAt, now)
+    return left !== null && left <= 0 ? 'trial_expired' : 'trialing'
+  }
+
+  if (usage.plan === 'licensed') {
+    const left = daysLeft(usage.licenseEndsAt, now)
+    return left !== null && left > 0 ? 'licensed' : 'license_expired'
+  }
+
+  // Devralınan kiracılar: ne denemede ne lisanslı.
+  return 'unlimited'
+}
+
+export const LICENSE_STATE_LABEL: Record<LicenseState, string> = {
+  trialing: 'Deneme sürüyor',
+  trial_expired: 'Deneme süresi doldu',
+  licensed: 'Lisans aktif',
+  license_expired: 'Lisans süresi doldu',
+  unlimited: 'Sınırsız',
+}
+
+/** Erişimin neden engellendiği. 058'deki blocked_reason ile aynı küme. */
+export type BlockedReason =
+  | 'suspended'
+  | 'archived'
+  | 'trial_expired'
+  | 'license_expired'
 
 export const BLOCKED_MESSAGE: Record<
   BlockedReason,
@@ -123,10 +154,16 @@ export const BLOCKED_MESSAGE: Record<
 > = {
   trial_expired: {
     title: 'Deneme süreniz doldu',
-    teacher:
-      '14 günlük deneme süreniz sona erdi. Verilerinizin hiçbiri silinmedi; bir plan seçtiğinizde kaldığınız yerden devam edersiniz.',
+    teacher: `${TRIAL_DAYS} günlük deneme süreniz sona erdi. Verilerinizin hiçbiri silinmedi; bir lisans aldığınızda kaldığınız yerden devam edersiniz.`,
     // Öğrenci ve veli ödemeyle ilgili değil; onlara fatura dili
     // kurulmaz, ne yapmaları gerektiği söylenir.
+    other:
+      'Öğretmeninizin çalışma alanı şu an erişime kapalı. Bilgileriniz duruyor; öğretmeninizle iletişime geçebilirsiniz.',
+  },
+  license_expired: {
+    title: 'Lisans süreniz doldu',
+    teacher:
+      'Lisansınızın süresi sona erdi. Verilerinizin hiçbiri silinmedi; lisansınızı yenilediğinizde kaldığınız yerden devam edersiniz.',
     other:
       'Öğretmeninizin çalışma alanı şu an erişime kapalı. Bilgileriniz duruyor; öğretmeninizle iletişime geçebilirsiniz.',
   },

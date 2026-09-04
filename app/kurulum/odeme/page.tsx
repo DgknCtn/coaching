@@ -1,39 +1,25 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
-import { CardStep } from './card-step'
+import { LicenseStep } from './license-step'
 
-export const metadata: Metadata = { title: 'Denemenizi başlatın' }
+export const metadata: Metadata = { title: 'Lisansınızı seçin' }
 
-// KART ADIMI SAYFASI.
-//
-// Zaten aboneliği olan kullanıcı buraya düşmemeli: kayıttan sonra
+// Zaten lisansı olan kullanıcı buraya düşmemeli: kayıttan sonraki
 // yönlendirme sabit olduğu için tarayıcı geri tuşu ya da yer imi bu
-// sayfayı tekrar açabilir ve kullanıcı ikinci bir kart girmeye çalışır.
+// sayfayı tekrar açabilir.
 
-const NOTICES: Record<string, string> = {
-  basarisiz:
-    'Abonelik kurulamadı. Kart bilgilerinizi kontrol edip tekrar deneyebilirsiniz; tahsilat yapılmadı.',
-  belirsiz:
-    'Aboneliğinizin sonucu doğrulanamadı. Birkaç dakika içinde panelinizi kontrol edin; sorun sürerse bize yazın.',
-}
-
-export default async function CardSetupPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ kart?: string }>
-}) {
+export default async function LicenseSetupPage() {
   const { supabase, workspaceId } = await getTeacherContext()
-  const params = await searchParams
 
   const { data: existing } = await supabase
-    .from('billing_subscriptions')
+    .from('workspace_licenses')
     .select('id')
     .eq('workspace_id', workspaceId)
-    .in('status', ['trialing', 'active', 'past_due'])
+    .eq('status', 'active')
     .maybeSingle()
 
-  if (existing) redirect('/teacher')
+  if (existing) redirect('/teacher/ayarlar/abonelik')
 
-  return <CardStep notice={params.kart ? NOTICES[params.kart] : undefined} />
+  return <LicenseStep />
 }

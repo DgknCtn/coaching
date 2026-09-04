@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { AlertTriangle, Users } from 'lucide-react'
-import { PLANS, evaluateQuota, trialDaysLeft, type WorkspaceUsage } from '@/lib/plans'
+import { PLAN_LABEL, evaluateQuota, trialDaysLeft, type WorkspaceUsage } from '@/lib/plans'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +23,7 @@ export function QuotaNotice({
 }) {
   const quota = evaluateQuota(usage)
   const daysLeft = trialDaysLeft(usage.trialEndsAt)
-  const planName = PLANS[usage.plan]?.name ?? usage.plan
+  const planName = PLAN_LABEL[usage.plan] ?? usage.plan
 
   // Deneme uyarısı son üç günde çıkar: 14 gün boyunca sayaç göstermek
   // ürünü denemeyi bir geri sayıma çevirir.

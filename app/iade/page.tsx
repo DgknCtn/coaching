@@ -30,22 +30,21 @@ export default function RefundPage() {
 
       <LegalHeading>Önce deneyin, sonra ödeyin</LegalHeading>
       <p>
-        Her yeni hesap {TRIAL_DAYS} gün boyunca ürünün tamamına ücretsiz erişir.
-        Denemeye başlarken kart bilgilerinizi kaydedersiniz ama{' '}
-        <strong className="text-foreground">deneme boyunca hiçbir tahsilat yapılmaz</strong> —
-        ürünün işinize yarayıp yaramadığını ödeme yapmadan görürsünüz.
+        Her yeni hesap {TRIAL_DAYS} gün boyunca ürünün tamamına ücretsiz erişir ve{' '}
+        <strong className="text-foreground">deneme için kart bilgisi istenmez</strong>.
+        Ürünün işinize yarayıp yaramadığını ödeme yapmadan görürsünüz.
       </p>
 
-      <LegalHeading>İptal</LegalHeading>
+      <LegalHeading>İptal etmenize gerek yok</LegalHeading>
       <p>
-        Aboneliğinizi <strong className="text-foreground">dilediğiniz zaman</strong>,
-        gerekçe göstermeden, panelden tek adımda iptal edebilirsiniz. Bizi aramanız ya
-        da e-posta yazmanız gerekmez.
+        Lisans <strong className="text-foreground">otomatik yenilenmez</strong>. Yeni bir
+        lisans almadığınız sürece sizden başka bir tahsilat yapılmaz — iptal etmeniz
+        gereken yinelenen bir ödeme yok.
       </p>
       <p>
-        İptalde erişiminiz <strong className="text-foreground">hemen kesilmez</strong>:
-        ödediğiniz dönemin sonuna kadar kullanmaya devam edersiniz. Verileriniz
-        silinmez; daha sonra geri dönerseniz aynı verilerle devam edersiniz.
+        Süre dolduğunda erişiminiz kapanır ama{' '}
+        <strong className="text-foreground">verileriniz silinmez</strong>. Daha sonra
+        yeni bir lisans aldığınızda aynı verilerle kaldığınız yerden devam edersiniz.
       </p>
 
       <LegalHeading>14 gün koşulsuz iade</LegalHeading>
@@ -68,28 +67,11 @@ export default function RefundPage() {
         bağlı olarak hesabınıza geçmesi genellikle birkaç iş günü sürer.
       </p>
 
-      <LegalHeading>Yenileme ödemelerinde iade</LegalHeading>
+      <LegalHeading>Sonraki lisans alımlarında iade</LegalHeading>
       <p>
-        14 günlük süre, <strong className="text-foreground">ilk ödemeniz</strong> için
-        geçerlidir. Sonraki yenilemelerde kullanılmamış döneme ilişkin iade talebinizi
-        yine değerlendiririz; yenileme tarihini kaçırdıysanız ve ürünü hiç
-        kullanmadıysanız bize yazın.
-      </p>
-      <p>
-        Yenilemeden önce hatırlatma göndeririz. Beklenmedik bir tahsilatla
-        karşılaşırsanız bu bir hatadır ve düzeltiriz.
-      </p>
-
-      <LegalHeading>Deneme süresi biterken</LegalHeading>
-      <p>
-        Deneme süresinin sonunda tahsilat <strong className="text-foreground">otomatik</strong>{' '}
-        yapılır. Ücret ödemek istemiyorsanız, süre dolmadan panelden tek adımda iptal
-        etmeniz yeterli; iptal ettiğinizde hiçbir ücret alınmaz. Yenileme öncesinde
-        e-posta ile hatırlatma göndeririz.
-      </p>
-      <p>
-        Hatırlatmayı kaçırıp istemediğiniz bir tahsilatla karşılaştıysanız bize yazın —
-        14 günlük koşulsuz iade hakkınız zaten bu durumu kapsıyor.
+        14 günlük süre <strong className="text-foreground">her lisans alımı</strong> için
+        ayrı ayrı geçerlidir; yalnız ilk alımla sınırlı değildir. Yanlışlıkla aldığınız
+        ya da fikir değiştirdiğiniz bir lisansı 14 gün içinde iade edebilirsiniz.
       </p>
 
       <LegalHeading>İade yapmadığımız durumlar</LegalHeading>

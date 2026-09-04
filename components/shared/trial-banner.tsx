@@ -4,16 +4,15 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { trialDaysLeft } from '@/lib/plans'
 
-// DENEME ŞERİDİ — kart adımını atlayanlar için.
+// DENEME ŞERİDİ — henüz lisans almamış kullanıcılar için.
 //
 // ============================================================
 // NEDEN SERT ENGEL YOK
 //
-// Kart adımı "sonra hatırlat" ile geçilebiliyor. Kapıyı kilitlemek,
-// kaydolmuş bir kullanıcıyı ürünü hiç görmeden kaybetmek olurdu. Ama
-// atlayan kullanıcı da sessiz bırakılmamalı: deneme gerçekten doluyor
-// (057) ve dolduğunda çalışma alanı kapanıyor. Habersiz kapanmak,
-// kullanıcının ürünü değil bizi suçlaması demek.
+// 7 günlük deneme ücretsiz ve kart istemiyor. Ama süre gerçekten doluyor
+// (058) ve dolduğunda çalışma alanı kapanıyor. Habersiz kapanmak,
+// kullanıcının ürünü değil bizi suçlaması demek — otomatik tahsilat
+// olmadığı için hatırlatmanın tek yolu bu şerit.
 //
 // TON SÜREYE GÖRE SERTLEŞİYOR: son üç günde uyarı rengine geçiyor.
 // Aynı tonda ısrar eden bir şerit, ikinci günden sonra görünmez olur.
@@ -22,14 +21,14 @@ import { trialDaysLeft } from '@/lib/plans'
 interface TrialBannerProps {
   /** `workspaces.trial_ends_at`. Null ise deneme yok ya da bitmiş. */
   trialEndsAt: string | null
-  /** Abonelik kurulduysa şerit hiç gösterilmez. */
-  hasSubscription: boolean
+  /** Aktif lisans varsa şerit hiç gösterilmez. */
+  hasLicense: boolean
 }
 
-export function TrialBanner({ trialEndsAt, hasSubscription }: TrialBannerProps) {
-  // Kart verilmişse söylenecek bir şey yok. Ödeme yapmış kullanıcıya
+export function TrialBanner({ trialEndsAt, hasLicense }: TrialBannerProps) {
+  // Lisans alınmışsa söylenecek bir şey yok. Ödeme yapmış kullanıcıya
   // ödeme hatırlatmak, en kolay güven kaybettirme yollarından biri.
-  if (hasSubscription) return null
+  if (hasLicense) return null
 
   const daysLeft = trialDaysLeft(trialEndsAt)
   if (daysLeft == null) return null
@@ -63,20 +62,20 @@ export function TrialBanner({ trialEndsAt, hasSubscription }: TrialBannerProps) 
           </p>
           <p className={cn('mt-0.5', urgent ? 'text-warning-foreground' : 'text-muted-foreground')}>
             {expired
-              ? 'Verileriniz duruyor. Bir plan seçtiğinizde kaldığınız yerden devam edersiniz.'
-              : 'Kartınızı kaydedin, süre dolduğunda kesinti yaşamayın. Deneme boyunca tahsilat yapılmaz.'}
+              ? 'Verileriniz duruyor. Bir lisans aldığınızda kaldığınız yerden devam edersiniz.'
+              : 'Süre dolmadan lisansınızı alın, kesinti yaşamayın. Öğrenci sayınızı ve süreyi kendiniz seçersiniz.'}
           </p>
         </div>
       </div>
 
       <Link
-        href="/kurulum/odeme"
+        href="/teacher/ayarlar/abonelik"
         className={cn(
           buttonVariants({ size: 'sm', variant: urgent ? 'default' : 'outline' }),
           'shrink-0'
         )}
       >
-        {expired ? 'Plan seç' : 'Kartı kaydet'}
+        Lisans al
       </Link>
     </div>
   )

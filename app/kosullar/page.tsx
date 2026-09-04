@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalShell, LegalHeading } from '@/components/marketing/legal-shell'
 import { BRAND } from '@/lib/brand'
-import { PLANS, TRIAL_DAYS } from '@/lib/plans'
+import { TRIAL_DAYS } from '@/lib/plans'
 
 // Kullanım koşulları — TASLAK.
 //
@@ -47,31 +47,26 @@ export default function TermsPage() {
         alınması sizin sorumluluğunuzdadır.
       </p>
 
-      <LegalHeading>Planlar ve sınırlar</LegalHeading>
+      <LegalHeading>Lisans ve sınırlar</LegalHeading>
       <p>
         Yeni hesaplar <strong className="text-foreground">{TRIAL_DAYS} günlük</strong>{' '}
-        deneme süresiyle başlar. Deneme süresi sonunda bir plan seçilmezse çalışma alanı
-        erişime kapatılır;{' '}
-        <strong className="text-foreground">verileriniz silinmez</strong> ve plan
-        seçildiğinde erişim aynı verilerle yeniden açılır.
+        ücretsiz deneme ile başlar. Sonrasında, takip edeceğiniz{' '}
+        <strong className="text-foreground">öğrenci sayısını</strong> ve{' '}
+        <strong className="text-foreground">kullanım süresini</strong> kendiniz
+        seçerek lisans alırsınız. Öğrenci sayısı ve süre arttıkça öğrenci başına
+        maliyet düşer; güncel tutarı satın alma ekranında görürsünüz.
       </p>
-      <p>Planların aktif öğrenci sınırları:</p>
-      <ul className="ml-5 list-disc space-y-2">
-        <li>
-          <strong className="text-foreground">{PLANS.starter.name}</strong> —{' '}
-          {PLANS.starter.studentLimit} aktif öğrenciye kadar
-        </li>
-        <li>
-          <strong className="text-foreground">{PLANS.coach.name}</strong> —{' '}
-          {PLANS.coach.studentLimit} aktif öğrenciye kadar
-        </li>
-        <li>
-          <strong className="text-foreground">{PLANS.institution.name}</strong> — öğrenci
-          sınırı yok
-        </li>
-      </ul>
       <p>
-        Arşivlenen öğrenciler sınıra dahil değildir. Sınıra ulaşıldığında mevcut
+        Lisans <strong className="text-foreground">tek çekimdir ve otomatik
+        yenilenmez</strong>. Süre bitmeden hatırlatma yapılır. Süre dolduğunda
+        çalışma alanı erişime kapanır;{' '}
+        <strong className="text-foreground">verileriniz silinmez</strong> ve yeni bir
+        lisans aldığınızda aynı verilerle devam edersiniz.
+      </p>
+      <p>
+        Lisansta belirttiğiniz öğrenci sayısı, aynı anda takip edebileceğiniz{' '}
+        <strong className="text-foreground">aktif</strong> öğrenci sayısıdır.
+        Arşivlenen öğrenciler bu sınıra dahil değildir. Sınıra ulaşıldığında mevcut
         verileriniz etkilenmez; yalnız yeni öğrenci ekleme durur.
       </p>
 

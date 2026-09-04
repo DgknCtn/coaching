@@ -54,7 +54,7 @@ export function StickyCta() {
         {TRIAL_DAYS} Gün Ücretsiz Dene
       </Link>
       <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
-        Deneme boyunca tahsilat yok · Tek tıkla iptal
+        Kredi kartı istemiyoruz · Otomatik yenileme yok
       </p>
     </div>
   )

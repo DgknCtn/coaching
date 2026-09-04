@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–057
+supabase/migrations/ 001–058
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 57 veritabanı migration'ı çalıştırılmıştır (001–057).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 58 veritabanı migration'ı çalıştırılmıştır (001–058).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -512,5 +512,29 @@ SSS'e satın alma kararının bugünkü gerçek soruları eklendi: taksit, kart 
 **İki yanlış vaat daha düzeltildi:** `features-section.tsx` veli kartı "geciken ödev bildirimleri" ve "kritik anlarda haberdar olun" diyordu; kod tabanında e-posta ya da push gönderen hiçbir şey yok. Veli panele girip bakar, dil buna göre değişti.
 
 Mobilde yapışkan CTA eklendi (yalnız `sm` altında; masaüstünde navbar zaten sabit).
+
+### Faz 8 — Lisans modeli (058)
+
+İş modeli değişti: plan tabanlı yinelenen abonelikten **ön ödemeli lisansa**. Kullanıcı öğrenci sayısını ve süreyi seçer, tek seferde öder, lisans o süre boyunca geçerlidir.
+
+**Neden abonelik bırakıldı.** Öğrenci sayısı × ay kombinasyonu sınırsız ve sağlayıcının abonelik ürünü önceden tanımlı fiyat planı istiyor — N×12 için plan üretilemez. 057'de kurulan abonelik altyapısı bu yüzden geri alındı: `iyzico-subscription.ts`, `plan-codes.ts`, webhook ve abonelik callback rotaları, `start_trial_subscription`, `mark_subscription_past_due` silindi. Kararlı ve test edilmiş olan **Checkout Form** yolu (`iyzico.ts`, imza modülü ve 29 testi, `/api/billing/callback`) olduğu gibi kaldı.
+
+**Fiyat eğrisi.** Taban 500 TL/öğrenci/ay (KDV dahil). Süre indirimi 1 ayda %0'dan 12 ayda %35'e, adet indirimi 1-4'te %0'dan 100+'da %25'e. İkisi çarpılır. İki çapa ürün kararı olarak verildi ve teste bağlandı: `1 öğrenci × 1 ay = 500 TL`, `1 öğrenci × 2 ay = 900 TL`.
+
+**Fiyat iki yerde hesaplanıyor ve bu bilinçli.** SQL sunucu otoritesidir — istemci tutar gönderemesin diye ödenecek rakamı veritabanı belirler. TypeScript ise arayüzün canlı hesabı; kullanıcı öğrenci sayısını değiştirdikçe tutarı anında görmeli, her tuş vuruşunda sunucuya gitmek olmaz. İkisi ayrışırsa müşteri ekranda gördüğünden başka bir tutar öder. `tests/pricing-sql-parity.test.ts` migration dosyasındaki sayıları okuyup TypeScript sabitleriyle karşılaştırıyor; biri değişip diğeri unutulursa CI kırılır. Test yuvarlamanın **yerini** de kontrol ediyor — `ROUND` çarpımın dışında olmalı, aksi hâlde iki taraf farklı kuruş üretir.
+
+**Yuvarlama tek yerde.** Toplam otoritedir, öğrenci başına birim fiyat ondan **türetilir**. Önce birim fiyatı yuvarlayıp sonra çarpsaydık "10 × 292,50" ile gösterilen toplam tutmazdı.
+
+**Deneme 7 güne indi.** Mevcut deneme kullanıcılarına dokunulmadı — sürelerini kısaltmak, verilmiş bir günü geri almaktır. `BLOCKED_MESSAGE` metnindeki "14 günlük" ifadesi elle yazılmıştı ve `TRIAL_DAYS` değişince sessizce yanlış olmuştu; artık koddan okunuyor ve bir test bunu kilitliyor.
+
+**Erişim kontrolü genişledi.** 052'de yalnız deneme süresine bakılıyordu; artık ödeyen kullanıcının da bir bitişi var. Kural `workspace_access_ok()` içinde **tek yerde**: üç ayrı yerde tekrarlansaydı biri düzeltilirken diğerleri unutulur ve süresi dolmuş bir lisans bir yoldan içeri girmeye devam ederdi. `get_workspace_access_state()` yeni bir gerekçe döndürüyor: `license_expired`.
+
+**Lisans genişletmede limit aşağı inmez.** 30 öğrencilik lisansı olan biri 5 öğrencilik ek alım yaptığında 25 öğrencisinin bir anda limit dışı kalmaması için `settle_billing_order` mevcut ve yeni sayının **büyüğünü** alıyor. Süresi dolmamış lisansın üstüne ekleniyor; erken yenileyen kalan günlerini kaybetmiyor.
+
+**Ekranlar.** `LicenseConfigurator` (öğrenci sayısı + süre, canlı toplam, birim maliyet ve kazanılan indirim; 500 üstü görüşmeye yönlendirir), lisans durumu paneli (**durum, dönem, kalan süre, öğrenci limiti** tek bakışta), kayıt sonrası adım kart adımından lisans adımına dönüştü ve **zorunlu değil** — 7 gün ücretsiz deneme dururken satın almaya zorlamak, ürünü hiç görmemiş kullanıcıyı kapıda kaybetmek olurdu.
+
+**Vitrinde kademe kartları yerine hesaplayıcı.** Üç sabit kart, sürekli değişen bir fiyatı temsil edemez ve "benim durumumda ne tutar?" sorusunu cevapsız bırakırdı. Hesaplayıcı bu soruyu ziyaretçi kaydolmadan cevaplıyor. Kademe olmadığı için "hangi özellik hangi pakette" sorusu da yok: **her şey her lisansta**, ve bu açıkça yazılıyor.
+
+**Yasal metinlerdeki otomatik yenileme maddeleri geri alındı.** 057'de yazılmışlardı; ön ödemeli lisansta otomatik tahsilat yok ve olmayan bir şeyi taahhüt eden metin yanlış beyandır. **14 günlük iade güvencesi korundu** — deneme süresinden ayrı bir taahhüt ve artık her lisans alımı için ayrı ayrı geçerli.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

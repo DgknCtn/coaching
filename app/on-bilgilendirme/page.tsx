@@ -2,8 +2,15 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalShell, LegalHeading } from '@/components/marketing/legal-shell'
 import { BRAND } from '@/lib/brand'
-import { PLANS, TRIAL_DAYS } from '@/lib/plans'
-import { PLAN_PRICING, formatKurus, VAT_RATE } from '@/lib/billing/pricing'
+import { TRIAL_DAYS } from '@/lib/plans'
+import {
+  BASE_PER_STUDENT_MONTH_KURUS,
+  MAX_SELF_SERVICE_STUDENTS,
+  MAX_MONTHS,
+  formatKurus,
+  quote,
+  VAT_RATE,
+} from '@/lib/billing/pricing'
 
 // ÖN BİLGİLENDİRME FORMU — TASLAK.
 //
@@ -64,28 +71,35 @@ export default function PreliminaryInfoPage() {
 
       <LegalHeading>Fiyatlar</LegalHeading>
       <p>
-        Aşağıdaki tutarlar <strong className="text-foreground">KDV dahildir</strong> (%
-        {Math.round(VAT_RATE * 100)}). Fiyatlara ayrıca kargo veya teslimat bedeli
-        eklenmez.
+        Tutarlar <strong className="text-foreground">KDV dahildir</strong> (%
+        {Math.round(VAT_RATE * 100)}). Kargo veya teslimat bedeli yoktur.
       </p>
+      <p>
+        Fiyat, seçtiğiniz <strong className="text-foreground">öğrenci sayısı</strong>{' '}
+        ve <strong className="text-foreground">kullanım süresine</strong> göre
+        hesaplanır. Taban birim fiyat{' '}
+        <strong className="text-foreground">
+          {formatKurus(BASE_PER_STUDENT_MONTH_KURUS)} / öğrenci / ay
+        </strong>
+        &apos;dır; öğrenci sayısı ve süre arttıkça birim fiyat kademeli olarak düşer.
+        Süre en fazla {MAX_MONTHS} ay seçilebilir.
+      </p>
+      <p>Örnek tutarlar:</p>
       <ul className="ml-5 list-disc space-y-2">
         <li>
-          <strong className="text-foreground">{PLANS.starter.name}</strong> —{' '}
-          {formatKurus(PLAN_PRICING.starter.monthlyKurus)} / ay veya{' '}
-          {formatKurus(PLAN_PRICING.starter.yearlyKurus)} / yıl ·{' '}
-          {PLANS.starter.studentLimit} aktif öğrenciye kadar
+          1 öğrenci · 1 ay — {formatKurus(quote(1, 1).grossKurus)}
         </li>
         <li>
-          <strong className="text-foreground">{PLANS.coach.name}</strong> —{' '}
-          {formatKurus(PLAN_PRICING.coach.monthlyKurus)} / ay veya{' '}
-          {formatKurus(PLAN_PRICING.coach.yearlyKurus)} / yıl ·{' '}
-          {PLANS.coach.studentLimit} aktif öğrenciye kadar
+          10 öğrenci · 12 ay — {formatKurus(quote(10, 12).grossKurus)} (öğrenci başına
+          ayda {formatKurus(quote(10, 12).perStudentPerMonthKurus)})
         </li>
         <li>
-          <strong className="text-foreground">{PLANS.institution.name}</strong> — öğrenci
-          sınırı yok, fiyat görüşmeye tabidir.
+          {MAX_SELF_SERVICE_STUDENTS} üzeri öğrenci — fiyat görüşmeye tabidir.
         </li>
       </ul>
+      <p>
+        Satın alma ekranında, ödemeden önce ödeyeceğiniz kesin tutar gösterilir.
+      </p>
 
       <LegalHeading>Ödeme</LegalHeading>
       <p>
@@ -95,25 +109,16 @@ export default function PreliminaryInfoPage() {
         ve saklanmaz; kart, ödeme kuruluşunda saklanır.
       </p>
 
-      <LegalHeading>Otomatik yenileme — önemli</LegalHeading>
+      <LegalHeading>Ödemenin tek çekim olması</LegalHeading>
       <p>
-        Denemeye başlarken kart bilgilerinizi kaydedersiniz.{' '}
-        <strong className="text-foreground">
-          Deneme süresi boyunca kartınızdan tahsilat yapılmaz.
-        </strong>{' '}
-        Kartın geçerliliği, ödeme kuruluşu tarafından 1 TL&apos;lik bir provizyon alınıp
-        anında iade edilerek doğrulanır.
+        Lisans bedeli <strong className="text-foreground">tek seferde</strong> tahsil
+        edilir ve <strong className="text-foreground">otomatik yenilenmez</strong>.
+        Kartınız saklanmaz; süre bitiminde kendiliğinden hiçbir tahsilat yapılmaz.
       </p>
       <p>
-        {TRIAL_DAYS} günlük deneme süresinin sonunda, seçtiğiniz planın bedeli{' '}
-        <strong className="text-foreground">otomatik olarak</strong> kayıtlı kartınızdan
-        tahsil edilir ve abonelik, siz iptal edene kadar seçtiğiniz dönemde (aylık ya da
-        yıllık) kendiliğinden yenilenir. Yenileme öncesinde e-posta ile hatırlatma
-        gönderilir.
-      </p>
-      <p>
-        Tahsilat istemiyorsanız, deneme süresi dolmadan önce panelden tek adımda iptal
-        etmeniz yeterlidir; iptal ettiğinizde hiçbir ücret alınmaz.
+        Lisans süresi dolmadan önce hatırlatma yapılır. Devam etmek isterseniz yeni
+        bir lisans alırsınız; almazsanız çalışma alanı erişime kapanır ve verileriniz
+        silinmeden saklanır.
       </p>
 
       <LegalHeading>Abonelik süresi ve yenileme</LegalHeading>

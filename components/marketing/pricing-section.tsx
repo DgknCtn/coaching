@@ -1,248 +1,208 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Check, ArrowRight } from 'lucide-react'
-import { buttonVariants, Button } from '@/components/ui/button'
+import { Check, ArrowRight, Users, CalendarRange } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { BRAND, contactMailto } from '@/lib/brand'
-import { PLANS as PLAN_DEFS, TRIAL_DAYS } from '@/lib/plans'
+import { TRIAL_DAYS } from '@/lib/plans'
 import {
-  PLAN_PRICING,
+  quote,
+  isSelfService,
   formatKurus,
-  yearlyDiscountPercent,
-  yearlyPerMonthKurus,
-  type BillingPeriod,
+  formatKurusShort,
+  MONTH_OPTIONS,
+  MAX_SELF_SERVICE_STUDENTS,
 } from '@/lib/billing/pricing'
-import { cn } from '@/lib/utils'
 import { SectionHeading } from './section-heading'
 import { GuaranteeStrip } from './guarantee-strip'
 
-// Fiyatlandırma (SaaS vitrini).
+// FİYATLANDIRMA — lisans hesaplayıcısı (058).
 //
 // ============================================================
-// TAKSİT KALDIRILDI (057), GEÇİŞ DÜĞMESİ GELDİ
+// NEDEN KADEME KARTLARI DEĞİL HESAPLAYICI
 //
-// Önceden aylık ve yıllık fiyat aynı anda, statik olarak yazılıydı;
-// okuyucu iki sayıyı kendi kafasında karşılaştırmak zorundaydı. Geçiş
-// düğmesi indirimi ETKİLEŞİMLİ hâle getiriyor: kullanıcı "Yıllık"a
-// bastığında rakamın düştüğünü GÖRÜYOR. Bu, aynı bilgiyi vermenin
-// belirgin biçimde daha ikna edici yolu.
+// Önceki bölüm üç sabit kademe gösteriyordu (Başlangıç/Koç/Kurum).
+// Yeni modelde fiyat öğrenci sayısı ve süreye göre sürekli değişiyor;
+// üç kart bunu temsil edemez ve "acaba benim durumumda ne tutar?"
+// sorusunu cevapsız bırakırdı.
 //
-// RAKAMLAR KODDAN OKUNUYOR: lib/billing/pricing.ts. Elle yazılsalardı
-// ödeme ekranıyla vitrin ayrışabilir ve müşteri gördüğünden başka bir
-// tutarla karşılaşırdı.
+// Hesaplayıcı bu soruyu ziyaretçi daha kaydolmadan cevaplıyor. Satın
+// alma kararının önündeki en büyük belirsizlik fiyattır; onu vitrinde
+// çözmek, kayıt sonrası kaybı azaltmanın en doğrudan yolu.
 //
-// YAYINA ÇIKMADAN ÖNCE: bu rakamlar HENÜZ ONAYLANMADI. Yayınlanmış bir
-// fiyatı değiştirmek mevcut abonelerin yenileme bedelini de değiştirir.
+// Rakamlar lib/billing/pricing.ts'ten; ödeme ekranıyla aynı fonksiyon.
+// Vitrinde başka, kasada başka tutar göstermek güveni bir kerede bitirir.
 // ============================================================
 
-interface Plan {
-  key: 'starter' | 'coach' | 'institution'
-  audience: string
-  limit: string
-  features: string[]
-  cta: 'register' | 'contact'
-  highlighted?: boolean
-}
-
-const PLANS: Plan[] = [
-  {
-    key: 'starter',
-    audience: 'Yeni başlayan koçlar ve özel ders öğretmenleri',
-    limit: '10 öğrenciye kadar',
-    features: [
-      'Kitap havuzu ve kitap haritası',
-      'İçindekilerden toplu kitap aktarma',
-      'Haftalık plan ve ödev takibi',
-      'Öğrenci paneli',
-      'Ödev metnini WhatsApp\'a kopyalama',
-    ],
-    cta: 'register',
-  },
-  {
-    key: 'coach',
-    audience: 'Öğrenci portföyünü tek başına yöneten koçlar',
-    limit: '30 öğrenciye kadar',
-    features: [
-      'Başlangıç planındaki her şey',
-      'Veli paneli ve veli davetleri',
-      'Plan tempo göstergeleri ve risk analizi',
-      'Sayfa bazlı takip ve hedef kapsamı',
-      'İlerleme raporu (yazdırılabilir)',
-    ],
-    cta: 'register',
-    highlighted: true,
-  },
-  {
-    key: 'institution',
-    audience: 'Kurs, dershane ve eğitim kurumları',
-    limit: 'Sınırsız öğrenci',
-    features: [
-      'Koç planındaki her şey',
-      'Çoklu öğretmen hesabı ve çalışma alanı geçişi',
-      'Kurum geneli dönem yönetimi',
-      'Kitap havuzu yedeği (CSV / JSON)',
-      'Öncelikli destek',
-    ],
-    cta: 'contact',
-  },
+const INCLUDED = [
+  'Kitap havuzu ve kitap haritası',
+  'İçindekiler listesini yapıştırarak toplu kitap aktarma',
+  'Haftalık plan, ödev takibi ve öğretmen onayı',
+  'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
+  'Müfredat akışı, koruma havuzu ve risk analizi',
+  'Sayfa bazlı takip, hedefler ve yazdırılabilir rapor',
+  'Ödev metnini WhatsApp\'a kopyalama',
 ]
 
 export function PricingSection() {
-  const [period, setPeriod] = useState<BillingPeriod>('yearly')
+  const [studentsInput, setStudentsInput] = useState('10')
+  const [months, setMonths] = useState(12)
+
+  const studentCount = Number.parseInt(studentsInput, 10)
+  const valid = Number.isInteger(studentCount) && studentCount >= 1
+  const selfService = valid && isSelfService(studentCount)
+
+  const q = useMemo(
+    () => (valid && selfService ? quote(studentCount, months) : null),
+    [valid, selfService, studentCount, months]
+  )
 
   return (
     <section
       id="fiyatlar"
       className="scroll-mt-16 border-y bg-muted/30 px-6 py-20 md:py-28"
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-5xl">
         <SectionHeading
           eyebrow="Fiyatlandırma"
-          title="Öğrenci sayınıza göre"
-          description={`${TRIAL_DAYS} gün boyunca ürünün tamamını ücretsiz deneyin. Sonrasında öğrenci sayınıza uyan planı seçersiniz.`}
+          title="Yalnız ihtiyacınız kadar ödeyin"
+          description={`Öğrenci sayınızı ve kullanım sürenizi siz belirleyin. İkisi de arttıkça öğrenci başına maliyet düşer. Önce ${TRIAL_DAYS} gün ücretsiz deneyin.`}
         />
 
-        <div className="mt-10 flex justify-center">
-          <div
-            className="inline-flex items-center rounded-md border bg-card p-0.5"
-            role="group"
-            aria-label="Ödeme dönemi"
-          >
-            <Button
-              type="button"
-              size="sm"
-              variant={period === 'monthly' ? 'default' : 'ghost'}
-              onClick={() => setPeriod('monthly')}
-            >
-              Aylık
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={period === 'yearly' ? 'default' : 'ghost'}
-              onClick={() => setPeriod('yearly')}
-            >
-              Yıllık
-              {/* Seçiliyken arka plan tonu YOK: mor düğmenin üstüne %15
-                  beyaz katman koymak zemini açıyor ve beyaz metinle
-                  kontrast 4.14'e düşüyordu (AA için 4.5 gerekli). Metni
-                  doğrudan mor üzerine bırakmak hem daha okunaklı hem de
-                  seçili durumu zaten düğmenin kendisi anlatıyor. */}
-              <span
-                className={cn(
-                  'ml-1.5 rounded-sm text-[11px] font-medium',
-                  period === 'yearly'
-                    ? 'text-primary-foreground'
-                    : 'bg-success-subtle px-1.5 py-0.5 text-success-foreground'
-                )}
-              >
-                %{yearlyDiscountPercent('coach')} indirim
-              </span>
-            </Button>
-          </div>
-        </div>
+        <div className="mt-12 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+          {/* HESAPLAYICI */}
+          <div className="rounded-lg border bg-card p-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pricing-students" className="flex items-center gap-1.5">
+                  <Users className="size-3.5 text-muted-foreground" />
+                  Öğrenci sayısı
+                </Label>
+                <Input
+                  id="pricing-students"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_SELF_SERVICE_STUDENTS}
+                  value={studentsInput}
+                  onChange={(e) => setStudentsInput(e.target.value)}
+                />
+              </div>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {PLANS.map((plan) => {
-            // Kurum planının fiyatı yok. Anahtarın kendisini daraltıyoruz
-            // ki fiyat fonksiyonlarına 'institution' geçme ihtimali
-            // derleme zamanında imkânsız olsun.
-            const payableKey = plan.key === 'institution' ? null : plan.key
+              <div className="space-y-1.5">
+                <Label htmlFor="pricing-months" className="flex items-center gap-1.5">
+                  <CalendarRange className="size-3.5 text-muted-foreground" />
+                  Kullanım süresi
+                </Label>
+                <select
+                  id="pricing-months"
+                  value={months}
+                  onChange={(e) => setMonths(Number(e.target.value))}
+                  className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {MONTH_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {m} Ay
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-            return (
-              <div
-                key={plan.key}
-                className={cn(
-                  'flex flex-col rounded-lg border bg-card p-6 transition-colors',
-                  plan.highlighted
-                    ? 'border-primary shadow-lg shadow-primary/10 md:-my-2 md:py-8'
-                    : 'hover:border-primary/40'
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-base font-semibold">{PLAN_DEFS[plan.key].name}</h3>
-                  {plan.highlighted && (
-                    <span className="rounded-sm bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      En çok tercih edilen
-                    </span>
-                  )}
-                </div>
+            {!valid ? (
+              <p className="mt-6 text-sm text-muted-foreground">
+                Geçerli bir öğrenci sayısı girin.
+              </p>
+            ) : !selfService ? (
+              <div className="mt-6 rounded-md border border-primary/30 bg-primary/5 p-4">
+                <p className="text-sm font-medium">
+                  {MAX_SELF_SERVICE_STUDENTS} üzeri öğrenci için özel fiyatlandırma
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Bu ölçekte kurumsal koşullar ve sözleşme gerekiyor. Size uygun fiyatı
+                  birlikte belirleyelim.
+                </p>
+                <a
+                  href={contactMailto(`${BRAND.name} — kurumsal fiyat talebi`)}
+                  className="mt-3 inline-block text-sm font-medium text-primary underline underline-offset-4"
+                >
+                  İletişime geç
+                </a>
+              </div>
+            ) : (
+              q && (
+                <div className="mt-6 border-t pt-5">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-3xl font-semibold tracking-tight tabular-nums">
+                        {formatKurus(q.grossKurus)}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        KDV dahil · tek çekim
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium tabular-nums">
+                        {formatKurus(q.perStudentPerMonthKurus)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">öğrenci / ay</p>
+                    </div>
+                  </div>
 
-                <p className="mt-1.5 text-sm text-muted-foreground">{plan.audience}</p>
-
-                {payableKey ? (
-                  <div className="mt-5">
-                    <p className="text-3xl font-semibold tracking-tight tabular-nums">
-                      {formatKurus(
-                        period === 'yearly'
-                          ? yearlyPerMonthKurus(payableKey)
-                          : PLAN_PRICING[payableKey].monthlyKurus
-                      )}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {' '}
-                        / ay
+                  {q.totalDiscountPercent > 0 && (
+                    <p className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="rounded-sm bg-success-subtle px-2 py-0.5 text-xs font-medium text-success-foreground">
+                        %{q.totalDiscountPercent} indirim
+                      </span>
+                      <span className="text-muted-foreground">
+                        Liste fiyatı{' '}
+                        <span className="line-through tabular-nums">
+                          {formatKurusShort(q.listGrossKurus)}
+                        </span>
                       </span>
                     </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {period === 'yearly'
-                        ? `Yılda tek çekim ${formatKurus(PLAN_PRICING[payableKey].yearlyKurus)}`
-                        : 'Her ay yenilenir'}
-                      {' · KDV dahil'}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{plan.limit}</p>
-                  </div>
-                ) : (
-                  <div className="mt-5">
-                    <p className="text-3xl font-semibold tracking-tight">{plan.limit}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Fiyat için görüşelim
-                    </p>
-                  </div>
-                )}
-
-                <ul className="mt-6 flex-1 space-y-2.5">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex gap-2.5 text-sm">
-                      <Check className="mt-0.5 size-4 shrink-0 text-success-foreground" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="mt-8">
-                  {plan.cta === 'register' ? (
-                    <Link
-                      href="/register"
-                      className={buttonVariants({
-                        variant: plan.highlighted ? 'default' : 'outline',
-                        className: 'w-full',
-                      })}
-                    >
-                      {TRIAL_DAYS} Gün Ücretsiz Dene
-                      <ArrowRight />
-                    </Link>
-                  ) : (
-                    <a
-                      href={contactMailto(
-                        `${BRAND.name} — ${PLAN_DEFS[plan.key].name} planı hakkında`
-                      )}
-                      className={buttonVariants({ variant: 'outline', className: 'w-full' })}
-                    >
-                      İletişime geç
-                    </a>
                   )}
+
+                  <Link
+                    href="/register"
+                    className={buttonVariants({ size: 'lg', className: 'mt-6 w-full' })}
+                  >
+                    {TRIAL_DAYS} Gün Ücretsiz Dene
+                    <ArrowRight />
+                  </Link>
                 </div>
-              </div>
-            )
-          })}
+              )
+            )}
+          </div>
+
+          {/* KAPSAM — her lisansta ne var.
+              Kademe olmadığı için "hangi özellik hangi pakette" sorusu da
+              yok: HER ŞEY her lisansta. Bunu açıkça yazmak, kademeli
+              rakiplere karşı en güçlü satış argümanı. */}
+          <div className="rounded-lg border bg-card p-6">
+            <h3 className="text-base font-semibold">Her lisansta bunların hepsi var</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Özellik kısıtlaması yok. Yalnız öğrenci sayısı ve süre değişir.
+            </p>
+            <ul className="mt-5 space-y-2.5">
+              {INCLUDED.map((item) => (
+                <li key={item} className="flex gap-2.5 text-sm">
+                  <Check className="mt-0.5 size-4 shrink-0 text-success-foreground" />
+                  <span className="text-muted-foreground">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <GuaranteeStrip className="mt-8" />
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Öğrenci ve veli hesapları tüm planlarda ücretsizdir — yalnızca öğretmen
-          tarafı ücretlendirilir.{' '}
+          Öğrenci ve veli hesapları ücretsizdir — yalnızca öğretmen tarafı
+          ücretlendirilir.{' '}
           <Link href="/iade" className="underline underline-offset-4 hover:text-foreground">
             İade koşulları
           </Link>
