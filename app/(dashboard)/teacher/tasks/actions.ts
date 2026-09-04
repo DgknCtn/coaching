@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { logAudit } from '@/lib/audit'
 
 // students/[studentId]/homework-actions.ts ile aynı RPC'ler; tek fark
 // revalidate hedefi — buradan onaylanan iş dashboard sayaçlarını da düşürür.
@@ -14,7 +15,7 @@ export async function approveFromTasksAction(homeworkItemId: string) {
   const parsed = uuidSchema.safeParse(homeworkItemId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
-  await getTeacherContext()
+  const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('approve_homework_item', {
@@ -22,6 +23,16 @@ export async function approveFromTasksAction(homeworkItemId: string) {
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // Onay öğrencinin ilerlemesini kalıcı olarak değiştirir; kim onayladı
+  // sorusunun cevabı olmalı.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.approve',
+    entityType: 'homework_item',
+    entityId: parsed.data,
+  })
+
   revalidatePath('/teacher/tasks')
   revalidatePath('/teacher')
   return { success: true }
@@ -36,7 +47,7 @@ export async function rejectFromTasksAction(homeworkItemId: string, note?: strin
   const parsed = rejectSchema.safeParse({ homeworkItemId, note })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
-  await getTeacherContext()
+  const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('reject_homework_item', {
@@ -45,6 +56,17 @@ export async function rejectFromTasksAction(homeworkItemId: string, note?: strin
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // Notun KENDİSİ kaydedilmez: öğrenciye yazılmış kişisel bir metin ve
+  // denetim kaydı uzun ömürlü. Yalnız iade edildiği bilgisi tutulur.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.reject',
+    entityType: 'homework_item',
+    entityId: parsed.data.homeworkItemId,
+    detail: { hasNote: !!parsed.data.note },
+  })
+
   revalidatePath('/teacher/tasks')
   revalidatePath('/teacher')
   return { success: true }

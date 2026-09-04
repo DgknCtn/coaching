@@ -3,7 +3,8 @@ import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, workspace, workspaceId, profile, activeTerm } = await getTeacherContext()
+  const { supabase, workspace, workspaceId, profile, activeTerm, workspaces } =
+    await getTeacherContext()
 
   // Sidebar'daki aktif öğrenci seçicisi için hafif liste. /teacher/students
   // ile aynı view; seçici yalnız öğrenci bağlamındaki rotalarda gösterilir.
@@ -32,6 +33,8 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         userName={profile.full_name}
         panel={activeTerm ? { label: 'Aktif dönem', items: [activeTerm.name] } : undefined}
         students={students}
+        workspaces={workspaces}
+        activeWorkspaceId={workspaceId}
         defaultCollapsed={collapsed}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">

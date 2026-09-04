@@ -45,15 +45,37 @@ export async function registerAction(
 
   const supabase = await createClient()
 
-  const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password })
+  // Ad ve çalışma alanı adı KULLANICI ÜST VERİSİNE yazılır.
+  //
+  // Neden: e-posta doğrulaması açıldığında signUp oturum DÖNDÜRMEZ, yani
+  // create_teacher_workspace'in auth.uid() kontrolü (024) başarısız olur ve
+  // workspace kurulamaz. Bu iki bilgi üst veriye konursa, kullanıcı
+  // e-postasını doğrulayıp ilk kez giriş yaptığında workspace o anda
+  // kurulabilir (app/page.tsx). Doğrulama kapalıyken davranış aynen
+  // korunur: oturum hemen geldiği için workspace burada kurulur.
+  const { data: authData, error: signUpError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: parsed.data.fullName,
+        workspace_name: parsed.data.workspaceName || null,
+      },
+    },
+  })
   if (signUpError) return { error: authErrorToTr(signUpError.message) }
   if (!authData.user) return { error: 'Kullanıcı oluşturulamadı.' }
 
+  // Oturum yoksa e-posta doğrulaması bekleniyor demektir.
+  if (!authData.session) {
+    return { needsVerification: true, email: parsed.data.email }
+  }
+
   const { error: rpcError } = await supabase.rpc('create_teacher_workspace', {
     p_auth_user_id: authData.user.id,
-    p_full_name: fullName,
-    p_email: email,
-    p_workspace_name: workspaceName || null,
+    p_full_name: parsed.data.fullName,
+    p_email: parsed.data.email,
+    p_workspace_name: parsed.data.workspaceName || null,
   })
   if (rpcError) return { error: authErrorToTr(rpcError.message) }
 

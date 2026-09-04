@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { studentSchema, assignBookSchema, uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { logAudit } from '@/lib/audit'
 
 export async function createStudentAction(
   fullName: string,
@@ -152,6 +153,16 @@ export async function archiveStudentAction(studentId: string) {
     .eq('workspace_id', workspaceId)
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // Arşivleme öğrenciyi tüm listelerden çıkarır ve (Faz 4'te) faturaya da
+  // yansıyacak; kim yaptığı kayda geçmeli.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'student.archive',
+    entityType: 'student',
+    entityId: parsed.data,
+  })
+
   revalidatePath('/teacher/students')
   redirect('/teacher/students')
 }

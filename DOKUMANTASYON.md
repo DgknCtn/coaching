@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–050
+supabase/migrations/ 001–051
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 50 veritabanı migration'ı çalıştırılmıştır (001–050).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 51 veritabanı migration'ı çalıştırılmıştır (001–051).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -356,5 +356,23 @@ Satış öncesi denetimde çıkan P0 ve P1 güvenlik bulguları kapatıldı.
 **CI beş adıma çıktı**: lint, typecheck, test, güvenlik taraması, derleme — artı ayrı bir uçtan uca işi. E2E bugüne kadar CI'da **hiç koşmamıştı**; `playwright.config.ts`'teki CI dalları ölü koddu. Node sürümü `.nvmrc` ve `engines` ile sabitlendi, Dependabot eklendi.
 
 *Bilinçli ve geçici bir taviz:* `npm audit` eşiği `critical`. Bugün tek bir bilinen `high` açık var (postcss, next üzerinden) ve yalnız Next 16 majör yükseltmesiyle kapanıyor. Eşiği `high` bırakmak boru hattını ilk günden kalıcı kırmızıya çevirirdi — kalıcı kırmızı boru hattı da görmezden gelinir. **Next 16 yükseltmesinden sonra eşik `high`a çıkarılmalı.**
+
+### Faz 3 — Çok kiracılığı tamamlama (051)
+
+**Aktif çalışma alanı seçilebilir oldu.** Tüm okuma yolu `profiles.default_workspace_id` üzerinden geçiyordu ve bunu değiştirecek hiçbir arayüz yoktu. Dahası `accept_invitation` bu alanı yalnız **boşken** yazıyor: zaten bir kurumu olan bir öğretmen ikinci bir kuruma davet edildiğinde o kurumun verisini hiç göremiyor, **üstelik hata da almıyordu**. Sessiz başarısızlık, kullanıcının bildireceği türden bile değil.
+
+Aktif workspace artık bir çerezde; `default_workspace_id` yalnız varsayılan. Çerez **kullanıcı tarafından değiştirilebilir** kabul edilir: içindeki değer bir yetki değil bir tercihtir ve her okumada üyelik doğrulanır (`resolveActiveWorkspaceId`, testli). Karar tek yerde verilir — middleware ile sunucu bileşenlerinin ayrı mantık kullanması bu kod tabanında zaten bir kez soruna yol açtı. Modül bilinçli olarak **saftır** ve `next/headers` içe aktarmaz; middleware Edge'de koşuyor. Seçici tek çalışma alanında hiç çizilmez.
+
+**Askıya alma çalışır hâle geldi.** `workspaces.status` alanı 001'den beri `'suspended'` kabul ediyordu ama hiçbir yerde okunmuyordu — `getTeacherContext` workspace'i `select('id, name')` ile çekiyor, status sorguya bile girmiyordu. Kontrol `is_workspace_member` ve `has_workspace_role` içine kondu: **uygulama katmanına değil**, çünkü uygulama atlanabilir — PostgREST üzerinden doğrudan sorgu yapan bir istemci uygulamayı hiç görmez.
+
+**`assistant` rolü kaldırıldı.** Şemada vardı ama fiilen kırıktı: middleware onu `/teacher` alanına alıyor, `getTeacherContext` reddedip `/login`'e atıyordu. `can_read_student` onu öğrenci verisine yetkili sayıyor ama hiçbir ekran ona açılmıyordu — bu ikilik ileride yanlış tarafa çözülebilirdi. Mevcut üyelikler silinmedi, `inactive` yapıldı.
+
+**E-posta doğrulaması için akış hazırlandı.** Doğrulama açıldığında `signUp` oturum döndürmez, yani `create_teacher_workspace`'in `auth.uid()` kontrolü (024) başarısız olur ve workspace kurulamaz. Ad ve çalışma alanı adı artık kullanıcı üst verisine yazılıyor; kullanıcı e-postasını doğrulayıp ilk kez girdiğinde workspace **o anda** kuruluyor. Doğrulama kapalıyken davranış aynen korunur. Kayıt ekranına "e-postanızı doğrulayın" durumu eklendi.
+
+*Davetlileri muaf tutma fikrinden vazgeçildi:* Supabase'in doğrulama ayarı proje geneli ve muafiyet, kullanıcıyı admin API ile önceden onaylı oluşturmayı — yani Faz 1'de sildiğimiz **servis anahtarını geri getirmeyi** gerektiriyordu. RLS'i tamamen atlayan bir anahtarı sunucu ortamına sokmak, davetliye bir ek adım kazandırmaya değmez.
+
+**Denetim kaydı eklendi.** "Bu ödevi kim onayladı, bu daveti kim iptal etti?" sorularının cevabı yoktu; `created_by_profile_id` yalnız altı tabloda, `updated_by` hiçbirinde yoktu. Tek, **ekleme-only** bir olay tablosu: `UPDATE` ve `DELETE` politikası yok — değiştirilebilen bir denetim kaydı denetim kaydı değildir. Yalnız geri alınamaz eylemler kaydedilir (onay, iade, arşivleme, davet oluşturma/iptal); her tıklamayı yazmak tabloyu okunamaz ve pahalı yapardı. Yazma **asla patlamaz**: denetim satırı yazılamadı diye ödev onayı geri alınmamalı.
+
+Ayrıca 002'deki yardımcı fonksiyonların `search_path` sabitlemesi tanımların kendisine yazıldı — 024 bunu toplu bir `ALTER` ile yapmıştı ama sıfırdan kurulan bir ortamda 002 yeniden uygulanırsa koruma sessizce kaybolurdu.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

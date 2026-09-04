@@ -21,6 +21,7 @@ import {
   type Role,
 } from '@/components/nav-config'
 import { StudentSwitcher, type SwitcherStudent } from '@/components/shared/student-switcher'
+import { WorkspaceSwitcher, type WorkspaceOption } from '@/components/shared/workspace-switcher'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,13 @@ interface AppSidebarProps {
    */
   students?: SwitcherStudent[]
   /**
+   * Kullanıcının üye olduğu çalışma alanları (Faz 3). İkiden azsa seçici
+   * hiç çizilmez — seçenek sunmayan bir seçici, olmayan bir karar varmış
+   * gibi gösterir.
+   */
+  workspaces?: WorkspaceOption[]
+  activeWorkspaceId?: string
+  /**
    * Masaüstü rail'in başlangıç durumu. Layout tarafında cookie'den okunur
    * (lib/sidebar-prefs.ts) — böylece ilk boyada genişten dara zıplama olmaz.
    */
@@ -69,6 +77,8 @@ export function AppSidebar({
   userName,
   panel,
   students,
+  workspaces,
+  activeWorkspaceId,
   defaultCollapsed = false,
 }: AppSidebarProps) {
   const items = navByRole[role]
@@ -152,6 +162,19 @@ export function AppSidebar({
     const switcher = !compact && students && students.length > 0 && activeStudentId && (
       <div className="mb-4">
         <StudentSwitcher students={students} activeStudentId={activeStudentId} />
+      </div>
+    )
+
+    // Çalışma alanı seçici markanın hemen altında: hangi kurumun verisine
+    // bakıldığı, ekrandaki her sayının bağlamı. Bileşen tek alanda kendini
+    // hiç çizmez.
+    const workspacePicker = workspaces && activeWorkspaceId && (
+      <div className={cn('mb-4', compact ? 'px-2' : 'px-3')}>
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          activeId={activeWorkspaceId}
+          compact={compact}
+        />
       </div>
     )
 
@@ -268,6 +291,7 @@ export function AppSidebar({
     return (
       <>
         {brand}
+        {workspacePicker}
         {switcher}
         {nav}
         {studentNavBlock}

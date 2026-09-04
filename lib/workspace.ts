@@ -1,6 +1,18 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  resolveActiveWorkspaceId,
+  type WorkspaceMembership,
+} from '@/lib/active-workspace'
+
+/** Çerezdeki tercih. Doğrulanmamış ham değer — tek başına kullanılmaz. */
+async function readActiveWorkspaceCookie(): Promise<string | null> {
+  const store = await cookies()
+  return store.get(ACTIVE_WORKSPACE_COOKIE)?.value ?? null
+}
 
 // Bu üç fonksiyon React.cache() ile sarılıdır: layout ve sayfa AYNI istek
 // içinde aynı context'i çağırdığında sorgular yalnız bir kez çalışır.
@@ -17,51 +29,77 @@ export const getTeacherContext = cache(async function getTeacherContext() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Profil ve TÜM öğretmen üyelikleri tek sorguda. Önceden yalnız
+  // default_workspace_id'nin üyeliği çekiliyordu; artık kullanıcı
+  // workspace değiştirebildiği için hepsi gerekiyor (Faz 3).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, full_name, email, default_workspace_id')
+    .select(
+      'id, full_name, email, default_workspace_id, workspace_members(role, workspace_id, status)'
+    )
     .eq('auth_user_id', user.id)
     .single()
 
-  if (!profile?.default_workspace_id) redirect('/login')
+  if (!profile) redirect('/login')
 
-  const [{ data: member }, { data: workspace }, { data: activeTerm }] = await Promise.all([
-    supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('profile_id', profile.id)
-      .eq('workspace_id', profile.default_workspace_id)
-      .eq('status', 'active')
-      .in('role', ['owner', 'teacher'])
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('workspaces')
-      .select('id, name')
-      .eq('id', profile.default_workspace_id)
-      .single(),
-    supabase
-      .from('academic_terms')
-      .select('id, name, status')
-      .eq('workspace_id', profile.default_workspace_id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ])
+  // Askıya alınmış kiracının üyelikleri RLS tarafından zaten süzülür (051):
+  // workspace_members okuması has_workspace_role'den geçiyor.
+  const memberships: WorkspaceMembership[] = (
+    (profile.workspace_members ?? []) as unknown as {
+      role: string
+      workspace_id: string
+      status: string
+    }[]
+  )
+    .filter(m => m.status === 'active' && ['owner', 'teacher'].includes(m.role))
+    .map(m => ({ workspaceId: m.workspace_id, role: m.role }))
 
-  // Yetki kontrolü sorgular paralelleştirildikten SONRA da aynı noktada
-  // uygulanır: üyeliği olmayan kullanıcı yine /login'e gider.
-  if (!member) redirect('/login')
+  const workspaceId = resolveActiveWorkspaceId(
+    memberships,
+    await readActiveWorkspaceCookie(),
+    profile.default_workspace_id
+  )
+
+  // Öğretmen üyeliği olmayan kullanıcı buraya ait değil.
+  if (!workspaceId) redirect('/login')
+
+  const [{ data: workspace }, { data: activeTerm }, { data: allWorkspaces }] =
+    await Promise.all([
+      supabase.from('workspaces').select('id, name').eq('id', workspaceId).single(),
+      supabase
+        .from('academic_terms')
+        .select('id, name, status')
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      // Seçici için: yalnız BİR workspace varsa arayüzde hiç gösterilmez.
+      supabase
+        .from('workspaces')
+        .select('id, name')
+        .in('id', [...new Set(memberships.map(m => m.workspaceId))])
+        .order('name'),
+    ])
+
+  // Workspace okunamıyorsa (askıya alınmış ya da silinmiş) oturum bu
+  // bağlamda geçersizdir.
+  if (!workspace) redirect('/login')
 
   return {
     supabase,
-    profile: profile as { id: string; full_name: string; email: string | null; default_workspace_id: string },
-    workspace: workspace!,
-    workspaceId: profile.default_workspace_id as string,
-    role: member.role as string,
+    profile: profile as unknown as {
+      id: string
+      full_name: string
+      email: string | null
+      default_workspace_id: string
+    },
+    workspace,
+    workspaceId,
+    role: memberships.find(m => m.workspaceId === workspaceId)?.role ?? 'teacher',
     activeTerm: activeTerm as { id: string; name: string; status: string } | null,
+    /** Kullanıcının öğretmen olduğu tüm çalışma alanları (seçici için). */
+    workspaces: (allWorkspaces ?? []) as { id: string; name: string }[],
   }
 })
 

@@ -9,6 +9,7 @@ import { dbErrorToTr } from '@/lib/auth-errors'
 import { firstIssue, uuidSchema } from '@/lib/validation'
 import { generateToken, hashToken } from '@/lib/invite'
 import { INVITE_TTL_MS } from '@/lib/invite-status'
+import { logAudit } from '@/lib/audit'
 
 /**
  * Veli daveti için isteğe bağlı e-posta.
@@ -98,6 +99,16 @@ export async function createInviteAction(
 
   if (error) return { error: dbErrorToTr(error.message) }
 
+  // Davet, başka bir kişiye öğrenci verisine erişim veren bir eylem;
+  // kimin ne zaman verdiği kayda geçmeli.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'invite.create',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { role, bound: !!invitedEmail, expiresAt },
+  })
+
   revalidatePath(`/teacher/students/${studentId}`)
   return { link: `${appUrl}/invite/${token}`, expiresAt, bound: !!invitedEmail }
 }
@@ -129,6 +140,13 @@ export async function revokeInviteAction(studentId: string, invitationId: string
     .eq('status', 'pending')
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'invite.revoke',
+    entityType: 'invitation',
+    entityId: parsed.data.invitationId,
+  })
 
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }

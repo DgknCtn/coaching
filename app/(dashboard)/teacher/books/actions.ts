@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { bookSchema, uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { logAudit } from '@/lib/audit'
 
 export interface SectionInput {
   title: string
@@ -120,6 +121,15 @@ export async function archiveBookAction(bookId: string) {
     .eq('workspace_id', workspaceId)
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // Arşivlenen kitap havuzdan düşer ve atamalarda görünmez olur.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'book.archive',
+    entityType: 'book',
+    entityId: parsed.data,
+  })
+
   revalidatePath('/teacher/books')
   redirect('/teacher/books')
 }

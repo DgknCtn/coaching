@@ -24,6 +24,10 @@ type FormData = z.infer<typeof schema>
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
+  // E-posta doğrulaması açıkken kayıt oturum açmaz; kullanıcıya ne
+  // olduğunu ve ne yapması gerektiğini söylemek zorundayız, yoksa form
+  // hiçbir şey olmamış gibi durur.
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
 
   const {
     register,
@@ -40,8 +44,40 @@ export default function RegisterPage() {
         data.password,
         data.workspaceName
       )
-      if (result?.error) setServerError(result.error)
+      if (result?.error) {
+        setServerError(result.error)
+        return
+      }
+      if (result?.needsVerification) setVerifyEmail(result.email ?? data.email)
     })
+  }
+
+  if (verifyEmail) {
+    return (
+      <AuthShell
+        title="E-postanızı doğrulayın"
+        description="Hesabınız oluşturuldu, son bir adım kaldı"
+        footer={
+          <p className="text-center text-sm text-muted-foreground">
+            Doğruladıktan sonra{' '}
+            <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+              giriş yapabilirsiniz
+            </Link>
+          </p>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{verifyEmail}</span> adresine bir
+            doğrulama bağlantısı gönderdik. Bağlantıya tıkladığınızda çalışma alanınız
+            kurulacak ve panelinize yönlendirileceksiniz.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            E-posta birkaç dakika içinde gelmezse spam klasörünü kontrol edin.
+          </p>
+        </div>
+      </AuthShell>
+    )
   }
 
   return (

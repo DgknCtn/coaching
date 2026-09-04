@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  resolveActiveWorkspaceId,
+  rolesInWorkspace,
+} from '@/lib/active-workspace'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -63,7 +68,10 @@ export async function middleware(request: NextRequest) {
   // girmesini engelle ve doğru paneline yönlendir (getXContext'in /login'e
   // atmasından daha iyi UX + ek savunma katmanı).
   const roleAreas = [
-    { prefix: '/teacher', roles: ['owner', 'teacher', 'assistant'] },
+    // 'assistant' KALDIRILDI (051): rol şemada vardı ama fiilen kırıktı —
+    // middleware onu buraya alıyor, getTeacherContext ise reddedip
+    // /login'e atıyordu. Yarım bir rol, yarım bir yetkilendirmedir.
+    { prefix: '/teacher', roles: ['owner', 'teacher'] },
     { prefix: '/student', roles: ['student'] },
     { prefix: '/parent', roles: ['parent'] },
   ] as const
@@ -79,19 +87,28 @@ export async function middleware(request: NextRequest) {
       .eq('auth_user_id', user.id)
       .maybeSingle()
 
-    if (profile?.default_workspace_id) {
+    if (profile) {
       const members = (profile.workspace_members ?? []) as unknown as {
         role: string
         workspace_id: string
         status: string
       }[]
 
-      // Filtreleme artık istemci tarafında: sorgu tüm üyelikleri getiriyor,
-      // aktif dönem workspace'ine ait ve 'active' olanlar seçiliyor. Sonuç
-      // önceki iki sorgulu halle birebir aynı.
-      const userRoles = members
-        .filter((m) => m.workspace_id === profile.default_workspace_id && m.status === 'active')
-        .map((m) => m.role)
+      // AKTİF WORKSPACE aynı fonksiyondan çözülür (lib/active-workspace.ts).
+      // Middleware ile sunucu bileşenlerinin ayrı mantık kullanması, bu kod
+      // tabanında zaten bir kez soruna yol açtı (assistant rolü): biri
+      // erişim verirken diğeri reddediyordu. Tek kaynak, tek karar.
+      const memberships = members
+        .filter((m) => m.status === 'active')
+        .map((m) => ({ workspaceId: m.workspace_id, role: m.role }))
+
+      const activeWorkspaceId = resolveActiveWorkspaceId(
+        memberships,
+        request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value ?? null,
+        profile.default_workspace_id
+      )
+
+      const userRoles = rolesInWorkspace(memberships, activeWorkspaceId)
       const hasAccess = userRoles.some((r) => area.roles.includes(r as never))
 
       if (!hasAccess) {
@@ -100,7 +117,7 @@ export async function middleware(request: NextRequest) {
           ? '/student'
           : userRoles.includes('parent')
             ? '/parent'
-            : userRoles.some((r) => ['owner', 'teacher', 'assistant'].includes(r))
+            : userRoles.some((r) => ['owner', 'teacher'].includes(r))
               ? '/teacher'
               : '/login'
         const url = request.nextUrl.clone()
