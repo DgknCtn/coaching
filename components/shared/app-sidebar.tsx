@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  ChevronDown,
   GraduationCap,
   LogOut,
   Menu,
@@ -15,8 +16,11 @@ import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 import {
+  isNavGroup,
   navByRole,
   studentContextNav,
+  type NavEntry,
+  type NavGroup,
   type NavItem,
   type Role,
 } from '@/components/nav-config'
@@ -85,6 +89,17 @@ export function AppSidebar({
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+
+  // Menü gruplarının açık/kapalı durumu.
+  //
+  // Boş başlıyor ve `undefined` "kullanıcı bu grubu hiç açıp
+  // kapamamış" demek — o durumda grup, içinde aktif bir sayfa varsa
+  // açık gösterilir. Kullanıcı bir kez dokunduğunda tercihi kazanır.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+
+  const setGroupOpen = useCallback((id: string, open: boolean) => {
+    setOpenGroups((prev) => (prev[id] === open ? prev : { ...prev, [id]: open }))
+  }, [])
   const [isPending, startTransition] = useTransition()
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const drawerRef = useRef<HTMLElement>(null)
@@ -180,7 +195,85 @@ export function AppSidebar({
 
     // Tek bir nav bloğu. İki yerde kullanılıyor (ana menü ve öğrenci
     // bağlamı), bu yüzden link görünümü tek yerde tanımlı.
-    function navBlock(navItems: NavItem[], label: string, heading?: string) {
+    function navLink(item: NavItem, nested = false) {
+      const active = isActive(item)
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={active ? 'page' : undefined}
+          aria-label={compact ? item.label : undefined}
+          title={compact ? item.label : undefined}
+          onClick={() => setMobileOpen(false)}
+          className={cn(
+            // py-2.5 md:py-2 — mobil çekmecede dokunma hedefini büyütür,
+            // masaüstü rail (md ve üzeri) eski yoğunluğunda kalır.
+            'flex items-center gap-3 rounded-lg py-2.5 text-sm transition-colors md:py-2',
+            compact ? 'justify-center px-0' : nested ? 'pl-9 pr-3' : 'px-3',
+            active
+              ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+          )}
+        >
+          <item.icon className="size-4 shrink-0" />
+          {!compact && item.label}
+        </Link>
+      )
+    }
+
+    // KATLANABİLİR GRUP — <details> ile.
+    //
+    // Yeni bir bağımlılık ya da elle yazılmış açılır kapanır mantığı
+    // yerine tarayıcının kendi öğesi kullanılıyor: klavye desteği,
+    // ekran okuyucu davranışı ve JavaScript kapalıyken çalışması
+    // yerleşik olarak geliyor.
+    //
+    // DAR RAIL'DE GRUP AÇILMAZ: yalnız ikonların göründüğü genişlikte
+    // katlanabilir bir başlık anlamsız; alt öğeler doğrudan listelenir.
+    function navGroupBlock(group: NavGroup) {
+      const hasActiveChild = group.items.some((i) => isActive(i))
+
+      if (compact) {
+        return (
+          <div key={group.id} className="flex flex-col gap-1">
+            {group.items.map((item) => navLink(item))}
+          </div>
+        )
+      }
+
+      return (
+        <details
+          key={group.id}
+          // Grubun içindeki bir sayfa açıkken grup da açık başlar:
+          // kullanıcı bulunduğu yeri menüde göremezse kaybolur.
+          open={openGroups[group.id] ?? hasActiveChild}
+          onToggle={(e) => setGroupOpen(group.id, e.currentTarget.open)}
+          className="group/nav"
+        >
+          <summary
+            className={cn(
+              'flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors md:py-2',
+              'marker:hidden [&::-webkit-details-marker]:hidden',
+              hasActiveChild
+                ? 'font-medium text-sidebar-foreground'
+                : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+            )}
+          >
+            <group.icon className="size-4 shrink-0" />
+            <span className="flex-1">{group.label}</span>
+            <ChevronDown
+              aria-hidden
+              className="size-3.5 shrink-0 transition-transform group-open/nav:rotate-180"
+            />
+          </summary>
+          <div className="mt-1 flex flex-col gap-1">
+            {group.items.map((item) => navLink(item, true))}
+          </div>
+        </details>
+      )
+    }
+
+    function navBlock(navItems: NavEntry[], label: string, heading?: string) {
       if (navItems.length === 0) return null
       return (
         <nav aria-label={label} className="flex flex-col gap-1 px-3">
@@ -189,31 +282,9 @@ export function AppSidebar({
               {heading}
             </p>
           )}
-          {navItems.map((item) => {
-            const active = isActive(item)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                aria-label={compact ? item.label : undefined}
-                title={compact ? item.label : undefined}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  // py-2.5 md:py-2 — mobil çekmecede dokunma hedefini büyütür,
-                  // masaüstü rail (md ve üzeri) eski yoğunluğunda kalır.
-                  'flex items-center gap-3 rounded-lg py-2.5 text-sm transition-colors md:py-2',
-                  compact ? 'justify-center px-0' : 'px-3',
-                  active
-                    ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                )}
-              >
-                <item.icon className="size-4 shrink-0" />
-                {!compact && item.label}
-              </Link>
-            )
-          })}
+          {navItems.map((entry) =>
+            isNavGroup(entry) ? navGroupBlock(entry) : navLink(entry)
+          )}
         </nav>
       )
     }

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { readReferralCode, clearReferralCode } from '@/lib/referral'
 import { LandingPage } from '@/components/marketing/landing-page'
 
 export const dynamic = 'force-dynamic'
@@ -30,16 +31,32 @@ export default async function RootPage() {
   // sırasında kurulmuş olur.
   if (!profile?.default_workspace_id) {
     const meta = user.user_metadata as
-      | { full_name?: string; workspace_name?: string | null }
+      | { full_name?: string; name?: string; workspace_name?: string | null }
       | undefined
 
-    if (meta?.full_name) {
+    // AD İÇİN YEDEK ZİNCİRİ.
+    //
+    // Bu dal artık Google ile girenler için de çalışıyor ve orada kayıt
+    // formu YOK. Google çoğu zaman `full_name` veriyor ama garanti
+    // değil; ad boş kalırsa kullanıcı sessizce /login'e atılıyor,
+    // çalışma alanı hiç kurulmuyor ve sonsuz döngüye giriyordu.
+    // E-postanın yerel kısmı, hiç yoktan iyidir ve kullanıcı adını
+    // sonradan değiştirebilir.
+    const fullName =
+      meta?.full_name?.trim() ||
+      meta?.name?.trim() ||
+      user.email?.split('@')[0] ||
+      'Kullanıcı'
+
+    {
       const { error } = await supabase.rpc('create_teacher_workspace', {
         p_auth_user_id: user.id,
-        p_full_name: meta.full_name,
+        p_full_name: fullName,
         p_email: user.email ?? '',
-        p_workspace_name: meta.workspace_name ?? null,
+        p_workspace_name: meta?.workspace_name ?? null,
+        p_partner_code: await readReferralCode(),
       })
+      if (!error) await clearReferralCode()
       // Kurulum başarılıysa aynı sayfaya dönülür ve bu kez profil dolu
       // gelir. Başarısızsa aşağıdaki /login yönlendirmesine düşülür —
       // sonsuz döngü olmaz çünkü /login korumasız bir rota.

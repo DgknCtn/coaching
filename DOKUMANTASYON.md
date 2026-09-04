@@ -142,7 +142,7 @@ app/demo/            interaktif demo
 app/api/health/      health check
 components/          teacher | student | parent | shared | ui | marketing
 lib/                 workspace, invite, validation, auth-errors, observability, supabase/
-supabase/migrations/ 001–058
+supabase/migrations/ 001–059
 ```
 
 ---
@@ -169,7 +169,7 @@ npm run e2e        # playwright
 
 MVP ve MVP sonrası kalite fazları (P1–P4) **tamamlandı**: kimlik doğrulama, üç rolün panelleri, kitap/ödev/test takibi, davet akışı, ilerleme raporu, testler ve CI kuruludur.
 
-R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 58 veritabanı migration'ı çalıştırılmıştır (001–058).
+R2–R7 revizyonları uygulanmıştır: durum etiketleri (R2), Kitap Haritası + haftalık plan çalışma masası (R3), kitap havuzu ölçekleme + sayfa bazlı takip + hedef kapsamı + video + WhatsApp çıktısı (R4), öğrenci kaynak planı + müfredat akışı + koruma havuzu (R5), gerçek kullanım ve kaynak yönetimi (R6), kitap havuzu yapısı + tek Kitap Haritası (R7). 59 veritabanı migration'ı çalıştırılmıştır (001–059).
 
 ### R7 — Kitap Havuzu yapısı ve tek Kitap Haritası
 
@@ -536,5 +536,25 @@ Mobilde yapışkan CTA eklendi (yalnız `sm` altında; masaüstünde navbar zate
 **Vitrinde kademe kartları yerine hesaplayıcı.** Üç sabit kart, sürekli değişen bir fiyatı temsil edemez ve "benim durumumda ne tutar?" sorusunu cevapsız bırakırdı. Hesaplayıcı bu soruyu ziyaretçi kaydolmadan cevaplıyor. Kademe olmadığı için "hangi özellik hangi pakette" sorusu da yok: **her şey her lisansta**, ve bu açıkça yazılıyor.
 
 **Yasal metinlerdeki otomatik yenileme maddeleri geri alındı.** 057'de yazılmışlardı; ön ödemeli lisansta otomatik tahsilat yok ve olmayan bir şeyi taahhüt eden metin yanlış beyandır. **14 günlük iade güvencesi korundu** — deneme süresinden ayrı bir taahhüt ve artık her lisans alımı için ayrı ayrı geçerli.
+
+### Faz 9 — Google girişi, partner sistemi, menü gruplaması (059)
+
+**Google ile giriş için yeni callback yazılmadı.** `/auth/callback` zaten sağlayıcıdan bağımsız: gelen `code` değerini `exchangeCodeForSession` ile oturuma çeviriyor ve bu, e-posta bağlantılarında da OAuth'ta da aynı PKCE akışı. Rota middleware'de zaten herkese açık. Eklenen tek şey giriş ve kayıt ekranlarındaki düğme.
+
+**Yol boyunca kapatılan gerçek boşluk:** `app/page.tsx`'teki geç kurulum dalı `user_metadata.full_name` boşsa kullanıcıyı sessizce `/login`'e atıyor ve çalışma alanı hiç kurulmuyordu. Şifreyle kayıtta ad her zaman formdan geliyordu, ama Google'da form yok. Google çoğu zaman `full_name` veriyor — garanti değil. Ad boş kalsaydı Google ile giren kullanıcı `/` ile `/login` arasında sonsuz döngüye girerdi. Yedek zinciri eklendi: `full_name` → `name` → e-postanın yerel kısmı.
+
+**Partner atfı çerezde, sorgu parametresinde değil.** Ziyaretçi `/?ref=KOD` ile geliyor ama kaydolması dakikalar sürebilir; daha kötüsü, Google ile kaydolursa tarayıcı Google'a gidip döner ve o yolculukta sorgu parametresi **kaybolur**. Çerez, OAuth yönlendirmesinden sağ çıkmanın tek yolu. `httpOnly` — üçüncü taraf bir betiğin hangi partnerin getirdiğini öğrenmesine gerek yok.
+
+**Kod kuralı üç yerde gerekiyordu, tek yerde duruyor.** Middleware (Edge), sunucu aksiyonu ve test. `lib/referral.ts` `next/headers` kullandığı için `server-only` ve ne Edge'de ne testte import edilebiliyor; saf kural `lib/referral-code.ts`'e ayrıldı — `lib/active-workspace.ts` ile aynı ayrım. Üç yerde elle tekrarlansaydı biri düzeltilirken diğerleri unutulur, geçersiz bir kod bir yoldan içeri girerdi.
+
+**Atıf bir kez yazılır ve değişmez.** Çalışma alanı kurulurken yazılıyor; sonradan değiştirilebilseydi bir partnerin getirdiği müşteri başka bir partnere aktarılabilirdi. Kullanılan çerez hemen siliniyor — silinmezse aynı tarayıcıdan açılan ikinci hesap da aynı partnere yazılır ve partner bir kez tanıtım yapıp aynı kişinin bütün hesaplarından komisyon alırdı. **Geçersiz kod sessizce yok sayılıyor**: kullanıcı yanlış bir bağlantıdan geldi diye kaydı reddetmek bize müşteri kaybettirir.
+
+**Komisyon KDV hariç matrah üzerinden.** Fiyatlar KDV dahil yayınlanıyor; KDV devlete gidiyor ve bizim gelirimiz değil. Brüt üzerinden komisyon ödemek, olmayan bir gelirin payını dağıtmak olurdu. Hakediş `settle_billing_order` içinde, sipariş `paid` olduktan **sonra** üretiliyor; sipariş açılırken üretilseydi tamamlanmayan her denemede sahte hakediş birikirdi. `billing_order_id` üzerindeki `UNIQUE`, tekrarlanan callback'e karşı ikinci güvence.
+
+**Partner, kiracının verisine ortak değil.** `get_partner_referrals()` bilinçli olarak dar: çalışma alanı adı, tarih, hakediş. Öğrenci adı, öğrenci sayısı, ödeme tutarı ve kullanıcı e-postası **yok**. Partner bir satış ortağı; getirdiği müşterinin öğrencilerini görmesi için hiçbir sebep yok ve o veriler reşit olmayan kişilere ait.
+
+**Menü gruplaması `<details>` ile.** Depoda accordion primitifi yoktu ve `NavItem` düzdü. Yeni bir bağımlılık ya da elle yazılmış açılır kapanır mantığı yerine tarayıcının kendi öğesi kullanıldı: klavye desteği, ekran okuyucu davranışı ve JavaScript kapalıyken çalışması yerleşik geliyor. Grup, içinde aktif bir sayfa varken açık başlıyor — kullanıcı bulunduğu yeri menüde göremezse kaybolur; bir kez dokununca tercihi kazanıyor. Dar rail'de grup açılmıyor, alt öğeler doğrudan listeleniyor.
+
+**Kitap Havuzu ve Müfredat Şablonları gruba alınmadı.** Adları öğrenci ekranlarındakilere benzese de bunlar çalışma alanı seviyesi — bir kez kurulur, bütün öğrenciler için geçerlidir. Gruba almak, "öğrenciye kitap atama" ile "havuza kitap ekleme"yi aynı iş gibi gösterirdi.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.

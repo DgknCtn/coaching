@@ -11,6 +11,7 @@ import {
   firstIssue,
 } from '@/lib/validation'
 import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
+import { readReferralCode, clearReferralCode } from '@/lib/referral'
 
 export async function loginAction(email: string, password: string) {
   const parsed = loginSchema.safeParse({ email, password })
@@ -76,13 +77,19 @@ export async function registerAction(
     p_full_name: parsed.data.fullName,
     p_email: parsed.data.email,
     p_workspace_name: parsed.data.workspaceName || null,
+    // Partner atfı çerezden gelir (059). Geçersiz kod sunucuda sessizce
+    // yok sayılır; kullanıcı yanlış bir bağlantıdan geldi diye kaydı
+    // reddetmek bize müşteri kaybettirir.
+    p_partner_code: await readReferralCode(),
   })
   if (rpcError) return { error: authErrorToTr(rpcError.message) }
 
-  // Kayıttan sonra doğrudan panele DEĞİL, kart adımına gidiliyor (057).
-  // Deneme süresi artık gerçekten doluyor ve deneme sonunda otomatik
-  // tahsilat yapılabilmesi için kartın önceden alınması gerekiyor.
-  // Adım zorunlu değil: sayfada "sonra hatırlat" bağlantısı var.
+  // Atıf kullanıldı; çerez silinir. Silinmezse aynı tarayıcıdan açılan
+  // ikinci hesap da aynı partnere yazılırdı.
+  await clearReferralCode()
+
+  // Kayıttan sonra lisans adımına gidiliyor. ZORUNLU DEĞİL: sayfada
+  // "önce ücretsiz deneyeceğim" bağlantısı var (058).
   redirect('/kurulum/odeme')
 }
 
@@ -138,4 +145,48 @@ export async function logoutAction() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/login')
+}
+
+/**
+ * Google ile giriş / kayıt.
+ *
+ * ============================================================
+ * NEDEN AYRI BİR CALLBACK GEREKMİYOR
+ *
+ * `/auth/callback` zaten sağlayıcıdan bağımsız: gelen `code` değerini
+ * `exchangeCodeForSession` ile oturuma çeviriyor. Bu, e-posta
+ * bağlantılarında da OAuth'ta da aynı PKCE akışı. Yeni bir rota
+ * eklemek, aynı işi ikinci kez yazmak olurdu.
+ *
+ * ÇALIŞMA ALANI BURADA KURULMAZ: OAuth'ta kayıt formu yok, dolayısıyla
+ * ad ve çalışma alanı adı elimizde değil. Kurulum, kullanıcı oturumla
+ * `/` adresine döndüğünde yapılıyor (app/page.tsx) — orada Google'ın
+ * verdiği ad üst veriden okunuyor.
+ *
+ * PARTNER ATFI KAYBOLMUYOR: kod çerezde duruyor ve çerez Google'a gidip
+ * dönerken hayatta kalıyor. Sorgu parametresiyle taşınsaydı kaybolurdu.
+ * ============================================================
+ */
+export async function signInWithGoogleAction(next?: string) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl) {
+    return { error: 'Uygulama adresi yapılandırılmamış; Google ile giriş yapılamıyor.' }
+  }
+
+  const supabase = await createClient()
+
+  // Açık yönlendirme koruması: yalnız kendi sitemiz içindeki yollar.
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${appUrl.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent(safeNext)}`,
+    },
+  })
+
+  if (error) return { error: authErrorToTr(error.message) }
+  if (!data.url) return { error: 'Google girişi başlatılamadı.' }
+
+  redirect(data.url)
 }

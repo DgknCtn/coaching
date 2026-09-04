@@ -4,6 +4,7 @@ import {
   CalendarRange,
   ClipboardList,
   CreditCard,
+  UserPlus,
   FileBarChart,
   LayoutDashboard,
   Library,
@@ -23,10 +24,48 @@ export interface NavItem {
   exact?: boolean
 }
 
-export const teacherNav: NavItem[] = [
+/**
+ * Katlanabilir menü grubu.
+ *
+ * NEDEN AYRI TİP: bir grubun kendi `href`'i yok — tıklanınca bir yere
+ * gitmez, açılır. `NavItem`'a isteğe bağlı `children` eklemek, her
+ * tüketicinin "bu bir bağlantı mı yoksa grup mu" kontrolü yapmasını
+ * gerektirirdi ve `href` alanı gruplarda anlamsız bir zorunluluk olarak
+ * kalırdı.
+ */
+export interface NavGroup {
+  /** Grup kimliği — açık/kapalı durumu bununla saklanır. */
+  id: string
+  label: string
+  icon: LucideIcon
+  items: NavItem[]
+}
+
+export type NavEntry = NavItem | NavGroup
+
+export function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'items' in entry
+}
+
+export const teacherNav: NavEntry[] = [
   { href: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
-  { href: '/teacher/students', label: 'Öğrenciler', icon: Users },
+  // ÖĞRENCİ İŞLERİ: öğrenciyle ilgili üç ekran tek başlık altında.
+  //
+  // Kitap Havuzu ve Müfredat Şablonları BİLİNÇLİ OLARAK DIŞARIDA:
+  // adları öğrenci ekranlarındakilere benzese de bunlar çalışma alanı
+  // seviyesi — bir kez kurulur, bütün öğrenciler için geçerlidir.
+  // Gruba almak, "öğrenciye kitap atama" ile "havuza kitap ekleme"yi
+  // aynı iş gibi gösterirdi.
+  {
+    id: 'ogrenci-isleri',
+    label: 'Öğrenci İşleri',
+    icon: Users,
+    items: [
+      { href: '/teacher/students', label: 'Öğrenciler', icon: Users, exact: true },
+      { href: '/teacher/students/new', label: 'Yeni Öğrenci', icon: UserPlus },
+      { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
+    ],
+  },
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
@@ -74,7 +113,7 @@ export const parentNav: NavItem[] = []
  * Component'ten prop olarak geçirilemez, çünkü `icon` bir bileşen
  * fonksiyonudur ve fonksiyonlar RSC sınırından geçemez.
  */
-export const navByRole: Record<Role, NavItem[]> = {
+export const navByRole: Record<Role, NavEntry[]> = {
   teacher: teacherNav,
   student: studentNav,
   parent: parentNav,

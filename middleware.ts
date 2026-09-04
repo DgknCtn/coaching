@@ -6,6 +6,11 @@ import {
   resolveActiveWorkspaceId,
   rolesInWorkspace,
 } from '@/lib/active-workspace'
+import {
+  REFERRAL_COOKIE,
+  REFERRAL_MAX_AGE_SECONDS,
+  normalizeReferralCode,
+} from '@/lib/referral-code'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -36,6 +41,26 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
+
+  // ---- PARTNER ATIF YAKALAMA (059) ----
+  //
+  // `?ref=KOD` ile gelen ziyaretçinin kodu ÇEREZE yazılır. Sorgu
+  // parametresi olarak taşınsaydı, kullanıcı Google ile kaydolurken
+  // tarayıcı Google'a gidip dönerken kaybolurdu.
+  //
+  // Biçim kuralı lib/referral-code.ts'te: middleware (Edge), sunucu
+  // aksiyonu ve testler aynı kuralı kullanıyor. Üç yerde elle
+  // tekrarlansaydı biri düzeltilirken diğerleri unutulurdu.
+  const code = normalizeReferralCode(request.nextUrl.searchParams.get('ref'))
+  if (code) {
+    supabaseResponse.cookies.set(REFERRAL_COOKIE, code, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: REFERRAL_MAX_AGE_SECONDS,
+      secure: process.env.NODE_ENV === 'production',
+    })
+  }
 
   // Giriş gerektirmeyen herkese açık rotalar (tam eşleşme veya segment sınırı)
   const isPublicPath =

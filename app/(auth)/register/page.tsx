@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
 import { TRIAL_DAYS } from '@/lib/plans'
+import { GoogleButton } from '@/components/shared/google-button'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Ad en az 2 karakter olmalı'),
@@ -94,6 +95,20 @@ export default function RegisterPage() {
         </p>
       }
     >
+      {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
+          Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
+          başladıktan sonra fark ederdi. */}
+      <GoogleButton />
+
+      <div className="relative my-5">
+        <div className="absolute inset-0 flex items-center" aria-hidden>
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-2 text-xs text-muted-foreground">veya</span>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="fullName">Ad Soyad</Label>
