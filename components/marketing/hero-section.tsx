@@ -39,9 +39,15 @@ export function HeroSection() {
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
+          {/* "KURULUM 10 DAKİKA" KALDIRILDI (068 · rapor bulgusu 10d).
+              Sayı üç ayrı yerde elle yazılıydı ve hiçbir kullanıcı
+              ölçümüne dayanmıyordu — ölçülmemiş bir süre vaadi, ilk
+              kurulumu 40 dakika süren kullanıcı için doğrudan bir güven
+              kaybı. Yerine DOĞRULANABİLİR bir şey konuyor: kart
+              istenmediği kodun kendisinde görülebilir. */}
           <p className="mx-auto inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="size-3.5 text-primary" />
-            {TRIAL_DAYS} gün ücretsiz · Kurulum 10 dakika
+            {TRIAL_DAYS} gün ücretsiz · Kart istenmez
           </p>
 
           {/* BAŞLIK KAYBEDİLEN ZAMANI adlandırıyor. Öğretmenin ödediği

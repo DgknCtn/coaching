@@ -29,7 +29,7 @@ type FormData = z.infer<typeof schema>
 // "Kaydolduktan sonra ne olacak?" sorusunun cevabı. Dördü de üründe
 // bugün var ve onboarding listesindeki adımlarla aynı sırada
 // (onboarding-checklist.tsx) — vaat ile ekran birbirini tutuyor.
-const FIRST_10_MIN = [
+const FIRST_STEPS = [
   'Öğrencilerinizi ekleyin',
   'İlk ödevinizi oluşturun',
   'Kitap takibini başlatın',
@@ -112,13 +112,16 @@ export default function RegisterPage() {
       {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
           Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
           başladıktan sonra fark ederdi. */}
-      {/* İLK 10 DAKİKA formun üstünde: kayıt formu bir maliyet, bu liste
-          onun karşılığı. Altında olsaydı kullanıcı zaten karar verdikten
-          sonra görürdü. */}
+      {/* KAYITTAN SONRA NE OLACAĞI formun üstünde: kayıt formu bir
+          maliyet, bu liste onun karşılığı. Altında olsaydı kullanıcı
+          zaten karar verdikten sonra görürdü.
+          Başlıktaki "10 dakika" kaldırıldı (068): ölçülmemiş bir süre
+          vaadiydi ve sayfanın geri kalanıyla da senkron tutulması
+          gerekiyordu. */}
       <div className="mb-5 rounded-lg border bg-muted/30 p-4">
-        <p className="text-sm font-medium">İlk 10 dakikada:</p>
+        <p className="text-sm font-medium">Kaydolduktan hemen sonra:</p>
         <ul className="mt-2 space-y-1.5">
-          {FIRST_10_MIN.map((item) => (
+          {FIRST_STEPS.map((item) => (
             <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
               <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success-foreground" />
               {item}

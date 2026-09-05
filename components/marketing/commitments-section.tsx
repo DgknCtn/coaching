@@ -41,9 +41,19 @@ const COMMITMENTS = [
     title: 'Veriniz size ait',
     body: 'Her çalışma alanı veritabanı düzeyinde yalıtılmıştır. Verinizi dışa aktarabilir, silinmesini talep edebilirsiniz; reklam için kullanılmaz, satılmaz.',
   },
+  // İPTAL EDİLECEK BİR ŞEY YOK — VE BU DAHA GÜÇLÜ BİR VAAT (068).
+  //
+  // Önceki metin "İptal, kayıt kadar kolay · Tek tıkla, gerekçe
+  // sorulmadan" diyordu ve otomatik yenilenen bir abonelik çağrışımı
+  // yapıyordu. Oysa kodda ne autoRenew ne de bir iptal akışı var: model
+  // ön ödemeli, kullanıcının elle yenilediği lisans. Yani "tek tıkla
+  // iptal" karşılığı olmayan bir vaatti — tıklanacak bir şey yoktu.
+  //
+  // Doğrusunu söylemek daha iyi bir vaat: iptal etmesi gereken bir
+  // şey yok, çünkü kimse otomatik olarak paranızı almıyor.
   {
-    title: 'İptal, kayıt kadar kolay',
-    body: 'Tek tıkla, gerekçe sorulmadan. Erişiminiz ödediğiniz dönemin sonuna kadar sürer, veriniz silinmez.',
+    title: 'İptal edilecek bir şey yok',
+    body: 'Otomatik yenileme yapmıyoruz; süre dolduğunda kartınızdan çekim olmaz. Uzatmak isterseniz siz karar verirsiniz. Süre dolsa bile veriniz silinmez.',
   },
 ]
 

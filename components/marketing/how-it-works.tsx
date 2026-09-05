@@ -46,10 +46,13 @@ export function HowItWorks() {
           ))}
         </ol>
 
-        {/* Hero'daki "Kurulum 10 dakika" ile AYNI sayı. İki farklı yerde
-            iki farklı süre söylemek, ikisini de inandırıcılıktan çıkarır. */}
+        {/* SÜRE DEĞİL ADIM SAYISI (068 · rapor bulgusu 10d).
+            "10 dakika" üç ayrı yerde elle yazılıydı, hiçbir ölçüme
+            dayanmıyordu ve bu dosyadaki eski yorum senkron riskini zaten
+            itiraf ediyordu. Adım sayısı ise hemen yukarıdaki listeden
+            türüyor: yanlış olması imkânsız. */}
         <p className="mt-8 text-center text-sm font-medium">
-          10 dakikada kurun. Aynı gün kullanmaya başlayın.
+          {steps.length} adımda kurun. Aynı gün kullanmaya başlayın.
         </p>
       </div>
     </section>

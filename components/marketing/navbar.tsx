@@ -36,25 +36,28 @@ export function Navbar() {
             <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
           </Link>
 
+          {/* SAYFA-GÖRELİ ANCHOR (068 · rapor bulgusu 10a).
+              Bu üç bağlantı saf hash'ti (#ozellikler) ve navbar /demo
+              sayfasında da render ediliyor — orada bu id'ler yok, yani
+              üç link de hiçbir yere gitmiyor, yalnız adrese hash
+              ekliyordu. "/#" öneki hangi sayfada olunursa olunsun ana
+              sayfanın ilgili bölümüne götürür. */}
           <nav className="hidden md:flex items-center">
-            <a
-              href="#ozellikler"
+            <Link href="/#ozellikler"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Özellikler
-            </a>
-            <a
-              href="#nasil-calisir"
+            </Link>
+            <Link href="/#nasil-calisir"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Nasıl Çalışır
-            </a>
-            <a
-              href="#fiyatlar"
+            </Link>
+            <Link href="/#fiyatlar"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Fiyatlar
-            </a>
+            </Link>
             <Link
               href="/demo"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -89,27 +92,24 @@ export function Navbar() {
         // max-h + scroll: yatay tutulan telefonlarda panel ekranı taşıyordu.
         <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b bg-background px-6 pb-4 md:hidden">
           <nav className="flex flex-col gap-1 pt-2">
-            <a
-              href="#ozellikler"
+            <Link href="/#ozellikler"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Özellikler
-            </a>
-            <a
-              href="#nasil-calisir"
+            </Link>
+            <Link href="/#nasil-calisir"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Nasıl Çalışır
-            </a>
-            <a
-              href="#fiyatlar"
+            </Link>
+            <Link href="/#fiyatlar"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Fiyatlar
-            </a>
+            </Link>
             <Link
               href="/demo"
               onClick={() => setMobileOpen(false)}
