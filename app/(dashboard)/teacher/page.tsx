@@ -31,40 +31,50 @@ type StudentRow = {
 export default async function TeacherDashboard() {
   const { supabase, workspaceId, activeTerm, profile, usage } = await getTeacherContext()
 
-  // Lisansı olmayanlara deneme şeridi gösterilecek.
-  const { data: licenseRow } = await supabase
-    .from('workspace_licenses')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('status', 'active')
-    .maybeSingle()
+  // İLK DALGA — birbirinden bağımsız olan her şey aynı anda.
+  //
+  // Önceden lisans sorgusu, check-in RPC'si ve aşağıdaki üçlü ARDIŞIK
+  // çalışıyordu: dashboard açılışı dört ayrı gidiş-dönüş bekliyordu.
+  // Yalnız öğrenci listesi RPC'ye bağımlı (aşağıya bakınız); geri kalanın
+  // sırayla beklemesi için hiçbir sebep yoktu.
+  const [{ data: licenseRow }, { count: bookCount }, { count: homeworkCount }] =
+    await Promise.all([
+      // Lisansı olmayanlara deneme şeridi gösterilecek.
+      supabase
+        .from('workspace_licenses')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'active')
+        .maybeSingle(),
+      // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
+      // gövdesi taşınmaz.
+      supabase
+        .from('books')
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'active'),
+      // Kurulum adımları için: hiç ödev verilmiş mi? Aynı HEAD sayımı
+      // kalıbı; tek sorulan "sıfır mı, değil mi".
+      supabase
+        .from('homework_batches')
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', workspaceId),
+      // Durum bildirimleri tembel materyalize edilir (cron yok): planı olup
+      // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar.
+      // Idempotent.
+      //
+      // BU DALGANIN İÇİNDE ama sonucu okunmuyor: yazdığı satırları
+      // AŞAĞIDAKİ öğrenci listesi okuyor, o yüzden ondan önce bitmeli.
+      // (student/page.tsx'te aynı kalıp kullanılıyor.)
+      supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
+    ])
   const hasLicense = !!licenseRow
 
-  // Durum bildirimleri tembel materyalize edilir (cron yok): planı olup
-  // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar. Idempotent.
-  await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
-
-  const [{ data: students }, { count: bookCount }, { count: homeworkCount }] =
-    await Promise.all([
-    supabase
-      .from('teacher_student_overview_view')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('student_full_name'),
-    // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
-    // gövdesi taşınmaz.
-    supabase
-      .from('books')
-      .select('id', { count: 'exact', head: true })
-      .eq('workspace_id', workspaceId)
-      .eq('status', 'active'),
-    // Kurulum adımları için: hiç ödev verilmiş mi? Aynı HEAD sayımı
-    // kalıbı; tek sorulan "sıfır mı, değil mi".
-    supabase
-      .from('homework_batches')
-      .select('id', { count: 'exact', head: true })
-      .eq('workspace_id', workspaceId),
-  ])
+  const { data: students } = await supabase
+    .from('teacher_student_overview_view')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .order('student_full_name')
 
   // Aksiyon gerektiren öğrenciler üstte: kayıp temas > geciken > onay kuyruğu.
   // (describeStudentAttention ile aynı öncelik sırası.)
