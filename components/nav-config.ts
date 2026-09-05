@@ -12,6 +12,7 @@ import {
   ListChecks,
   ShieldCheck,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -77,6 +78,11 @@ export const teacherNav: NavEntry[] = [
   // "Yönetim"in ne içerdiğini tahmin edip açmak zorundaydı. Üç öğe
   // için bir tıklama ve bir tahmin, kazandırdığı derli topluluktan
   // pahalı.
+  // FİNANS her öğretmene GÖRÜNÜR ama yalnız sahibe açıktır (066).
+  // Menüyü role göre budamak, Plan bağlantısında olduğu gibi yetkinin
+  // ikinci bir kaynağını yaratırdı; sayfanın kendisi neden
+  // giremediğini zaten açıklıyor.
+  { href: '/teacher/finans', label: 'Finans', icon: Wallet },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
   // Plan yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
   // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre

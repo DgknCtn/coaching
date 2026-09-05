@@ -1,10 +1,12 @@
 import { AppSidebar } from '@/components/shared/app-sidebar'
+import { TopBar } from '@/components/shared/top-bar'
+import { licenseState } from '@/lib/plans'
 import { BRAND } from '@/lib/brand'
 import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, workspaceId, profile, activeTerm, workspaces } =
+  const { supabase, workspaceId, profile, activeTerm, workspaces, usage } =
     await getTeacherContext()
 
   // Sidebar'daki aktif öğrenci seçicisi için hafif liste. /teacher/students
@@ -17,6 +19,23 @@ export default async function TeacherLayout({ children }: { children: React.Reac
     .limit(500)
 
   const collapsed = await getSidebarCollapsed()
+
+  // ÜST BARDAKİ SÜRE ROZETİ İÇİN.
+  //
+  // Sunucu yalnız BİTİŞ ANINI veriyor; kalan süreyi üst bar tarayıcıda
+  // hesaplıyor. Burada "kaç gün kaldı" hesaplamak, sayfa önbelleğe
+  // alındığında donmuş bir rakam basmak olurdu.
+  //
+  // Sınırsız çalışma alanında rozet hiç çizilmez: dolmayan bir sayaç,
+  // olmayan bir son tarihi varmış gibi gösterir.
+  const state = usage ? licenseState(usage) : null
+  const licenseKind = state === 'licensed' || state === 'license_expired' ? 'licensed' : 'trial'
+  const licenseEndsAt =
+    state === null || state === 'unlimited'
+      ? null
+      : licenseKind === 'trial'
+        ? usage?.trialEndsAt
+        : usage?.licenseEndsAt
 
   const students = (studentRows ?? []).map((s) => ({
     id: s.student_id as string,
@@ -45,8 +64,13 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         // gerekiyordu. Bayrak profil satırında zaten okunuyor, ek sorgu yok.
         isPlatformAdmin={profile.is_platform_admin === true}
       />
-      <main className="flex-1 overflow-auto pt-14 md:pt-0">
-        {children}
+      <main className="flex min-w-0 flex-1 flex-col overflow-auto pt-14 md:pt-0">
+        <TopBar
+          licenseEndsAt={licenseEndsAt}
+          licenseKind={licenseKind}
+          licenseHref="/teacher/ayarlar/abonelik"
+        />
+        <div className="flex-1">{children}</div>
       </main>
     </div>
   )

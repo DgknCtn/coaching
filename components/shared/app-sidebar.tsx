@@ -12,6 +12,9 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+// Mobil başlıktaki tema düğmesi burada KALIYOR: üst bardaki düğme dar
+// ekranda gizli (rozetlerle birlikte sığmıyor). Telefonda sağ üst köşe
+// yine bu başlık.
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { BrandMark } from '@/components/shared/brand-mark'
 import { cn } from '@/lib/utils'
@@ -358,11 +361,11 @@ export function AppSidebar({
             </div>
           )}
         </div>
-        <ThemeToggle
-          variant="sidebar"
-          showLabel={!compact}
-          className={compact ? 'justify-center px-0' : undefined}
-        />
+        {/* TEMA DÜĞMESİ ÜST BARA TAŞINDI (066).
+            Burada, menünün en dibindeydi: rail daraltıldığında ya da
+            mobilde çekmece kapalıyken düğmeye ulaşmak için önce menüyü
+            açmak gerekiyordu. Sağ üst köşe, kullanıcının bu düğmeyi
+            aradığı yer. */}
         <button
           type="button"
           onClick={handleLogout}
