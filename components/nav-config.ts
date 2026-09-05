@@ -134,6 +134,11 @@ export const teacherNav: NavEntry[] = [
   // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
   { href: '/teacher/ayarlar/abonelik', label: 'Plan', icon: CreditCard },
   { href: '/teacher/destek', label: 'Destek', icon: LifeBuoy },
+  // HESAP VE VERİ (068): silme talebi altyapısı 053'ten beri vardı ama
+  // hiçbir yerden erişilemiyordu. Menüde herkese görünür, Plan ve Finans
+  // ile aynı gerekçeyle: menüyü role göre budamak yetkinin ikinci bir
+  // kaynağını yaratırdı, sayfa neden giremediğini zaten açıklıyor.
+  { href: '/teacher/ayarlar/veri', label: 'Hesap ve Veri', icon: ShieldCheck },
 ]
 
 /**

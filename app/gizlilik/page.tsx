@@ -56,6 +56,29 @@ export default function PrivacyPage() {
           bilgileri ve hesap güvenliği için tutulan teknik kayıtlar; öğretmenin yaptığı
           geri alınamaz işlemlerin denetim kaydı (kim, ne zaman, hangi işlem).
         </li>
+        <li>
+          <strong className="text-foreground">Ödeme ve abonelik:</strong> plan
+          bilgisi, sipariş kayıtları ve ödeme sağlayıcısından dönen işlem
+          kimlikleri. Kart bilgisi platformda{' '}
+          <strong className="text-foreground">hiçbir zaman</strong> tutulmaz;
+          ödeme sayfası sağlayıcı tarafından gösterilir.
+        </li>
+        <li>
+          <strong className="text-foreground">Ders ücreti kayıtları:</strong>{' '}
+          öğretmenin kendi takibi için girdiği ders ücreti, yapılan ders ve
+          tahsilat kayıtları. Bu veriyi yalnız çalışma alanının sahibi görür;
+          öğrenciye ve veliye gösterilmez.
+        </li>
+        <li>
+          <strong className="text-foreground">Destek yazışmaları:</strong> açtığınız
+          destek taleplerinin konusu ve mesaj içeriği.
+        </li>
+        <li>
+          <strong className="text-foreground">İş ortağı atfı:</strong> bir iş ortağı
+          bağlantısıyla geldiyseniz, hangi bağlantıdan geldiğiniz bilgisi. İş
+          ortağı yalnız getirdiği çalışma alanının adını ve tarihini görür;
+          öğrenci verisine, ödeme tutarına ya da e-posta adresinize erişemez.
+        </li>
       </ul>
       <p>
         Özel nitelikli kişisel veri (sağlık, inanç, biyometrik veri vb.){' '}
@@ -85,13 +108,22 @@ export default function PrivacyPage() {
         </li>
       </ul>
 
-      <LegalHeading>Saklama süresi</LegalHeading>
+      <LegalHeading>Saklama süresi ve silme</LegalHeading>
       <p>
-        Veriler, hesap aktif olduğu sürece saklanır. Hesap kapatıldığında ya da silme
-        talebi geldiğinde kişisel veriler{' '}
-        <strong className="text-foreground">30 gün içinde</strong> silinir. Denetim
-        kayıtları, hukuki yükümlülükler nedeniyle kişisel veri içermeyecek şekilde
-        anonimleştirilerek saklanabilir.
+        Veriler, hesap aktif olduğu sürece saklanır. Silme talebinizi{' '}
+        <strong className="text-foreground">Hesap ve Veri</strong> ekranından
+        açabilirsiniz.
+      </p>
+      <p>
+        Talep açıldığı anda hiçbir veri silinmez:{' '}
+        <strong className="text-foreground">30 günlük bir bekleme penceresi</strong>{' '}
+        başlar. Bu süre, yanlışlıkla ya da yetkisiz açılmış bir talebin geri
+        alınabilmesi içindir; talebinizi bu süre boyunca iptal edebilirsiniz.
+        Pencere dolduktan sonra silme yürütülür ve size bildirilir.
+      </p>
+      <p>
+        Denetim kayıtları ve yasal saklama yükümlülüğü bulunan ödeme kayıtları,
+        kişisel veri içermeyecek şekilde anonimleştirilerek saklanabilir.
       </p>
 
       <LegalHeading>Haklarınız</LegalHeading>
