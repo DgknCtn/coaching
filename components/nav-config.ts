@@ -49,6 +49,52 @@ export function isNavGroup(entry: NavEntry): entry is NavGroup {
   return 'items' in entry
 }
 
+/**
+ * Öğrenci ekranları — TEK KAYNAK.
+ *
+ * Aynı beş ekran menüde iki yerde görünüyor:
+ *  1) Bir öğrenci açıkken, o öğrencinin altında (studentContextNav),
+ *  2) Öğrenci seçili değilken ana menüde bir grup olarak
+ *     (studentScreensGroup) — bağlantı öğrenci listesine gider, seçim
+ *     yapılınca doğrudan istenen ekrana girilir.
+ *
+ * `slug` URL'de taşınan kimlik (?ekran=...), `path` öğrenci altındaki
+ * gerçek yol. İkisi ayrı tutuluyor: "homework/new" gibi bir yol sorgu
+ * değerinde okunaksız kalırdı.
+ */
+export const studentScreens = [
+  { slug: 'mufredat', path: 'curriculum', label: 'Müfredat Akışı', icon: CalendarRange },
+  { slug: 'kaynak', path: 'goals', label: 'Kaynak Planı', icon: Library },
+  { slug: 'haftalik', path: 'homework/new', label: 'Haftalık Plan', icon: ListChecks },
+  { slug: 'koruma', path: 'protection', label: 'Koruma Havuzu', icon: ShieldCheck },
+  { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
+] as const
+
+export type StudentScreen = (typeof studentScreens)[number]
+
+/** ?ekran= değerini doğrular; tanınmayan değer için null döner. */
+export function studentScreenBySlug(slug: string | undefined): StudentScreen | null {
+  if (!slug) return null
+  return studentScreens.find((s) => s.slug === slug) ?? null
+}
+
+/**
+ * Ekranların öğrenci SEÇİLMEMİŞKEN görünen hâli. Hedef öğrenci
+ * listesidir: liste sayfası ?ekran= değerini okur ve satır bağlantılarını
+ * doğrudan o ekrana yöneltir. Böylece menü, hangi sayfada olunursa olsun
+ * aynı beş satırı gösterir.
+ */
+export const studentScreensGroup: NavGroup = {
+  id: 'ogrenci-ekranlari',
+  label: 'Öğrenci Ekranları',
+  icon: CalendarRange,
+  items: studentScreens.map((s) => ({
+    href: `/teacher/students?ekran=${s.slug}`,
+    label: s.label,
+    icon: s.icon,
+  })),
+}
+
 export const teacherNav: NavEntry[] = [
   { href: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   // ÖĞRENCİ İŞLERİ: öğrenciyle ilgili üç ekran tek başlık altında.
@@ -70,6 +116,7 @@ export const teacherNav: NavEntry[] = [
   },
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
+  studentScreensGroup,
   // EĞİTİM DÖNEMİ / PLAN / DESTEK ARTIK DÜZ SEVİYEDE.
   //
   // Önce "Yönetim" adlı katlanabilir bir grubun altındaydılar. Grup,
@@ -105,11 +152,11 @@ export function studentContextNav(studentId: string): NavItem[] {
   const base = `/teacher/students/${studentId}`
   return [
     { href: base, label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
-    { href: `${base}/curriculum`, label: 'Müfredat Akışı', icon: CalendarRange },
-    { href: `${base}/goals`, label: 'Kaynak Planı', icon: Library },
-    { href: `${base}/homework/new`, label: 'Haftalık Plan', icon: ListChecks },
-    { href: `${base}/protection`, label: 'Koruma Havuzu', icon: ShieldCheck },
-    { href: `${base}/report`, label: 'Rapor', icon: FileBarChart },
+    ...studentScreens.map((s) => ({
+      href: `${base}/${s.path}`,
+      label: s.label,
+      icon: s.icon,
+    })),
   ]
 }
 

@@ -8,6 +8,7 @@ import { Section } from '@/components/shared/section'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { studentScreenBySlug } from '@/components/nav-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +24,18 @@ type StudentRow = {
   risk_status: string | null
 }
 
-export default async function StudentsPage() {
+export default async function StudentsPage({
+  searchParams,
+}: {
+  // Sol menüdeki "Öğrenci Ekranları" grubu buraya ?ekran=... ile gelir:
+  // öğrenci seçilmeden o ekranlara girilemez, bu yüzden liste bir seçim
+  // adımı olarak kullanılır ve satırlar doğrudan istenen ekrana bağlanır.
+  searchParams: Promise<{ ekran?: string }>
+}) {
   const { supabase, workspaceId, usage } = await getTeacherContext()
+  // Tanınmayan slug sessizce yok sayılır — elle yazılmış bir adres
+  // yüzünden liste bozulmasın.
+  const screen = studentScreenBySlug((await searchParams).ekran)
 
   const { data: students } = await supabase
     .from('teacher_student_overview_view')
@@ -102,9 +113,17 @@ export default async function StudentsPage() {
         <Button
           variant="ghost"
           size="sm"
-          render={<Link href={`/teacher/students/${s.student_id}`} />}
+          render={
+            <Link
+              href={
+                screen
+                  ? `/teacher/students/${s.student_id}/${screen.path}`
+                  : `/teacher/students/${s.student_id}`
+              }
+            />
+          }
         >
-          Detay
+          {screen ? screen.label : 'Detay'}
         </Button>
       ),
     },
@@ -113,8 +132,14 @@ export default async function StudentsPage() {
   return (
     <div className="max-w-6xl space-y-8 p-6 md:p-8">
       <PageHeader
-        title="Öğrenciler"
-        subtitle={rows.length ? `${rows.length} öğrenci` : undefined}
+        title={screen ? screen.label : 'Öğrenciler'}
+        subtitle={
+          screen
+            ? 'Hangi öğrenci için açılacağını seç.'
+            : rows.length
+              ? `${rows.length} öğrenci`
+              : undefined
+        }
         action={
           <Button size="sm" render={<Link href="/teacher/students/new" />}>
             <Plus />
