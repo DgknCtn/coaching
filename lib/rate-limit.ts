@@ -1,19 +1,42 @@
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { reportError } from '@/lib/observability'
 
-// Kimlik akışlarında hız sınırı (050).
+// Kimlik akışlarında hız sınırı (050, 068'de sertleştirildi).
 //
 // Sunucusuz ortamda bellekteki sayaç yalnız o örnekte yaşar; ortak durum
 // veritabanında tutulur. Sayma ve sınır kararı tek atomik adımda
 // `check_rate_limit` RPC'sinde yapılır — "sor, sonra artır" iki eşzamanlı
 // denemenin ikisinin de geçmesine izin verirdi.
 //
-// GİZLİLİK: IP ve e-posta veritabanına HAM GİTMEZ. Burada SHA-256'dan
-// geçirilir; sayaç tablosunda kimlik değil kimliğin özeti durur.
+// ============================================================
+// LİMİTLER ARTIK BURADA DEĞİL, VERİTABANINDA (068)
+//
+// 068'e kadar bu dosya kova anahtarını, üst sınırı ve pencereyi RPC'ye
+// PARAMETRE olarak geçiyordu ve RPC anon'a açıktı. İki sonucu vardı:
+//
+//   a) Saldırgan `p_max_attempts = 1` göndererek sayacı tek çağrıda
+//      doldurabiliyordu.
+//   b) Anahtar tuzsuz SHA-256 olduğu için tahmin edilebiliyordu: hedefin
+//      e-postasını bilen `login:subject:<sha256(email)>` kovasını
+//      yeniden üretip HİÇ giriş denemeden o hesabı 15 dakika
+//      kilitleyebiliyordu.
+//
+// Artık eylem ADI gönderiliyor; limitler ve özetleme sunucuda. Özetin
+// tuzu veritabanında duruyor ve uygulamaya hiç gelmiyor, yani kova
+// anahtarı dışarıdan üretilemiyor.
+// ============================================================
 
-/** Eylem başına sınırlar. Kimlik akışları düşük hacimlidir; dar tutuldu. */
+/**
+ * Eylem başına sınırlar — BELGELEME AMAÇLI.
+ *
+ * Gerçek değerler `check_rate_limit` fonksiyonunun içindeki CASE
+ * bloğunda (068). Buradaki kopya yalnız okuyana ne olduğunu anlatıyor;
+ * bir yerde değiştirilirse diğerinin de güncellenmesi gerekir ve
+ * migration bunu yorumda söylüyor.
+ */
 export const RATE_LIMITS = {
-  /** Kaba kuvvete karşı. Aynı IP'den 15 dakikada 10 giriş denemesi. */
+  /** Kaba kuvvete karşı. 15 dakikada 10 giriş denemesi. */
   login: { max: 10, windowSeconds: 15 * 60 },
   /** Otomatik hesap üretimine karşı. Saatte 5 kayıt. */
   register: { max: 5, windowSeconds: 60 * 60 },
@@ -25,14 +48,6 @@ export const RATE_LIMITS = {
 
 export type RateLimitAction = keyof typeof RATE_LIMITS
 
-async function sha256(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return Array.from(new Uint8Array(digest))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 /**
  * İstemcinin IP adresi.
  *
@@ -40,12 +55,15 @@ async function sha256(value: string): Promise<string> {
  * gönderdiğini EZER, bu yüzden ilk değer güvenilirdir. Başlık hiç yoksa
  * sabit bir kovaya düşülür: o durumda sınır tüm anonim trafiği tek sayaçta
  * toplar — kaba ama açık bırakmaktan iyidir.
+ *
+ * ÖZETLENMEDEN GÖNDERİLİYOR: özet artık sunucuda, tuzla alınıyor. Ham IP
+ * zaten isteğin kendisiyle veritabanı sunucusuna ulaşmıyor; yalnız bu
+ * RPC'nin parametresi olarak gidiyor ve tabloya özeti yazılıyor.
  */
-async function clientKey(): Promise<string> {
+async function clientIp(): Promise<string> {
   const h = await headers()
   const forwarded = h.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0]?.trim() || h.get('x-real-ip') || 'bilinmeyen'
-  return sha256(ip)
+  return forwarded?.split(',')[0]?.trim() || h.get('x-real-ip') || 'bilinmeyen'
 }
 
 export interface RateLimitResult {
@@ -62,34 +80,36 @@ export interface RateLimitResult {
  *
  * AÇIK KALMA KARARI: RPC hata verirse istek ENGELLENMEZ. Sayaç altyapısı
  * bozuk diye kimsenin giriş yapamaması, hız sınırının olmamasından daha
- * kötü bir arıza olurdu. Hata sessizce yutulmaz, loglanır.
+ * kötü bir arıza olurdu. Karar korunuyor ama artık SESSİZ DEĞİL:
+ * koruma devreden çıktığında merkezî hata kaydına düşüyor — fark
+ * edilmeden aylarca kapalı kalması, açık kalma kararının kendisinden
+ * daha tehlikeli.
  */
 export async function checkRateLimit(
   action: RateLimitAction,
   subject?: string
 ): Promise<RateLimitResult> {
-  const { max, windowSeconds } = RATE_LIMITS[action]
   const supabase = await createClient()
 
-  const keys = [`${action}:ip:${await clientKey()}`]
-  if (subject?.trim()) {
-    keys.push(`${action}:subject:${await sha256(subject.trim().toLowerCase())}`)
-  }
+  // İki kova: kaynak (IP) ve hedef (e-posta). Ön ek, iki kovanın aynı
+  // özete düşmemesi için.
+  const subjects = [`ip:${await clientIp()}`]
+  if (subject?.trim()) subjects.push(`subject:${subject.trim().toLowerCase()}`)
 
   let worst: RateLimitResult = { allowed: true, retryAfterSeconds: 0 }
 
-  for (const key of keys) {
+  for (const value of subjects) {
     const { data, error } = await supabase.rpc('check_rate_limit', {
-      p_bucket_key: key,
-      p_max_attempts: max,
-      p_window_seconds: windowSeconds,
+      p_action: action,
+      p_subject: value,
     })
 
     if (error) {
-      console.error(
-        '[rate-limit] sayaç çalışmadı, istek geçirildi:',
-        JSON.stringify({ action, message: error.message })
-      )
+      reportError(error, {
+        scope: 'rate-limit',
+        message: 'Hız sınırı sayacı çalışmadı; istek geçirildi.',
+        action,
+      })
       continue
     }
 

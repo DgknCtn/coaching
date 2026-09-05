@@ -74,6 +74,13 @@ const LOCKED_TABLES = [
   'partner_commissions',
   'audit_events',
   'usage_counters',
+  // 066'da eklenen finans tabloları bu listeye alınmamıştı (068 · denetim
+  // raporu bulgusu 1). Öğrenci ücreti ve tahsilat, kiracının en hassas
+  // ticari verisi; listeye girmeyen bir tablo bu dosyanın hiç
+  // bakmadığı bir tablodur.
+  'student_fees',
+  'finance_lessons',
+  'finance_payments',
 ] as const
 
 async function anonSelect(view: string) {

@@ -88,6 +88,8 @@ interface Overview {
   expiring_trials: number
   awaiting_payment: number
   at_student_limit: number
+  // 068 — belirteci yazılamamış, bir saatten eski açık siparişler:
+  unmatched_orders: number
 }
 
 // Filtre seçenekleri. Değerler DB'deki enum'larla birebir; adres
@@ -224,6 +226,16 @@ export default async function AdminHome({
     attention.push({
       tone: 'warning',
       text: `${overview.at_student_limit} çalışma alanı öğrenci limitine ulaştı`,
+    })
+  }
+  // BELİRTECİ OLMAYAN SİPARİŞ (068 · rapor bulgusu 2). Ödeme başlatılırken
+  // belirteç yazılamazsa artık ödemeye hiç geçilmiyor; ama o düzeltmeden
+  // önce açılmış siparişler elle mutabakat istiyor ve görünmeyen bir şey
+  // mutabık edilemez.
+  if ((overview?.unmatched_orders ?? 0) > 0) {
+    attention.push({
+      tone: 'destructive',
+      text: `${overview.unmatched_orders} sipariş ödeme belirteci olmadan açık kaldı — elle mutabakat gerekiyor`,
     })
   }
 
