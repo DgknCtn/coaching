@@ -33,6 +33,7 @@ export type AuditAction =
   | 'curriculum.flow_save'
   | 'workspace.switch'
   | 'book.outline_import'
+  | 'book.import'
   // Faturalama (056). Para hareketi denetim kaydının asıl sebebidir:
   // "bu abonelik ne zaman, hangi planla açıldı" sorusunun cevabı burada.
   | 'billing.checkout_started'
@@ -59,6 +60,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'book.section_delete': 'Kitap bölümü sildi',
   'book.subsection_delete': 'Kitap alt bölümü sildi',
   'book.outline_import': 'Kitap içindekiler aktardı',
+  'book.import': 'Yedekten kitap aktardı',
   'invite.create': 'Davet oluşturdu',
   'invite.revoke': 'Daveti iptal etti',
   'target.set': 'Hedef belirledi',

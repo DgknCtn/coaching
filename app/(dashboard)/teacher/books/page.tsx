@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { BookCard } from '@/components/shared/book-card'
 import { Section } from '@/components/shared/section'
 import { BookPoolFilters } from './book-pool-filters'
+import { BookPoolImport } from '@/components/shared/book-pool-import'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,6 +105,11 @@ export default async function BooksPage({ searchParams }: PageProps) {
               <Download />
               Yedek al
             </Button>
+            {/* İÇE AKTARMA YEDEĞİN HEMEN YANINDA: "yedek al" tek başına
+                yarım bir vaatti — dosya iniyordu ama geri konulamıyordu.
+                İki düğme yan yana durunca yedeğin ne işe yaradığı da
+                anlaşılıyor. */}
+            <BookPoolImport />
             <Button size="sm" render={<Link href="/teacher/books/new" />}>
               <Plus />
               Yeni Kitap

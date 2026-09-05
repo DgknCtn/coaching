@@ -5,8 +5,18 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { bookSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import { parseBookBackup, bookIdentityKey } from '@/lib/book-backup'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
+
+/**
+ * İçe aktarılabilecek en büyük yedek metni.
+ *
+ * ~4 MB, 1000 kitaplık bir havuzun JSON'undan kat kat fazla. Sınır,
+ * kazayla seçilen dev bir dosyanın sunucuyu ayrıştırmayla meşgul
+ * etmesine karşı.
+ */
+const MAX_BACKUP_CHARS = 4_000_000
 
 export interface SectionInput {
   title: string
@@ -105,6 +115,105 @@ export async function createBookAction(input: NewBookInput) {
 
   revalidatePath('/teacher/books')
   return { success: true, data }
+}
+
+/**
+ * KİTAP HAVUZU YEDEĞİNİ GERİ YÜKLE (içe aktarma).
+ *
+ * "Yedek al" ile indirilen JSON dosyasını havuza geri koyar. Export
+ * baştan beri vardı ama karşılığı yoktu: dosya duruyor, kullanıcı onunla
+ * hiçbir şey yapamıyordu. Asıl kullanım, havuzu bir çalışma alanından
+ * diğerine taşımak.
+ *
+ * KİTAPLAR TEK TEK, MEVCUT RPC İLE eklenir. Toplu bir INSERT daha hızlı
+ * olurdu ama bölüm/test üretimi, sınav türü türetmesi ve yetki kontrolü
+ * create_book_with_sections_and_tests içinde; ikinci bir yol açmak, iki
+ * yoldan gelen kitapların farklı kurulduğu bir sistem demekti.
+ *
+ * YARIM SONUÇ KABUL EDİLİR: bir kitap hata verirse işlem durmaz, o kitap
+ * atlanır ve rapora yazılır. 80 kitabın 79'unu geri almak, 80'ini birden
+ * kaybetmekten iyidir; tekrar çalıştırmak da güvenli, çünkü zaten var
+ * olan kitaplar atlanıyor.
+ */
+export async function importBookBackupAction(fileText: string) {
+  // Dosya boyutu ÖNCE: 5 MB'lık bir metni ayrıştırmaya kalkmak, hatayı
+  // sunucuyu meşgul ettikten sonra vermek olurdu.
+  if (typeof fileText !== 'string' || fileText.length > MAX_BACKUP_CHARS) {
+    return { error: 'Dosya çok büyük ya da okunamadı.' }
+  }
+
+  const parsed = parseBookBackup(fileText)
+  if (parsed.fatal) return { error: parsed.fatal }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  // MEVCUT HAVUZ ÖNCE OKUNUR: aynı yedeği iki kez aktarmak havuzu
+  // ikiye katlamamalı. Arşivlenmişler de sayılır — kullanıcı kitabı
+  // bilerek havuzdan çıkardıysa geri getirmek onun kararı olmalı.
+  const { data: existing } = await supabase
+    .from('books')
+    .select('title, publisher, edition_year')
+    .eq('workspace_id', workspaceId)
+    .limit(2000)
+
+  const seen = new Set(
+    (existing ?? []).map((b) => bookIdentityKey(b.title, b.publisher, b.edition_year))
+  )
+
+  let imported = 0
+  const skipped: string[] = [...parsed.skipped]
+
+  for (const book of parsed.books) {
+    const key = bookIdentityKey(book.title, book.publisher ?? null, book.editionYear ?? null)
+    if (seen.has(key)) {
+      skipped.push(`${book.title} — havuzda zaten var`)
+      continue
+    }
+
+    const { data, error } = await supabase.rpc('create_book_with_sections_and_tests', {
+      p_workspace_id: workspaceId,
+      p_academic_term_id: null,
+      p_title: book.title,
+      p_subject: book.subject,
+      p_publisher: book.publisher || null,
+      p_level_exam: book.levelExam || null,
+      p_edition_year: book.editionYear ?? null,
+      p_description: book.description || null,
+      p_sections: book.sections,
+      p_tracking_mode: book.trackingMode,
+      p_video_mode: book.videoMode,
+      p_video_url: book.videoUrl || null,
+    })
+
+    if (error) {
+      skipped.push(`${book.title} — ${dbErrorToTr(error.message)}`)
+      continue
+    }
+
+    // Aynı dosyada tekrarlanan kitap ikinci kez eklenmesin.
+    seen.add(key)
+    imported++
+
+    const newBookId = (data as { book_id?: string } | null)?.book_id
+    if (newBookId) {
+      await logAudit(supabase, {
+        workspaceId,
+        action: 'book.import',
+        entityType: 'book',
+        entityId: newBookId,
+      })
+    }
+  }
+
+  revalidatePath('/teacher/books')
+
+  return {
+    success: true,
+    imported,
+    // Rapor uzayabilir; ekranda ilk 20'si gösterilip gerisi sayılıyor.
+    skipped,
+  }
 }
 
 export async function archiveBookAction(bookId: string) {

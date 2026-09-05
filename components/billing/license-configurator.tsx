@@ -11,6 +11,9 @@ import {
   Check,
   Lock,
   RotateCcw,
+  Minus,
+  Plus,
+  TrendingDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +21,8 @@ import { Label } from '@/components/ui/label'
 import {
   quote,
   isSelfService,
+  durationDiscountPercent,
+  nextVolumeTier,
   formatKurus,
   formatKurusShort,
   MONTH_OPTIONS,
@@ -77,6 +82,11 @@ export function LicenseConfigurator({
     return quote(studentCount, months)
   }, [valid, selfService, studentCount, months])
 
+  const tier = useMemo(
+    () => (valid && selfService ? nextVolumeTier(studentCount) : null),
+    [valid, selfService, studentCount]
+  )
+
   function buy() {
     if (!q) return
     startTransition(async () => {
@@ -97,40 +107,122 @@ export function LicenseConfigurator({
             <Users className="size-3.5 text-muted-foreground" />
             Öğrenci sayısı
           </Label>
-          <Input
-            id="student-count"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={MAX_SELF_SERVICE_STUDENTS}
-            value={studentsInput}
-            onChange={(e) => setStudentsInput(e.target.value)}
-            aria-describedby="student-count-hint"
-          />
+
+          {/* ARTI/EKSİ DÜĞMELERİ: kullanıcı çoğu zaman sayıyı bir iki
+              kişi oynatıp fiyatın nasıl değiştiğine bakıyor. Sayı
+              alanının yerel okları masaüstünde minicik, mobilde hiç
+              yok; bu iş için alanı silip yeniden yazmak gerekiyordu. */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Bir öğrenci azalt"
+              disabled={!valid || studentCount <= 1}
+              onClick={() => setStudentsInput(String(Math.max(1, studentCount - 1)))}
+            >
+              <Minus className="size-4" />
+            </Button>
+
+            <Input
+              id="student-count"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_SELF_SERVICE_STUDENTS}
+              value={studentsInput}
+              onChange={(e) => setStudentsInput(e.target.value)}
+              aria-describedby="student-count-hint"
+              className="text-center tabular-nums"
+            />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Bir öğrenci artır"
+              disabled={valid && studentCount >= MAX_SELF_SERVICE_STUDENTS}
+              onClick={() =>
+                setStudentsInput(
+                  String(Math.min(MAX_SELF_SERVICE_STUDENTS, (valid ? studentCount : 0) + 1))
+                )
+              }
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+
           <p id="student-count-hint" className="text-xs text-muted-foreground">
             Plan süresince aynı anda takip edebileceğiniz aktif öğrenci sayısı.
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="months" className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
             <CalendarRange className="size-3.5 text-muted-foreground" />
             Kullanım süresi
-          </Label>
-          {/* Yerel select: 12 seçenek için özel bir bileşen gereksiz ve
-              mobilde yerel seçici her zaman daha kullanışlı. */}
-          <select
-            id="months"
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {MONTH_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {m} Ay
-              </option>
-            ))}
-          </select>
+          </span>
+
+          {/* SÜRE ARTIK AÇILIR LİSTE DEĞİL.
+              12 seçenekli bir <select>, indirim merdivenini kapalı bir
+              kutuda saklıyordu: kullanıcı 12 ayın %35 kazandırdığını
+              ancak seçenekleri tek tek deneyerek görebiliyordu. Izgarada
+              bütün basamaklar ve yüzdeleri aynı anda duruyor — bu ekranda
+              ikna eden şey cümle değil, merdivenin kendisi.
+
+              Radyo düğmesi (düğme değil): ok tuşlarıyla gezinme ve
+              "seçili" durumunun ekran okuyucuya duyurulması tarayıcıdan
+              hazır geliyor. */}
+          <fieldset>
+            <legend className="sr-only">Kullanım süresi</legend>
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+              {MONTH_OPTIONS.map((m) => {
+                const off = durationDiscountPercent(m)
+                const active = months === m
+                return (
+                  <label
+                    key={m}
+                    className={cn(
+                      'flex cursor-pointer flex-col items-center rounded-md border px-1 py-1.5 text-center transition-colors',
+                      'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+                      active
+                        ? 'border-primary bg-primary/10'
+                        : 'border-input hover:border-primary/40 hover:bg-muted/50'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="months"
+                      value={m}
+                      checked={active}
+                      onChange={() => setMonths(m)}
+                      className="sr-only"
+                    />
+                    <span
+                      className={cn(
+                        'text-sm tabular-nums',
+                        active ? 'font-semibold' : 'font-medium'
+                      )}
+                    >
+                      {m} ay
+                    </span>
+                    {/* "%0" yazmak indirimin kendisini değersizleştirir;
+                        satır yine de yer tutuyor, yoksa kutular seçime
+                        göre bir aşağı bir yukarı zıplardı. */}
+                    <span
+                      className={cn(
+                        'text-[11px] tabular-nums',
+                        off > 0 ? 'text-success-foreground' : 'invisible'
+                      )}
+                    >
+                      %{off}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
           <p className="text-xs text-muted-foreground">
             Süre uzadıkça öğrenci başına maliyet düşer.
           </p>
@@ -225,6 +317,28 @@ export function LicenseConfigurator({
                     </li>
                   )}
                 </ul>
+              )}
+
+              {/* BİR SONRAKİ KADEME: kademeli indirim, tablosu
+                  görünmediği sürece yalnız sonradan fark edilen bir
+                  sürprizdir. 4 öğrenci seçen kullanıcı, bir kişi daha
+                  eklerse ne kazanacağını burada görüyor. Bu bir BİLGİ,
+                  öneri değil: sayıyı kendiliğinden değiştirmiyoruz,
+                  isterse bağlantıya basıyor. */}
+              {tier && (
+                <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <TrendingDown className="mt-0.5 size-3.5 shrink-0 text-success-foreground" />
+                  <span>
+                    <button
+                      type="button"
+                      onClick={() => setStudentsInput(String(tier.minStudents))}
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
+                      {tier.minStudents} öğrenciye
+                    </button>{' '}
+                    çıkarsanız ({tier.needed} kişi daha) adet indirimi %{tier.percent} olur.
+                  </span>
+                </p>
               )}
             </div>
 

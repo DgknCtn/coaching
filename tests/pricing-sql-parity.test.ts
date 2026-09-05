@@ -14,7 +14,7 @@ import {
 // NEDEN BU TEST VAR
 //
 // Fiyat iki yerde hesaplanıyor ve bu bilinçli:
-//   - SQL (058) SUNUCU OTORİTESİ. İstemci tutar gönderemesin diye
+//   - SQL (058, en son 065) SUNUCU OTORİTESİ. İstemci tutar gönderemesin diye
 //     ödenecek rakamı veritabanı belirler.
 //   - TypeScript (lib/billing/pricing.ts) ARAYÜZÜN CANLI HESABI.
 //     Kullanıcı öğrenci sayısını değiştirdikçe tutarı anında görmeli;
@@ -29,9 +29,13 @@ import {
 //
 // Migration'daki PARITY-BEGIN/END blokları BU TEST İÇİN var; taşınır ya
 // da silinirlerse test bunu da söyler.
+//
+// OKUNAN DOSYA HER ZAMAN FİYATI EN SON TANIMLAYAN MIGRATION'dır: fiyat
+// değiştiğinde bu yol da güncellenmeli, yoksa test artık çalışmayan bir
+// tanımı doğrular.
 // ============================================================
 
-const SQL_PATH = join(process.cwd(), 'supabase/migrations/058_license_model.sql')
+const SQL_PATH = join(process.cwd(), 'supabase/migrations/065_price_double.sql')
 
 function parityBlock(sql: string, name: string): string {
   // `\r?\n`: depoda satır sonları KARIŞIK (CRLF ve LF bir arada) ve bir
@@ -94,6 +98,6 @@ describe('fiyat tabloları SQL ile aynı', () => {
     const body = fn![0]
     // Tek bir ROUND olmalı ve çarpımların tamamını sarmalı.
     expect((body.match(/ROUND\(/g) ?? []).length).toBe(1)
-    expect(body).toMatch(/ROUND\(\s*\n?\s*\(50000::NUMERIC \* p_students \* p_months\)/)
+    expect(body).toMatch(/ROUND\(\s*\n?\s*\(100000::NUMERIC \* p_students \* p_months\)/)
   })
 })

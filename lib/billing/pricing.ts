@@ -19,8 +19,15 @@
 // gösterim ve sağlayıcıya gönderim anında ondalığa çevrilir.
 // ============================================================
 
-/** Taban birim fiyat: 500,00 TL / öğrenci / ay, KDV dahil. */
-export const BASE_PER_STUDENT_MONTH_KURUS = 50_000
+/**
+ * Taban birim fiyat: 1.000,00 TL / öğrenci / ay, KDV dahil.
+ *
+ * 065'te 500,00 TL'den iki katına çıkarıldı. Sayı burada TEK KAYNAK:
+ * vitrin, plan ekranı ve ön bilgilendirme formu hepsi bunu okur.
+ * SQL tarafındaki karşılığı 065_price_double.sql içinde ve
+ * tests/pricing-sql-parity.test.ts ikisinin ayrışmasını engelliyor.
+ */
+export const BASE_PER_STUDENT_MONTH_KURUS = 100_000
 
 /** KDV oranı. SaaS hizmeti Türkiye'de genel orana tabidir. */
 export const VAT_RATE = 0.2
@@ -99,6 +106,28 @@ export function volumeDiscountPercent(studentCount: number): number {
     if (studentCount >= tier.minStudents) percent = tier.percent
   }
   return percent
+}
+
+/**
+ * Bir sonraki adet kademesi — "kaç öğrenci daha eklersen ne kazanırsın".
+ *
+ * NEDEN VAR: kademeli indirim, tablosu görünmediği sürece yalnız
+ * ödemede fark edilen bir sürprizdir. 4 öğrenci seçen kullanıcı, bir
+ * kişi daha eklediğinde %5 kazanacağını bilmiyor. Bu fonksiyon o eşiği
+ * arayüzün söyleyebilmesi için hesaplar.
+ *
+ * En üst kademedeyken null döner — gösterilecek bir sonraki adım yok.
+ */
+export function nextVolumeTier(
+  studentCount: number
+): { minStudents: number; percent: number; needed: number } | null {
+  const current = volumeDiscountPercent(studentCount)
+  const next = VOLUME_DISCOUNTS.find(
+    (t) => t.minStudents > studentCount && t.percent > current
+  )
+  if (!next) return null
+
+  return { ...next, needed: next.minStudents - studentCount }
 }
 
 /**

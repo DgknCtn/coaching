@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   Library,
   ListChecks,
-  Settings,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -70,24 +69,20 @@ export const teacherNav: NavEntry[] = [
   },
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
-  // YÖNETİM: günlük işin parçası olmayan üç ekran.
+  // EĞİTİM DÖNEMİ / PLAN / DESTEK ARTIK DÜZ SEVİYEDE.
   //
-  // Plan ve Destek'e öğretmen ayda bir bakar, Eğitim Dönemi'ne yılda
-  // birkaç kez. Günlük kullanılan Öğrenci/Kitap/Müfredat ile aynı
-  // düzeyde durmaları, sık kullanılanı seyreltiyordu.
-  {
-    id: 'yonetim',
-    label: 'Yönetim',
-    icon: Settings,
-    items: [
-      { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
-      // Plan yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
-      // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
-      // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
-      { href: '/teacher/ayarlar/abonelik', label: 'Plan', icon: CreditCard },
-      { href: '/teacher/destek', label: 'Destek', icon: LifeBuoy },
-    ],
-  },
+  // Önce "Yönetim" adlı katlanabilir bir grubun altındaydılar. Grup,
+  // seyrek kullanılan ekranları toplamak için kurulmuştu ama ters
+  // çalıştı: üçü de menüde hiç görünmüyordu, kullanıcı önce
+  // "Yönetim"in ne içerdiğini tahmin edip açmak zorundaydı. Üç öğe
+  // için bir tıklama ve bir tahmin, kazandırdığı derli topluluktan
+  // pahalı.
+  { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
+  // Plan yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
+  // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
+  // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
+  { href: '/teacher/ayarlar/abonelik', label: 'Plan', icon: CreditCard },
+  { href: '/teacher/destek', label: 'Destek', icon: LifeBuoy },
 ]
 
 /**

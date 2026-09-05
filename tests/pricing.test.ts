@@ -20,19 +20,19 @@ import {
 describe('fiyat çapaları', () => {
   // Bu iki sayı ÜRÜN KARARI olarak verildi. Eğri bunlardan türetildi;
   // değişirlerse bilerek değişmeli, kazara değil.
-  it('1 öğrenci × 1 ay = 500 TL', () => {
-    expect(quote(1, 1).grossKurus).toBe(50_000)
+  it('1 öğrenci × 1 ay = 1.000 TL', () => {
+    expect(quote(1, 1).grossKurus).toBe(100_000)
   })
 
-  it('1 öğrenci × 2 ay = 900 TL', () => {
-    expect(quote(1, 2).grossKurus).toBe(90_000)
+  it('1 öğrenci × 2 ay = 1.800 TL', () => {
+    expect(quote(1, 2).grossKurus).toBe(180_000)
   })
 
   it('onaylanan örnek tablo birebir tutuyor', () => {
-    expect(quote(1, 12).grossKurus).toBe(390_000) // 3.900 TL
-    expect(quote(10, 1).grossKurus).toBe(450_000) // 4.500 TL
-    expect(quote(10, 12).grossKurus).toBe(3_510_000) // 35.100 TL
-    expect(quote(30, 12).grossKurus).toBe(9_945_000) // 99.450 TL
+    expect(quote(1, 12).grossKurus).toBe(780_000) // 7.800 TL
+    expect(quote(10, 1).grossKurus).toBe(900_000) // 9.000 TL
+    expect(quote(10, 12).grossKurus).toBe(7_020_000) // 70.200 TL
+    expect(quote(30, 12).grossKurus).toBe(19_890_000) // 198.900 TL
   })
 })
 
@@ -200,7 +200,7 @@ describe('splitVat', () => {
   it('matrah ve KDV toplamı brüte eşit', () => {
     // Ayrı yuvarlayıp toplamak faturada bir kuruşluk tutarsızlık bırakır
     // ve partner komisyonu bu matrahtan hesaplandığı için hata büyür.
-    for (const gross of [50_000, 90_000, 3_510_000, 9_945_000, 1, 33_333, 7]) {
+    for (const gross of [100_000, 180_000, 7_020_000, 19_890_000, 1, 33_333, 7]) {
       const { netKurus, vatKurus } = splitVat(gross)
       expect(netKurus + vatKurus).toBe(gross)
     }

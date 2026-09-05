@@ -6,11 +6,14 @@ import { Badge } from '@/components/ui/badge'
 import { getTeacherContext } from '@/lib/workspace'
 import {
   daysLeft,
+  evaluateQuota,
   licenseState,
   LICENSE_STATE_LABEL,
   TRIAL_DAYS,
   type WorkspaceUsage,
 } from '@/lib/plans'
+import { ProgressBar } from '@/components/shared/progress-bar'
+import { AlertTriangle } from 'lucide-react'
 import { formatKurus } from '@/lib/billing/pricing'
 import { formatDateTr } from '@/lib/format'
 import { LicensePurchase } from './license-purchase'
@@ -90,6 +93,16 @@ export default async function LicensePage({
   const state = licenseState(usage)
   const isTrial = state === 'trialing' || state === 'trial_expired'
   const remainingDays = daysLeft(isTrial ? usage.trialEndsAt : usage.licenseEndsAt)
+  const quota = evaluateQuota(usage)
+
+  // ACİLİYET TEK YERDE TÜRETİLİR.
+  //
+  // Durum panelindeki "3 gün" rakamı doğruydu ama sessizdi: dört
+  // kutudan biri, diğerleriyle aynı puntoda. Süresi dolmuş bir çalışma
+  // alanının sahibi bu sayfaya zaten bir sorun yaşadığı için gelir; ne
+  // yapması gerektiğini rozet okuyarak çıkarmak zorunda kalmamalı.
+  const expired = state === 'trial_expired' || state === 'license_expired'
+  const endingSoon = !expired && remainingDays !== null && remainingDays <= 7
 
   const tone: Record<string, 'success' | 'warning' | 'destructive' | 'info' | 'neutral'> = {
     licensed: 'success',
@@ -118,6 +131,41 @@ export default async function LicensePage({
           role="status"
         >
           {notice.text}
+        </div>
+      )}
+
+      {/* SÜRE UYARISI: ne olduğu + ne olacağı + nereye basılacağı tek
+          kutuda. Bağlantı sayfa içindeki satın alma bölümüne iniyor;
+          uzun bir sayfada "aşağıda bir yerde" demek, kullanıcıyı arama
+          yapmaya bırakmaktır. */}
+      {(expired || endingSoon) && (
+        <div
+          role="status"
+          className={
+            expired
+              ? 'mb-6 flex items-start gap-2 rounded-md border border-destructive-border bg-destructive-subtle px-4 py-3 text-sm text-destructive-foreground'
+              : 'mb-6 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-foreground'
+          }
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {expired ? (
+              <>
+                {isTrial ? 'Deneme süreniz doldu' : 'Plan süreniz doldu'}. Verilerinizin
+                hiçbiri silinmedi; bir plan aldığınızda kaldığınız yerden devam
+                edersiniz.
+              </>
+            ) : (
+              <>
+                {isTrial ? 'Deneme sürenizin' : 'Planınızın'} bitmesine{' '}
+                <strong className="font-medium tabular-nums">{remainingDays} gün</strong>{' '}
+                kaldı. Süre dolduğunda çalışma alanı erişime kapanır.
+              </>
+            )}{' '}
+            <a href="#plan-olustur" className="font-medium underline underline-offset-4">
+              {expired ? 'Plan alın' : 'Şimdi uzatın'}
+            </a>
+          </span>
         </div>
       )}
 
@@ -193,6 +241,23 @@ export default async function LicensePage({
                     <>
                       <strong className="font-medium">{usage.activeStudents}</strong> /{' '}
                       {usage.studentLimit}
+                      {/* ÇUBUK, İKİ SAYIYI TEK BAKIŞA ÇEVİRİR: "18 / 20"
+                          okunup hesaplanması gereken bir şey; dolmuş bir
+                          çubuk bakılır bakılmaz anlaşılır. Yalnız limitli
+                          alanlarda çizilir — sınırsızda dolmayan bir
+                          çubuk, olmayan bir tavanı varmış gibi gösterir. */}
+                      <ProgressBar
+                        className="mt-2"
+                        value={quota.usedPercentage ?? 0}
+                        label="Öğrenci kotası kullanımı"
+                        tone={
+                          quota.atLimit
+                            ? 'destructive'
+                            : quota.isNearLimit
+                              ? 'warning'
+                              : 'primary'
+                        }
+                      />
                     </>
                   )}
                 </dd>
@@ -201,7 +266,7 @@ export default async function LicensePage({
           </CardContent>
         </Card>
 
-        <div>
+        <div id="plan-olustur" className="scroll-mt-6">
           <h2 className="mb-1 text-base font-medium">
             {state === 'licensed'
               ? 'Planınızı uzatın veya genişletin'
@@ -223,7 +288,43 @@ export default async function LicensePage({
             {!orders || orders.length === 0 ? (
               <p className="text-sm text-muted-foreground">Henüz sipariş kaydınız yok.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* MOBİLDE TABLO DEĞİL KART.
+                    Dört sütunluk tablo telefonda yatay kaydırma
+                    gerektiriyordu: kullanıcı tutarı görmek için sağa
+                    kaydırıyor, kaydırınca hangi siparişe baktığını
+                    kaybediyordu. Aynı veri, aynı sıra — yalnız dizilim
+                    dikey. */}
+                <ul className="space-y-3 sm:hidden">
+                  {orders.map((order) => (
+                    <li key={order.id} className="rounded-md border p-3 text-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium tabular-nums">
+                            {formatKurus(order.gross_kurus)}
+                          </p>
+                          <p className="mt-0.5 text-muted-foreground">
+                            {order.student_count} öğrenci · {order.months} ay
+                          </p>
+                        </div>
+                        {order.status === 'paid' ? (
+                          <Badge variant="success">Ödendi</Badge>
+                        ) : order.status === 'failed' ? (
+                          <Badge variant="destructive">Başarısız</Badge>
+                        ) : order.status === 'cancelled' ? (
+                          <Badge variant="neutral">İptal edildi</Badge>
+                        ) : (
+                          <Badge variant="warning">Ödeme tamamlanmadı</Badge>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                        {formatDateTr(order.created_at)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs text-muted-foreground">
@@ -264,7 +365,8 @@ export default async function LicensePage({
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
