@@ -30,6 +30,10 @@ interface AdminTicketProps {
   statusVariant: 'info' | 'success' | 'neutral'
   messageCount: number
   lastMessageAt: string
+  /** "3 saat önce" — sunucuda biçimlenir (formatRelativeTr). */
+  lastMessageLabel: string
+  /** Yalnız gecikmiş taleplerde dolu: "4 gündür yanıtsız". */
+  waitingLabel?: string
 }
 
 export function AdminTicket(props: AdminTicketProps) {
@@ -92,11 +96,15 @@ export function AdminTicket(props: AdminTicketProps) {
           <p className="mt-0.5 text-xs text-muted-foreground">
             {props.workspaceName}
             {props.openedBy && ` · ${props.openedBy}`} · {props.category} ·{' '}
-            {props.messageCount} mesaj ·{' '}
-            {new Date(props.lastMessageAt).toLocaleDateString('tr-TR')}
+            {props.messageCount} mesaj · {props.lastMessageLabel}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* GECİKME ROZETİ: durum rozetinin SOLUNDA, çünkü aciliyet
+              "açık mı kapalı mı" bilgisinden önce taranıyor. */}
+          {props.waitingLabel && (
+            <Badge variant="warning">{props.waitingLabel}</Badge>
+          )}
           <Badge variant={props.statusVariant}>{props.statusLabel}</Badge>
           <ChevronDown
             aria-hidden

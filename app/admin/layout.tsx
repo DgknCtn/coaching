@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BRAND } from '@/lib/brand'
+import { AdminTabs } from './admin-tabs'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,12 +21,6 @@ export const dynamic = 'force-dynamic'
 // ulaşsa bile hiçbir veri göremez.
 // ============================================================
 
-const TABS = [
-  { href: '/admin', label: 'Özet' },
-  { href: '/admin/talepler', label: 'Destek Talepleri' },
-  { href: '/admin/partnerler', label: 'Partnerler' },
-]
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
 
@@ -39,28 +34,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-muted/20">
+      {/* Marka satırı ve sekmeler AYRI SATIRDA: üçü tek satırda dururken
+          dar ekranda sarılıyor ve "Panele dön" bağlantısı sekmelerin
+          arasına düşüyordu. Sekmeler artık aktif olanı işaretliyor
+          (AdminTabs). */}
       <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 pt-4">
           <Link href="/admin" className="text-sm font-semibold">
             {BRAND.name} <span className="text-muted-foreground">Yönetim</span>
           </Link>
-          <nav className="flex gap-4 text-sm" aria-label="Yönetim menüsü">
-            {TABS.map((t) => (
-              <Link
-                key={t.href}
-                href={t.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {t.label}
-              </Link>
-            ))}
-          </nav>
           <Link
             href="/teacher"
-            className="ml-auto text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            className="ml-auto shrink-0 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
           >
             Panele dön
           </Link>
+        </div>
+        <div className="mx-auto max-w-6xl px-6">
+          <AdminTabs />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

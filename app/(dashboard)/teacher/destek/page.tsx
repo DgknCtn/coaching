@@ -24,7 +24,11 @@ export default async function SupportPage() {
   const rows = tickets ?? []
 
   return (
-    <div>
+    // SAYFA SARMALAYICISI (067): bu üç ekran bare <div> ile açılıyordu ve
+    // diğer bütün öğretmen sayfalarından farklı olarak içeriği kenara
+    // yapışık, genişliği sınırsız çiziyordu. Ölçüler teacher/students ve
+    // teacher/finans ile aynı.
+    <div className="max-w-4xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Size nasıl yardımcı olabiliriz?"
         subtitle="Bir sorunuz mu var veya bir sorunla mı karşılaştınız? Destek talebinizi oluşturun, ekibimiz buradan sizinle iletişime geçsin."

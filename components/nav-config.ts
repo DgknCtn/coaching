@@ -180,6 +180,21 @@ export function studentOverviewNav(studentId: string): NavItem[] {
   ]
 }
 
+/**
+ * Platform yönetimi sekmeleri.
+ *
+ * BURADA, app/admin/layout.tsx'te DEĞİL (067): dizi orada satır içinde
+ * duruyordu, yani menü tanımının tek kaynak olması kuralının dışında
+ * kalan tek yerdi. Rol menüleriyle aynı tipi kullanır ki sekme şeridi
+ * aktif olanı `exact` kuralına göre işaretleyebilsin — /admin her
+ * yönetim adresinin öneki olduğundan onsuz hep aktif görünürdü.
+ */
+export const adminNav: NavItem[] = [
+  { href: '/admin', label: 'Özet', icon: LayoutDashboard, exact: true },
+  { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
+  { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
+]
+
 export const studentNav: NavItem[] = [
   { href: '/student', label: 'Ödevlerim', icon: ClipboardList, exact: true },
   // R8: öğrenci artık kendi akademik planını da görebiliyor. Kitap haritası

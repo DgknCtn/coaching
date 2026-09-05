@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type Column } from '@/components/shared/data-table'
+import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles, type MetricTile } from '@/components/shared/metric-tiles'
 import { createClient } from '@/lib/supabase/server'
 import { formatKurusShort } from '@/lib/billing/pricing'
@@ -359,6 +360,16 @@ export default async function AdminHome({
 
   return (
     <div className="space-y-8">
+      {/* BAŞLIK (067): üç yönetim sayfasının hiçbirinde h1 yoktu. Sekme
+          şeridi hangi sayfada olunduğunu artık gösteriyor ama sayfanın
+          bir adı olması ayrı bir gerek: ekran okuyucu belge yapısını
+          başlıklardan çıkarıyor ve sekmelerden önce onu okuyor. */}
+      <PageHeader
+        title="Özet"
+        subtitle="Çalışma alanları, planlar ve dikkat gerektiren durumlar"
+        className="mb-0"
+      />
+
       <MetricTiles metrics={tiles} className="xl:grid-cols-4" />
 
       {attention.length > 0 && (

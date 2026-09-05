@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { BadgeTurkishLira, CalendarPlus, History, Search, Tag, Trash2 } from 'lucide-react'
+import {
+  BadgeTurkishLira,
+  CalendarPlus,
+  History,
+  Search,
+  SearchX,
+  Tag,
+  Trash2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Section } from '@/components/shared/section'
+import { EmptyState } from '@/components/shared/empty-state'
 import { formatKurus } from '@/lib/billing/pricing'
 import {
   balanceState,
@@ -78,6 +87,11 @@ export function FinanceTable({ rows }: { rows: StudentFinanceRow[] }) {
 
   const visible = useMemo(() => filterFinanceRows(rows, filter, query), [rows, filter, query])
 
+  const clearFilters = useCallback(() => {
+    setFilter('all')
+    setQuery('')
+  }, [])
+
   return (
     <Section
       title="Öğrenci Bazında Takip"
@@ -117,9 +131,19 @@ export function FinanceTable({ rows }: { rows: StudentFinanceRow[] }) {
       </div>
 
       {visible.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          Bu süzgeçle eşleşen öğrenci yok.
-        </p>
+        // Boş durum diğer listelerle aynı bileşende: çıplak bir cümle,
+        // süzgeci nasıl temizleyeceğini söylemeden bırakıyordu.
+        <EmptyState
+          icon={SearchX}
+          title="Eşleşen öğrenci yok"
+          description={
+            query
+              ? 'Arama metnini ya da süzgeci değiştirin.'
+              : 'Bu süzgeçle eşleşen öğrenci yok.'
+          }
+          className="py-10"
+          action={{ label: 'Süzgeci temizle', onClick: clearFilters }}
+        />
       ) : (
         <ul className="mt-4 divide-y">
           {visible.map((row) => {

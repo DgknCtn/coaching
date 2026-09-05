@@ -73,7 +73,7 @@ export default async function LicensePage({
 }: {
   searchParams: Promise<{ odeme?: string }>
 }) {
-  const { supabase, workspaceId, usage: rawUsage } = await getTeacherContext()
+  const { supabase, workspaceId, role, usage: rawUsage } = await getTeacherContext()
   const params = await searchParams
 
   // usage, RPC boş dönerse null olabilir. `!` ile susturmak yerine makul
@@ -83,12 +83,28 @@ export default async function LicensePage({
   const usage = rawUsage ?? FALLBACK_USAGE
   const notice = params.odeme ? PAYMENT_NOTICES[params.odeme] : undefined
 
-  const { data: orders } = await supabase
-    .from('billing_orders')
-    .select('id, student_count, months, gross_kurus, status, created_at, paid_at')
-    .eq('workspace_id', workspaceId)
-    .order('created_at', { ascending: false })
-    .limit(10)
+  // SATIN ALMA VE SİPARİŞLER YALNIZ SAHİBE (067).
+  //
+  // nav-config bu bağlantının herkese görünmesini bilinçli olarak
+  // seçiyor ("sayfa zaten yetki hatası verir") — ama sayfa bunu
+  // yapmıyordu: sahip olmayan bir öğretmene fiyat seçicisi de sipariş
+  // geçmişi de tam açık görünüyor, hata ancak ÖDEMEYE KALKIŞINCA
+  // çıkıyordu. Yetkiyi işlemin sonunda söylemek, kullanıcıya boşuna
+  // bir form doldurtmak demek.
+  //
+  // Plan DURUMU herkese açık kalıyor: çalışma alanının ne zaman
+  // kapanacağı orada ders veren öğretmeni de ilgilendiriyor ve üst
+  // bardaki geri sayım zaten ona da görünüyor.
+  const isOwner = role === 'owner'
+
+  const { data: orders } = isOwner
+    ? await supabase
+        .from('billing_orders')
+        .select('id, student_count, months, gross_kurus, status, created_at, paid_at')
+        .eq('workspace_id', workspaceId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    : { data: null }
 
   const state = licenseState(usage)
   const isTrial = state === 'trialing' || state === 'trial_expired'
@@ -113,7 +129,11 @@ export default async function LicensePage({
   }
 
   return (
-    <div>
+    // SAYFA SARMALAYICISI (067): bu üç ekran bare <div> ile açılıyordu ve
+    // diğer bütün öğretmen sayfalarından farklı olarak içeriği kenara
+    // yapışık, genişliği sınırsız çiziyordu. Ölçüler teacher/students ve
+    // teacher/finans ile aynı.
+    <div className="max-w-6xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Plan"
         subtitle="Planınızı görün, öğrenci sayınıza ve sürenize göre yükseltin."
@@ -162,9 +182,15 @@ export default async function LicensePage({
                 kaldı. Süre dolduğunda çalışma alanı erişime kapanır.
               </>
             )}{' '}
-            <a href="#plan-olustur" className="font-medium underline underline-offset-4">
-              {expired ? 'Plan alın' : 'Şimdi uzatın'}
-            </a>
+            {/* Bağlantı yalnız sahibe: satın alma bölümü onun dışında
+                render edilmiyor, olmayan bir çıpaya göndermek olurdu. */}
+            {isOwner ? (
+              <a href="#plan-olustur" className="font-medium underline underline-offset-4">
+                {expired ? 'Plan alın' : 'Şimdi uzatın'}
+              </a>
+            ) : (
+              'Plan işlemleri için çalışma alanı sahibiyle iletişime geçin.'
+            )}
           </span>
         </div>
       )}
@@ -266,6 +292,15 @@ export default async function LicensePage({
           </CardContent>
         </Card>
 
+        {!isOwner && (
+          <div className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+            Plan satın alma ve sipariş geçmişi yalnız çalışma alanının
+            sahibine açıktır. Süreyle ilgili bir sorun varsa çalışma alanı
+            sahibiyle iletişime geçin.
+          </div>
+        )}
+
+        {isOwner && (
         <div id="plan-olustur" className="scroll-mt-6">
           <h2 className="mb-1 text-base font-medium">
             {state === 'licensed'
@@ -279,7 +314,9 @@ export default async function LicensePage({
           </p>
           <LicensePurchase currentStudents={usage.activeStudents} />
         </div>
+        )}
 
+        {isOwner && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Siparişleriniz</CardTitle>
@@ -370,6 +407,7 @@ export default async function LicensePage({
             )}
           </CardContent>
         </Card>
+        )}
 
         <p className="text-xs text-muted-foreground">
           Satın alma öncesi{' '}

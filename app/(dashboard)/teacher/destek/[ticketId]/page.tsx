@@ -36,7 +36,11 @@ export default async function TicketPage({
   const statusVariant = ticketStatusVariant(ticket.status)
 
   return (
-    <div>
+    // SAYFA SARMALAYICISI (067): bu üç ekran bare <div> ile açılıyordu ve
+    // diğer bütün öğretmen sayfalarından farklı olarak içeriği kenara
+    // yapışık, genişliği sınırsız çiziyordu. Ölçüler teacher/students ve
+    // teacher/finans ile aynı.
+    <div className="max-w-4xl space-y-8 p-6 md:p-8">
       <PageHeader
         title={ticket.subject}
         backHref="/teacher/destek"
