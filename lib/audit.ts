@@ -40,6 +40,46 @@ export type AuditAction =
   | 'billing.order_paid'
   | 'billing.subscription_cancelled'
 
+/**
+ * Eylemlerin Türkçe karşılıkları — yönetim panelindeki aktivite akışı
+ * için.
+ *
+ * SQL TARAFINDA DA YAZILAN EYLEMLER VAR (billing.*, data.*); bunlar
+ * AuditAction birleşiminde görünmüyor ama audit_events'te bulunuyor.
+ * Bu yüzden anahtar tipi AuditAction değil string — akış, bilmediği bir
+ * eylemi ham hâliyle basmak yerine `auditActionLabel` üzerinden geçirir.
+ */
+export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  'homework.publish': 'Ödev verdi',
+  'homework.approve': 'Ödev onayladı',
+  'homework.reject': 'Ödev reddetti',
+  'homework.revert': 'Ödev onayını geri aldı',
+  'student.archive': 'Öğrenci arşivledi',
+  'book.archive': 'Kitap arşivledi',
+  'book.section_delete': 'Kitap bölümü sildi',
+  'book.subsection_delete': 'Kitap alt bölümü sildi',
+  'book.outline_import': 'Kitap içindekiler aktardı',
+  'invite.create': 'Davet oluşturdu',
+  'invite.revoke': 'Daveti iptal etti',
+  'target.set': 'Hedef belirledi',
+  'target.clear': 'Hedefi kaldırdı',
+  'curriculum.flow_save': 'Müfredat akışını kaydetti',
+  'workspace.switch': 'Çalışma alanı değiştirdi',
+  'billing.checkout_started': 'Ödeme başlattı',
+  'billing.order_created': 'Sipariş oluşturdu',
+  'billing.order_paid': 'Ödeme tamamlandı',
+  'billing.payment_failed': 'Ödeme başarısız oldu',
+  'billing.trial_started': 'Deneme başladı',
+  'billing.subscription_cancelled': 'Planı iptal etti',
+  'data.deletion_request': 'Veri silme talebi açtı',
+  'data.deletion_cancel': 'Veri silme talebini geri aldı',
+}
+
+/** Bilinmeyen eylemde ham anahtarı döner — akış boş satır göstermez. */
+export function auditActionLabel(action: string): string {
+  return AUDIT_ACTION_LABEL[action] ?? action
+}
+
 export interface AuditInput {
   workspaceId: string
   action: AuditAction

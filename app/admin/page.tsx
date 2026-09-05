@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import {
   Building2,
   Clock,
@@ -16,6 +17,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatKurusShort } from '@/lib/billing/pricing'
 import { daysLeft, planLabel, workspaceStatusLabel } from '@/lib/plans'
 import { formatDateTr, formatRelativeTr } from '@/lib/format'
+import { auditActionLabel } from '@/lib/audit'
 
 export const metadata: Metadata = { title: 'Yönetim' }
 export const dynamic = 'force-dynamic'
@@ -65,6 +67,14 @@ interface WorkspaceRow {
   pending_order_kurus: number
 }
 
+interface ActivityRow {
+  id: string
+  workspace_id: string
+  workspace_name: string
+  action: string
+  created_at: string
+}
+
 interface Overview {
   total_workspaces: number
   trial_workspaces: number
@@ -72,23 +82,70 @@ interface Overview {
   total_students: number
   open_tickets: number
   revenue_kurus: number
+  // 063 — filtreden etkilenmeyen özet sayıları:
+  pending_kurus: number
+  expiring_trials: number
+  awaiting_payment: number
+  at_student_limit: number
 }
+
+// Filtre seçenekleri. Değerler DB'deki enum'larla birebir; adres
+// çubuğundan gelen bilinmeyen bir değer sorguya HİÇ geçmiyor.
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Aktif' },
+  { value: 'suspended', label: 'Askıda' },
+  { value: 'archived', label: 'Arşivlendi' },
+]
+
+const PLAN_OPTIONS = [
+  { value: 'trial', label: 'Deneme' },
+  { value: 'licensed', label: 'Plan aktif' },
+  { value: 'institution', label: 'Kurumsal' },
+]
+
+const PARTNER_OPTIONS = [
+  { value: 'with', label: 'Partnerli' },
+  { value: 'without', label: 'Partnersiz' },
+]
 
 export default async function AdminHome({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{
+    q?: string
+    durum?: string
+    plan?: string
+    partner?: string
+  }>
 }) {
   const supabase = await createClient()
-  const { q } = await searchParams
+  const { q, durum, plan, partner } = await searchParams
 
-  const [{ data: overviewRows }, { data: workspaceRows }] = await Promise.all([
-    supabase.rpc('admin_overview'),
-    supabase.rpc('admin_list_workspaces', { p_search: q || null, p_limit: 200 }),
-  ])
+  // FİLTRE SQL TARAFINDA: sayfa 200 kayıt çekiyor, filtreyi burada
+  // uygulamak 200'den fazla çalışma alanı olduğu gün sessizce yanlış
+  // sonuç verirdi. Bilinmeyen değer parametreye hiç geçmiyor —
+  // adres çubuğuna elle yazılan bir şey sorguyu boşa düşürmesin.
+  const statusFilter = STATUS_OPTIONS.some((o) => o.value === durum) ? durum : null
+  const planFilter = PLAN_OPTIONS.some((o) => o.value === plan) ? plan : null
+  const partnerFilter = PARTNER_OPTIONS.some((o) => o.value === partner) ? partner : null
+
+  const [{ data: overviewRows }, { data: workspaceRows }, { data: activityRows }] =
+    await Promise.all([
+      supabase.rpc('admin_overview'),
+      supabase.rpc('admin_list_workspaces', {
+        p_search: q || null,
+        p_limit: 200,
+        p_status: statusFilter,
+        p_plan: planFilter,
+        p_partner: partnerFilter,
+      }),
+      supabase.rpc('admin_recent_activity', { p_limit: 20 }),
+    ])
 
   const overview = ((overviewRows ?? []) as unknown as Overview[])[0]
   const rows = (workspaceRows ?? []) as unknown as WorkspaceRow[]
+  const activity = (activityRows ?? []) as unknown as ActivityRow[]
+  const filtered = !!(statusFilter || planFilter || partnerFilter || q)
 
   const trials = overview?.trial_workspaces ?? 0
   const licensed = overview?.licensed_workspaces ?? 0
@@ -99,7 +156,10 @@ export default async function AdminHome({
   const conversion =
     conversionBase > 0 ? `%${Math.round((licensed / conversionBase) * 100)}` : '—'
 
-  const pendingKurus = rows.reduce((sum, r) => sum + (r.pending_order_kurus ?? 0), 0)
+  // ÖZET FİLTREDEN ETKİLENMEZ: bu sayılar "sistemde ne oluyor" sorusunu
+  // yanıtlıyor, "listede ne var" sorusunu değil. Önceden satırlardan
+  // toplanıyorlardı; filtre eklenince rakam listeyle birlikte değişirdi.
+  const pendingKurus = overview?.pending_kurus ?? 0
 
   const tiles: MetricTile[] = [
     {
@@ -136,31 +196,21 @@ export default async function AdminHome({
     },
   ]
 
-  // DİKKAT GEREKTİRENLER: yalnız bugünün verisinden türetilebilenler.
-  // Hiçbiri yoksa bölüm HİÇ ÇİZİLMEZ — "her şey yolunda" kartı her gün
-  // görünen bir gürültüdür ve gerçekten bir şey olduğunda fark
-  // edilmesini zorlaştırır.
-  const expiringTrials = rows.filter((r) => {
-    if (r.plan !== 'trial') return false
-    const left = daysLeft(r.trial_ends_at)
-    return left !== null && left <= 3
-  })
-  const awaitingPayment = rows.filter((r) => (r.pending_order_kurus ?? 0) > 0)
-  const atStudentLimit = rows.filter(
-    (r) => r.student_limit != null && r.active_students >= r.student_limit
-  )
-
+  // DİKKAT GEREKTİRENLER: hepsi 063'teki özetten, yani FİLTREDEN
+  // BAĞIMSIZ. Hiçbiri yoksa bölüm HİÇ ÇİZİLMEZ — "her şey yolunda"
+  // kartı her gün görünen bir gürültüdür ve gerçekten bir şey olduğunda
+  // fark edilmesini zorlaştırır.
   const attention: { tone: 'destructive' | 'warning'; text: string }[] = []
-  if (expiringTrials.length > 0) {
+  if ((overview?.expiring_trials ?? 0) > 0) {
     attention.push({
       tone: 'destructive',
-      text: `${expiringTrials.length} denemenin bitmesine 3 gün ya da daha az kaldı`,
+      text: `${overview.expiring_trials} denemenin bitmesine 3 gün ya da daha az kaldı`,
     })
   }
-  if (awaitingPayment.length > 0) {
+  if ((overview?.awaiting_payment ?? 0) > 0) {
     attention.push({
       tone: 'warning',
-      text: `${awaitingPayment.length} çalışma alanında tamamlanmamış ödeme var`,
+      text: `${overview.awaiting_payment} çalışma alanında tamamlanmamış ödeme var`,
     })
   }
   if ((overview?.open_tickets ?? 0) > 0) {
@@ -169,10 +219,10 @@ export default async function AdminHome({
       text: `${overview.open_tickets} açık destek talebi bekliyor`,
     })
   }
-  if (atStudentLimit.length > 0) {
+  if ((overview?.at_student_limit ?? 0) > 0) {
     attention.push({
       tone: 'warning',
-      text: `${atStudentLimit.length} çalışma alanı öğrenci limitine ulaştı`,
+      text: `${overview.at_student_limit} çalışma alanı öğrenci limitine ulaştı`,
     })
   }
 
@@ -343,17 +393,50 @@ export default async function AdminHome({
           <CardTitle className="text-base">Çalışma Alanları</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Arama sunucu tarafında: GET formu, JavaScript gerektirmiyor
-              ve adres çubuğunda paylaşılabilir bir sonuç bırakıyor. */}
-          <form method="get" className="mb-4">
+          {/* Arama ve filtreler sunucu tarafında: tek GET formu,
+              JavaScript gerektirmiyor ve adres çubuğunda paylaşılabilir
+              bir sonuç bırakıyor. Seçim değişince form kendiliğinden
+              gönderilmiyor — "Uygula" düğmesi, üç filtreyi tek istekte
+              birleştirmeyi mümkün kılıyor. */}
+          <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
             <input
               type="search"
               name="q"
               defaultValue={q ?? ''}
               placeholder="Çalışma alanı, ad ya da e-posta ara…"
               aria-label="Çalışma alanı ara"
-              className="h-9 w-full max-w-sm rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-9 w-full max-w-xs rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
+
+            <FilterSelect
+              name="durum"
+              label="Durum"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+            />
+            <FilterSelect name="plan" label="Plan" value={planFilter} options={PLAN_OPTIONS} />
+            <FilterSelect
+              name="partner"
+              label="Partner"
+              value={partnerFilter}
+              options={PARTNER_OPTIONS}
+            />
+
+            <button
+              type="submit"
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Uygula
+            </button>
+
+            {filtered && (
+              <Link
+                href="/admin"
+                className="h-9 px-2 text-sm leading-9 text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >
+                Temizle
+              </Link>
+            )}
           </form>
 
           <DataTable
@@ -372,6 +455,70 @@ export default async function AdminHome({
           />
         </CardContent>
       </Card>
+
+      {/* SON AKTİVİTELER: audit_events zaten yazılıyordu ama hiçbir
+          yönetim ekranı okumuyordu. Akış yalnız çalışma alanı adını,
+          eylemi ve zamanı gösterir — eylemin ayrıntısı (detail) hiç
+          okunmuyor. */}
+      {activity.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Son aktiviteler</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {activity.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-sm"
+                >
+                  <span className="min-w-0">
+                    <Link
+                      href={`/admin/calisma-alanlari/${a.workspace_id}`}
+                      className="font-medium underline-offset-4 hover:underline"
+                    >
+                      {a.workspace_name}
+                    </Link>{' '}
+                    <span className="text-muted-foreground">{auditActionLabel(a.action)}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatRelativeTr(a.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  )
+}
+
+/** Filtre açılırı — üçü de aynı görünüyor, üç kez yazmaya gerek yok. */
+function FilterSelect({
+  name,
+  label,
+  value,
+  options,
+}: {
+  name: string
+  label: string
+  value: string | null | undefined
+  options: { value: string; label: string }[]
+}) {
+  return (
+    <select
+      name={name}
+      defaultValue={value ?? ''}
+      aria-label={`${label} filtresi`}
+      className="h-9 rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <option value="">{label}: tümü</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   )
 }
