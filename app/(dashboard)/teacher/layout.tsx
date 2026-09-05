@@ -1,9 +1,10 @@
 import { AppSidebar } from '@/components/shared/app-sidebar'
+import { BRAND } from '@/lib/brand'
 import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, workspace, workspaceId, profile, activeTerm, workspaces } =
+  const { supabase, workspaceId, profile, activeTerm, workspaces } =
     await getTeacherContext()
 
   // Sidebar'daki aktif öğrenci seçicisi için hafif liste. /teacher/students
@@ -27,7 +28,11 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   return (
     <div className="flex min-h-screen">
       <AppSidebar
-        title={workspace.name}
+        // Üstte MARKA duruyor, çalışma alanı adı değil. Varsayılan
+        // workspace adı "{ad} Workspace" olduğundan (058) aynı isim
+        // sidebar'ın üstünde ve altında iki kez görünüyordu. Çalışma
+        // alanı adı zaten hemen altındaki seçicide yazıyor.
+        title={BRAND.name}
         role="teacher"
         roleLabel="Öğretmen"
         userName={profile.full_name}

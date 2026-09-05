@@ -7,7 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND, contactMailto } from '@/lib/brand'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { PLAN_INCLUDED, TRIAL_DAYS } from '@/lib/plans'
 import {
   quote,
   isSelfService,
@@ -36,16 +36,6 @@ import { GuaranteeStrip } from './guarantee-strip'
 // Rakamlar lib/billing/pricing.ts'ten; ödeme ekranıyla aynı fonksiyon.
 // Vitrinde başka, kasada başka tutar göstermek güveni bir kerede bitirir.
 // ============================================================
-
-const INCLUDED = [
-  'Kitap havuzu ve kitap haritası',
-  'İçindekiler listesini yapıştırarak toplu kitap aktarma',
-  'Haftalık plan, ödev takibi ve öğretmen onayı',
-  'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
-  'Müfredat akışı, koruma havuzu ve risk analizi',
-  'Sayfa bazlı takip, hedefler ve yazdırılabilir rapor',
-  'Ödev metnini WhatsApp\'a kopyalama',
-]
 
 export function PricingSection() {
   const [studentsInput, setStudentsInput] = useState('10')
@@ -188,7 +178,7 @@ export function PricingSection() {
               Özellik kısıtlaması yok. Yalnız öğrenci sayısı ve süre değişir.
             </p>
             <ul className="mt-5 space-y-2.5">
-              {INCLUDED.map((item) => (
+              {PLAN_INCLUDED.map((item) => (
                 <li key={item} className="flex gap-2.5 text-sm">
                   <Check className="mt-0.5 size-4 shrink-0 text-success-foreground" />
                   <span className="text-muted-foreground">{item}</span>

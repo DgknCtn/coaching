@@ -3,7 +3,15 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Users, CalendarRange, ShoppingCart, Phone } from 'lucide-react'
+import {
+  Users,
+  CalendarRange,
+  ShoppingCart,
+  Phone,
+  Check,
+  Lock,
+  RotateCcw,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +25,7 @@ import {
   type Quote,
 } from '@/lib/billing/pricing'
 import { BRAND, contactMailto } from '@/lib/brand'
+import { PLAN_INCLUDED } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 
 // LİSANS YAPILANDIRICISI.
@@ -51,7 +60,7 @@ interface LicenseConfiguratorProps {
 export function LicenseConfigurator({
   onPurchase,
   currentStudents = 0,
-  ctaLabel = 'Satın Al',
+  ctaLabel = 'Güvenli Ödemeye Geç',
 }: LicenseConfiguratorProps) {
   // Varsayılan: mevcut öğrenci sayısı (en az 1). Kullanıcının bugün
   // kaç öğrencisi varsa muhtemelen o kadarına lisans alacak.
@@ -99,7 +108,7 @@ export function LicenseConfigurator({
             aria-describedby="student-count-hint"
           />
           <p id="student-count-hint" className="text-xs text-muted-foreground">
-            Lisans süresince aynı anda takip edebileceğiniz aktif öğrenci sayısı.
+            Plan süresince aynı anda takip edebileceğiniz aktif öğrenci sayısı.
           </p>
         </div>
 
@@ -160,7 +169,14 @@ export function LicenseConfigurator({
                   <p className="text-3xl font-semibold tracking-tight tabular-nums">
                     {formatKurus(q.grossKurus)}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  {/* RAKAM NEYİN KARŞILIĞI: toplam tutar en büyük sayı
+                      ama neyin bedeli olduğu yazmıyordu. Kullanıcı
+                      seçtiği yapılandırmayı yukarı kaydırıp tekrar
+                      kontrol etmek zorunda kalıyordu. */}
+                  <p className="mt-1 text-sm font-medium">
+                    {q.studentCount} öğrenci · {q.months} ay
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
                     KDV dahil · tek çekim
                   </p>
                 </div>
@@ -179,7 +195,7 @@ export function LicenseConfigurator({
               {q.totalDiscountPercent > 0 && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                   <span className="rounded-sm bg-success-subtle px-2 py-0.5 text-xs font-medium text-success-foreground">
-                    %{q.totalDiscountPercent} indirim
+                    %{q.totalDiscountPercent} avantaj
                   </span>
                   <span className="text-muted-foreground">
                     Liste fiyatı{' '}
@@ -212,10 +228,43 @@ export function LicenseConfigurator({
               )}
             </div>
 
+            {/* DAHİL OLANLAR fiyatın hemen yanında: "bu parayı neden
+                vereyim" sorusu karar anında sorulur, SSS'de değil.
+                Metin pricing-section.tsx'teki mevcut listeden alındı —
+                burada yeni vaat üretilmiyor. */}
+            <div className="mt-5 rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm font-medium">Bu planla</p>
+              <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                {PLAN_INCLUDED.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <Check className="mt-0.5 size-4 shrink-0 text-success-foreground" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Özellik kısıtlaması yok. Yalnız öğrenci sayısı ve süre değişir.
+              </p>
+            </div>
+
+            {/* Kart kaydedilip her ay çekilmesi, bu üründe olmayan ama
+                en çok korkulan şey. Onay metninde zaten yazıyordu —
+                ama düğmenin ALTINDA, yani karar verildikten sonra. */}
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Lock className="size-3.5 shrink-0 text-success-foreground" />
+                Tek seferlik ödeme
+              </span>
+              <span className="flex items-center gap-1.5">
+                <RotateCcw className="size-3.5 shrink-0 text-success-foreground" />
+                Otomatik yenileme yok
+              </span>
+            </div>
+
             <Button
               type="button"
               size="lg"
-              className={cn('mt-6 w-full gap-2')}
+              className={cn('mt-4 w-full gap-2')}
               disabled={pending}
               onClick={buy}
             >

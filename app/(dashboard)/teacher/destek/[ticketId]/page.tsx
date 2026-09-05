@@ -3,15 +3,10 @@ import { notFound } from 'next/navigation'
 import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
 import { getTeacherContext } from '@/lib/workspace'
+import { ticketStatusLabel, ticketStatusVariant } from '@/lib/support'
 import { TicketThread } from './ticket-thread'
 
 export const metadata: Metadata = { title: 'Destek Talebi' }
-
-const STATUS: Record<string, { label: string; variant: 'info' | 'success' | 'neutral' }> = {
-  open: { label: 'Yanıt bekliyor', variant: 'info' },
-  answered: { label: 'Yanıtlandı', variant: 'success' },
-  closed: { label: 'Kapatıldı', variant: 'neutral' },
-}
 
 export default async function TicketPage({
   params,
@@ -37,14 +32,15 @@ export default async function TicketPage({
     .eq('ticket_id', ticketId)
     .order('created_at', { ascending: true })
 
-  const status = STATUS[ticket.status] ?? STATUS.open
+  const statusLabel = ticketStatusLabel(ticket.status)
+  const statusVariant = ticketStatusVariant(ticket.status)
 
   return (
     <div>
       <PageHeader
         title={ticket.subject}
         backHref="/teacher/destek"
-        badges={<Badge variant={status.variant}>{status.label}</Badge>}
+        badges={<Badge variant={statusVariant}>{statusLabel}</Badge>}
       />
 
       <TicketThread

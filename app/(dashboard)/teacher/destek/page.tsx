@@ -1,25 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { LifeBuoy } from 'lucide-react'
 import { PageHeader } from '@/components/shared/page-header'
-import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { getTeacherContext } from '@/lib/workspace'
+import { ticketCategoryLabel, ticketStatusLabel, ticketStatusVariant } from '@/lib/support'
+import { formatDateTr } from '@/lib/format'
 import { NewTicketForm } from './new-ticket-form'
 
 export const metadata: Metadata = { title: 'Destek' }
-
-const STATUS: Record<string, { label: string; variant: 'info' | 'success' | 'neutral' }> = {
-  open: { label: 'Yanıt bekliyor', variant: 'info' },
-  answered: { label: 'Yanıtlandı', variant: 'success' },
-  closed: { label: 'Kapatıldı', variant: 'neutral' },
-}
-
-const CATEGORY: Record<string, string> = {
-  genel: 'Genel',
-  teknik: 'Teknik',
-  odeme: 'Ödeme',
-  oneri: 'Öneri',
-}
 
 export default async function SupportPage() {
   const { supabase, workspaceId } = await getTeacherContext()
@@ -36,8 +26,8 @@ export default async function SupportPage() {
   return (
     <div>
       <PageHeader
-        title="Destek"
-        subtitle="Bir sorunuz ya da sorununuz mu var? Talep açın, size buradan dönelim."
+        title="Size nasıl yardımcı olabiliriz?"
+        subtitle="Bir sorunuz mu var veya bir sorunla mı karşılaştınız? Destek talebinizi oluşturun, ekibimiz buradan sizinle iletişime geçsin."
       />
 
       <div className="space-y-6">
@@ -46,15 +36,19 @@ export default async function SupportPage() {
         <div>
           <h2 className="mb-3 text-base font-medium">Talepleriniz</h2>
           {rows.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Henüz bir destek talebiniz yok.
-              </CardContent>
-            </Card>
+            /* Ortalama yanıt süresi BİLİNÇLİ olarak yazılmıyor: ölçülmüyor.
+               Ölçülmeyen bir söz vermek, destek ekranında verilebilecek en
+               kötü sözdür. */
+            <div className="rounded-lg border bg-card">
+              <EmptyState
+                icon={LifeBuoy}
+                title="Henüz bir destek talebiniz yok"
+                description="Sorularınız, karşılaştığınız sorunlar veya önerileriniz için bize buradan ulaşabilirsiniz."
+              />
+            </div>
           ) : (
             <div className="divide-y rounded-lg border bg-card">
               {rows.map((t) => {
-                const status = STATUS[t.status] ?? STATUS.open
                 return (
                   <Link
                     key={t.id}
@@ -64,11 +58,13 @@ export default async function SupportPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{t.subject}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {CATEGORY[t.category] ?? t.category} ·{' '}
-                        {new Date(t.last_message_at).toLocaleDateString('tr-TR')}
+                        {ticketCategoryLabel(t.category)} ·{' '}
+                        {formatDateTr(t.last_message_at)}
                       </p>
                     </div>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge variant={ticketStatusVariant(t.status)}>
+                      {ticketStatusLabel(t.status)}
+                    </Badge>
                   </Link>
                 )
               })}

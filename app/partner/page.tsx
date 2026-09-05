@@ -86,7 +86,7 @@ export default async function PartnerPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Lisans alan
+                Plan alan
               </CardTitle>
             </CardHeader>
             <CardContent>

@@ -18,8 +18,30 @@ export type PlanId = 'trial' | 'licensed' | 'institution'
 
 export const PLAN_LABEL: Record<string, string> = {
   trial: 'Deneme',
-  licensed: 'Lisanslı',
+  licensed: 'Plan aktif',
   institution: 'Kurumsal',
+}
+
+/**
+ * `workspaces.status` karşılıkları.
+ *
+ * Yönetim paneli bu değerleri ham İngilizce basıyordu ('suspended',
+ * 'archived'). Türkçe bir arayüzde ham enum göstermek, kullanıcıyı
+ * veritabanı şemasını okumaya zorlar.
+ */
+export const WORKSPACE_STATUS_LABEL: Record<string, string> = {
+  active: 'Aktif',
+  suspended: 'Askıda',
+  archived: 'Arşivlendi',
+}
+
+/** Bilinmeyen değerde ham veriyi basmak yerine değerin kendisini döner. */
+export function planLabel(plan: string): string {
+  return PLAN_LABEL[plan] ?? plan
+}
+
+export function workspaceStatusLabel(status: string): string {
+  return WORKSPACE_STATUS_LABEL[status] ?? status
 }
 
 /**
@@ -33,6 +55,26 @@ export const TRIAL_DAYS = 7
 
 /** Denemede kaç öğrenci eklenebilir. Ürünü gerçekten denemeye yeter. */
 export const TRIAL_STUDENT_LIMIT = 3
+
+/**
+ * Her planın kapsadığı özellikler — TEK KAYNAK.
+ *
+ * Hem vitrindeki fiyat bölümü hem uygulama içindeki plan ekranı bunu
+ * okuyor. İki yerde elle yazılsaydı biri güncellenirken diğeri bayatlar
+ * ve ürün kendi vaadi konusunda kendisiyle çelişirdi.
+ *
+ * ÖZELLİK KISITLAMASI YOK: liste plana göre değişmiyor, yalnız öğrenci
+ * sayısı ve süre değişiyor. Bu yüzden tek bir dizi yeterli.
+ */
+export const PLAN_INCLUDED = [
+  'Kitap havuzu ve kitap haritası',
+  'İçindekiler listesini yapıştırarak toplu kitap aktarma',
+  'Haftalık plan, ödev takibi ve öğretmen onayı',
+  'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
+  'Müfredat akışı, koruma havuzu ve risk analizi',
+  'Sayfa bazlı takip, hedefler ve yazdırılabilir rapor',
+  "Ödev metnini WhatsApp'a kopyalama",
+] as const
 
 export interface WorkspaceUsage {
   plan: string
@@ -136,8 +178,8 @@ export function licenseState(usage: WorkspaceUsage, now: Date = new Date()): Lic
 export const LICENSE_STATE_LABEL: Record<LicenseState, string> = {
   trialing: 'Deneme sürüyor',
   trial_expired: 'Deneme süresi doldu',
-  licensed: 'Lisans aktif',
-  license_expired: 'Lisans süresi doldu',
+  licensed: 'Plan aktif',
+  license_expired: 'Plan süresi doldu',
   unlimited: 'Sınırsız',
 }
 
@@ -154,16 +196,16 @@ export const BLOCKED_MESSAGE: Record<
 > = {
   trial_expired: {
     title: 'Deneme süreniz doldu',
-    teacher: `${TRIAL_DAYS} günlük deneme süreniz sona erdi. Verilerinizin hiçbiri silinmedi; bir lisans aldığınızda kaldığınız yerden devam edersiniz.`,
+    teacher: `${TRIAL_DAYS} günlük deneme süreniz sona erdi. Verilerinizin hiçbiri silinmedi; bir plan aldığınızda kaldığınız yerden devam edersiniz.`,
     // Öğrenci ve veli ödemeyle ilgili değil; onlara fatura dili
     // kurulmaz, ne yapmaları gerektiği söylenir.
     other:
       'Öğretmeninizin çalışma alanı şu an erişime kapalı. Bilgileriniz duruyor; öğretmeninizle iletişime geçebilirsiniz.',
   },
   license_expired: {
-    title: 'Lisans süreniz doldu',
+    title: 'Plan süreniz doldu',
     teacher:
-      'Lisansınızın süresi sona erdi. Verilerinizin hiçbiri silinmedi; lisansınızı yenilediğinizde kaldığınız yerden devam edersiniz.',
+      'Planınızın süresi sona erdi. Verilerinizin hiçbiri silinmedi; planınızı yenilediğinizde kaldığınız yerden devam edersiniz.',
     other:
       'Öğretmeninizin çalışma alanı şu an erişime kapalı. Bilgileriniz duruyor; öğretmeninizle iletişime geçebilirsiniz.',
   },

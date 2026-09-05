@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { AlertTriangle, Users } from 'lucide-react'
-import { PLAN_LABEL, evaluateQuota, trialDaysLeft, type WorkspaceUsage } from '@/lib/plans'
+import { evaluateQuota, trialDaysLeft, type WorkspaceUsage } from '@/lib/plans'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { cn } from '@/lib/utils'
 
@@ -23,8 +23,6 @@ export function QuotaNotice({
 }) {
   const quota = evaluateQuota(usage)
   const daysLeft = trialDaysLeft(usage.trialEndsAt)
-  const planName = PLAN_LABEL[usage.plan] ?? usage.plan
-
   // Deneme uyarısı son üç günde çıkar: 14 gün boyunca sayaç göstermek
   // ürünü denemeyi bir geri sayıma çevirir.
   const showTrial = usage.plan === 'trial' && daysLeft !== null && daysLeft <= 3
@@ -75,8 +73,8 @@ export function QuotaNotice({
             >
               <Users className="size-4 shrink-0" />
               {quota.atLimit
-                ? `${planName} planının öğrenci sınırına ulaştınız.`
-                : `${planName} planında ${quota.remaining} öğrenci hakkınız kaldı.`}
+                ? 'Öğrenci sınırınıza ulaştınız.'
+                : `${quota.remaining} öğrenci hakkınız kaldı.`}
             </p>
             <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
               {usage.activeStudents} / {usage.studentLimit}
@@ -92,8 +90,13 @@ export function QuotaNotice({
 
           <p className="mt-2 text-xs text-muted-foreground">
             Arşivlenen öğrenciler kotadan düşer.{' '}
-            <Link href="/#fiyatlar" className="underline underline-offset-2">
-              Planları görüntüleyin
+            {/* Uygulama içindeki kullanıcıyı pazarlama sayfasının çapasına
+                göndermek, oturumdan çıkarılmış hissi veriyordu. */}
+            <Link
+              href="/teacher/ayarlar/abonelik"
+              className="underline underline-offset-2"
+            >
+              Planınızı yükseltin
             </Link>
           </p>
         </div>

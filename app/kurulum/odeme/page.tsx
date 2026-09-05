@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { LicenseStep } from './license-step'
 
-export const metadata: Metadata = { title: 'Lisansınızı seçin' }
+export const metadata: Metadata = { title: 'Planınızı seçin' }
 
 // Zaten lisansı olan kullanıcı buraya düşmemeli: kayıttan sonraki
 // yönlendirme sabit olduğu için tarayıcı geri tuşu ya da yer imi bu

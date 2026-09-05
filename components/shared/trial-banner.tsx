@@ -62,8 +62,8 @@ export function TrialBanner({ trialEndsAt, hasLicense }: TrialBannerProps) {
           </p>
           <p className={cn('mt-0.5', urgent ? 'text-warning-foreground' : 'text-muted-foreground')}>
             {expired
-              ? 'Verileriniz duruyor. Bir lisans aldığınızda kaldığınız yerden devam edersiniz.'
-              : 'Süre dolmadan lisansınızı alın, kesinti yaşamayın. Öğrenci sayınızı ve süreyi kendiniz seçersiniz.'}
+              ? 'Verileriniz duruyor. Bir plan aldığınızda kaldığınız yerden devam edersiniz.'
+              : 'Süre dolmadan planınızı alın, kesinti yaşamayın. Öğrenci sayınızı ve süreyi kendiniz seçersiniz.'}
           </p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export function TrialBanner({ trialEndsAt, hasLicense }: TrialBannerProps) {
           'shrink-0'
         )}
       >
-        Lisans al
+        Plan al
       </Link>
     </div>
   )

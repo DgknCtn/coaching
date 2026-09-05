@@ -12,9 +12,10 @@ import {
   type WorkspaceUsage,
 } from '@/lib/plans'
 import { formatKurus } from '@/lib/billing/pricing'
+import { formatDateTr } from '@/lib/format'
 import { LicensePurchase } from './license-purchase'
 
-export const metadata: Metadata = { title: 'Lisans' }
+export const metadata: Metadata = { title: 'Plan' }
 
 // LİSANS DURUMU VE SATIN ALMA.
 //
@@ -28,7 +29,7 @@ const PAYMENT_NOTICES: Record<
   string,
   { text: string; tone: 'success' | 'warning' | 'destructive' }
 > = {
-  tamam: { text: 'Ödemeniz alındı. Lisansınız aşağıda görünüyor.', tone: 'success' },
+  tamam: { text: 'Ödemeniz alındı. Planınız aşağıda görünüyor.', tone: 'success' },
   basarisiz: {
     text: 'Ödeme tamamlanamadı. Kartınızdan tahsilat yapılmadıysa tekrar deneyebilirsiniz.',
     tone: 'destructive',
@@ -36,7 +37,7 @@ const PAYMENT_NOTICES: Record<
   belirsiz: {
     // Bilinçli olarak temkinli: "başarısız" demek, parası çekilmiş bir
     // kullanıcıya yanlış bilgi vermek olurdu.
-    text: 'Ödemenizin sonucu henüz doğrulanamadı. Birkaç dakika içinde bu sayfayı yenileyin; tahsilat yapıldıysa lisansınız otomatik açılır. Sorun sürerse bize yazın.',
+    text: 'Ödemenizin sonucu henüz doğrulanamadı. Birkaç dakika içinde bu sayfayı yenileyin; tahsilat yapıldıysa planınız otomatik açılır. Sorun sürerse bize yazın.',
     tone: 'warning',
   },
   gecersiz: {
@@ -101,8 +102,8 @@ export default async function LicensePage({
   return (
     <div>
       <PageHeader
-        title="Lisans"
-        subtitle="Lisans durumunuzu görün, öğrenci sayınıza ve sürenize göre satın alın."
+        title="Plan"
+        subtitle="Planınızı görün, öğrenci sayınıza ve sürenize göre yükseltin."
       />
 
       {notice && (
@@ -123,10 +124,10 @@ export default async function LicensePage({
       <div className="space-y-6">
         {/* DURUM PANELİ: dört bilgi tek bakışta — durum, dönem, kalan
             süre, öğrenci limiti. Ayrı yerlere dağıtmak, kullanıcıyı
-            "lisansım ne zaman bitiyor" sorusu için gezdirirdi. */}
+            "planım ne zaman bitiyor" sorusu için gezdirirdi. */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Mevcut durum</CardTitle>
+            <CardTitle className="text-base">Mevcut planınız</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -143,7 +144,7 @@ export default async function LicensePage({
 
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {isTrial ? 'Deneme dönemi' : 'Lisans dönemi'}
+                  {isTrial ? 'Deneme dönemi' : 'Plan dönemi'}
                 </dt>
                 <dd className="mt-1.5 text-sm">
                   {isTrial ? (
@@ -202,30 +203,32 @@ export default async function LicensePage({
 
         <div>
           <h2 className="mb-1 text-base font-medium">
-            {state === 'licensed' ? 'Lisansı uzat veya genişlet' : 'Lisans al'}
+            {state === 'licensed'
+              ? 'Planınızı uzatın veya genişletin'
+              : 'Planınızı oluşturun'}
           </h2>
           <p className="mb-4 text-sm text-muted-foreground">
             {state === 'licensed'
-              ? 'Yeni alım mevcut lisansınızın üstüne eklenir; kalan günlerinizi kaybetmezsiniz.'
-              : 'Öğrenci sayınızı ve süreyi seçin. İkisi de arttıkça öğrenci başına maliyet düşer.'}
+              ? 'Yeni alım mevcut planınızın üstüne eklenir; kalan günlerinizi kaybetmezsiniz.'
+              : 'Öğrenci sayınızı ve kullanım sürenizi seçin. Uzun süreli kullanımda öğrenci başına maliyetiniz düşer.'}
           </p>
           <LicensePurchase currentStudents={usage.activeStudents} />
         </div>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Ödeme geçmişi</CardTitle>
+            <CardTitle className="text-base">Siparişleriniz</CardTitle>
           </CardHeader>
           <CardContent>
             {!orders || orders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Henüz ödeme kaydı yok.</p>
+              <p className="text-sm text-muted-foreground">Henüz sipariş kaydınız yok.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs text-muted-foreground">
                       <th className="pb-2 font-medium">Tarih</th>
-                      <th className="pb-2 font-medium">Lisans</th>
+                      <th className="pb-2 font-medium">Plan</th>
                       <th className="pb-2 font-medium">Tutar</th>
                       <th className="pb-2 font-medium">Durum</th>
                     </tr>
@@ -234,7 +237,7 @@ export default async function LicensePage({
                     {orders.map((order) => (
                       <tr key={order.id} className="border-b last:border-0">
                         <td className="py-2 tabular-nums">
-                          {new Date(order.created_at).toLocaleDateString('tr-TR')}
+                          {formatDateTr(order.created_at)}
                         </td>
                         <td className="py-2">
                           {order.student_count} öğrenci · {order.months} ay
@@ -242,13 +245,19 @@ export default async function LicensePage({
                         <td className="py-2 tabular-nums">
                           {formatKurus(order.gross_kurus)}
                         </td>
+                        {/* İPTAL EDİLEN SİPARİŞ "BEKLİYOR" DEMEZ.
+                            Önceden pending ve cancelled aynı rozeti
+                            alıyordu; kullanıcı ödemediği bir tutarın
+                            kendisinden hâlâ beklendiğini sanıyordu. */}
                         <td className="py-2">
                           {order.status === 'paid' ? (
                             <Badge variant="success">Ödendi</Badge>
                           ) : order.status === 'failed' ? (
                             <Badge variant="destructive">Başarısız</Badge>
+                          ) : order.status === 'cancelled' ? (
+                            <Badge variant="neutral">İptal edildi</Badge>
                           ) : (
-                            <Badge variant="neutral">Bekliyor</Badge>
+                            <Badge variant="warning">Ödeme tamamlanmadı</Badge>
                           )}
                         </td>
                       </tr>

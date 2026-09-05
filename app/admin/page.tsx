@@ -1,14 +1,26 @@
 import type { Metadata } from 'next'
+import {
+  Building2,
+  Clock,
+  CreditCard,
+  LifeBuoy,
+  TrendingUp,
+  Users,
+  Wallet,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { DataTable, type Column } from '@/components/shared/data-table'
+import { MetricTiles, type MetricTile } from '@/components/shared/metric-tiles'
 import { createClient } from '@/lib/supabase/server'
 import { formatKurusShort } from '@/lib/billing/pricing'
-import { daysLeft } from '@/lib/plans'
+import { daysLeft, planLabel, workspaceStatusLabel } from '@/lib/plans'
+import { formatDateTr, formatRelativeTr } from '@/lib/format'
 
 export const metadata: Metadata = { title: 'Yönetim' }
 export const dynamic = 'force-dynamic'
 
-// KOÇ LİSTESİ VE ÖZET.
+// ÇALIŞMA ALANI LİSTESİ VE ÖZET.
 //
 // ============================================================
 // ÖĞRENCİ VERİSİ YOK — YALNIZ SAYI
@@ -20,6 +32,16 @@ export const dynamic = 'force-dynamic'
 // Kısıt arayüzde değil `admin_list_workspaces` RPC'sinde: fonksiyon o
 // alanları zaten döndürmüyor. Arayüzde saklamak, veriyi tarayıcıya
 // göndermiş olmak demekti.
+// ============================================================
+//
+// ============================================================
+// "NE VAR" DEĞİL "NE OLUYOR"
+//
+// Panel önceden bir veritabanı sayımıydı: kaç kayıt var. Hangi müşterinin
+// ürünü gerçekten kullandığı, kimin ödemesi yarıda kaldığı, hangi
+// denemenin bitmek üzere olduğu görünmüyordu — yani paneli açan kişi
+// "şimdi ne yapmalıyım" sorusunun cevabını alamıyordu. 062 ile gelen
+// son aktivite, bekleyen ödeme ve plan süresi alanları bunun için var.
 // ============================================================
 
 interface WorkspaceRow {
@@ -36,6 +58,11 @@ interface WorkspaceRow {
   license_ends_at: string | null
   total_paid_kurus: number
   partner_code: string | null
+  // 062:
+  license_student_count: number | null
+  license_months: number | null
+  last_activity_at: string | null
+  pending_order_kurus: number
 }
 
 interface Overview {
@@ -63,35 +90,257 @@ export default async function AdminHome({
   const overview = ((overviewRows ?? []) as unknown as Overview[])[0]
   const rows = (workspaceRows ?? []) as unknown as WorkspaceRow[]
 
-  const stats = [
-    { label: 'Çalışma alanı', value: String(overview?.total_workspaces ?? 0) },
-    { label: 'Denemede', value: String(overview?.trial_workspaces ?? 0) },
-    { label: 'Lisanslı', value: String(overview?.licensed_workspaces ?? 0) },
-    { label: 'Aktif öğrenci', value: String(overview?.total_students ?? 0) },
-    { label: 'Açık talep', value: String(overview?.open_tickets ?? 0) },
-    { label: 'Toplam tahsilat', value: formatKurusShort(overview?.revenue_kurus ?? 0) },
+  const trials = overview?.trial_workspaces ?? 0
+  const licensed = overview?.licensed_workspaces ?? 0
+
+  // DÖNÜŞÜM: payda sıfırken "%0" YAZMAZ. Hiç denemesi olmayan bir
+  // sistemde "%0 dönüşüm" doğru değil, yanlış bir başarısızlık iddiası.
+  const conversionBase = trials + licensed
+  const conversion =
+    conversionBase > 0 ? `%${Math.round((licensed / conversionBase) * 100)}` : '—'
+
+  const pendingKurus = rows.reduce((sum, r) => sum + (r.pending_order_kurus ?? 0), 0)
+
+  const tiles: MetricTile[] = [
+    {
+      label: 'Toplam Çalışma Alanı',
+      value: overview?.total_workspaces ?? 0,
+      icon: Building2,
+    },
+    { label: 'Aktif Deneme', value: trials, icon: Clock, tone: 'info' },
+    { label: 'Aktif Plan', value: licensed, icon: CreditCard, tone: 'success' },
+    { label: 'Aktif Öğrenci', value: overview?.total_students ?? 0, icon: Users },
+    {
+      label: 'Deneme → Plan',
+      value: conversion,
+      icon: TrendingUp,
+      hint: conversionBase > 0 ? `${licensed} / ${conversionBase}` : 'Henüz veri yok',
+    },
+    {
+      label: 'Açık Talep',
+      value: overview?.open_tickets ?? 0,
+      icon: LifeBuoy,
+      tone: (overview?.open_tickets ?? 0) > 0 ? 'warning' : 'default',
+      href: '/admin/talepler',
+    },
+    {
+      label: 'Bekleyen Ödeme',
+      value: formatKurusShort(pendingKurus),
+      icon: Wallet,
+      tone: pendingKurus > 0 ? 'warning' : 'default',
+    },
+    {
+      label: 'Toplam Tahsilat',
+      value: formatKurusShort(overview?.revenue_kurus ?? 0),
+      icon: Wallet,
+    },
   ]
+
+  // DİKKAT GEREKTİRENLER: yalnız bugünün verisinden türetilebilenler.
+  // Hiçbiri yoksa bölüm HİÇ ÇİZİLMEZ — "her şey yolunda" kartı her gün
+  // görünen bir gürültüdür ve gerçekten bir şey olduğunda fark
+  // edilmesini zorlaştırır.
+  const expiringTrials = rows.filter((r) => {
+    if (r.plan !== 'trial') return false
+    const left = daysLeft(r.trial_ends_at)
+    return left !== null && left <= 3
+  })
+  const awaitingPayment = rows.filter((r) => (r.pending_order_kurus ?? 0) > 0)
+  const atStudentLimit = rows.filter(
+    (r) => r.student_limit != null && r.active_students >= r.student_limit
+  )
+
+  const attention: { tone: 'destructive' | 'warning'; text: string }[] = []
+  if (expiringTrials.length > 0) {
+    attention.push({
+      tone: 'destructive',
+      text: `${expiringTrials.length} denemenin bitmesine 3 gün ya da daha az kaldı`,
+    })
+  }
+  if (awaitingPayment.length > 0) {
+    attention.push({
+      tone: 'warning',
+      text: `${awaitingPayment.length} çalışma alanında tamamlanmamış ödeme var`,
+    })
+  }
+  if ((overview?.open_tickets ?? 0) > 0) {
+    attention.push({
+      tone: 'warning',
+      text: `${overview.open_tickets} açık destek talebi bekliyor`,
+    })
+  }
+  if (atStudentLimit.length > 0) {
+    attention.push({
+      tone: 'warning',
+      text: `${atStudentLimit.length} çalışma alanı öğrenci limitine ulaştı`,
+    })
+  }
+
+  // Partner kolonu boşken tabloyu seyreltiyordu: hiçbir kayıtta partner
+  // yoksa kolon hiç çizilmiyor.
+  const hasPartner = rows.some((r) => r.partner_code)
+
+  const columns: Column<WorkspaceRow>[] = [
+    {
+      key: 'workspace',
+      header: 'Çalışma Alanı',
+      render: (r) => <span className="font-medium">{r.workspace_name}</span>,
+    },
+    {
+      key: 'owner',
+      header: 'Sahip',
+      hideBelow: 'md',
+      render: (r) => (
+        <div className="min-w-0">
+          <p className="truncate">{r.owner_name ?? '—'}</p>
+          {r.owner_email && (
+            <p className="truncate text-xs text-muted-foreground">{r.owner_email}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'students',
+      header: 'Öğrenci',
+      align: 'right',
+      render: (r) => (
+        <span className="tabular-nums">
+          {r.active_students}
+          {r.student_limit != null && (
+            <span className="text-muted-foreground"> / {r.student_limit}</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'plan',
+      header: 'Plan',
+      hideBelow: 'lg',
+      render: (r) => {
+        if (r.plan === 'trial') return <span className="text-muted-foreground">Deneme</span>
+        if (r.license_student_count != null) {
+          return (
+            <span className="tabular-nums">
+              {r.license_student_count} öğrenci
+              {r.license_months != null && ` · ${r.license_months} ay`}
+            </span>
+          )
+        }
+        return <span className="text-muted-foreground">—</span>
+      },
+    },
+    {
+      key: 'status',
+      header: 'Durum',
+      render: (r) => {
+        // Çalışma alanı askıya alınmış/arşivlenmişse plan bilgisi
+        // ikincil: önce erişim durumu söylenmeli.
+        if (r.status !== 'active') {
+          return <Badge variant="destructive">{workspaceStatusLabel(r.status)}</Badge>
+        }
+        if (r.plan === 'trial') return <Badge variant="info">Deneme</Badge>
+        if (r.plan === 'licensed') return <Badge variant="success">Plan aktif</Badge>
+        return <Badge variant="neutral">{planLabel(r.plan)}</Badge>
+      },
+    },
+    {
+      key: 'ends',
+      header: 'Bitiş',
+      hideBelow: 'sm',
+      render: (r) => {
+        const endsAt = r.plan === 'trial' ? r.trial_ends_at : r.license_ends_at
+        const left = daysLeft(endsAt)
+        if (left === null) return <span className="text-muted-foreground">—</span>
+        if (left <= 0) {
+          return <span className="text-destructive-foreground">Doldu</span>
+        }
+        return (
+          <div className="tabular-nums">
+            <p>{formatDateTr(endsAt)}</p>
+            <p
+              className={
+                left <= 3 ? 'text-xs text-warning-foreground' : 'text-xs text-muted-foreground'
+              }
+            >
+              {left} gün
+            </p>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'activity',
+      header: 'Son Aktivite',
+      hideBelow: 'lg',
+      render: (r) => (
+        <span className="text-muted-foreground">{formatRelativeTr(r.last_activity_at)}</span>
+      ),
+    },
+    {
+      key: 'revenue',
+      header: 'Tahsilat',
+      align: 'right',
+      render: (r) => (
+        <div className="tabular-nums">
+          <p>{r.total_paid_kurus > 0 ? formatKurusShort(r.total_paid_kurus) : '—'}</p>
+          {r.pending_order_kurus > 0 && (
+            <p className="text-xs text-warning-foreground">
+              {formatKurusShort(r.pending_order_kurus)} bekliyor
+            </p>
+          )}
+        </div>
+      ),
+    },
+  ]
+
+  if (hasPartner) {
+    columns.push({
+      key: 'partner',
+      header: 'Partner',
+      hideBelow: 'lg',
+      render: (r) =>
+        r.partner_code ? (
+          <code className="text-xs">{r.partner_code}</code>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    })
+  }
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {s.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold tabular-nums">{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <MetricTiles metrics={tiles} className="xl:grid-cols-4" />
+
+      {attention.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Dikkat gerektirenler</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {attention.map((a) => (
+                <li key={a.text} className="flex items-start gap-2">
+                  {/* Renk tek başına anlam taşımıyor: metin zaten neyin
+                      olduğunu söylüyor. Nokta yalnız tarama hızı için. */}
+                  <span
+                    aria-hidden
+                    className={
+                      a.tone === 'destructive'
+                        ? 'mt-1.5 size-2 shrink-0 rounded-full bg-destructive'
+                        : 'mt-1.5 size-2 shrink-0 rounded-full bg-warning'
+                    }
+                  />
+                  {a.text}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Koçlar</CardTitle>
+          <CardTitle className="text-base">Çalışma Alanları</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Arama sunucu tarafında: GET formu, JavaScript gerektirmiyor
@@ -102,93 +351,25 @@ export default async function AdminHome({
               name="q"
               defaultValue={q ?? ''}
               placeholder="Çalışma alanı, ad ya da e-posta ara…"
-              aria-label="Koç ara"
+              aria-label="Çalışma alanı ara"
               className="h-9 w-full max-w-sm rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </form>
 
-          {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Kayıt bulunamadı.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="pb-2 font-medium">Çalışma alanı</th>
-                    <th className="pb-2 font-medium">Sahip</th>
-                    <th className="pb-2 font-medium">Kayıt</th>
-                    <th className="pb-2 font-medium">Öğrenci</th>
-                    <th className="pb-2 font-medium">Durum</th>
-                    <th className="pb-2 font-medium">Kalan</th>
-                    <th className="pb-2 font-medium">Tahsilat</th>
-                    <th className="pb-2 font-medium">Partner</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const isTrial = r.plan === 'trial'
-                    const endsAt = isTrial ? r.trial_ends_at : r.license_ends_at
-                    const left = daysLeft(endsAt)
-                    return (
-                      <tr key={r.workspace_id} className="border-b last:border-0">
-                        <td className="py-2">{r.workspace_name}</td>
-                        <td className="py-2">
-                          <span className="block">{r.owner_name ?? '—'}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {r.owner_email ?? ''}
-                          </span>
-                        </td>
-                        <td className="py-2 tabular-nums">
-                          {new Date(r.created_at).toLocaleDateString('tr-TR')}
-                        </td>
-                        <td className="py-2 tabular-nums">
-                          {r.active_students}
-                          {r.student_limit != null && (
-                            <span className="text-muted-foreground">
-                              {' '}
-                              / {r.student_limit}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2">
-                          {r.status !== 'active' ? (
-                            <Badge variant="destructive">{r.status}</Badge>
-                          ) : isTrial ? (
-                            <Badge variant="info">Deneme</Badge>
-                          ) : r.plan === 'licensed' ? (
-                            <Badge variant="success">Lisanslı</Badge>
-                          ) : (
-                            <Badge variant="neutral">{r.plan}</Badge>
-                          )}
-                        </td>
-                        <td className="py-2 tabular-nums">
-                          {left === null ? (
-                            '—'
-                          ) : left <= 0 ? (
-                            <span className="text-destructive-foreground">Doldu</span>
-                          ) : (
-                            `${left} gün`
-                          )}
-                        </td>
-                        <td className="py-2 tabular-nums">
-                          {r.total_paid_kurus > 0
-                            ? formatKurusShort(r.total_paid_kurus)
-                            : '—'}
-                        </td>
-                        <td className="py-2">
-                          {r.partner_code ? (
-                            <code className="text-xs">{r.partner_code}</code>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.workspace_id}
+            rowHref={(r) => `/admin/calisma-alanlari/${r.workspace_id}`}
+            rowLabel={(r) => `${r.workspace_name} detayına git`}
+            empty={{
+              icon: Building2,
+              title: 'Kayıt bulunamadı',
+              description: q
+                ? 'Aramanızla eşleşen bir çalışma alanı yok.'
+                : 'Henüz çalışma alanı oluşturulmamış.',
+            }}
+          />
         </CardContent>
       </Card>
     </div>

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TICKET_CATEGORY_OPTIONS } from '@/lib/support'
 import { openTicketAction } from './actions'
 
 // YENİ TALEP FORMU.
@@ -15,13 +16,6 @@ import { openTicketAction } from './actions'
 // Kapalı başlıyor: destek sayfasına gelenlerin çoğu ÖNCE eski talebine
 // bakmaya geliyor. Açık bir form, listeyi aşağı iterek asıl aranan şeyi
 // gizlerdi.
-
-const CATEGORIES = [
-  { value: 'genel', label: 'Genel' },
-  { value: 'teknik', label: 'Teknik sorun' },
-  { value: 'odeme', label: 'Ödeme ve lisans' },
-  { value: 'oneri', label: 'Öneri' },
-]
 
 export function NewTicketForm() {
   const [open, setOpen] = useState(false)
@@ -42,7 +36,7 @@ export function NewTicketForm() {
     return (
       <Button type="button" onClick={() => setOpen(true)} className="gap-2">
         <Plus className="size-4" />
-        Yeni destek talebi
+        Destek Talebi Oluştur
       </Button>
     )
   }
@@ -50,7 +44,11 @@ export function NewTicketForm() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Yeni destek talebi</CardTitle>
+        <CardTitle className="text-base">Size nasıl yardımcı olabiliriz?</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Sorununuzu mümkün olduğunca detaylı anlatın. Böylece daha hızlı
+          yardımcı olabiliriz.
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
@@ -61,7 +59,7 @@ export function NewTicketForm() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               maxLength={200}
-              placeholder="Kısaca ne hakkında?"
+              placeholder="Örn. Öğrenci eklerken hata alıyorum"
             />
           </div>
           <div className="space-y-1.5">
@@ -72,7 +70,7 @@ export function NewTicketForm() {
               onChange={(e) => setCategory(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {CATEGORIES.map((c) => (
+              {TICKET_CATEGORY_OPTIONS.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
@@ -89,13 +87,13 @@ export function NewTicketForm() {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             maxLength={5000}
-            placeholder="Ne olduğunu ve ne beklediğinizi yazın. Ekran adı ve yaptığınız adımlar çok yardımcı olur."
+            placeholder="Hangi ekranda olduğunuzu, ne yaptığınızı ve varsa aldığınız hata mesajını yazın. Örn. Öğrenci İşleri > Yeni Öğrenci ekranında bilgileri girip Kaydet'e bastığımda hata alıyorum."
           />
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={submit} disabled={pending}>
-            {pending ? 'Gönderiliyor…' : 'Gönder'}
+            {pending ? 'Gönderiliyor…' : 'Destek Talebi Oluştur'}
           </Button>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
             Vazgeç

@@ -31,7 +31,7 @@ export function LicenseStep() {
           Hesabınız oluşturuldu
         </p>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Lisansınızı seçin
+          Planınızı seçin
         </h1>
         <p className="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
           Kaç öğrenci takip edeceğinizi ve ne kadar süre kullanacağınızı seçin.
@@ -40,7 +40,7 @@ export function LicenseStep() {
       </div>
 
       <div className="mt-8">
-        <LicenseConfigurator onPurchase={purchaseLicenseAction} ctaLabel="Satın Al" />
+        <LicenseConfigurator onPurchase={purchaseLicenseAction} />
       </div>
 
       {/* İKİNCİL AMA GÖRÜNÜR. 7 günlük ücretsiz deneme dururken satın

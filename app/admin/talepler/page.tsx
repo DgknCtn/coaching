@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/server'
+import { ticketCategoryLabel, ticketStatusLabel, ticketStatusVariant } from '@/lib/support'
 import { AdminTicket } from './admin-ticket'
 
 export const metadata: Metadata = { title: 'Destek Talepleri' }
@@ -24,19 +25,6 @@ interface TicketRow {
   message_count: number
   last_message_at: string
   created_at: string
-}
-
-const STATUS: Record<string, { label: string; variant: 'info' | 'success' | 'neutral' }> = {
-  open: { label: 'Yanıt bekliyor', variant: 'info' },
-  answered: { label: 'Yanıtlandı', variant: 'success' },
-  closed: { label: 'Kapatıldı', variant: 'neutral' },
-}
-
-const CATEGORY: Record<string, string> = {
-  genel: 'Genel',
-  teknik: 'Teknik',
-  odeme: 'Ödeme',
-  oneri: 'Öneri',
 }
 
 export default async function AdminTicketsPage() {
@@ -72,9 +60,9 @@ export default async function AdminTicketsPage() {
                   subject={t.subject}
                   workspaceName={t.workspace_name}
                   openedBy={t.opened_by}
-                  category={CATEGORY[t.category] ?? t.category}
-                  statusLabel={STATUS[t.status]?.label ?? t.status}
-                  statusVariant={STATUS[t.status]?.variant ?? 'neutral'}
+                  category={ticketCategoryLabel(t.category)}
+                  statusLabel={ticketStatusLabel(t.status)}
+                  statusVariant={ticketStatusVariant(t.status)}
                   messageCount={t.message_count}
                   lastMessageAt={t.last_message_at}
                 />
