@@ -5,16 +5,36 @@ const SRC = 'brand/izlogo.png'
 const OUT = 'public'
 const CREAM = { r: 0xf6, g: 0xef, b: 0xe8, alpha: 1 }
 
-// Logonun beyaz zeminini saydama çevir: köşe pikseli referans, tolerans 12.
-const base = sharp(SRC).ensureAlpha()
-const { data, info } = await base.raw().toBuffer({ resolveWithObject: true })
-const [r0, g0, b0] = [data[0], data[1], data[2]]
-for (let i = 0; i < data.length; i += 4) {
-  if (Math.abs(data[i] - r0) < 14 && Math.abs(data[i+1] - g0) < 14 && Math.abs(data[i+2] - b0) < 14) data[i+3] = 0
+// Kaynak saydam DEĞİLSE düz zemini kes: köşe pikseli referans alınır ve
+// ona yakın renkler saydamlaştırılır.
+//
+// Zaten saydam bir kaynakta bu adım atlanır — köşe pikseli o durumda
+// (0,0,0,0) olur ve RGB karşılaştırması logonun koyu kahverengilerini de
+// silmeye aday hale gelir. Yapılacak iş yokken risk almanın anlamı yok.
+const meta = await sharp(SRC).metadata()
+let source = SRC
+if (!meta.hasAlpha) {
+  const { data, info } = await sharp(SRC).ensureAlpha().raw()
+    .toBuffer({ resolveWithObject: true })
+  const [r0, g0, b0] = [data[0], data[1], data[2]]
+  for (let i = 0; i < data.length; i += 4) {
+    if (
+      Math.abs(data[i] - r0) < 14 &&
+      Math.abs(data[i + 1] - g0) < 14 &&
+      Math.abs(data[i + 2] - b0) < 14
+    ) {
+      data[i + 3] = 0
+    }
+  }
+  source = await sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  }).png().toBuffer()
+  console.log('zemin kesildi (kaynakta alfa yoktu)')
+} else {
+  console.log('kaynak zaten saydam, zemin kesme atlandı')
 }
-const cut = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-  .png().toBuffer()
-const trimmed = await sharp(cut).trim().png().toBuffer()
+
+const trimmed = await sharp(source).trim().png().toBuffer()
 const tm = await sharp(trimmed).metadata()
 console.log('trim:', tm.width, 'x', tm.height)
 
