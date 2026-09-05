@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { MetricRow } from '@/components/shared/metric-row'
 import { Section } from '@/components/shared/section'
+import { academicYearLabel, demoRelative } from '@/lib/demo-data'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { ProgressBar } from '@/components/shared/progress-bar'
 
@@ -10,7 +11,10 @@ type MockStudent = (typeof mockStudents)[number]
 const mockStudents = [
   {
     id: '1',
-    name: 'Ayşe Yılmaz',
+    name: 'Ayşe Y.',
+    doneTasks: 8,
+    totalTasks: 8,
+    lastActiveDays: 0,
     exam: 'YKS',
     grade: '12. Sınıf',
     status: 'green' as const,
@@ -20,7 +24,10 @@ const mockStudents = [
   },
   {
     id: '2',
-    name: 'Mehmet Kaya',
+    name: 'Mehmet K.',
+    doneTasks: 5,
+    totalTasks: 8,
+    lastActiveDays: 2,
     exam: 'YKS',
     grade: '12. Sınıf',
     status: 'yellow' as const,
@@ -30,7 +37,10 @@ const mockStudents = [
   },
   {
     id: '3',
-    name: 'Zeynep Arslan',
+    name: 'Zeynep A.',
+    doneTasks: 3,
+    totalTasks: 9,
+    lastActiveDays: 4,
     exam: 'YKS',
     grade: '11. Sınıf',
     status: 'red' as const,
@@ -40,7 +50,10 @@ const mockStudents = [
   },
   {
     id: '4',
-    name: 'Ali Rıza Demir',
+    name: 'Ali Rıza D.',
+    doneTasks: 7,
+    totalTasks: 8,
+    lastActiveDays: 0,
     exam: 'LGS',
     grade: '8. Sınıf',
     status: 'green' as const,
@@ -50,7 +63,10 @@ const mockStudents = [
   },
   {
     id: '5',
-    name: 'Elif Şahin',
+    name: 'Elif Ş.',
+    doneTasks: 4,
+    totalTasks: 8,
+    lastActiveDays: 1,
     exam: 'YKS',
     grade: '12. Sınıf',
     status: 'yellow' as const,
@@ -99,6 +115,26 @@ export function TeacherDemo() {
       ),
     },
     {
+      key: 'tasks',
+      header: 'Ödevler',
+      align: 'center',
+      hideBelow: 'md',
+      render: (s) => (
+        <span className="tabular-nums">
+          {s.doneTasks}
+          <span className="text-muted-foreground">/{s.totalTasks}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'activity',
+      header: 'Son Aktivite',
+      hideBelow: 'lg',
+      render: (s) => (
+        <span className="text-muted-foreground">{demoRelative(s.lastActiveDays)}</span>
+      ),
+    },
+    {
       key: 'overdue',
       header: 'Geciken',
       align: 'center',
@@ -114,16 +150,29 @@ export function TeacherDemo() {
 
   return (
     <div className="space-y-6">
+      {/* SAYI DEĞİL, SORU. "Risk altında 3" bir veritabanı sayımı;
+          "Kritik Öğrenci — müdahale gereken öğrenciler" öğretmenin
+          zihninde bir iş. Kelime ürünün kendi rozet sözlüğünden
+          (status-badge.tsx): kullanıcı kaydolduktan sonra AYNI kelimeyi
+          görüyor, demoya özel bir dil uydurulmuyor. */}
       <MetricRow
         metrics={[
-          { label: 'Toplam öğrenci', value: 24 },
-          { label: 'Haftalık tamamlama', value: '74%' },
-          { label: 'Geciken ödev', value: 11 },
-          { label: 'Risk altında', value: 3 },
+          { label: 'Aktif Öğrenci', value: 24 },
+          { label: 'Bu Haftaki Görev Tamamlama', value: '74%' },
+          { label: 'Geciken Görev', value: 11 },
+          {
+            label: 'Kritik Öğrenci',
+            value: 3,
+            hint: 'Müdahale gereken öğrenciler',
+          },
         ]}
       />
 
-      <Section title="Öğrenciler" description="2025–2026 YKS dönemi" variant="card">
+      <Section
+        title="Öğrenciler"
+        description={`${academicYearLabel()} YKS dönemi`}
+        variant="card"
+      >
         <DataTable columns={columns} rows={mockStudents} rowKey={(s) => s.id} />
       </Section>
     </div>

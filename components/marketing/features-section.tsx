@@ -11,7 +11,10 @@ const roles = [
       'Tüm öğrencilerinizi tek ekrandan yönetin. Risk analiziyle kimlerin takibe ihtiyacı olduğunu erkenden görün.',
     features: [
       'Öğrenci başına kitap ataması',
-      'Haftalık risk analizi (Kritik / Dikkat / İyi)',
+      'Geride kalan öğrencileri siz fark etmeden sistem fark etsin',
+      // Ürünün rozet sözlüğüyle birebir aynı üçlü (status-badge.tsx).
+      // Kullanıcı kaydolduktan sonra bu kelimelerin aynısını görüyor.
+      'Kritik / Dikkat / İyi olarak haftalık durum',
       'Ödev oluşturma ve ilerleme takibi',
       'Veli & öğrenci davet sistemi',
       'Eğitim dönemi yönetimi',
@@ -59,8 +62,8 @@ export function FeaturesSection() {
       <div className="mx-auto max-w-6xl">
         <SectionHeading
           eyebrow="Roller"
-          title="Üç rol, tek platform"
-          description="Koç, öğrenci ve veliler için tasarlanmış birbirine bağlı bir deneyim."
+          title="Öğretmen yönetir. Öğrenci uygular. Veli takip eder."
+          description="Herkes aynı veriyi görür, herkes kendi ekranından takip eder."
         />
 
         <div className="mt-14 grid gap-4 sm:grid-cols-2 md:grid-cols-3">

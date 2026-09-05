@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Menu, X } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { BRAND } from '@/lib/brand'
+import { TRIAL_CTA_LABEL } from '@/lib/plans'
 import { BrandMark } from '@/components/shared/brand-mark'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
@@ -68,7 +69,7 @@ export function Navbar() {
               Giriş Yap
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm' })}>
-              Ücretsiz Dene
+              {TRIAL_CTA_LABEL}
             </Link>
           </div>
 
@@ -123,7 +124,7 @@ export function Navbar() {
               Giriş Yap
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm', className: 'w-full' })}>
-              Ücretsiz Dene
+              {TRIAL_CTA_LABEL}
             </Link>
           </div>
         </div>

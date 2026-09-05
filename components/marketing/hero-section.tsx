@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { GuaranteeStrip } from './guarantee-strip'
 
 const previewStats = [
@@ -44,24 +44,22 @@ export function HeroSection() {
             {TRIAL_DAYS} gün ücretsiz · Kurulum 10 dakika
           </p>
 
-          {/* BAŞLIK KAZANCI SÖYLÜYOR, acıyı değil. Önceki başlık
-              ("20 öğrenci, 20 ayrı Excel dosyası olmasın") sorunu doğru
-              adlandırıyordu ama okuyucuya ne KAZANACAĞINI söylemiyordu.
-              Acı, hemen altındaki cümlede duruyor — kaybolmadı, sıraya
-              girdi. */}
+          {/* BAŞLIK KAYBEDİLEN ZAMANI adlandırıyor. Öğretmenin ödediği
+              asıl bedel öğrenci sayısı değil, takip için harcadığı saatler;
+              ürünün vaadi de o saatleri geri vermek. Ne yapıldığı hemen
+              altındaki cümlede duruyor. */}
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-            Her öğrencinin nerede kaldığını 10 saniyede görün
+            Öğrencilerinizi takip etmek için saatlerinizi harcamayın.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            20 öğrenci, 20 ayrı Excel dosyası olmasın. Hangi öğrenci hangi kitabın
-            neresinde, bu hafta ne verildi, kim geride kaldı — hepsi tek ekranda.
-            Veliler kendi panelinden izler, siz her hafta aynı soruları
-            cevaplamazsınız.
+            Ödevleri verin, ilerlemeyi görün, geride kalan öğrenciyi anında fark
+            edin. İZ; özel ders öğretmenleri ve eğitim koçları için öğrenci, ödev
+            ve kitap takibini tek ekranda birleştirir.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/register" className={buttonVariants({ size: 'lg' })}>
-              Ücretsiz Dene
+              {TRIAL_CTA_LABEL}
               <ArrowRight />
             </Link>
             <Link href="/demo" className={buttonVariants({ variant: 'outline', size: 'lg' })}>

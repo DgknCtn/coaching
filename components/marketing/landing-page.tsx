@@ -1,7 +1,10 @@
 import { Navbar } from './navbar'
 import { HeroSection } from './hero-section'
-import { StatsBar } from './stats-bar'
+import { AudienceSection } from './audience-section'
+import { BeforeAfterSection } from './before-after-section'
 import { FeaturesSection } from './features-section'
+import { ApprovalSection } from './approval-section'
+import { ParentSection } from './parent-section'
 import { HowItWorks } from './how-it-works'
 import { CommitmentsSection } from './commitments-section'
 import { PricingSection } from './pricing-section'
@@ -19,19 +22,35 @@ import { StickyCta } from './sticky-cta'
 //    içerik olarak büyük ölçüde çakışıyordu: risk analizi, davet sistemi,
 //    kitap havuzu, ödev takibi — hepsi rol kartlarının içinde zaten
 //    sayılıyor. İki ardışık kart ızgarası, fiyatlandırmaya inen yolu
-//    uzatmaktan başka bir işe yaramıyordu. Kaldırılınca fiyat bölümü
-//    okuyucuya bir ekran daha yakın.
+//    uzatmaktan başka bir işe yaramıyordu.
 //
-// 2. CommitmentsSection FİYATTAN HEMEN ÖNCE eklendi. Parayı konuşmadan
-//    önceki son durak; hem güven veriyor hem de kayıt olmadan görülebilen
-//    demoya yönlendiriyor. Kart isteyen bir akışta "önce gör, sonra
-//    kaydol" diyebilmek en güçlü koz.
+// 2. StatsBar da AYNI GEREKÇEYLE ÇIKARILDI (dosya duruyor). Dört
+//    maddesinin ikisi yeni bölümlerin başlığı hâline geldi: "Üç rol, tek
+//    sistem" artık FeaturesSection'ın başlığı, "Öğretmen onaylı ilerleme"
+//    ise kendi bölümü (ApprovalSection). Kalan ikisi ("test ve sayfa
+//    takibi", "veri yalıtımı") FeaturesSection ve CommitmentsSection
+//    içinde zaten söyleniyordu. Aynı şeyi iki kez, iki farklı cümleyle
+//    söylemek okuyucuyu ikna etmiyor, yalnız sayfayı uzatıyor.
 //
-// 3. SSS fiyatlandırmadan SONRA kaldı ama içeriği yeniden sıralandı:
-//    kart, iptal ve iade soruları en üstte. İtiraz, fiyatı gördükten
-//    hemen sonra karşılanmalı.
+// 3. AudienceSection HERO'DAN HEMEN SONRA: sayfa "ne yapar" sorusunu iyi
+//    cevaplıyordu ama "bu benim için mi" sorusunu hiç cevaplamıyordu.
+//    Okuyucu kendini listede göremezse kalan her şeyi başkasına
+//    anlatılan bir ürün olarak okur.
 //
-// 4. StickyCta yalnız mobilde: uzun sayfada, ikna olmuş okuyucunun
+// 4. BeforeAfterSection nitelendirmenin hemen ardında: okuyucu kendini
+//    tanıdıktan sonra ilk merak ettiği şey neyin değişeceği.
+//
+// 5. ApprovalSection -> ParentSection SIRASI BAĞIMLI: velinin gördüğü
+//    veri, öğretmenin ONAYLADIĞI veri. Veli bölümü tek başına dursaydı
+//    "veli her şeyi görüyor" gibi okunurdu.
+//
+// 6. CommitmentsSection FİYATTAN HEMEN ÖNCE: parayı konuşmadan önceki
+//    son durak.
+//
+// 7. SSS fiyatlandırmadan SONRA: kart, iptal ve iade soruları en üstte.
+//    İtiraz, fiyatı gördükten hemen sonra karşılanmalı.
+//
+// 8. StickyCta yalnız mobilde: uzun sayfada, ikna olmuş okuyucunun
 //    basacağı bir şey her zaman ekranda olsun.
 // ============================================================
 
@@ -40,8 +59,11 @@ export function LandingPage() {
     <div className="min-h-screen">
       <Navbar />
       <HeroSection />
-      <StatsBar />
+      <AudienceSection />
+      <BeforeAfterSection />
       <FeaturesSection />
+      <ApprovalSection />
+      <ParentSection />
       <HowItWorks />
       <CommitmentsSection />
       <PricingSection />

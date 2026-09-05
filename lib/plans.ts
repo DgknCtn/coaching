@@ -53,6 +53,18 @@ export function workspaceStatusLabel(status: string): string {
  */
 export const TRIAL_DAYS = 7
 
+/**
+ * Deneme çağrısının metni — TEK KAYNAK.
+ *
+ * Aynı düğme beş ayrı yerde beş farklı ad taşıyordu: "Ücretsiz Dene",
+ * "Ücretsiz Başla", "Ücretsiz Başlayın", "7 Gün Ücretsiz Dene",
+ * "Hesap Oluştur". Kullanıcı sayfa boyunca aynı eylemi farklı adlarla
+ * görünce her seferinde yeniden karar vermek zorunda kalıyordu.
+ *
+ * Süre + fayda + eylem.
+ */
+export const TRIAL_CTA_LABEL = `${TRIAL_DAYS} Gün Ücretsiz Başla`
+
 /** Denemede kaç öğrenci eklenebilir. Ürünü gerçekten denemeye yeter. */
 export const TRIAL_STUDENT_LIMIT = 3
 
@@ -71,9 +83,9 @@ export const PLAN_INCLUDED = [
   'İçindekiler listesini yapıştırarak toplu kitap aktarma',
   'Haftalık plan, ödev takibi ve öğretmen onayı',
   'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
-  'Müfredat akışı, koruma havuzu ve risk analizi',
-  'Sayfa bazlı takip, hedefler ve yazdırılabilir rapor',
-  "Ödev metnini WhatsApp'a kopyalama",
+  'Geride kalan öğrencileri siz fark etmeden sistem fark etsin.',
+  'Kitabın hangi sayfasında kaldığınızı otomatik takip edin.',
+  "Ödevi WhatsApp'tan saniyeler içinde gönderin.",
 ] as const
 
 export interface WorkspaceUsage {

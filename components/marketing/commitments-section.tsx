@@ -71,7 +71,7 @@ export function CommitmentsSection() {
               href="/demo"
               className={buttonVariants({ variant: 'outline', size: 'lg' })}
             >
-              Önce demoyu gezin
+              Demoyu Gör
             </Link>
           </div>
 

@@ -7,7 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND, contactMailto } from '@/lib/brand'
-import { PLAN_INCLUDED, TRIAL_DAYS } from '@/lib/plans'
+import { PLAN_INCLUDED, TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import {
   quote,
   isSelfService,
@@ -160,7 +160,7 @@ export function PricingSection() {
                     href="/register"
                     className={buttonVariants({ size: 'lg', className: 'mt-6 w-full' })}
                   >
-                    {TRIAL_DAYS} Gün Ücretsiz Dene
+                    {TRIAL_CTA_LABEL}
                     <ArrowRight />
                   </Link>
                 </div>

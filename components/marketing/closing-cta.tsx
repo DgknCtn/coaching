@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { BRAND } from '@/lib/brand'
+import { TRIAL_CTA_LABEL } from '@/lib/plans'
 import { GuaranteeStrip } from './guarantee-strip'
 
 // SAYFANIN SON CTA'SI.
@@ -64,14 +65,14 @@ export function ClosingCta() {
 
           <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/register" className={buttonVariants({ size: 'lg' })}>
-              Ücretsiz Başlayın
+              {TRIAL_CTA_LABEL}
               <ArrowRight />
             </Link>
             <Link
               href="/demo"
               className={buttonVariants({ variant: 'outline', size: 'lg' })}
             >
-              Önce demoyu gezin
+              Demoyu Gör
             </Link>
           </div>
 

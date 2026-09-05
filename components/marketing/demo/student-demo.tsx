@@ -1,4 +1,5 @@
 import { BookCard } from '@/components/shared/book-card'
+import { demoDate } from '@/lib/demo-data'
 import { Section } from '@/components/shared/section'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
@@ -7,7 +8,7 @@ const mockOverdueHomework = [
   {
     id: '1',
     batchName: 'TYT Matematik – Denklemler',
-    dueDate: '18 Haziran 2026',
+    dueDate: demoDate(-6),
     testsTotal: 5,
     testsDone: 2,
     bookTitle: 'TYT Soru Bankası',
@@ -15,7 +16,7 @@ const mockOverdueHomework = [
   {
     id: '2',
     batchName: 'AYT Fizik – Kuvvet',
-    dueDate: '20 Haziran 2026',
+    dueDate: demoDate(-4),
     testsTotal: 3,
     testsDone: 0,
     bookTitle: 'AYT Fizik 72 Deneme',
@@ -26,7 +27,7 @@ const mockUpcomingHomework = [
   {
     id: '3',
     batchName: 'TYT Türkçe – Anlam Bilgisi',
-    dueDate: '26 Haziran 2026',
+    dueDate: demoDate(3),
     testsTotal: 4,
     testsDone: 1,
     bookTitle: 'TYT Türkçe Soru Kitabı',
@@ -34,7 +35,7 @@ const mockUpcomingHomework = [
   {
     id: '4',
     batchName: 'AYT Matematik – Türev',
-    dueDate: '28 Haziran 2026',
+    dueDate: demoDate(5),
     testsTotal: 6,
     testsDone: 6,
     bookTitle: 'AYT Mat 72 Soru',

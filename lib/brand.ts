@@ -16,7 +16,7 @@ export const BRAND = {
   fullName: 'İZ',
 
   /** Tek cümlelik ne olduğu. */
-  tagline: 'Öğrenci takibini Excel\'den kurtaran koçluk ve ders takip platformu',
+  tagline: 'Öğretmenler için öğrenci takip platformu',
 
   /**
    * İletişim adresi — fiyatlandırma bölümündeki "İletişime geç" butonu ve

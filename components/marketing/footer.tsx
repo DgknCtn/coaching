@@ -14,7 +14,7 @@ export function Footer() {
               <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Öğrenci takibini Excel&apos;den kurtarın.
+              Öğrenci takibini tek ekranda yönetin.
             </p>
             <a
               href={contactMailto(`${BRAND.name} hakkında`)}

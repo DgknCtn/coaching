@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
 import { MetricRow } from '@/components/shared/metric-row'
+import { demoDate } from '@/lib/demo-data'
 import { Section } from '@/components/shared/section'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
@@ -48,27 +49,32 @@ const mockHomework = [
   {
     id: '1',
     name: 'TYT Matematik – Türevler',
-    dueDate: '26 Haziran 2026',
+    dueDate: demoDate(-2),
     done: 4,
     total: 4,
   },
   {
     id: '2',
     name: 'TYT Türkçe – Paragraf',
-    dueDate: '26 Haziran 2026',
+    dueDate: demoDate(-1),
     done: 2,
     total: 5,
   },
   {
     id: '3',
     name: 'AYT Fizik – Elektrik',
-    dueDate: '28 Haziran 2026',
+    dueDate: demoDate(3),
     done: 0,
     total: 3,
   },
 ]
 
 export function ParentDemo() {
+  const completed = mockHomework.filter((hw) => hw.done >= hw.total).length
+  // Geciken: tamamlanmamış ve teslim tarihi geçmiş olanlar. demoDate
+  // negatif offset'le geçmiş tarih üretiyor; ilk iki kayıt öyle.
+  const overdue = mockHomework.filter((hw, i) => hw.done < hw.total && i < 2).length
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-2">
@@ -78,12 +84,16 @@ export function ParentDemo() {
       </div>
 
       <Section title="Bu hafta">
+        {/* SAYAÇLAR LİSTEDEN TÜRETİLİYOR. Elle yazılmışlardı ve
+            listeyle tutmuyorlardı: "13 verilen ödev" derken aşağıda üç
+            satır vardı. Demo da olsa kendi içinde tutarsız bir ekran,
+            ürünün sayılarına duyulan güveni zedeler. */}
         <MetricRow
           metrics={[
-            { label: 'Verilen ödev', value: 13 },
-            { label: 'Tamamlanan', value: 9 },
-            { label: 'Bekleyen', value: 2 },
-            { label: 'Geciken', value: 2 },
+            { label: 'Verilen ödev', value: mockHomework.length },
+            { label: 'Tamamlanan', value: completed },
+            { label: 'Bekleyen', value: mockHomework.length - completed },
+            { label: 'Geciken', value: overdue },
           ]}
         />
       </Section>

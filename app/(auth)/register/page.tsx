@@ -11,17 +11,36 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { Check, ShieldCheck } from 'lucide-react'
+import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
+import { registerSchema } from '@/lib/validation'
 import { GoogleButton } from '@/components/shared/google-button'
 
-const schema = z.object({
-  fullName: z.string().min(2, 'Ad en az 2 karakter olmalı'),
-  email: z.string().email('Geçerli bir e-posta girin'),
-  password: z.string().min(6, 'Şifre en az 6 karakter olmalı'),
-  workspaceName: z.string().optional(),
-})
+// ŞEMA SUNUCUYLA ORTAK. Burada ayrı bir kopya vardı ve mesajları
+// sunucudakinden ayrışmıştı ("Ad en az 2 karakter olmalı" vs "Ad Soyad
+// en az 2 karakter olmalı."): aynı formu iki kez doğrulayan iki farklı
+// kural. Alan `workspaceName` şemada KALIYOR — form artık sormasa da
+// e-posta doğrulaması açıkken çalışma alanı, kullanıcı metadata'sından
+// sonradan kuruluyor ve o yol alanı okuyor.
+const schema = registerSchema
 
 type FormData = z.infer<typeof schema>
+
+// "Kaydolduktan sonra ne olacak?" sorusunun cevabı. Dördü de üründe
+// bugün var ve onboarding listesindeki adımlarla aynı sırada
+// (onboarding-checklist.tsx) — vaat ile ekran birbirini tutuyor.
+const FIRST_10_MIN = [
+  'Öğrencilerinizi ekleyin',
+  'İlk ödevinizi oluşturun',
+  'Kitap takibini başlatın',
+  'Öğrencinizin ilerlemesini görün',
+]
+
+const TRUST = [
+  'Kredi kartı gerekmez',
+  'Otomatik ödeme yok',
+  'Kurulum gerektirmez',
+]
 
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition()
@@ -40,12 +59,7 @@ export default function RegisterPage() {
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
-      const result = await registerAction(
-        data.fullName,
-        data.email,
-        data.password,
-        data.workspaceName
-      )
+      const result = await registerAction(data.fullName, data.email, data.password)
       if (result?.error) {
         setServerError(result.error)
         return
@@ -84,8 +98,8 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title="Hesap oluşturun"
-      description={`${TRIAL_DAYS} gün ücretsiz deneme, kurulum gerektirmez`}
+      title="Öğrencilerinizi yönetmeye başlayın."
+      description={`${TRIAL_DAYS} gün boyunca tüm özellikleri ücretsiz deneyin. Kredi kartı gerekmez.`}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Zaten hesabın var mı?{' '}
@@ -98,7 +112,25 @@ export default function RegisterPage() {
       {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
           Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
           başladıktan sonra fark ederdi. */}
+      {/* İLK 10 DAKİKA formun üstünde: kayıt formu bir maliyet, bu liste
+          onun karşılığı. Altında olsaydı kullanıcı zaten karar verdikten
+          sonra görürdü. */}
+      <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+        <p className="text-sm font-medium">İlk 10 dakikada:</p>
+        <ul className="mt-2 space-y-1.5">
+          {FIRST_10_MIN.map((item) => (
+            <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success-foreground" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
       <GoogleButton />
+      <p className="mt-2 text-center text-xs text-muted-foreground">
+        En hızlı yöntem — 30 saniyede hesabınızı oluşturun.
+      </p>
 
       <div className="relative my-5">
         <div className="absolute inset-0 flex items-center" aria-hidden>
@@ -153,18 +185,10 @@ export default function RegisterPage() {
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="workspaceName">
-            Çalışma Alanı Adı{' '}
-            <span className="font-normal text-muted-foreground">(isteğe bağlı)</span>
-          </Label>
-          <Input
-            id="workspaceName"
-            type="text"
-            placeholder="Örn: Ahmet Hoca'nın Sınıfı"
-            {...register('workspaceName')}
-          />
-        </div>
+        {/* ÇALIŞMA ALANI ADI SORULMUYOR: ilk kayıtta "çalışma alanı
+            nedir?" sorusunu doğuruyordu ve zaten isteğe bağlıydı. Boş
+            geçildiğinde sunucu adı kendisi üretiyor (064). Kullanıcı
+            adı sonradan ayarlardan değiştirebilir. */}
 
         {serverError && (
           <p className="text-xs text-destructive">{serverError}</p>
@@ -172,8 +196,20 @@ export default function RegisterPage() {
 
         <Button type="submit" className="w-full" disabled={isPending}>
           {isPending && <Loader2 className="size-4 animate-spin" />}
-          Hesap Oluştur
+          {TRIAL_CTA_LABEL}
         </Button>
+
+        {/* GÜVENCE SATIRI kayıt bağlamına ait: pazarlama sayfasındaki
+            GuaranteeStrip'in vaatlerini tekrar etmiyor, kaydolmadan
+            hemen önceki çekinceyi karşılıyor. */}
+        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
+          {TRUST.map((item) => (
+            <li key={item} className="flex items-center gap-1.5">
+              <ShieldCheck aria-hidden className="size-3.5 shrink-0 text-success-foreground" />
+              {item}
+            </li>
+          ))}
+        </ul>
       </form>
     </AuthShell>
   )

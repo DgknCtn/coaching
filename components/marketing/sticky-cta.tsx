@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { TRIAL_CTA_LABEL } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 
 // MOBİLDE YAPIŞKAN CTA.
@@ -51,7 +51,7 @@ export function StickyCta() {
       {...(!visible ? { inert: '' as unknown as boolean } : {})}
     >
       <Link href="/register" className={buttonVariants({ className: 'w-full' })}>
-        {TRIAL_DAYS} Gün Ücretsiz Dene
+        {TRIAL_CTA_LABEL}
       </Link>
       <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
         Kredi kartı istemiyoruz · Otomatik yenileme yok

@@ -2,19 +2,17 @@ import { SectionHeading } from './section-heading'
 
 const steps = [
   {
-    title: 'Hesabını oluştur',
-    description:
-      'Kaydol, denemeni başlat. Eğitim dönemini ve kitap havuzunu tanımla — kitabın içindekiler listesini yapıştırman yeterli.',
+    title: 'Öğrencilerinizi ekleyin',
+    description: 'Öğrenci ve velilerinize davet linki gönderin.',
   },
   {
-    title: 'Öğrencilerini ekle',
+    title: 'Ödevleri planlayın',
     description:
-      'Öğrencilerine ve velilerine davet linki gönder. Kitapları ata, ödevleri oluştur.',
+      'Kitap, test, sayfa veya video bazında haftalık görevler oluşturun.',
   },
   {
-    title: 'Takip et ve yönet',
-    description:
-      'Risk analiziyle kimlerin geride kaldığını gör. Onayladığın çalışmalar ilerlemeye işlensin.',
+    title: 'Takip etmeye başlayın',
+    description: 'Kim yaptı, kim gecikti, kim geride kaldı? Tek ekrandan görün.',
   },
 ]
 
@@ -27,8 +25,8 @@ export function HowItWorks() {
       <div className="mx-auto max-w-6xl">
         <SectionHeading
           eyebrow="Nasıl çalışır"
-          title="3 adımda başla"
-          description="Dakikalar içinde kurulumu tamamla, öğrencilerini takip etmeye başla."
+          title="3 adımda başlayın"
+          description="Kurulum dakikalar sürüyor; ilk ödevinizi aynı gün verebilirsiniz."
         />
 
         <ol className="mt-14 grid gap-4 md:grid-cols-3">
@@ -47,6 +45,12 @@ export function HowItWorks() {
             </li>
           ))}
         </ol>
+
+        {/* Hero'daki "Kurulum 10 dakika" ile AYNI sayı. İki farklı yerde
+            iki farklı süre söylemek, ikisini de inandırıcılıktan çıkarır. */}
+        <p className="mt-8 text-center text-sm font-medium">
+          10 dakikada kurun. Aynı gün kullanmaya başlayın.
+        </p>
       </div>
     </section>
   )

@@ -5,6 +5,7 @@ import { Navbar } from '@/components/marketing/navbar'
 import { Footer } from '@/components/marketing/footer'
 import { DemoTabs } from '@/components/marketing/demo/demo-tabs'
 import { BRAND } from '@/lib/brand'
+import { TRIAL_CTA_LABEL } from '@/lib/plans'
 
 export const metadata = {
   title: 'Demo',
@@ -27,32 +28,46 @@ export default function DemoPage() {
           <span className="sm:hidden">Demo modu</span>
           <span className="hidden sm:inline">Demo modu — veriler örnek amaçlıdır.</span>
         </span>
+        {/* Düğme de yukarıdaki metinle aynı kısıta tabi: dar ekranda
+            tam etiket şeridi ikinci satıra taşırıyor. */}
         <Link href="/register" className={buttonVariants({ size: 'xs', variant: 'outline' })}>
-          Hesap Aç
+          <span className="sm:hidden">Ücretsiz</span>
+          <span className="hidden sm:inline">{TRIAL_CTA_LABEL}</span>
         </Link>
       </div>
 
       {/* pt: navbar (64px) + şerit (~41px) + nefes payı */}
       <main className="flex-1 pt-[137px] pb-16">
         <div className="mx-auto max-w-6xl px-6">
+          {/* "CANLI DEMO" DEĞİL. O ad, kullanıcıda ürünü gerçekten
+              kullanabileceği beklentisini kuruyordu; ekran örnek
+              verilerle çizilmiş bir önizleme. Beklentiyi karşılamayan
+              bir vaat, ürünü denemeden önce güven kaybettirir. */}
           <div className="mb-8">
-            <h1 className="text-xl font-semibold tracking-tight">Canlı demo</h1>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {BRAND.name}&apos;i keşfedin
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Koç, öğrenci ve veli görünümlerini keşfedin.
+              Gerçek bir koçluk akışının nasıl çalıştığını görün.
+            </p>
+            <p className="mt-4 text-base font-medium">
+              Kim iyi gidiyor, kim geride kalıyor? Tek bakışta görün.
             </p>
           </div>
 
           <DemoTabs />
 
           <div className="mt-12 rounded-lg border bg-card px-6 py-12 text-center">
-            <h2 className="text-xl font-semibold tracking-tight">Hazır mısınız?</h2>
+            <h2 className="text-xl font-semibold tracking-tight">
+              Öğrenci takibini bugün {BRAND.name}&apos;e taşıyın.
+            </h2>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              Ücretsiz hesabınızı oluşturun, dakikalar içinde öğrencilerinizi takip etmeye
-              başlayın.
+              WhatsApp, Excel ve not defterleri arasında kaybolmadan tüm
+              öğrencilerinizi tek ekrandan yönetin.
             </p>
             <div className="mt-6">
               <Link href="/register" className={buttonVariants({ size: 'lg' })}>
-                Ücretsiz Başla
+                {TRIAL_CTA_LABEL}
                 <ArrowRight />
               </Link>
             </div>
