@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import { formatUnitCount } from '@/lib/unit-labels'
 import { buildHomeworkDetail } from '@/lib/homework-detail'
 import { CheckCircle2, RotateCcw, Loader2, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
@@ -113,9 +114,23 @@ function BatchCard({ batch }: { batch: HomeworkBatch }) {
   // Havuzu'nun "son temas" hesabının kaynağı olur — onay tarihi değil.
   const [studiedOn, setStudiedOn] = useState(todayDateString())
 
+  // SONUÇ OKUNUYOR (068 · rapor bulgusu 6).
+  //
+  // Bu üç çağrı da başarısızlıkta { error } dönüyordu ama dönüş hiç
+  // atanmıyordu: öğrenci düğmeye basıyor, bekleme bitiyor, hiçbir şey
+  // değişmiyor ve NEDEN olmadığı hiçbir yerde yazmıyordu. Üstelik
+  // revalidatePath da çalışmadığı için ekran eski hâlinde kalıyor,
+  // öğrenci gönderdiğini sanıyordu.
+  //
+  // Aynı projedeki doğru kalıp: student/check-in-card.tsx.
   function submitAll(bookId?: string) {
     startTransition(async () => {
-      await submitHomeworkBatchAction(batch.id, bookId, studiedOn)
+      const res = await submitHomeworkBatchAction(batch.id, bookId, studiedOn)
+      if (res?.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success('Çalışman öğretmenin onayına gönderildi.')
     })
   }
 
@@ -330,11 +345,15 @@ function HomeworkItemRow({
 
   function toggle() {
     startTransition(async () => {
-      if (isDone) {
-        await revertCompletedAction(item.id)
-      } else {
-        await submitHomeworkItemAction(item.id, studiedOn)
+      const res = isDone
+        ? await revertCompletedAction(item.id)
+        : await submitHomeworkItemAction(item.id, studiedOn)
+
+      if (res?.error) {
+        toast.error(res.error)
+        return
       }
+      toast.success(isDone ? 'İşaret geri alındı.' : 'Onaya gönderildi.')
     })
   }
 

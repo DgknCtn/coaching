@@ -58,12 +58,21 @@ export default async function RootPage() {
       })
       if (!error) await clearReferralCode()
       // Kurulum başarılıysa aynı sayfaya dönülür ve bu kez profil dolu
-      // gelir. Başarısızsa aşağıdaki /login yönlendirmesine düşülür —
-      // sonsuz döngü olmaz çünkü /login korumasız bir rota.
+      // gelir.
       if (!error) redirect('/')
+      console.error('[kurulum] çalışma alanı kurulamadı', error)
     }
 
-    redirect('/login')
+    // KURULUM BAŞARISIZ → /erisim, /login DEĞİL (068 · rapor bulgusu 3).
+    //
+    // Buradaki eski yorum "sonsuz döngü olmaz çünkü /login korumasız bir
+    // rota" diyordu ve bu ARTIK DOĞRU DEĞİL: /login public olsa da
+    // middleware oturumu olan kullanıcıyı /login'den geri /'a
+    // yönlendiriyor. Yani oturumu olup çalışma alanı kurulamamış
+    // kullanıcı / → /login → / arasında kilitleniyordu.
+    //
+    // /erisim ne olduğunu anlatıyor ve oturumu kapatma yolu sunuyor.
+    redirect('/erisim')
   }
 
   const { data: member } = await supabase
@@ -76,11 +85,17 @@ export default async function RootPage() {
     .limit(1)
     .maybeSingle()
 
-  if (!member) redirect('/login')
+  // ÜYELİK YOK: kullanıcı yetkisiz değil, çalışma alanına BAĞLI DEĞİL —
+  // askıya alınmış bir kiracının üyelikleri de RLS tarafından süzülüp
+  // buraya boş düşüyor. Giriş ekranına atmak, doğru şifreyle tekrar
+  // tekrar denemekten başka bir şey bırakmıyordu.
+  if (!member) redirect('/erisim')
 
   if (member.role === 'owner' || member.role === 'teacher') redirect('/teacher')
   if (member.role === 'student') redirect('/student')
   if (member.role === 'parent') redirect('/parent')
 
-  redirect('/login')
+  // Tanınmayan rol: veri şemayla uyuşmuyor. Yine /login değil — oturum
+  // geçerli, sorun oturumda değil.
+  redirect('/erisim')
 }

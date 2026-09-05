@@ -1,10 +1,10 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AuthShell } from '@/components/shared/auth-shell'
 import { buttonVariants } from '@/components/ui/button'
 import { BLOCKED_MESSAGE, type BlockedReason } from '@/lib/plans'
 import { contactMailto } from '@/lib/brand'
+import { SignOutLink } from './sign-out-link'
 
 // ERİŞİM ENGELLENDİ ekranı (Faz 4).
 //
@@ -48,7 +48,45 @@ export default async function AccessBlockedPage() {
   const rows = (data ?? []) as AccessRow[]
 
   // Engellenmemiş bir çalışma alanı varsa kullanıcının burada işi yok.
-  if (rows.length === 0 || rows.some(r => !r.blocked_reason)) redirect('/')
+  if (rows.some(r => !r.blocked_reason)) redirect('/')
+
+  // HİÇ ÜYELİK YOK — bu dal 068'e kadar `/`'a geri yönlendiriyordu ve
+  // yönlendirme döngüsünün ikinci yarısıydı (rapor bulgusu 3): app/page.tsx
+  // profil/üyelik bulamayınca buraya, burası da geri oraya gönderiyordu.
+  //
+  // Artık kullanıcı burada duruyor ve ne olduğunu okuyor. Çıkış düğmesi
+  // ŞART: hesabı kurulamamış bir kullanıcının elindeki tek çıkış yolu o —
+  // aksi halde tarayıcısını temizlemekten başka seçeneği kalmıyor.
+  if (rows.length === 0) {
+    return (
+      <AuthShell
+        title="Çalışma alanınız hazır değil"
+        description={user.email ?? ""}
+        footer={<SignOutLink />}
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-muted-foreground">
+            Hesabınız açıldı ama bir çalışma alanına bağlı değil. Bu genellikle
+            kurulumun yarıda kalmasından ya da bir davetin henüz kabul
+            edilmemiş olmasından kaynaklanır.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Sizi davet eden öğretmenin bağlantısını yeniden açmayı deneyin. Kendi
+            çalışma alanınızı kurmak istiyorsanız bizimle iletişime geçin.
+          </p>
+          <a
+            href={contactMailto('Çalışma alanı kurulamadı')}
+            className={buttonVariants({ className: 'w-full' })}
+          >
+            Bizimle iletişime geçin
+          </a>
+          <p className="text-xs text-muted-foreground">
+            Hiçbir veriniz silinmedi.
+          </p>
+        </div>
+      </AuthShell>
+    )
+  }
 
   const row = rows[0]
   const reason = row.blocked_reason as BlockedReason
@@ -59,17 +97,7 @@ export default async function AccessBlockedPage() {
     <AuthShell
       title={message.title}
       description={row.workspace_name}
-      footer={
-        <p className="text-center text-sm text-muted-foreground">
-          Farklı bir hesapla{' '}
-          <Link
-            href="/login"
-            className="font-medium text-primary underline-offset-4 hover:underline"
-          >
-            giriş yapabilirsiniz
-          </Link>
-        </p>
-      }
+      footer={<SignOutLink />}
     >
       <div className="space-y-5">
         <p className="text-sm text-muted-foreground">
