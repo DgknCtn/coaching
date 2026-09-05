@@ -6,7 +6,7 @@ import { HowItWorks } from './how-it-works'
 import { CommitmentsSection } from './commitments-section'
 import { PricingSection } from './pricing-section'
 import { FaqSection } from './faq-section'
-import { DemoCta } from './demo-cta'
+import { ClosingCta } from './closing-cta'
 import { Footer } from './footer'
 import { StickyCta } from './sticky-cta'
 
@@ -46,7 +46,7 @@ export function LandingPage() {
       <CommitmentsSection />
       <PricingSection />
       <FaqSection />
-      <DemoCta />
+      <ClosingCta />
       <Footer />
       <StickyCta />
     </div>

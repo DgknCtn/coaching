@@ -22,6 +22,7 @@ export interface OnboardingState {
   hasTerm: boolean
   hasBook: boolean
   hasStudent: boolean
+  hasHomework: boolean
 }
 
 interface Step {
@@ -32,7 +33,18 @@ interface Step {
   done: boolean
 }
 
-export function OnboardingChecklist({ state }: { state: OnboardingState }) {
+export function OnboardingChecklist({
+  state,
+  firstStudentId,
+}: {
+  state: OnboardingState
+  /**
+   * Ödev sayfası bir öğrenciye bağlı; dördüncü adımın hedefi bu id ile
+   * kuruluyor. Öğrenci yokken null gelir — o durumda zaten "öğrenci
+   * ekleyin" sıradaki adım, ödev düğmesi hiç render edilmez.
+   */
+  firstStudentId?: string | null
+}) {
   const steps: Step[] = [
     {
       title: 'Eğitim dönemi oluşturun',
@@ -51,12 +63,26 @@ export function OnboardingChecklist({ state }: { state: OnboardingState }) {
       done: state.hasBook,
     },
     {
-      title: 'İlk öğrencinizi ekleyin',
+      title: 'Öğrencinizi ekleyin',
       description:
         'Öğrenci kaydı hesap değildir; öğrenci kendi panelini görsün isterseniz ayrıca davet gönderirsiniz.',
       href: '/teacher/students/new',
       cta: 'Öğrenci ekle',
       done: state.hasStudent,
+    },
+    // DÖRDÜNCÜ ADIM ürünün "aha" anı: ilk ödev verilene kadar panel hâlâ
+    // boş sayaçlardan ibaret. Liste önceden öğrenci eklenince kayboluyor
+    // ve kullanıcıyı tam da kanıtın üretildiği yerden bir adım önce
+    // yalnız bırakıyordu.
+    {
+      title: 'İlk ödevinizi verin',
+      description:
+        'Ödev öğrencinin panelinde görünür; tamamladığını bildirdiğinde onayınıza düşer. İlerleme yüzdeleri buradan doğar.',
+      href: firstStudentId
+        ? `/teacher/students/${firstStudentId}/homework/new`
+        : '/teacher/students',
+      cta: 'Ödev ver',
+      done: state.hasHomework,
     },
   ]
 

@@ -44,7 +44,8 @@ export default async function TeacherDashboard() {
   // açık bildirimi olmayan öğrenciler için sıradaki kaydı açar. Idempotent.
   await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
 
-  const [{ data: students }, { count: bookCount }] = await Promise.all([
+  const [{ data: students }, { count: bookCount }, { count: homeworkCount }] =
+    await Promise.all([
     supabase
       .from('teacher_student_overview_view')
       .select('*')
@@ -57,6 +58,12 @@ export default async function TeacherDashboard() {
       .select('id', { count: 'exact', head: true })
       .eq('workspace_id', workspaceId)
       .eq('status', 'active'),
+    // Kurulum adımları için: hiç ödev verilmiş mi? Aynı HEAD sayımı
+    // kalıbı; tek sorulan "sıfır mı, değil mi".
+    supabase
+      .from('homework_batches')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId),
   ])
 
   // Aksiyon gerektiren öğrenciler üstte: kayıp temas > geciken > onay kuyruğu.
@@ -201,7 +208,9 @@ export default async function TeacherDashboard() {
           hasTerm: !!activeTerm,
           hasBook: (bookCount ?? 0) > 0,
           hasStudent: rows.length > 0,
+          hasHomework: (homeworkCount ?? 0) > 0,
         }}
+        firstStudentId={rows[0]?.student_id ?? null}
       />
 
       {usage && <QuotaNotice usage={usage} />}

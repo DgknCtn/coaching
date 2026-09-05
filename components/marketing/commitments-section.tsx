@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { TRIAL_DAYS } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 
 // TAAHHÜTLER + DEMO — dürüst sosyal kanıt.
@@ -15,9 +16,10 @@ import { cn } from '@/lib/utils'
 //
 // Yerine iki gerçek kanıt kullanılıyor:
 //   1. TAAHHÜTLER — hepsi bugün koddan doğrulanabilir cümleler.
-//   2. DEMO — kayıt olmadan, üç rolün gerçek arayüzü. Bir vaat değil,
-//      ürünün kendisi. Kart isteyen bir akışta en güçlü ikna aracı bu:
-//      "önce gör, sonra kaydol" diyebilmek.
+//   2. KENDİ KANITINIZ — başkasının referansı yerine okuyucunun kendi
+//      öğrencisiyle, ilk oturumda ürettiği kanıt. Birincil düğme bu
+//      yüzden kayıt: "kendi öğrencilerinizde deneyin". Demo ikincil
+//      kaldı — daha ihtiyatlı okuyucu için hâlâ orada.
 //
 // Bu bölüm fiyatlandırmadan HEMEN ÖNCE duruyor — okuyucu parayı
 // konuşmadan hemen önce ürünü kendi gözüyle görebilsin diye.
@@ -54,25 +56,32 @@ export function CommitmentsSection() {
             Söz veriyoruz
           </p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-            Yeni bir ürüne güvenmek zor. Kolaylaştıralım.
+            Denemek için bize güvenmek zorunda değilsiniz.
           </h2>
           <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-            Kayıt olmadan, kart vermeden, üç rolün de gerçek arayüzünü örnek verilerle
-            gezebilirsiniz. Beğenirseniz denemeye başlarsınız.
+            Kredi kartı yok. Otomatik ödeme yok. Gerçek arayüzü deneyin.
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/demo" className={buttonVariants({ size: 'lg' })}>
-              Demoyu aç
+            <Link href="/register" className={buttonVariants({ size: 'lg' })}>
+              Kendi öğrencilerinizde deneyin
               <ArrowRight />
             </Link>
             <Link
-              href="/register"
+              href="/demo"
               className={buttonVariants({ variant: 'outline', size: 'lg' })}
             >
-              Ücretsiz Dene
+              Önce demoyu gezin
             </Link>
           </div>
+
+          {/* Süre ve koşul, düğmeye BASILMADAN önce. Öğrenci sayısından
+              bilinçli olarak söz edilmiyor: denemede öğrenci sınırı gerçekten
+              yok (workspaces.student_limit trial'da NULL kalıyor), olmayan bir
+              kısıtı ilan etmek bu bölümün reddettiği şeyin ta kendisi olurdu. */}
+          <p className="mt-4 text-sm text-muted-foreground">
+            {TRIAL_DAYS} gün ücretsiz. Kart yok. Süre sonunda otomatik tahsilat yok.
+          </p>
         </div>
 
         <dl className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
