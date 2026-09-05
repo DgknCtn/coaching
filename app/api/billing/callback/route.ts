@@ -43,6 +43,15 @@ function redirectTo(request: NextRequest, path: string) {
   })
 }
 
+/**
+ * Sipariş kimliği biçimi — yedek eşleştirmede sağlayıcıdan gelen
+ * conversationId'yi sorguya koymadan önce doğrulamak için. İmza zaten
+ * doğrulanmış oluyor ama biçimi bozuk bir değeri veritabanına
+ * göndermenin bir anlamı yok.
+ */
+const UUID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
 export async function POST(request: NextRequest) {
   let token: string | null = null
 
@@ -61,11 +70,64 @@ export async function POST(request: NextRequest) {
 
   // Belirteci KENDİ kaydımızla eşleştiriyoruz. Tanımadığımız bir belirteç,
   // başka bir mağazanın ödemesi ya da uydurma olabilir.
-  const { data: order } = await supabase
+  let { data: order } = await supabase
     .from('billing_orders')
     .select('id, status, workspace_id, gross_kurus')
     .eq('provider_token', token)
     .maybeSingle()
+
+  // Sağlayıcı yanıtı: normalde aşağıda sorgulanır, ama yedek eşleştirme
+  // için erken gerekebilir. İki kez sorgulamamak için burada tutuluyor.
+  let result: Awaited<ReturnType<typeof retrieveCheckoutResult>> | null = null
+
+  // ---- YEDEK EŞLEŞTİRME (068 · rapor bulgusu 2) ----
+  //
+  // Belirteç siparişe yazılamamışsa buraya düşülür. Artık ödeme
+  // başlatılırken bu durum engelleniyor (abonelik/actions.ts), ama o
+  // düzeltmeden ÖNCE başlatılmış ödemeler ve yazma ile callback arasında
+  // kalan yarış durumları hâlâ mümkün.
+  //
+  // Sipariş kimliğimiz zaten sağlayıcıya conversationId olarak
+  // gidiyordu (lib/billing/iyzico.ts) ve yanıtta geri geliyordu —
+  // yalnızca hiç okunmuyordu. Yeni bir entegrasyon değil, var olan
+  // alanın kullanılması.
+  //
+  // GÜVENLİ: kimlik ancak İMZA DOĞRULANDIKTAN sonra kabul ediliyor,
+  // yani değeri sağlayıcının ürettiği kanıtlanmış oluyor. Tutar
+  // kontrolü de aşağıda aynen çalışıyor.
+  if (!order) {
+    try {
+      result = await retrieveCheckoutResult(token)
+    } catch (e) {
+      console.error('[billing] yedek eşleştirme için sonuç sorgulanamadı', e)
+      return redirectTo(request, '/teacher/ayarlar/abonelik?odeme=belirsiz')
+    }
+
+    if (!verifyCheckoutResult(result)) {
+      console.error('[billing] tanınmayan belirteç + imza doğrulanamadı')
+      return redirectTo(request, '/teacher/ayarlar/abonelik?odeme=gecersiz')
+    }
+
+    const conversationId = result.conversationId
+    if (conversationId && UUID_PATTERN.test(conversationId)) {
+      const { data: fallbackOrder } = await supabase
+        .from('billing_orders')
+        .select('id, status, workspace_id, gross_kurus')
+        .eq('id', conversationId)
+        .maybeSingle()
+      order = fallbackOrder ?? null
+
+      // Belirteci şimdi bağlıyoruz: tekrarlanan bildirim ilk yoldan
+      // eşleşsin ve bu dal bir daha çalışmasın.
+      if (order) {
+        await supabase
+          .from('billing_orders')
+          .update({ provider_token: token })
+          .eq('id', order.id)
+        console.error('[billing] sipariş yedek yoldan eşleşti', { orderId: order.id })
+      }
+    }
+  }
 
   if (!order) {
     console.error('[billing] tanınmayan belirteç ile callback')
@@ -79,9 +141,9 @@ export async function POST(request: NextRequest) {
     return redirectTo(request, '/teacher/ayarlar/abonelik?odeme=tamam')
   }
 
-  let result
   try {
-    result = await retrieveCheckoutResult(token)
+    // Yedek eşleştirme sırasında zaten sorgulandıysa tekrarlanmaz.
+    result = result ?? (await retrieveCheckoutResult(token))
   } catch (e) {
     console.error('[billing] sonuç sorgulanamadı', e)
     // Sipariş 'pending' KALIR, 'failed' YAPILMAZ: ödeme gerçekten

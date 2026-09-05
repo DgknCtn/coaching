@@ -91,11 +91,39 @@ export async function purchaseLicenseAction(
     return { error: 'Ödeme sayfası açılamadı. Lütfen biraz sonra tekrar deneyin.' }
   }
 
-  // Belirteci siparişe bağlıyoruz: callback yalnız belirteci taşır.
-  await supabase
+  // BELİRTEÇ YAZILMADAN ÖDEME SAYFASINA GEÇİLMEZ (068 · rapor bulgusu 2).
+  //
+  // ============================================================
+  // NEDEN BU GÜNCELLEMENİN HATASI YUTULAMAZ
+  //
+  // Callback siparişi ÖNCELİKLE bu belirteçle buluyor. Güncelleme
+  // sessizce başarısız olursa sıra şöyle işliyordu:
+  //   1. Sağlayıcı ödeme sayfasını açıyor,
+  //   2. belirtecin kaydı başarısız oluyor,
+  //   3. kullanıcı ödemeyi yapıyor,
+  //   4. gelen bildirim hiçbir siparişle eşleşmiyor.
+  //
+  // Yani para el değiştiriyor ama lisans açılmıyor. Ödeme sayfasına
+  // gönderip sonra eşleştirememektense HİÇ göndermemek doğru takas:
+  // ikincisinde kullanıcı yalnızca tekrar dener, birincisinde parası
+  // gider.
+  //
+  // Sipariş 'failed' işaretlenir ki mutabakatta "açık kalmış" gibi
+  // görünmesin — henüz hiçbir ödeme başlamadı.
+  // ============================================================
+  const { error: tokenError } = await supabase
     .from('billing_orders')
     .update({ provider_token: session.token })
     .eq('id', created.order_id)
+
+  if (tokenError) {
+    console.error('[billing] belirteç siparişe yazılamadı', tokenError)
+    await supabase.rpc('fail_billing_order', {
+      p_order_id: created.order_id,
+      p_reason: 'Ödeme belirteci kaydedilemedi',
+    })
+    return { error: 'Ödeme başlatılamadı. Lütfen biraz sonra tekrar deneyin.' }
+  }
 
   await logAudit(supabase, {
     workspaceId,
