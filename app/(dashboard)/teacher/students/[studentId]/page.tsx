@@ -8,7 +8,6 @@ import {
   BookOpen,
   ClipboardList,
   Users,
-  StickyNote,
   FileText,
   MessageSquareDashed,
   Pencil,
@@ -23,7 +22,7 @@ import {
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { studentOverviewTabBySlug } from '@/components/nav-config'
 import { AssignBookDialog } from './assign-book-dialog'
 import { InviteList, type InviteListRow } from './invite-list'
 import { deriveInviteStatus } from '@/lib/invite-status'
@@ -65,10 +64,15 @@ function one<T>(value: Nested<T>): T | null {
 
 export default async function StudentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studentId: string }>
+  // ?sekme= — Kitaplar / Ödevler / Durum / Veliler / Akademik Not.
+  // Değer YOKSA özet gösterilir; tanınmayan değer de özete düşer.
+  searchParams: Promise<{ sekme?: string }>
 }) {
   const { studentId } = await params
+  const tab = studentOverviewTabBySlug((await searchParams).sekme)
   const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -449,6 +453,12 @@ export default async function StudentDetailPage({
         }
       />
 
+      {/* ÖZET YALNIZ GENEL BAKIŞ'TA (068): bir panel seçiliyken sayaçları,
+          nabız kartlarını ve akademik izi de çizmek, kullanıcıyı aradığı
+          panele ulaşmak için her seferinde aynı bloğun altına kaydırmaya
+          zorlardı. Panelin bağlamı zaten üstteki şeritte. */}
+      {!tab && (
+        <>
       {weeklySummary && (
         <MetricTiles
           className="xl:grid-cols-5"
@@ -604,29 +614,15 @@ export default async function StudentDetailPage({
         </div>
       )}
 
-      <Tabs defaultValue="books">
-        <TabsList className="mb-6">
-          <TabsTrigger value="books">
-            <BookOpen /> Kitaplar
-          </TabsTrigger>
-          <TabsTrigger value="homework">
-            <ClipboardList /> Ödevler
-          </TabsTrigger>
-          <TabsTrigger value="checkin">
-            <MessageSquareDashed /> Durum
-          </TabsTrigger>
-          <TabsTrigger value="parents">
-            <Users /> Veliler
-          </TabsTrigger>
-          {/* R6-07: sekme artık koşulsuz. Eskiden yalnız students.notes
-              doluysa görünüyordu ve not eklemenin tek yolu öğrenci
-              oluşturma formuydu. */}
-          <TabsTrigger value="notes">
-            <StickyNote /> Akademik Not
-          </TabsTrigger>
-        </TabsList>
+        </>
+      )}
 
-        <TabsContent value="books">
+      {/* PANELLER ARTIK ÜST ŞERİTTE (068).
+          Burada bir TabsList vardı ve seçim client state'te tutuluyordu:
+          hangi sekmede olduğun paylaşılamıyor, yer imlenemiyor, geri
+          tuşuyla gezilemiyordu. Sekmeler çalışma masasının şeridine
+          taşındı (student-tabs.tsx), seçim ?sekme= ile URL'de. */}
+      {tab?.slug === 'kitaplar' && (
           <Section
             title="Atanmış kitaplar"
             action={
@@ -673,9 +669,9 @@ export default async function StudentDetailPage({
               </div>
             )}
           </Section>
-        </TabsContent>
+      )}
 
-        <TabsContent value="homework">
+      {tab?.slug === 'odevler' && (
           <div className="space-y-8">
             <PendingApprovalList
               studentId={studentId}
@@ -765,9 +761,9 @@ export default async function StudentDetailPage({
               )}
             </Section>
           </div>
-        </TabsContent>
+      )}
 
-        <TabsContent value="checkin">
+      {tab?.slug === 'durum' && (
           <Section
             title="Durum bildirimi"
             description="Öğrencinin planlı bildirimleri ve son temas geçmişi."
@@ -808,9 +804,10 @@ export default async function StudentDetailPage({
               )}
             </div>
           </Section>
-        </TabsContent>
+      )}
 
-        <TabsContent value="parents">
+      {tab?.slug === 'veliler' && (
+        <>
           <Section
             title="Veliler"
             action={
@@ -886,17 +883,17 @@ export default async function StudentDetailPage({
               <InviteList studentId={studentId} invites={invites} />
             </Section>
           )}
-        </TabsContent>
+        </>
+      )}
 
-        <TabsContent value="notes">
+      {tab?.slug === 'not' && (
           <Section
             title="Akademik Not / Öğrenci Hafızası"
             description="Derse başlarken hatırlamak istedikleriniz. Yalnız eğitmenlere görünür; öğrenci ve veli panelinde yer almaz."
           >
             <AcademicNotesPanel studentId={studentId} notes={academicNotes} />
           </Section>
-        </TabsContent>
-      </Tabs>
+      )}
     </div>
   )
 }

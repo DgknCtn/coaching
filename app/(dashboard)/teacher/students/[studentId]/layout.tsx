@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { StudentTabs } from './student-tabs'
@@ -71,7 +72,14 @@ export default async function StudentWorkbenchLayout({
           )}
         </div>
         <div className="print:hidden">
-          <StudentTabs studentId={studentId} />
+          {/* Suspense: StudentTabs useSearchParams okuyor (aktif sekme
+              Genel Bakış rotasında ?sekme= ile belirleniyor) ve Next bunu
+              bir sınır olmadan prerender etmeyi reddediyor. Yedek olarak
+              şeridin yüksekliği kadar boşluk: sekmeler bir an sonra
+              geldiğinde sayfa zıplamasın. */}
+          <Suspense fallback={<div className="h-[41px] border-b" />}>
+            <StudentTabs studentId={studentId} />
+          </Suspense>
         </div>
       </div>
       <div className="min-w-0 flex-1">{children}</div>

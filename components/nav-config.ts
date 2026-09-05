@@ -10,7 +10,9 @@ import {
   LayoutDashboard,
   Library,
   ListChecks,
+  MessageSquareDashed,
   ShieldCheck,
+  StickyNote,
   Users,
   Wallet,
   type LucideIcon,
@@ -135,6 +137,37 @@ export const teacherNav: NavEntry[] = [
 ]
 
 /**
+ * Genel Bakış sayfasının İÇİNDEKİ sekmeler — artık üst şeritte (068).
+ *
+ * Bunlar `studentScreens` gibi ayrı rota DEĞİL: hepsi aynı sayfanın
+ * (`/teacher/students/<id>`) farklı panelleri ve verileri o sayfanın tek
+ * sorgu dalgasından geliyor. Bu yüzden yol yerine SORGU PARAMETRESİ ile
+ * taşınıyorlar (`?sekme=kitaplar`).
+ *
+ * NEDEN URL'DE: eskiden components/ui/tabs ile client state'te
+ * tutuluyorlardı — hangi sekmede olduğun paylaşılamıyor, yer imlenemiyor
+ * ve geri tuşuyla gezilemiyordu. Bir ödevi konuşurken "Ödevler sekmesine
+ * gel" demek, karşı tarafa tıklama tarifi vermek demekti.
+ */
+export const studentOverviewTabs = [
+  { slug: 'kitaplar', label: 'Kitaplar', icon: BookOpen },
+  { slug: 'odevler', label: 'Ödevler', icon: ClipboardList },
+  { slug: 'durum', label: 'Durum', icon: MessageSquareDashed },
+  { slug: 'veliler', label: 'Veliler', icon: Users },
+  { slug: 'not', label: 'Akademik Not', icon: StickyNote },
+] as const
+
+export type StudentOverviewTab = (typeof studentOverviewTabs)[number]
+
+/** `?sekme=` değerini doğrular; tanınmayan değer için null (= özet). */
+export function studentOverviewTabBySlug(
+  slug: string | undefined
+): StudentOverviewTab | null {
+  if (!slug) return null
+  return studentOverviewTabs.find((t) => t.slug === slug) ?? null
+}
+
+/**
  * Öğrenci çalışma masasının SEKMELERİ (067).
  *
  * Bu ekranlar öğrenciye özeldir — hepsi URL'de bir öğrenci id'si taşır. Bu
@@ -153,6 +186,13 @@ export function studentContextNav(studentId: string): NavItem[] {
   const base = `/teacher/students/${studentId}`
   return [
     { href: base, label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
+    // Genel Bakış'ın panelleri hemen onun ardından: ikisi de aynı
+    // sayfanın parçası, aradaki sınır kullanıcı için yok.
+    ...studentOverviewTabs.map((t) => ({
+      href: `${base}?sekme=${t.slug}`,
+      label: t.label,
+      icon: t.icon,
+    })),
     ...studentScreens.map((s) => ({
       href: `${base}/${s.path}`,
       label: s.label,
