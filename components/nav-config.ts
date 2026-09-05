@@ -54,8 +54,8 @@ export function isNavGroup(entry: NavEntry): entry is NavGroup {
  *
  * Aynı beş ekran menüde iki yerde görünüyor:
  *  1) Bir öğrenci açıkken, o öğrencinin altında (studentContextNav),
- *  2) Öğrenci seçili değilken ana menüde bir grup olarak
- *     (studentScreensGroup) — bağlantı öğrenci listesine gider, seçim
+ *  2) Ana menüde "Öğrenci İşleri" grubunun altında
+ *     (studentScreenLinks) — bağlantı öğrenci listesine gider, seçim
  *     yapılınca doğrudan istenen ekrana girilir.
  *
  * `slug` URL'de taşınan kimlik (?ekran=...), `path` öğrenci altındaki
@@ -79,25 +79,21 @@ export function studentScreenBySlug(slug: string | undefined): StudentScreen | n
 }
 
 /**
- * Ekranların öğrenci SEÇİLMEMİŞKEN görünen hâli. Hedef öğrenci
- * listesidir: liste sayfası ?ekran= değerini okur ve satır bağlantılarını
- * doğrudan o ekrana yöneltir. Böylece menü, hangi sayfada olunursa olsun
- * aynı beş satırı gösterir.
+ * Ekranların öğrenci SEÇİLMEMİŞKEN görünen hâli — "Öğrenci İşleri"
+ * grubunun içinde duruyor. Hedef öğrenci listesidir: liste sayfası
+ * ?ekran= değerini okur ve satır bağlantılarını doğrudan o ekrana
+ * yöneltir.
  */
-export const studentScreensGroup: NavGroup = {
-  id: 'ogrenci-ekranlari',
-  label: 'Öğrenci Ekranları',
-  icon: CalendarRange,
-  items: studentScreens.map((s) => ({
-    href: `/teacher/students?ekran=${s.slug}`,
-    label: s.label,
-    icon: s.icon,
-  })),
-}
+export const studentScreenLinks: NavItem[] = studentScreens.map((s) => ({
+  href: `/teacher/students?ekran=${s.slug}`,
+  label: s.label,
+  icon: s.icon,
+}))
 
 export const teacherNav: NavEntry[] = [
   { href: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  // ÖĞRENCİ İŞLERİ: öğrenciyle ilgili üç ekran tek başlık altında.
+  // ÖĞRENCİ İŞLERİ: öğrenciyle ilgili her ekran tek başlık altında —
+  // liste, yeni kayıt, görevler ve öğrenciye özel beş ekran.
   //
   // Kitap Havuzu ve Müfredat Şablonları BİLİNÇLİ OLARAK DIŞARIDA:
   // adları öğrenci ekranlarındakilere benzese de bunlar çalışma alanı
@@ -112,11 +108,11 @@ export const teacherNav: NavEntry[] = [
       { href: '/teacher/students', label: 'Öğrenciler', icon: Users, exact: true },
       { href: '/teacher/students/new', label: 'Yeni Öğrenci', icon: UserPlus },
       { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
+      ...studentScreenLinks,
     ],
   },
   { href: '/teacher/books', label: 'Kitaplar', icon: BookOpen },
   { href: '/teacher/curriculum', label: 'Müfredat', icon: CalendarRange },
-  studentScreensGroup,
   // EĞİTİM DÖNEMİ / PLAN / DESTEK ARTIK DÜZ SEVİYEDE.
   //
   // Önce "Yönetim" adlı katlanabilir bir grubun altındaydılar. Grup,
