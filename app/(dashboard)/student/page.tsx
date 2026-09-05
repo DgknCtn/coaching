@@ -1,7 +1,11 @@
 import Link from 'next/link'
-import { isOverdue } from '@/lib/homework-status'
+import {
+  deriveBatchState,
+  batchStateLabel,
+  type HomeworkBatchState,
+} from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, ClipboardList } from 'lucide-react'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MetricRow } from '@/components/shared/metric-row'
 import { getStudentContext } from '@/lib/workspace'
@@ -64,22 +68,58 @@ export default async function StudentPage() {
     .maybeSingle()
 
 
-  const overdue = (batches ?? []).filter(b => {
-    return (
-      isOverdue(b.due_date) &&
-      (b.homework_items as { status: string }[]).some(i => i.status === 'pending')
-    )
-  })
-  const upcoming = (batches ?? []).filter(b => !isOverdue(b.due_date))
+  // DURUM TARİH FİLTRESİNDEN DEĞİL, TEK KAYNAKTAN (068 · rapor bulgusu 4).
+  //
+  // Önceden iki liste vardı: "tarihi geçmiş VE içinde pending kalem
+  // olanlar" ve "tarihi geçmemiş olanlar". Vadesi geçmiş ama bütün
+  // kalemleri onaya gönderilmiş — ya da öğretmenin İADE ETTİĞİ — bir
+  // grup ikisine de girmiyordu ve ekrandan tamamen kayboluyordu. Başka
+  // ödev yoksa öğrenciye "Tüm ödevler tamamlandı" bile deniyordu.
+  //
+  // Artık her grup deriveBatchState ile tam olarak BİR kovaya düşüyor.
+  const allBatches = batches ?? []
+  const buckets = new Map<HomeworkBatchState, typeof allBatches>()
+  for (const batch of allBatches) {
+    const state = deriveBatchState({
+      dueDate: batch.due_date,
+      items: (batch.homework_items ?? []) as { status: string; rejected_at: string | null }[],
+    })
+    const list = buckets.get(state)
+    if (list) list.push(batch)
+    else buckets.set(state, [batch])
+  }
+
+  // Sıra ACİLİYETE göre: önce geciken, sonra öğretmenin geri gönderdiği,
+  // sonra yapılacaklar. Onay bekleyen ve tamamlanan altta — öğrencinin
+  // yapacağı bir şey yok ama GÖRÜNÜR olmaları şart, "gönderdim mi?"
+  // sorusunun cevabı orada.
+  const ORDER: HomeworkBatchState[] = [
+    'overdue',
+    'returned',
+    'assigned',
+    'pending_approval',
+    'completed',
+  ]
+  const sections = ORDER.map(state => ({ state, items: buckets.get(state) ?? [] })).filter(
+    section => section.items.length > 0
+  )
+
+  const overdueCount = buckets.get('overdue')?.length ?? 0
+  const openCount =
+    overdueCount +
+    (buckets.get('returned')?.length ?? 0) +
+    (buckets.get('assigned')?.length ?? 0)
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Ödevlerim"
         subtitle={
-          overdue.length > 0
-            ? `${overdue.length} gecikmiş · ${upcoming.length} yaklaşan ödev`
-            : `${upcoming.length} yaklaşan ödev`
+          overdueCount > 0
+            ? `${overdueCount} gecikmiş · ${openCount} açık ödev`
+            : openCount > 0
+              ? `${openCount} açık ödev`
+              : undefined
         }
       />
 
@@ -99,28 +139,36 @@ export default async function StudentPage() {
         />
       )}
 
-      {overdue.length > 0 && (
-        <>
-          <AlertBanner
-            tone="warning"
-            title={`${overdue.length} gecikmiş ödev`}
-            description="Bunları en kısa sürede tamamlamayı unutma."
-          />
-          <Section title="Geciken ödevler">
-            <HomeworkList batches={overdue as any} />
-          </Section>
-        </>
+      {overdueCount > 0 && (
+        <AlertBanner
+          tone="warning"
+          title={`${overdueCount} gecikmiş ödev`}
+          description="Bunları en kısa sürede tamamlamayı unutma."
+        />
       )}
 
-      {upcoming.length > 0 ? (
-        <Section title="Bu hafta ve yaklaşan">
-          <HomeworkList batches={upcoming as any} />
+      {sections.map(section => (
+        <Section key={section.state} title={batchStateLabel(section.state, 'student')}>
+          <HomeworkList batches={section.items as any} />
         </Section>
-      ) : overdue.length === 0 ? (
+      ))}
+
+      {/* HİÇ ÖDEV OLMAMASI TAMAMLANMA DEĞİLDİR (rapor bulgusu 4).
+          Önceden iki durum aynı başarı şeridini gösteriyordu: henüz
+          hiç ödev almamış öğrenciye de "Harika iş çıkardın" deniyordu. */}
+      {allBatches.length === 0 ? (
+        <div className="rounded-lg border bg-card">
+          <EmptyState
+            icon={ClipboardList}
+            title="Henüz ödevin yok"
+            description="Öğretmenin sana ödev verdiğinde burada görünecek."
+          />
+        </div>
+      ) : openCount === 0 ? (
         <AlertBanner
           tone="success"
-          title="Tüm ödevler tamamlandı"
-          description="Harika iş çıkardın."
+          title="Bekleyen ödevin yok"
+          description="Yapılacak bir şey kalmadı — güzel gidiyor."
         />
       ) : null}
 

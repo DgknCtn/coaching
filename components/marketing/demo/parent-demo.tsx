@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
 import { MetricRow } from '@/components/shared/metric-row'
 import { demoDate } from '@/lib/demo-data'
+import { isOverdue } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
@@ -70,10 +71,23 @@ const mockHomework = [
 ]
 
 export function ParentDemo() {
-  const completed = mockHomework.filter((hw) => hw.done >= hw.total).length
-  // Geciken: tamamlanmamış ve teslim tarihi geçmiş olanlar. demoDate
-  // negatif offset'le geçmiş tarih üretiyor; ilk iki kayıt öyle.
-  const overdue = mockHomework.filter((hw, i) => hw.done < hw.total && i < 2).length
+  // GECİKME TARİHTEN TÜRER, ÜRÜNDEKİ AYNI FONKSİYONLA.
+  //
+  // Önceden iki ayrı kural vardı ve birbirini tutmuyordu: sayaç
+  // "tamamlanmamış VE listedeki ilk iki kayıt" diyordu, satır rozeti ise
+  // `hw.done === 0`. Sonuç, teslim tarihi 3 gün SONRA olan bir ödevin
+  // "Gecikmiş" görünmesi ve sayacın listeyle çelişmesiydi.
+  //
+  // Pazarlama ekranı ürünle aynı durum kurallarını kullanmalı: burada
+  // yanlış gösterilen bir rozet, ürünün sayılarına duyulan güveni
+  // doğrudan zedeler.
+  const rows = mockHomework.map((hw) => ({
+    ...hw,
+    overdue: isOverdue(hw.dueDate) && hw.done < hw.total,
+  }))
+
+  const completed = rows.filter((hw) => hw.done >= hw.total).length
+  const overdue = rows.filter((hw) => hw.overdue).length
 
   return (
     <div className="space-y-8">
@@ -90,9 +104,9 @@ export function ParentDemo() {
             ürünün sayılarına duyulan güveni zedeler. */}
         <MetricRow
           metrics={[
-            { label: 'Verilen ödev', value: mockHomework.length },
+            { label: 'Verilen ödev', value: rows.length },
             { label: 'Tamamlanan', value: completed },
-            { label: 'Bekleyen', value: mockHomework.length - completed },
+            { label: 'Bekleyen', value: rows.length - completed },
             { label: 'Geciken', value: overdue },
           ]}
         />
@@ -100,14 +114,14 @@ export function ParentDemo() {
 
       <Section title="Son ödevler" variant="card">
         <ul className="divide-y">
-          {mockHomework.map((hw) => (
+          {rows.map((hw) => (
             <li key={hw.id}>
               <HomeworkBatchRow
                 title={hw.name}
                 dueDate={hw.dueDate}
                 completed={hw.done}
                 total={hw.total}
-                isOverdue={hw.done === 0}
+                isOverdue={hw.overdue}
               />
             </li>
           ))}

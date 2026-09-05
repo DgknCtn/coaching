@@ -1,5 +1,6 @@
 import { BookCard } from '@/components/shared/book-card'
 import { demoDate } from '@/lib/demo-data'
+import { isOverdue } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
@@ -93,7 +94,10 @@ export function StudentDemo() {
                 dueDate={hw.dueDate}
                 completed={hw.testsDone}
                 total={hw.testsTotal}
-                isOverdue
+                // Sabit `true` yerine türetiliyor: demo verisinin tarihi
+                // değiştiğinde rozet sessizce yanlış kalmasın. Veli
+                // demosunda tam bu olmuştu.
+                isOverdue={isOverdue(hw.dueDate) && hw.testsDone < hw.testsTotal}
               />
             </li>
           ))}

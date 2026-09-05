@@ -119,6 +119,132 @@ export function deriveTestState(input: DeriveTestStateInput): HomeworkTestState 
 }
 
 /**
+ * Bir ödev GRUBUNUN tek aktif durumu.
+ *
+ * `HomeworkTestState`'in grup ölçeğindeki karşılığı; aynı öncelik
+ * mantığını taşır ama `no_test` / `not_assigned` gibi tek teste özgü
+ * durumları içermez — bir grup ya vardır ya yoktur.
+ */
+export type HomeworkBatchState =
+  | 'overdue'
+  | 'returned'
+  | 'assigned'
+  | 'pending_approval'
+  | 'completed'
+
+export interface BatchItemInput {
+  status: string | null | undefined
+  rejected_at?: string | null
+}
+
+export interface DeriveBatchStateInput {
+  dueDate?: string | null
+  items: BatchItemInput[]
+  today?: Date
+}
+
+/**
+ * Grubun aktif durumu.
+ *
+ * ============================================================
+ * NEDEN VAR — kaybolan ödev
+ *
+ * Öğrenci ve veli ekranları grupları "tarihi geçmiş VE içinde pending
+ * kalem olanlar" / "tarihi geçmemiş olanlar" diye ikiye ayırıyordu.
+ * Tarihi geçmiş ama bütün kalemleri onaya gönderilmiş — ya da öğretmen
+ * tarafından İADE EDİLMİŞ — bir grup iki listeye de girmiyor, ekrandan
+ * tamamen kayboluyordu. Başka ödev yoksa öğrenciye "Tüm ödevler
+ * tamamlandı" bile deniyordu.
+ *
+ * Bu, ürünün temelindeki "teslim edildi" ile "öğretmen onayladı"
+ * ayrımını bozan bir hataydı. Durum artık tarih filtresinden değil
+ * buradan türer; her grup tam olarak bir listeye düşer.
+ * ============================================================
+ *
+ * ÖNCELİK, deriveTestState İLE AYNI: `pending_approval` gecikmenin
+ * önündedir — süresi geçmiş bir ödevi öğrenci onaya gönderdiğinde aktif
+ * durum artık "Süresi Geçen" değil "Onay Bekliyor"dur. Aynı şekilde
+ * `overdue`, `returned`'ın önündedir.
+ *
+ * `cancelled` kalemler HİÇ SAYILMAZ: iptal edilmiş bir kalem ne bekleyen
+ * iştir ne de tamamlanmış.
+ */
+export function deriveBatchState(input: DeriveBatchStateInput): HomeworkBatchState {
+  const items = input.items.filter((i) => i.status !== 'cancelled')
+
+  // Kalemsiz grup: "tamamlandı" demek yanlış olurdu — içinde hiçbir şey
+  // yok. Görünür kalması, sessizce kaybolmasından iyi.
+  if (items.length === 0) return 'assigned'
+
+  const open = items.filter((i) => i.status === 'pending')
+
+  if (open.length > 0) {
+    if (isOverdue(input.dueDate, input.today)) return 'overdue'
+    if (open.some((i) => i.rejected_at)) return 'returned'
+    return 'assigned'
+  }
+
+  if (items.some((i) => i.status === 'pending_approval')) return 'pending_approval'
+
+  return 'completed'
+}
+
+/** Öğrencinin hâlâ bir şey yapması gereken durumlar. */
+export const OPEN_BATCH_STATES: readonly HomeworkBatchState[] = [
+  'overdue',
+  'returned',
+  'assigned',
+]
+
+/** Grup öğrenciden eylem bekliyor mu? Veli özeti ve sayaçlar bunu sorar. */
+export function isOpenBatch(state: HomeworkBatchState): boolean {
+  return OPEN_BATCH_STATES.includes(state)
+}
+
+/**
+ * Grup başlıkları. Tek test etiketlerinden AYRI: bir grup için "Ödevde"
+ * demek tuhaf kaçıyor, "Yapılacak" doğru.
+ */
+const BATCH_LABEL: Record<StatusAudience, Record<HomeworkBatchState, string>> = {
+  teacher: {
+    overdue: 'Süresi geçen',
+    returned: 'İade edilen',
+    assigned: 'Öğrenciden beklenen',
+    pending_approval: 'Onay bekleyen',
+    completed: 'Tamamlanan',
+  },
+  student: {
+    overdue: 'Geciken',
+    returned: 'Düzeltme istenen',
+    assigned: 'Yapılacak',
+    pending_approval: 'Onay bekleyen',
+    completed: 'Tamamlanan',
+  },
+  parent: {
+    overdue: 'Geciken',
+    returned: 'Geri gönderilen',
+    assigned: 'Yapılmayı bekleyen',
+    pending_approval: 'Onay bekleyen',
+    completed: 'Tamamlanan',
+  },
+}
+
+export function batchStateLabel(
+  state: HomeworkBatchState,
+  audience: StatusAudience = 'teacher'
+): string {
+  return BATCH_LABEL[audience][state]
+}
+
+export const BATCH_STATE_VARIANT: Record<HomeworkBatchState, TestStateVariant> = {
+  overdue: 'destructive',
+  returned: 'warning',
+  assigned: 'warning',
+  pending_approval: 'info',
+  completed: 'success',
+}
+
+/**
  * Etiketler role göre değişir.
  *
  *   öğretmen  "Reddedildi"      · "Öğrenciden Beklenen"

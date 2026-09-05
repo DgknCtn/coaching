@@ -1,5 +1,5 @@
 import { BookOpen, Users } from 'lucide-react'
-import { isOverdue } from '@/lib/homework-status'
+import { deriveBatchState, isOpenBatch } from '@/lib/homework-status'
 import { getParentContext } from '@/lib/workspace'
 import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
@@ -79,6 +79,7 @@ export default async function ParentPage({
       const [
         { data: bookProgress },
         { data: batches },
+        { data: allBatches },
         { data: weeklySummary },
         { data: teacherRow },
       ] = await Promise.all([
@@ -92,7 +93,7 @@ export default async function ParentPage({
           .select(
             `id, title, description, due_date, status,
              homework_items(
-               id, status, book_id, section_id,
+               id, status, rejected_at, book_id, section_id,
                books(title, tracking_mode),
                book_sections(title),
                book_tests(order_index)
@@ -103,6 +104,22 @@ export default async function ParentPage({
           .eq('status', 'active')
           .order('due_date', { ascending: false })
           .limit(10),
+        // DURUM KARARI LİSTEDEN AYRI (068 · rapor bulgusu 5).
+        //
+        // Yukarıdaki liste en yeni 10 grubu getiriyor; dolayısıyla ilk
+        // 10'un dışında kalanlar EN ESKİ, yani gecikme riski en yüksek
+        // gruplar. "Her şey yolunda" kararı o listeden türetildiğinde,
+        // aylardır açık duran bir ödev velinin ekranına hiç yansımadan
+        // olumlu bir mesaj gösterilebiliyordu.
+        //
+        // Bu sorgu SINIRSIZ ama hafif: yalnız tarih ve kalem durumları.
+        // Sınır listede kalır, karara sızmaz.
+        supabase
+          .from('homework_batches')
+          .select('id, due_date, homework_items(status, rejected_at)')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .eq('status', 'active'),
         supabase
           .from('student_weekly_homework_summary_view')
           .select('*')
@@ -119,10 +136,23 @@ export default async function ParentPage({
           .maybeSingle(),
       ])
 
+      // Özet, SINIRSIZ listeden türer (yukarıdaki yorum). Gruplar
+      // deriveBatchState ile tek bir duruma indirgeniyor; "onay
+      // bekleyen" iş öğrencinin gecikmesi sayılmıyor.
+      const summaryStates = (allBatches ?? []).map(b =>
+        deriveBatchState({
+          dueDate: b.due_date as string | null,
+          items: (b.homework_items ?? []) as { status: string; rejected_at: string | null }[],
+        })
+      )
+
       return {
         student: link.students,
         bookProgress: bookProgress ?? [],
         batches: batches ?? [],
+        overdueCount: summaryStates.filter(st => st === 'overdue').length,
+        openCount: summaryStates.filter(isOpenBatch).length,
+        totalBatchCount: summaryStates.length,
         weekly: weeklySummary,
         teacherName:
           one((teacherRow as { profiles: Nested<{ full_name: string }> } | null)?.profiles ?? null)
@@ -164,20 +194,23 @@ export default async function ParentPage({
         </Section>
       )}
 
-      {studentData.map(({ student, bookProgress, batches, weekly, teacherName }) => {
-        const overdueBatches = batches.filter((b) => {
-          return (
-            isOverdue(b.due_date) &&
-            (b.homework_items as { status: string }[]).some((i) => i.status === 'pending')
-          )
-        })
-
+      {studentData.map(
+        ({
+          student,
+          bookProgress,
+          batches,
+          overdueCount,
+          openCount,
+          totalBatchCount,
+          weekly,
+          teacherName,
+        }) => {
         // Genel (dönem geneli) ilerleme — atanmış tüm kitaplar üzerinden.
         const overallTotal = bookProgress.reduce((s, p) => s + Number(p.total_tests ?? 0), 0)
         const overallCompleted = bookProgress.reduce((s, p) => s + Number(p.completed_tests ?? 0), 0)
         const overallPct = overallTotal > 0 ? Math.round((overallCompleted / overallTotal) * 100) : 0
-        const hasActivity = bookProgress.length > 0 || batches.length > 0
-        const onTrack = hasActivity && overdueBatches.length === 0
+        const hasActivity = bookProgress.length > 0 || totalBatchCount > 0
+        const onTrack = hasActivity && overdueCount === 0
 
         return (
           <div key={student.id} className="space-y-6 border-t pt-8 first:border-t-0 first:pt-0">
@@ -187,10 +220,10 @@ export default async function ParentPage({
               {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
             </div>
 
-            {overdueBatches.length > 0 && (
+            {overdueCount > 0 && (
               <AlertBanner
                 tone="warning"
-                title={`${overdueBatches.length} gecikmiş ödev grubu`}
+                title={`${overdueCount} gecikmiş ödev grubu`}
                 description={
                   teacherName
                     ? `Teslim tarihi geçmiş çalışmalar var. ${teacherName} ile iletişime geçebilirsiniz.`
@@ -203,7 +236,13 @@ export default async function ParentPage({
               <AlertBanner
                 tone="success"
                 title="Her şey yolunda"
-                description="Gecikmiş ödev yok, güzel gidiyor."
+                description={
+                  // Bekleyen iş varken "hiç iş yok" demiyoruz: gecikme
+                  // yokluğu ile boşluk farklı şeyler.
+                  openCount > 0
+                    ? `Gecikmiş ödev yok. ${openCount} çalışma zamanında devam ediyor.`
+                    : 'Gecikmiş ödev yok, güzel gidiyor.'
+                }
               />
             )}
 
@@ -299,6 +338,7 @@ export default async function ParentPage({
                     const items = batch.homework_items as unknown as {
                       id: string
                       status: string
+                      rejected_at: string | null
                       book_id: string | null
                       section_id: string | null
                       books: Nested<{ title: string; tracking_mode: string }>
@@ -317,8 +357,14 @@ export default async function ParentPage({
                     )
                     const total = items.filter((i) => i.status !== 'cancelled').length
                     const completed = items.filter((i) => i.status === 'completed').length
+                    // Satır rozeti de aynı türeticiden: liste ile üstteki
+                    // uyarı farklı kural kullanırsa veli çelişkili iki
+                    // sayı görür.
                     const batchOverdue =
-                      isOverdue(batch.due_date) && items.some((i) => i.status === 'pending')
+                      deriveBatchState({
+                        dueDate: batch.due_date,
+                        items,
+                      }) === 'overdue'
 
                     return (
                       <li key={batch.id}>
