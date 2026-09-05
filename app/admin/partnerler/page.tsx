@@ -8,19 +8,31 @@ import { DataTable, type Column } from '@/components/shared/data-table'
 import { createClient } from '@/lib/supabase/server'
 import { formatKurus } from '@/lib/billing/pricing'
 import { MarkPaidButton } from './mark-paid-button'
+import { NewPartnerDialog } from './new-partner-dialog'
+import { PartnerCodeCell } from './partner-code-cell'
+import { CommissionRateCell } from './commission-rate-cell'
+import { PartnerStatusButton } from './partner-status-button'
 
 export const metadata: Metadata = { title: 'Partnerler' }
 export const dynamic = 'force-dynamic'
 
 // PARTNER YÖNETİMİ.
 //
-// Partner kodları BURADAN OLUŞTURULMUYOR: yeni partner eklemek bir
-// anlaşma sonucu ve nadir bir işlem. Arayüzden eklenebilseydi, yanlışlıkla
-// oluşturulan bir kod komisyon yükümlülüğü doğururdu. Kod veritabanından
-// elle eklenir:
+// PARTNER EKLEME ARTIK ARAYÜZDEN (068).
 //
-//   INSERT INTO public.partners (code, name, email)
-//   VALUES ('ORNEK1', 'Ad Soyad', 'eposta@ornek.com');
+// 059'dan bu yana tek yol elle INSERT'tü ve bu yorum onu tarif
+// ediyordu: her anlaşmada veritabanına bağlanmak gerekiyordu — yavaş,
+// hataya açık ve denetim izi bırakmıyordu.
+//
+// Yanlışlıkla oluşturulan bir kodun komisyon yükümlülüğü doğurması
+// riski, kodu üretmeyi engelleyerek değil ASKIYA ALINABİLİR yaparak
+// karşılanıyor: 'suspended' bir partner ne yeni atıf alır ne de
+// hakediş üretir (settle_billing_order yalnız aktif partneri arıyor).
+//
+// KOMİSYON: varsayılan %10, KDV hariç matrah üzerinden, ödeme
+// KESİNLEŞTİKTEN sonra üretilir (059 · settle_billing_order). Oran
+// partner başına ve bu ekrandan değiştirilebilir; hakediş satırları o
+// anki oranı kendi içinde sakladığı için değişiklik geçmişe işlemez.
 
 interface PartnerRow {
   partner_id: string
@@ -50,10 +62,10 @@ export default async function AdminPartnersPage() {
       render: (r) => (
         <div className="min-w-0">
           <p className="truncate font-medium">{r.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            <code>{r.code}</code>
-            {r.email && ` · ${r.email}`}
-          </p>
+          <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            <PartnerCodeCell code={r.code} />
+            {r.email && <span className="truncate">{r.email}</span>}
+          </div>
         </div>
       ),
     },
@@ -63,7 +75,11 @@ export default async function AdminPartnersPage() {
       align: 'right',
       hideBelow: 'md',
       render: (r) => (
-        <span className="tabular-nums">%{Math.round(Number(r.commission_rate) * 100)}</span>
+        <CommissionRateCell
+          partnerId={r.partner_id}
+          partnerName={r.name}
+          rate={Number(r.commission_rate)}
+        />
       ),
     },
     {
@@ -106,16 +122,25 @@ export default async function AdminPartnersPage() {
       key: 'action',
       header: '',
       align: 'right',
-      render: (r) =>
-        r.status !== 'active' ? (
-          <Badge variant="neutral">Askıda</Badge>
-        ) : Number(r.unpaid_kurus) > 0 ? (
-          <MarkPaidButton
+      render: (r) => (
+        <span className="flex items-center justify-end gap-1.5">
+          {r.status !== 'active' && <Badge variant="neutral">Askıda</Badge>}
+          {/* ÖDEME ÖNCE: askıya alınmış bir partnerin birikmiş hakedişi
+              yerinde duruyor ve hâlâ ödenmesi gerekiyor. */}
+          {Number(r.unpaid_kurus) > 0 && (
+            <MarkPaidButton
+              partnerId={r.partner_id}
+              partnerName={r.name}
+              amount={formatKurus(Number(r.unpaid_kurus))}
+            />
+          )}
+          <PartnerStatusButton
             partnerId={r.partner_id}
             partnerName={r.name}
-            amount={formatKurus(Number(r.unpaid_kurus))}
+            status={r.status}
           />
-        ) : null,
+        </span>
+      ),
     },
   ]
 
@@ -124,6 +149,7 @@ export default async function AdminPartnersPage() {
       <PageHeader
         title="Partnerler"
         subtitle="Atıf kodları, getirilen çalışma alanları ve hakediş takibi"
+        action={<NewPartnerDialog />}
         className="mb-0"
       />
 
@@ -154,7 +180,7 @@ export default async function AdminPartnersPage() {
             icon: Handshake,
             title: 'Henüz partner yok',
             description:
-              'Partner kodları anlaşma sonrası veritabanından eklenir; bu ekrandan oluşturulmaz.',
+              '"Partner Ekle" ile bir kod oluşturun; partner o kodun bağlantısını paylaşarak müşteri getirir.',
           }}
         />
       </Section>
