@@ -1,5 +1,5 @@
-import { GraduationCap } from 'lucide-react'
 import { BRAND } from '@/lib/brand'
+import { BrandMark } from '@/components/shared/brand-mark'
 
 interface AuthShellProps {
   title: string
@@ -17,9 +17,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
     <div className="flex min-h-screen">
       <div className="hidden w-[420px] shrink-0 flex-col justify-between bg-sidebar p-10 lg:flex">
         <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-md bg-sidebar-accent">
-            <GraduationCap className="size-4 text-sidebar-foreground" />
-          </div>
+          <BrandMark size={32} />
           <span className="text-sm font-semibold text-sidebar-foreground">{BRAND.name}</span>
         </div>
 
@@ -40,9 +38,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
       <div className="flex flex-1 items-center justify-center bg-background p-6 md:p-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex size-8 items-center justify-center rounded-md bg-muted">
-              <GraduationCap className="size-4 text-muted-foreground" />
-            </div>
+            <BrandMark size={32} />
             <span className="text-sm font-semibold">{BRAND.name}</span>
           </div>
 

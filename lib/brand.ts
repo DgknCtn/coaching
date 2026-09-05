@@ -10,10 +10,10 @@
 
 export const BRAND = {
   /** Kısa ad — navbar, footer, e-posta metinleri. */
-  name: 'Etüt',
+  name: 'İZ',
 
   /** Uzun ad — sayfa başlıkları ve resmî metinler. */
-  fullName: 'Etüt',
+  fullName: 'İZ',
 
   /** Tek cümlelik ne olduğu. */
   tagline: 'Öğrenci takibini Excel\'den kurtaran koçluk ve ders takip platformu',
@@ -25,7 +25,7 @@ export const BRAND = {
    * DEĞİŞTİRİN: alan adı alındığında gerçek adresle güncellenmeli.
    * Şu an yer tutucu; e-posta kutusu yoksa buton çalışmaz.
    */
-  contactEmail: 'iletisim@etut.app',
+  contactEmail: 'iletisim@iz.app',
 
   /** Telif satırı için başlangıç yılı. */
   since: 2026,

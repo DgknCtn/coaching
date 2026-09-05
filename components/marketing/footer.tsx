@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { GraduationCap } from 'lucide-react'
 import { BRAND, contactMailto } from '@/lib/brand'
+import { BrandMark } from '@/components/shared/brand-mark'
 
 export function Footer() {
   return (
@@ -10,9 +10,7 @@ export function Footer() {
           {/* Logo + tagline */}
           <div className="flex flex-col items-center md:items-start gap-2">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="flex size-8 items-center justify-center rounded-md bg-primary">
-                <GraduationCap className="size-4 text-primary-foreground" />
-              </div>
+              <BrandMark size={32} />
               <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
             </Link>
             <p className="text-sm text-muted-foreground">

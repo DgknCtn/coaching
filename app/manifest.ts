@@ -34,10 +34,10 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     orientation: 'portrait',
 
-    // Açılış ekranının rengi. Koyu tema kullanıcısında bile açılış beyaz
-    // yanıp sönmesin diye arka plan marka moruyla eşleşiyor.
-    background_color: '#5a58c2',
-    theme_color: '#5a58c2',
+    // Açılış ekranının rengi. İkonların zemini krem; açılış ekranı da aynı
+    // kremle başlasın ki ikon ile splash arasında kenar çizgisi görünmesin.
+    background_color: '#f6efe8',
+    theme_color: '#bd4816',
 
     icons: [
       {

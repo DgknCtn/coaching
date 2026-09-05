@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { GraduationCap, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { BRAND } from '@/lib/brand'
+import { BrandMark } from '@/components/shared/brand-mark'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
 
@@ -30,9 +31,7 @@ export function Navbar() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="flex size-8 items-center justify-center rounded-md bg-primary">
-              <GraduationCap className="size-4 text-primary-foreground" />
-            </div>
+            <BrandMark size={32} />
             <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
           </Link>
 

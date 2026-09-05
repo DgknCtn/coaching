@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ChevronDown,
-  GraduationCap,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
+import { BrandMark } from '@/components/shared/brand-mark'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/app/(auth)/actions'
 import {
@@ -173,9 +173,7 @@ export function AppSidebar({
   function inner(compact: boolean) {
     const brand = (
       <div className={cn('mb-4 flex items-center gap-2.5', compact ? 'justify-center px-3' : 'px-5')}>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sidebar-primary to-primary">
-          <GraduationCap className="size-4 text-sidebar-primary-foreground" />
-        </div>
+        <BrandMark size={32} />
         {!compact && (
           <p className="truncate text-base font-semibold tracking-tight text-sidebar-foreground">
             {title}

@@ -38,12 +38,12 @@ export const metadata: Metadata = {
   },
 }
 
-// Tarayıcı arayüzünün rengi temaya göre değişmeli: tek bir mor değer,
+// Tarayıcı arayüzünün rengi temaya göre değişmeli: tek bir turuncu değer,
 // koyu temada ekranın üstünde yanan bir şerit bırakırdı.
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#5a58c2' },
-    { media: '(prefers-color-scheme: dark)', color: '#1a1a2e' },
+    { media: '(prefers-color-scheme: light)', color: '#bd4816' },
+    { media: '(prefers-color-scheme: dark)', color: '#2a1a12' },
   ],
 }
 
