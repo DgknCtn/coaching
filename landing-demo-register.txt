@@ -1,0 +1,950 @@
+site sekme kısmında İZ - Türkiye'nin Koçluk Takip Platformu yazsın 
+
+landing page kısmında bazı değişiklikler istiyorum: 
+Her öğrencinin nerede kaldığını 10 saniyede görün kısmını değiştirelim "# Öğrencilerinizi takip etmek için saatlerinizi harcamayın.
+
+Ödevleri verin, ilerlemeyi görün, geride kalan öğrenciyi anında fark edin.
+
+İZ; özel ders öğretmenleri ve eğitim koçları için öğrenci, ödev ve kitap takibini tek ekranda birleştirir.
+
+Öğrenciniz ne yaptı, neyi kaçırdı, hangi kitabın neresinde kaldı?
+Hepsi tek yerde.
+
+7 gün ücretsiz deneyin →
+
+Kredi kartı gerekmez · Kurulum dakikalar içinde tamamlanır · Otomatik yenileme yok" olsun.
+
+
+footerdan excelden kurtarın mesajını değiştirelim "Öğrenci takibini tek ekranda yönetin." olsun. 
+
+
+ayrı bir section açıp şunu ekleyelim : "Öğrenci "yaptım" dedi diye iş bitmez.
+
+Gerçek ilerlemeyi siz belirleyin.
+
+Öğrenci görevini tamamladığını işaretler.
+Siz kontrol edip onayladığınızda ilerlemesi sisteme işlenir.
+
+Böylece:
+
+✓ Öğrencinin beyanı ile gerçek ilerlemeyi ayırın
+✓ Hangi öğrencinin gerçekten çalıştığını görün
+✓ İlerleme yüzdelerini güvenilir tutun
+✓ Haftalık takibi daha kolay yönetin
+
+Kontrol sizde."
+
+bunu da ekleyelim: "Veliler artık her hafta "Çocuğum nasıl gidiyor?" diye sormak zorunda değil.
+
+Öğrencinin ödevleri, kitap ilerlemesi ve haftalık durumu velinin kendi panelinde görünür.
+
+Siz anlatmak yerine sistem göstersin.
+
+* Tamamlanan ödevler
+* Geciken görevler
+* Kitap ilerlemesi
+* Haftalık performans
+
+Böylece veli bilgilendirmesi için ekstra zaman harcamayın."
+
+
+"WhatsApp'a ödev metni kopyalama" yerine "Ödevi WhatsApp'tan saniyeler içinde gönderin." yazalım
+
+"Haftalık risk analizi" yerine "Geride kalan öğrencileri siz fark etmeden sistem fark etsin." yazalım 
+
+"Sayfa bazlı takip" yerine "Kitabın hangi sayfasında kaldığınızı otomatik takip edin." 
+
+"Üç rol, tek platform" yerine "Öğretmen yönetir. Öğrenci uygular. Veli takip eder." Altına:
+
+Herkes aynı veriyi görür, herkes kendi ekranından takip eder.
+
+Şu an:
+
+Hesabını oluştur
+Öğrencilerini ekle
+Takip et ve yönet
+
+Bunun yerine:
+
+01 — Öğrencilerinizi ekleyin
+
+Öğrenci ve velilerinize davet linki gönderin.
+
+02 — Ödevleri planlayın
+
+Kitap, test, sayfa veya video bazında haftalık görevler oluşturun.
+
+03 — Takip etmeye başlayın
+
+Kim yaptı, kim gecikti, kim geride kaldı? Tek ekrandan görün.
+
+Sonra:
+
+10 dakikada kurun. Aynı gün kullanmaya başlayın.
+
+Bu cümleyi de özellikle kullanırdım çünkü sitenizde zaten "Kurulum 10 dakika" iddiası var.
+
+Şu anda:
+
+Ücretsiz Dene
+
+var.
+
+Ben:
+
+7 Gün Ücretsiz Başla
+
+kullanırdım.
+
+Çünkü "Ücretsiz Dene" biraz SaaS jeneriği.
+
+"7 Gün Ücretsiz Başla" ise:
+
+süre + fayda + aksiyon
+
+veriyor.
+
+CTA alternatifleri:
+
+Birincil:
+
+7 Gün Ücretsiz Başla
+
+İkincil:
+
+Demoyu Gör
+
+Satın almaya yakın kullanıcı:
+
+Paketleri Gör
+
+"Söz veriyoruz" bölümü iyi fikir ama biraz fazla savunmada
+
+Şu an:
+
+Yeni bir ürüne güvenmek zor. Kolaylaştıralım.
+
+ile başlayıp:
+
+Uydurma rakam yok
+İlerlemeyi siz onaylarsınız
+Veriniz size ait
+İptal, kayıt kadar kolay
+
+şeklinde gidiyor.
+
+Bunu seviyorum.
+
+Çünkü ürün yeni olduğu için güven açığını dürüstlükle kapatmaya çalışıyorsunuz.
+
+Ama başlığı değiştirirdim:
+
+Denemek için bize güvenmek zorunda değilsiniz.
+
+Altına:
+
+Kredi kartı yok. Otomatik ödeme yok. Gerçek arayüzü deneyin.
+
+Fakat burada önemli bir satış problemi var: Sosyal kanıt yok
+
+Sitede bunu dürüstçe söylüyorsunuz:
+
+"Uydurma rakam yok."
+
+Bu etik açıdan çok iyi.
+
+Ama satış açısından boşluk yaratıyor.
+
+Şu anda müşteri:
+
+"Bunu başka hangi öğretmen kullanıyor?"
+
+diye soruyor.
+
+İlk kullanıcıları bulduğunuz anda şunları toplamaya başlayın:
+
+Öğretmen yorumu
+
+"Daha önce öğrencilerin ödevlerini WhatsApp ve Excel üzerinden takip ediyordum. Artık tüm öğrencilerimi tek ekrandan görebiliyorum."
+
+Altında:
+
+Ayşe Yılmaz — Matematik Öğretmeni
+
+ve mümkünse fotoğraf.
+
+ok önemli: "Kimin için?" bölümü ekleyin
+
+Bence ana sayfada kesinlikle olmalı.
+
+İZ kimler için?
+🎓 Özel Ders Öğretmenleri
+
+Birden fazla öğrencinin ödev ve kitap ilerlemesini tek yerden yönetin.
+
+🧠 Eğitim Koçları
+
+Öğrencilerinizin haftalık çalışma düzenini ve gecikmelerini takip edin.
+
+👥 Küçük Koçluk Ekipleri
+
+Öğrenci takibini ortak bir sistem üzerinden yönetin.
+
+Ve belki:
+
+20+ öğrenciniz varsa İZ sizin için tasarlandı.
+
+Bu son derece net bir qualification yapar.
+
+Bir de "önce / sonra" bölümü yapardım
+
+Bu SaaS için çok iyi çalışır.
+
+İZ'den önce
+
+❌ WhatsApp'ta ödevler
+❌ Excel'de öğrenci listeleri
+❌ Defterde kitap takibi
+❌ "Hocam ne yaptım?" mesajları
+❌ "Çocuğum nasıl gidiyor?" soruları
+❌ Kim geride kaldı takip edememe
+
+↓
+
+İZ'den sonra
+
+✓ Tüm öğrenciler tek ekranda
+✓ Haftalık ödev planı
+✓ Kitap ilerleme takibi
+✓ Öğretmen onaylı ilerleme
+✓ Veli kendi panelinden takip eder
+✓ Riskli öğrencileri anında görün
+
+Bu bölüm ürünün değerini 5 saniyede anlatır.
+
+Marka mesajını da biraz değiştirebiliriz
+
+Şu anda:
+
+İZ — Öğrenci takibini Excel'den kurtaran koçluk ve ders takip platformu
+
+Ben bunu daha premium yapardım:
+
+İZ — Öğretmenler için öğrenci takip platformu.
+
+veya:
+
+İZ — Öğrenci takibini tek ekranda yönetin.
+
+demo için iyileştirmelerim var 
+
+1. İlk problem: "Canlı demo" beklentiyi yanlış kuruyor
+
+Sayfanın başında:
+
+Canlı demo
+Koç, öğrenci ve veli görünümlerini keşfedin.
+
+diyorsunuz.
+
+"Canlı demo" kullanıcıda şu beklentiyi oluşturur:
+
+"Ben burada gerçekten ürünü kullanabileceğim."
+
+Ama karşısına daha çok dashboard preview çıkıyor.
+
+Bu nedenle:
+
+Şunu:
+
+Canlı demo
+
+Şuna çevirirdim:
+
+İZ'i keşfedin
+
+Altına:
+
+Gerçek bir koçluk akışının nasıl çalıştığını keşfedin.
+
+Daha sonra:
+
+Koç → Öğrenci → Veli
+
+sekmelerini bırakırdım.
+
+2. Demo'nun asıl amacı "özellik göstermek" değil, satın alma isteği yaratmak
+
+Şu anda kullanıcı şunları görüyor:
+
+Toplam öğrenci: 24
+Haftalık tamamlama: %74
+Geciken ödev: 11
+Risk altında: 3
+
+Bunlar güzel.
+
+Ama kullanıcı bunlara bakıp:
+
+"Eee?"
+
+diyebilir.
+
+Çünkü bu sayıların neden önemli olduğunu anlatmıyorsunuz.
+
+Örneğin:
+
+Şu:
+
+3 Risk altında
+
+Çok daha güçlü:
+
+3 öğrenci risk altında
+Bu hafta takibi aksayan öğrenciler
+
+veya:
+
+3 öğrenciniz alarmda
+Müdahale edilmesi gereken öğrencileri anında görün.
+
+Böylece sayı özellik olmaktan çıkıp probleme dönüşüyor.
+
+3. Dashboard KPI'larını yeniden tasarlardım
+
+Ben dört kutuyu şöyle yapardım:
+
+👥 24
+
+Aktif Öğrenci
+
+✓ 74%
+
+Bu Haftaki Görev Tamamlama
+
+⚠ 11
+
+Geciken Görev
+
+🔴 3
+
+Müdahale Gereken Öğrenci
+
+Son kutu özellikle önemli.
+
+"Risk altında" biraz kurumsal/soyut.
+
+"Müdahale gereken öğrenci" öğretmenin zihninde direkt aksiyon oluşturuyor.
+
+4. "Öğrenciler" tablosu çok basit kalmış
+
+Şu anda:
+
+Öğrenci	Durum
+Ayşe Yılmaz	İyi
+Mehmet Kaya	Dikkat
+Zeynep Arslan	Kritik
+Ali Rıza Demir	İyi
+Elif Şahin	Dikkat
+
+şeklinde.
+
+Bu bana:
+
+"Öğrenci listesi"
+
+gösteriyor.
+
+Halbuki demo'nun amacı:
+
+"Öğrencimi nasıl takip edeceğim?"
+
+sorusunu cevaplamak.
+
+Ben tabloyu şu hale getirirdim:
+
+Öğrenci	Haftalık İlerleme	Ödevler	Son Aktivite	Durum
+Ayşe Yılmaz	92%	8/8	Bugün	🟢 İyi
+Mehmet Kaya	61%	5/8	2 gün önce	🟡 Dikkat
+Zeynep Arslan	34%	3/9	4 gün önce	🔴 Müdahale
+Ali Rıza Demir	87%	7/8	Bugün	🟢 İyi
+
+Böylece öğretmen tek bakışta karar verebilir.
+
+5. En önemli eksik: "Öğrenciye tıklama" hissi
+
+Bence demodaki en büyük fırsat bu.
+
+Kullanıcı:
+
+Zeynep Arslan
+
+üzerine tıklamalı.
+
+Sonra karşısına:
+
+Zeynep Arslan
+
+11. Sınıf · YKS
+
+Bu hafta
+
+3 / 9 görev tamamlandı
+
+██████░░░░ 34%
+
+Gecikenler
+
+🔴 TYT Matematik — Test 4
+🔴 Fizik — 30 soru
+🟡 Paragraf — 20 soru
+
+Kitap ilerlemesi
+
+TYT Matematik
+
+Sayfa 184 / 320
+
+%57
+
+Koç notu
+
+"Matematikte son iki haftadır gerileme var."
+
+Son aktivite
+
+4 gün önce
+
+6. Koç / Öğrenci / Veli sekmeleri çok iyi fikir
+
+Bunu kesinlikle koruyun.
+
+Ama sekmelerin üzerinde küçük bir açıklama olabilir:
+
+KOÇ
+
+Yönet ve takip et
+
+ÖĞRENCİ
+
+Ne yapacağını gör
+
+VELİ
+
+İlerlemeyi takip et
+
+Bu küçük değişiklik bile ürünün mantığını çok daha hızlı anlatır.
+
+Şu an sadece:
+
+Koç
+Öğrenci
+Veli
+
+yazıyor.
+
+7. Öğrenci görünümü özellikle satış için çok önemli
+
+Öğretmenin ürününü satarken aslında şu mesajı vermelisin:
+
+"Öğrenci uygulamayı kullanmak zorunda kalır."
+
+Öğrenci ekranında örneğin:
+
+Bugünkü görevlerin
+📘 TYT Matematik
+
+Test 12 — 20 soru
+
+20 / 20 tamamlandı ✓
+
+📕 Türkçe
+
+Paragraf — 30 soru
+
+18 / 30
+
+📗 Fizik
+
+Kuvvet ve Hareket
+
+Başlamadı
+
+Sonra:
+
+Bugün 2 görev kaldı.
+
+Bu ekran öğretmene şunu düşündürmeli:
+
+"Öğrencime sadece ödev vermiyorum, ne yaptığını da görebiliyorum."
+
+8. Veli ekranı ise satışta gizli silahınız
+
+Bence burası çok daha güçlü pazarlanabilir.
+
+Veli ekranına girildiğinde:
+
+Ahmet'in Bu Haftası
+
+Toplam görev: 12
+Tamamlanan: 10
+Geciken: 2
+
+📈 Haftalık ilerleme
+
+%83
+
+Bu hafta
+
+✓ 10 görev tamamlandı
+⚠ 2 görev gecikti
+
+Kitaplar
+
+TYT Matematik — %62
+TYT Türkçe — %48
+
+Ve:
+
+Koçu tarafından doğrulanan ilerleme
+
+ibaresi.
+
+Bu son özellik sizin için çok önemli bir güven unsuru.
+
+9. "2025–2026 YKS dönemi" tarihini düzeltin
+
+Demo şu anda:
+
+2025–2026 YKS dönemi
+
+gösteriyor.
+
+Bugün 5 Eylül 2026 olduğu için bu demo artık eski görünür.
+
+Özellikle satış sitesinde böyle küçük şeyler:
+
+"Acaba ürün hala aktif geliştiriliyor mu?"
+
+hissi yaratabilir.
+
+Demo verisini:
+
+2026–2027 YKS Dönemi
+
+yapardım.
+
+Hatta daha iyisi:
+
+2026–2027 YKS Hazırlık
+
+10. Sahte isimler konusunda bir şey yapardım
+
+Şu anda:
+
+Ayşe Yılmaz
+Mehmet Kaya
+Zeynep Arslan
+Ali Rıza Demir
+Elif Şahin
+
+kullanılıyor.
+
+Sorun değil ama demo olduğu çok belli.
+
+Ben bunu biraz daha gerçek ürün hissi verecek şekilde yapardım.
+
+Örneğin:
+
+Ayşe Y.
+
+Sınıf · YKS
+
+veya kullanıcıların tamamını maskeleyebilirsiniz.
+
+Ayrıca:
+
+Demo Verisi
+
+ibaresini küçük şekilde koymak hukuki/güven açısından daha temiz olur.
+
+11. Demo'nun altında "Hazır mısınız?" biraz zayıf
+
+Şu anda:
+
+Hazır mısınız?
+
+Ücretsiz hesabınızı oluşturun, dakikalar içinde öğrencilerinizi takip etmeye başlayın.
+
+Ücretsiz Başla
+
+var.
+
+Bu standart SaaS copy'si.
+
+Ben burada çok daha spesifik bir CTA kullanırdım:
+
+# Öğrenci takibini bugün İZ'e taşıyın.
+
+WhatsApp, Excel ve not defterleri arasında kaybolmadan tüm öğrencilerinizi tek ekrandan yönetin.
+
+**7 gün ücretsiz başlayın.**
+
+Kredi kartı gerekmez · Kurulum gerekmez
+
+**[7 Gün Ücretsiz Başla]**
+
+12. Demo içinde satış mesajı eksik
+
+Bence dashboard'un üstüne küçük bir banner koyabilirsiniz:
+
+24 öğrencinizi tek ekrandan yönetin.
+
+veya daha güçlü:
+
+Kim iyi gidiyor, kim geride kalıyor? Tek bakışta görün.
+
+Altında:
+
+Ödevler · Kitaplar · İlerleme · Riskler
+
+Bu çok daha satış odaklı.
+
+13. Ben olsam demoyu "mini ürün turu"na dönüştürürdüm
+
+Asıl önerim bu.
+
+Kullanıcı demo sayfasına girdiğinde:
+
+Adım 1
+
+Koç Paneli
+
+24 öğrencinizin genel durumunu görün.
+
+↓
+
+Adım 2
+
+Bir öğrenciyi seçin
+
+Zeynep'in neden risk altında olduğunu inceleyin.
+
+↓
+
+Adım 3
+
+Ödev detayına girin
+
+Hangi görevlerin geciktiğini görün.
+
+↓
+
+Adım 4
+
+Öğrenci görünümü
+
+Öğrencinin günlük görevlerini görün.
+
+↓
+
+Adım 5
+
+Veli görünümü
+
+Velinin ne gördüğünü keşfedin.
+
+↓
+
+Son
+
+Artık kendi öğrencilerinizi yönetmeye başlayın.
+
+[7 Gün Ücretsiz Başla]
+
+Bu durumda demo özellik kataloğu değil, satış hunisinin bir parçası olur.
+
+Register ekranı için iyileştirmelerim var :
+
+1. "Hesap oluşturun" çok jenerik
+
+Bence en büyük copy problemi bu.
+
+Kullanıcı zaten bir kayıt formu gördüğünü biliyor.
+
+"Hesap oluşturun" demek yerine elde edilen sonucu söylemek daha iyi.
+
+Ben:
+
+Öğrenci takibinizi bugün İZ'e taşıyın.
+
+veya daha direkt:
+
+Öğrencilerinizi yönetmeye başlayın.
+
+kullanırdım.
+
+Altına:
+
+7 gün boyunca tüm özellikleri ücretsiz deneyin. Kredi kartı gerekmez.
+
+Bu çok daha satış odaklı.
+
+2. "7 gün ücretsiz" çok daha görünür olmalı
+
+Şu an:
+
+7 gün ücretsiz deneme, kurulum gerektirmez
+
+küçük bir açıklama gibi duruyor.
+
+Halbuki bu sizin en önemli conversion argümanınız.
+
+Bunu:
+
+🎁 7 GÜN ÜCRETSİZ DENEYİN
+
+Kredi kartı gerekmez.
+Otomatik ödeme yok.
+İstediğiniz zaman iptal edin.
+
+şeklinde görsel olarak öne çıkarırdım.
+
+Özellikle yeni bir SaaS olduğunuz için kullanıcıdaki:
+
+"Ya kayıt olduktan sonra para isterlerse?"
+
+çekincesini kırmanız gerekiyor.
+
+3. Form biraz fazla "boş"
+
+Şu anda kullanıcı:
+
+Ad Soyad
+
+E-posta
+
+Şifre
+
+Çalışma Alanı Adı
+
+alanlarını görüyor.
+
+Burada formun yanında veya altında değer önerisi bulunmuyor.
+
+Ben formun hemen üstüne küçük bir checklist koyardım:
+
+İlk 10 dakikada:
+
+✓ Öğrencilerinizi ekleyin
+✓ İlk ödevinizi oluşturun
+✓ Kitap takibini başlatın
+✓ Öğrencinizin ilerlemesini görün
+
+Bu, kullanıcının zihninde:
+
+"Kayıt olduktan sonra ne olacak?"
+
+sorusunu cevaplıyor.
+
+4. CTA "Hesap Oluştur" yerine değişmeli
+
+Şu anda:
+
+Hesap Oluştur
+
+Bence bunu kesinlikle değiştirirdim.
+
+Alternatifler:
+
+7 Gün Ücretsiz Başla ← favorim
+
+Ücretsiz Denemeyi Başlat
+
+Öğrencilerimi Takip Etmeye Başla
+
+Ben üçüncüyü bile ciddi şekilde düşünürdüm.
+
+Çünkü:
+
+Hesap oluştur
+
+bir teknik işlem.
+
+Öğrencilerimi takip etmeye başla
+
+bir sonuç.
+
+5. Google ile devam et çok iyi
+
+Bunu kesinlikle koruyun.
+
+Çünkü kullanıcı için:
+
+Google ile devam et
+
+1 tıklama
+
+Ad + email + şifre:
+
+30-60 saniye
+
+demek.
+
+Ama Google butonunun altına:
+
+En hızlı yöntem
+
+gibi küçük bir ibare eklenebilir.
+
+Örneğin:
+
+[ Google ile devam et ]
+
+30 saniyede hesabınızı oluşturun.
+
+6. "Çalışma Alanı Adı" bana biraz gereksiz geliyor
+
+Bu alan:
+
+Çalışma Alanı Adı (isteğe bağlı)
+Örn. Ahmet Hoca'nın Sınıfı
+
+İlk kayıt aşamasında kullanıcıya:
+
+"Çalışma alanı nedir?"
+
+sorusunu sordurabilir.
+
+Özellikle ürününüzün ilk kullanımında friction azaltmak istiyoruz.
+
+Ben bunu registration'dan çıkarırdım.
+
+Kullanıcı kayıt olduktan sonra:
+
+İZ'e hoş geldiniz 👋
+Çalışma alanınızı oluşturalım.
+
+şeklinde onboarding'de sorardım.
+
+7. Asıl fırsat: Registration + onboarding'i birleştirmek
+
+Burada çok daha iyi bir funnel yapabilirsiniz.
+
+Aşama 1 — Kayıt
+Öğrenci takibinizi bugün İZ'e taşıyın.
+
+Google ile devam et
+
+veya
+
+Ad Soyad
+E-posta
+Şifre
+
+[7 Gün Ücretsiz Başla]
+
+Kredi kartı gerekmez.
+
+Aşama 2 — Hoş geldiniz
+Hoş geldiniz 👋
+
+Önce sizi tanıyalım.
+
+Kaç öğrenciniz var?
+
+○ 1–10
+○ 11–25
+○ 26–50
+○ 50+
+
+Aşama 3
+İZ'i en çok ne için kullanacaksınız?
+
+□ Ödev takibi
+□ Kitap takibi
+□ Öğrenci performansı
+□ Veli takibi
+□ Hepsi
+
+Aşama 4
+İlk öğrencinizi ekleyin.
+
+Ad Soyad
+
+Sınıf
+
+Veli iletişim bilgisi
+
+[Öğrenciyi Ekle]
+
+Aşama 5
+
+🎉 Hazırsınız!
+
+İlk öğrenciniz için ilk görevi oluşturun.
+
+[İlk Ödevi Oluştur]
+
+Bu çok daha iyi bir SaaS onboarding deneyimi olur.
+
+8. Registration ekranında güven unsuru eksik
+
+Ben formun altında küçük bir güven satırı koyardım:
+
+🔒 Bilgileriniz güvenle saklanır
+💳 Kredi kartı gerekmez
+🔄 İstediğiniz zaman iptal edin
+⚡ Kurulum gerektirmez
+
+Bunlar küçük şeyler ama özellikle yeni bir SaaS'ta kayıt dönüşümünü etkileyebilir.
+
+9. Landing page → Demo → Register akışınız böyle olmalı
+
+Bence İZ için ideal funnel:
+
+LANDING PAGE
+
+Öğrencilerinizi tek ekrandan yönetin.
+
+↓
+
+Demo'yu Keşfet
+
+↓
+
+DEMO
+
+Bakın, öğretmen paneli böyle.
+
+Bakın, öğrenci böyle görüyor.
+
+Bakın, veli böyle görüyor.
+
+↓
+
+Kendi öğrencilerinizde deneyin
+
+↓
+
+REGISTER
+
+Öğrenci takibinizi bugün İZ'e taşıyın.
+
+7 gün ücretsiz.
+
+↓
+
+ONBOARDING
+
+Öğrencinizi ekleyin.
+
+↓
+
+İlk ödevinizi verin.
+
+↓
+
+Takip etmeye başlayın.
+
+Bu funnel bana çok daha güçlü geliyor.

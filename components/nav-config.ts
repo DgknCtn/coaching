@@ -135,11 +135,16 @@ export const teacherNav: NavEntry[] = [
 ]
 
 /**
- * Öğrenci bağlamındaki gezinme (sol menünün ikinci grubu).
+ * Öğrenci çalışma masasının SEKMELERİ (067).
  *
  * Bu ekranlar öğrenciye özeldir — hepsi URL'de bir öğrenci id'si taşır. Bu
- * yüzden sabit bir dizi değil, id alan bir ÜRETİCİ: sidebar aktif öğrenciyi
- * URL'den çözer ve grubu yalnız o zaman gösterir.
+ * yüzden sabit bir dizi değil, id alan bir ÜRETİCİ.
+ *
+ * ARTIK SOL MENÜDE DEĞİL, ÜSTTEKİ SEKME ŞERİDİNDE render ediliyor
+ * (app/(dashboard)/teacher/students/[studentId]/student-tabs.tsx). Sol
+ * menüde de aynı beşini listelemek, ekranda aynı bağlantıyı iki kez
+ * göstermek olurdu; sidebar artık yalnız "Genel Bakış"a bir dönüş yolu
+ * bırakıyor (studentOverviewNav).
  *
  * "Genel Bakış" exact işaretlidir; olmasaydı alt rotalarda (ör. /goals) hem
  * kendisi hem Genel Bakış aktif görünürdü.
@@ -153,6 +158,25 @@ export function studentContextNav(studentId: string): NavItem[] {
       label: s.label,
       icon: s.icon,
     })),
+  ]
+}
+
+/**
+ * Sol menüdeki öğrenci bloğu — TEK bağlantı.
+ *
+ * Beş ekran yukarıdaki sekme şeridine taşındıktan sonra sidebar'ın işi
+ * yalnız çalışma masasının köküne dönüş yolu bırakmak. Ayrı bir fonksiyon
+ * olarak duruyor ki sidebar `studentContextNav(...)[0]` gibi sıraya bağımlı
+ * bir dilim almasın: sekme sırası değiştiğinde menü sessizce bozulurdu.
+ */
+export function studentOverviewNav(studentId: string): NavItem[] {
+  return [
+    {
+      href: `/teacher/students/${studentId}`,
+      label: 'Genel Bakış',
+      icon: LayoutDashboard,
+      exact: true,
+    },
   ]
 }
 

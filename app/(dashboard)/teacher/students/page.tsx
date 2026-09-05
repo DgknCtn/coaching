@@ -1,5 +1,8 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { Plus, Users } from 'lucide-react'
+import { LAST_STUDENT_COOKIE, resolveLastStudentId } from '@/lib/last-student'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
@@ -45,6 +48,30 @@ export default async function StudentsPage({
     .limit(500)
 
   const rows = (students ?? []) as StudentRow[]
+
+  // SON ÇALIŞILAN ÖĞRENCİYE DOĞRUDAN GİT (067).
+  //
+  // Menüden "Kaynak Planı" gibi bir ekran seçildiğinde (?ekran=...) bu
+  // liste bir SEÇİM ADIMI olarak araya giriyor. Öğretmen genellikle aynı
+  // öğrenci üzerinde çalıştığı için bu adım her ekran değişiminde
+  // tekrarlanan bir vergiye dönüşmüştü.
+  //
+  // Çerezdeki kimlik listeye karşı doğrulanır (resolveLastStudentId):
+  // arşivlenmiş, başka çalışma alanına ait ya da kurcalanmış bir değer
+  // yönlendirme yapmaz, liste gösterilir.
+  //
+  // ?ekran= YOKKEN YÖNLENDİRME YOK: "Öğrenciler" bağlantısı listeyi
+  // görmek için var; onu da atlamak, öğretmeni kendi listesine
+  // ulaşamaz hâle getirirdi.
+  if (screen) {
+    const lastStudentId = resolveLastStudentId(
+      (await cookies()).get(LAST_STUDENT_COOKIE)?.value,
+      rows.map((r) => r.student_id)
+    )
+    if (lastStudentId) {
+      redirect(`/teacher/students/${lastStudentId}/${screen.path}`)
+    }
+  }
 
   const columns: Column<StudentRow>[] = [
     {

@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadProtectionPoolData } from '@/lib/protection-pool-rows'
 import { PageHeader } from '@/components/shared/page-header'
-import { Badge } from '@/components/ui/badge'
 import { ProtectionPoolClient } from './pool-client'
 
 // Koruma Havuzu (R5.4).
@@ -44,15 +43,13 @@ export default async function StudentProtectionPoolPage({
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
       <PageHeader
-        backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} — Koruma Havuzu`}
+        // BAŞLIKTA ÖĞRENCİ ADI YOK (067): ad, sınıf ve sınav rozetleri
+        // artık çalışma masasının üst şeridinde — sekmelerle birlikte
+        // gezinme boyunca yerinde duruyor. Burada tekrarlamak, aynı bilgiyi
+        // ekranda iki kez göstermek olurdu. Geri düğmesi de gereksiz:
+        // "Genel Bakış" bir sekme.
+        title="Koruma Havuzu"
         subtitle="Daha önce çalışılmış ancak uzun süredir doğrudan temas edilmeyen konular."
-        badges={
-          <>
-            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
-          </>
-        }
       />
 
       <ProtectionPoolClient

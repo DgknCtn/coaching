@@ -407,18 +407,19 @@ export default async function StudentDetailPage({
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
-        backHref="/teacher/students"
-        title={student.full_name}
+        // AD VE SINIF BURADA DEĞİL (067): çalışma masasının üst şeridinde,
+        // sekmelerle birlikte duruyor ve gezinme boyunca yerinde kalıyor.
+        // Burada kalan tek kimlik bilgisi İLETİŞİM — o şeride sığmayan ve
+        // yalnız bu ekranda işe yarayan kısım.
+        //
+        // Geri düğmesi kaldırıldı: "Genel Bakış" artık bir sekme, listeye
+        // dönüş yolu sol menüdeki "Öğrenciler".
+        title="Genel Bakış"
         subtitle={
-          [student.grade_level, student.email, student.phone]
-            .filter(Boolean)
-            .join(' · ') || undefined
+          [student.email, student.phone].filter(Boolean).join(' · ') || undefined
         }
-        badges={
-          student.exam_type ? <Badge variant="neutral">{student.exam_type}</Badge> : undefined
-        }
-        // Akış / Kaynak Planı / Koruma / Rapor artık sol menünün öğrenci
-        // grubunda; başlıkta yalnız bu ekranın kendi eylemleri kalıyor.
+        // Akış / Kaynak Planı / Koruma / Rapor üstteki sekme şeridinde;
+        // başlıkta yalnız bu ekranın kendi eylemleri kalıyor.
         action={
           <div className="flex items-center gap-2">
             <Button

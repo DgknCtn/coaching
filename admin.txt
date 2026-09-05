@@ -1,0 +1,621 @@
+1. Üst KPI'lar iyi ama biraz daha anlamlı hale getirilmeli
+
+Şu an:
+
+4 Çalışma Alanı
+1 Denemede
+0 Lisanslı
+11 Aktif Öğrenci
+0 Açık Talep
+0 ₺ Toplam Tahsilat
+
+Bence temel mantık doğru. Fakat bunlar biraz "database count".
+
+Ben admin gözüyle şunları görmek isterdim:
+
+Mevcut
+
+4
+Çalışma Alanı
+
+Bunun yerine
+
+4
+Toplam Çalışma Alanı
+
+1
+Denemede
+
+→
+
+1
+Aktif Deneme
+
+0
+Lisanslı
+
+→
+
+0
+Aktif Lisans
+
+11
+Aktif Öğrenci
+
+→ bunu kesinlikle koru.
+
+0
+Açık Talep
+
+→ çok iyi.
+
+0 ₺
+Toplam Tahsilat
+
+Burada özellikle:
+
+Tahsilat
+
+yanına dönem koyardım.
+
+Çünkü ileride:
+
+0 ₺
+
+çok anlamsız hale gelecek.
+
+Örneğin:
+
+0 ₺
+Bu Ay Tahsilat
+
+veya:
+
+35.100 ₺
+Toplam Tahsilat
+
+2. Sana en çok lazım olacak KPI eksik
+
+Bence en önemli eksik:
+
+Dönüşüm Oranı
+
+Şu anda:
+
+1 deneme
+0 lisans
+
+görüyorsun.
+
+Ama sistem sana:
+
+Deneme → Lisans dönüşüm: %0
+
+demeli.
+
+İleride:
+
+100 deneme
+18 lisans
+
+olduğunda:
+
+%18
+
+Deneme → Lisans Dönüşümü
+
+görmek çok değerli.
+
+3. Bir başka kritik KPI: MRR / ARR
+
+Sen SaaS yaptığın için admin panelinin en üstünde zamanla mutlaka:
+
+MRR
+
+Aylık Tekrarlayan Gelir
+
+veya senin modelin tek çekim lisans ise:
+
+Aktif Lisans Değeri
+
+olmalı.
+
+Çünkü senin gerçek iş metriğin:
+
+Kaç öğretmen kayıt oldu?
+
+değil.
+
+Kaç öğretmen para ödüyor ve ne kadar gelir üretiyorum?
+
+4. Şu an "Koçlar" başlığı yanlış olabilir
+
+Tablonun altında:
+
+Koçlar
+
+yazıyor.
+
+Ama senin sisteminde kullanıcı:
+
+Öğretmen
+
+olarak geçiyor.
+
+Landing page'de de öğretmen diyorduk.
+
+Dolayısıyla admin panelinde:
+
+Çalışma Alanları
+
+veya:
+
+Müşteriler
+
+çok daha doğru.
+
+Çünkü tablo aslında koçları değil:
+
+Workspace / müşteri hesaplarını
+
+gösteriyor.
+
+5. Tablo bence iyi ama kolonlar biraz yeniden düzenlenmeli
+
+Şu anda:
+
+Çalışma alanı
+Sahip
+Kayıt
+Öğrenci
+Durum
+Kalan
+Tahsilat
+Partner
+
+gayet mantıklı.
+
+Ama benim önerim:
+
+Çalışma Alanı	Sahip	Öğrenci	Plan	Durum	Bitiş	Tahsilat
+Burak Yakıcı	Burak Yakıcı	8	10 öğrenci / 12 ay	Aktif	04.09.27	35.100 ₺
+
+Burada Plan kolonunun eklenmesi önemli.
+
+Şu an:
+
+Öğrenci: 8
+Durum: institution
+
+bana yeterli bilgi vermiyor.
+
+6. "institution" kesinlikle değişmeli
+
+Bu çok küçük görünüyor ama profesyonellik açısından önemli.
+
+Tabloda:
+
+institution
+
+yazıyor.
+
+Kullanıcı Türkçe bir sistemde ve diğer her şey Türkçe.
+
+Bunu:
+
+Kurum
+
+veya daha doğru olarak:
+
+Özel Hesap
+
+gibi bir yapıya dönüştür.
+
+Hatta "institution" gerçekten bir hesap tipi ise:
+
+Hesap Tipi
+Öğretmen
+Kurum
+Partner
+Demo
+
+gibi Türkçe karşılıkları kullan.
+
+7. "Deneme" çok güzel ama 14 günün ne zaman biteceğini de göster
+
+Şu an:
+
+Deneme
+14 gün
+
+var.
+
+Bunu biraz daha aksiyonel yap:
+
+🟡 Deneme
+
+14 gün kaldı
+
+ve hatta ileride:
+
+🔴 2 gün kaldı
+
+gibi otomatik renk değişsin.
+
+Daha da güzeli:
+
+Deneme bitiş: 19.09.2026
+
+8. En önemli özellik: "Son Aktivite"
+
+Bunu kesinlikle eklerdim.
+
+Örneğin:
+
+Çalışma Alanı	Öğrenci	Durum	Son Aktivite
+Burak Yakıcı	8	Aktif	5 dk önce
+Doğu	3	Aktif	2 gün önce
+Ödeme Test	0	Deneme	4 saat önce
+
+Bu sana şunu gösterecek:
+
+"Bu müşteri ürünü gerçekten kullanıyor mu?"
+
+Bu SaaS açısından çok önemli.
+
+9. Çünkü asıl ihtiyacın "müşteri sağlık durumu"
+
+İleride şunu görmek isteyeceksin:
+
+Burak Yakıcı
+
+🟢 Sağlıklı
+
+8 öğrenci
+Son aktivite: 12 dk önce
+Bu hafta 43 görev tamamlandı
+Deneme: Yok
+Lisans: Aktif
+
+Doğu
+
+🟡 Düşük Aktivite
+
+3 öğrenci
+Son aktivite: 5 gün önce
+
+X Hoca
+
+🔴 Riskli
+
+Deneme bitimine 2 gün
+0 öğrenci eklenmiş
+
+Bu noktada admin paneli gerçekten iş zekası paneline dönüşür.
+
+10. "Koç detayına" kesinlikle tıklanabilmeli
+
+Şu anda tablo var.
+
+Ben her satırı:
+
+tıklanabilir
+
+yapardım.
+
+Örneğin Burak Yakıcı'ya tıklayınca:
+
+Burak Yakıcı
+
+Burak Yakıcı Workspace
+
+Genel Bakış
+
+8 Öğrenci
+
+10 Öğrenci Lisansı
+
+12 Ay
+
+35.100 ₺
+
+🟢 Aktif
+
+Kullanım
+
+Son giriş: 12 dk önce
+
+Bu ay:
+
+8 öğrenci
+47 ödev
+41 tamamlanan görev
+6 geciken görev
+Lisans
+
+Başlangıç: 04.09.2026
+Bitiş: 04.09.2027
+
+10 / 10 öğrenci
+
+Ödeme
+
+35.100 ₺
+
+🟢 Ödendi
+
+Destek
+
+0 açık talep
+
+Burası sana müşteri 360° ekranı olur.
+
+11. "Açık Talep" KPI'ı çok değerli
+
+Bunu koru.
+
+Ama:
+
+0 Açık Talep
+
+üzerine tıklayınca:
+
+Destek Talepleri
+
+sayfasına gitmeli.
+
+Örneğin:
+
+🔴 3 Kritik
+🟡 5 Bekliyor
+🔵 2 İnceleniyor
+
+Böylece dashboard sadece bilgi göstermiyor, aksiyon merkezine dönüşüyor.
+
+12. Partner kolonu da ileride çok önemli olabilir
+
+Şu an:
+
+Partner
+
+var.
+
+Bu aslında bence iyi düşünülmüş.
+
+Çünkü ileride:
+
+Öğretmen → Partner → İZ
+
+modeline gidersen:
+
+Partner
+Partner öğrencisi
+Partner geliri
+Komisyon
+Partner bazlı lisans
+
+takibi yapabilirsin.
+
+Ama şu anda boşsa tablonun çok fazla kolonla seyrelmesine gerek yok.
+
+Partner kullanan hesaplarda gösterilebilir.
+
+13. Admin paneline "Aksiyonlar" alanı ekle
+
+Bence üst KPI'ların altına çok faydalı bir bölüm:
+
+Dikkat Gerektirenler
+
+🔴 2 deneme hesabının süresi 3 gün içinde bitiyor
+
+🟡 1 ödeme bekliyor
+
+🟡 3 açık destek talebi var
+
+🔴 1 müşterinin lisans limiti doldu
+
+Bu bölüm senin için ana sayfanın en değerli bölümü olabilir.
+
+Çünkü admin panelini açtığında:
+
+"Neler oluyor?"
+
+sorusunun cevabını direkt alırsın.
+
+14. Bir de "Son aktiviteler" koyardım
+
+Örneğin:
+
+Son Aktiviteler
+
+🟢 Burak Yakıcı
+8. öğrenci eklendi
+5 dk önce
+
+💳 Doğu Test
+10 öğrenci / 12 ay lisans satın alma işlemi başlattı
+12 dk önce
+
+📝 Burak Yakıcı
+Yeni destek talebi oluşturdu
+1 saat önce
+
+👤 Yeni çalışma alanı oluşturuldu
+Ödeme Test Workspace
+4 saat önce
+
+Bu çok güzel bir admin deneyimi yaratır.
+
+15. Admin panelinde grafik şart mı?
+
+Şu an hayır.
+
+Bence grafik koymak için grafik koymayın.
+
+Ama veri oluşmaya başladığında:
+
+Son 30 Gün
+
+Yeni Çalışma Alanları
+
+📈
+
+Denemeler
+
+📈
+
+Lisans Satışları
+
+📈
+
+Tahsilat
+
+📈
+
+çok değerli olur.
+
+Özellikle aylık büyümeyi görmek için.
+
+16. Güvenlik tarafında ise burası çok önemli
+
+Bunu özellikle söylemek istiyorum çünkü artık gerçek kullanıcı verileri tutacaksınız.
+
+Admin paneli için:
+
+Mutlaka
+Admin rol kontrolü
+Server-side authorization
+Normal öğretmenin /admin endpointlerine erişememesi
+Admin API'lerinin ayrıca korunması
+Audit log
+Kim hangi işlemi yaptı?
+Lisans değişiklikleri loglanmalı
+Ödeme durumu değişiklikleri loglanmalı
+Kullanıcı silme işlemlerinde onay
+Kritik işlemlerde mümkünse ikinci onay
+
+olmalı.
+
+Özellikle frontend'de "admin" butonunu gizlemek güvenlik değildir.
+
+Backend de:
+
+role === admin
+
+kontrolü yapmalı.
+
+Bu SaaS büyüdükçe çok önemli olacak.
+
+17. Şu anki panelin bence en büyük problemi
+
+Aslında tasarım değil.
+
+Operasyonel bilgi eksikliği.
+
+Şu anda panel sana:
+
+"Sistemde ne var?"
+
+diyor.
+
+Benim istediğim:
+
+"Sistemde şu anda ne oluyor ve benim ne yapmam gerekiyor?"
+
+demesi.
+
+Bu ikisi çok farklı.
+
+Ben olsam admin ana sayfasını şöyle yapardım
+
+İZ Yönetim
+
+                         [ 🔍 Ara ]     [ PaneIe Dön ]
+
+────────────────────────────────────────────────────────
+
+4             1             0             11
+Çalışma       Aktif         Aktif         Aktif
+Alanı         Deneme        Lisans        Öğrenci
+
+────────────────────────────────────────────────────────
+
+0 ₺           %0            0             0
+Tahsilat      Dönüşüm       Açık Talep    Bekleyen Ödeme
+
+────────────────────────────────────────────────────────
+
+⚠ DİKKAT GEREKTİRENLER
+
+🔴 1 denemenin bitmesine 2 gün kaldı
+🟡 1 ödeme bekliyor
+🟢 Yeni destek talebi yok
+
+────────────────────────────────────────────────────────
+
+ÇALIŞMA ALANLARI
+
+[ Ara... ] [ Durum ▼ ] [ Plan ▼ ] [ Partner ▼ ]
+
+Çalışma Alanı
+Sahip
+Öğrenci
+Plan
+Durum
+Bitiş
+Tahsilat
+
+────────────────────────────────────────────────────────
+
+Burak Yakıcı
+Burak Yakıcı
+8
+10 Öğrenci · 12 Ay
+🟢 Aktif
+04.09.2027
+35.100 ₺
+
+────────────────────────────────────────────────────────
+
+SON AKTİVİTELER
+
+● Burak Yakıcı öğrenci ekledi — 5 dk önce
+● Yeni çalışma alanı oluşturuldu — 1 saat önce
+● Destek talebi kapatıldı — 2 saat önce
+
+Benim önceliklendirmem
+🔴 P0
+
+1. institution → Türkçeleştir.
+
+2. Çalışma alanı satırlarına tıklanabilir detay ekranı ekle.
+
+3. Plan / lisans bilgisini tabloya ekle.
+
+4. "Son aktivite" ekle.
+
+5. Ödeme durumunu gerçek durumuyla göster.
+
+🟠 P1
+
+6. Dikkat Gerektirenler alanı.
+
+7. Deneme → lisans dönüşüm oranı.
+
+8. Bekleyen ödeme KPI'ı.
+
+9. Durum / plan / partner filtreleri.
+
+10. Son aktiviteler.
+
+🟢 P2
+
+11. MRR / toplam gelir.
+
+12. Grafikler.
+
+13. Partner raporları.
+
+14. Kullanıcı sağlık skoru.
+
+15. Audit log.

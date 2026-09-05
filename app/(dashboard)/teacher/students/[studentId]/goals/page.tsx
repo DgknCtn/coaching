@@ -200,15 +200,13 @@ export default async function StudentResourcePlanPage({
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
-        backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} — Kaynak Planı`}
+        // BAŞLIKTA ÖĞRENCİ ADI YOK (067): ad, sınıf ve sınav rozetleri
+        // artık çalışma masasının üst şeridinde — sekmelerle birlikte
+        // gezinme boyunca yerinde duruyor. Burada tekrarlamak, aynı bilgiyi
+        // ekranda iki kez göstermek olurdu. Geri düğmesi de gereksiz:
+        // "Genel Bakış" bir sekme.
+        title="Kaynak Planı"
         subtitle="Her kaynağın rolü, hedef kapsamı ve hedef tarihe göre durumu"
-        badges={
-          <>
-            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
-          </>
-        }
         action={
           availableBooks.length > 0 ? (
             <AssignBookDialog studentId={studentId} books={availableBooks} />

@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadOpenWorkTopicIds } from '@/lib/open-work'
 import { PageHeader } from '@/components/shared/page-header'
-import { Badge } from '@/components/ui/badge'
 import type { FlowItem } from '@/lib/curriculum-flow'
 import {
   CurriculumFlowEditor,
@@ -134,15 +133,13 @@ export default async function StudentCurriculumPage({
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
       <PageHeader
-        backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} — Müfredat Akışı`}
+        // BAŞLIKTA ÖĞRENCİ ADI YOK (067): ad, sınıf ve sınav rozetleri
+        // artık çalışma masasının üst şeridinde — sekmelerle birlikte
+        // gezinme boyunca yerinde duruyor. Burada tekrarlamak, aynı bilgiyi
+        // ekranda iki kez göstermek olurdu. Geri düğmesi de gereksiz:
+        // "Genel Bakış" bir sekme.
+        title="Müfredat Akışı"
         subtitle="Öğrencinin kişisel akademik akışı. Konuların zamanını düzenler, ileri/geri taşır, ekler veya çıkarırsınız."
-        badges={
-          <>
-            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
-          </>
-        }
       />
 
       <CurriculumFlowEditor

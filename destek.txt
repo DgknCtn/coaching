@@ -1,0 +1,368 @@
+1. "Destek" başlığı biraz kuru
+
+Şu an:
+
+Destek
+Bir sorunuz ya da sorununuz mu var? Talep açın, size buradan dönelim.
+
+Fena değil ama SaaS ürünü için daha iyi olabilir.
+
+Ben:
+
+Size nasıl yardımcı olabiliriz?
+
+Bir sorunuz mu var veya bir sorunla mı karşılaştınız?
+Destek talebinizi oluşturun, ekibimiz buradan sizinle iletişime geçsin.
+
+derdim.
+
+Bu küçük değişiklik ekranı daha insan odaklı yapıyor.
+
+2. "Yeni destek talebi" yerine "Nasıl yardımcı olabiliriz?"
+
+İkinci ekranda:
+
+Yeni destek talebi
+
+başlığı var.
+
+Bu biraz teknik.
+
+Bunun yerine:
+
+Size nasıl yardımcı olabiliriz?
+
+Altına küçük açıklama:
+
+Sorununuzu mümkün olduğunca detaylı anlatın. Böylece daha hızlı yardımcı olabiliriz.
+
+Sonra:
+
+Konu
+
+Örn. Öğrencimi sisteme ekleyemiyorum
+
+Kategori
+
+Genel ▾
+
+Mesajınız
+
+Sorunu ve mümkünse aldığınız hata mesajını açıklayın...
+
+[ Destek Talebi Oluştur ]
+
+3. "Konu" placeholder'ı geliştirilmeli
+
+Şu an:
+
+Kısaca ne hakkında?
+
+biraz belirsiz.
+
+Kullanıcıya örnek verin:
+
+Örn. Öğrenci eklerken hata alıyorum
+
+Bu küçük bir UX dokunuşu ama form doldurmayı kolaylaştırır.
+
+4. Mesaj alanı daha iyi yönlendirilmeli
+
+Şu an:
+
+Ne olduğunu ve ne beklediğinizi yazın. Ekran adı ve yaptığınız adımlar çok yardımcı olur.
+
+Bu aslında çok iyi bir metin.
+
+Bunu koruyabilirsiniz.
+
+Ama biraz daha profesyonel:
+
+Sorunu mümkün olduğunca detaylı açıklayın.
+Hangi ekranda olduğunuzu, ne yaptığınızı ve varsa aldığınız hata mesajını yazın.
+
+Örneğin:
+
+"Öğrenci İşleri > Öğrenci Ekle ekranında öğrencinin bilgilerini girdikten sonra Kaydet'e bastığımda hata alıyorum."
+
+Bu, kullanıcıya nasıl kaliteli ticket açacağını öğretiyor.
+
+5. Kategori mutlaka genişletilmeli
+
+Şu an:
+
+Genel
+
+tek seçenek gibi duruyor.
+
+Bence kategoriler:
+
+Genel
+Hesap ve Giriş
+Öğrenci İşlemleri
+Ödev ve Görevler
+Kitaplar
+Müfredat
+Raporlar
+Teknik Sorun
+Öneri / Geri Bildirim
+
+olabilir.
+
+Ama burada dikkat:
+
+10-15 kategori yapmayın.
+
+Başlangıçta 6-8 kategori yeterli.
+
+6. "Yeni destek talebi" butonunun rengi güzel
+
+Turuncu CTA mevcut marka diliyle uyumlu.
+
+Ancak:
+
++ Yeni destek talebi
+
+yerine:
+
++ Destek Talebi Oluştur
+
+daha net.
+
+Çünkü kullanıcı butona basınca ne olacağını direkt biliyor.
+
+7. Boş durum çok boş 😄
+
+İlk ekran:
+
+Henüz bir destek talebiniz yok.
+
+diyor.
+
+Teknik olarak doğru.
+
+Ama ekranın büyük kısmı bomboş.
+
+Burada çok daha iyi bir empty state yapılabilir.
+
+Örneğin:
+
+🎧 Henüz bir destek talebiniz yok
+
+Sorularınız, karşılaştığınız sorunlar veya önerileriniz için bize buradan ulaşabilirsiniz.
+
+[ İlk Destek Talebini Oluştur ]
+
+Ortalama yanıt süremiz: X saat
+
+Eğer gerçekten ölçebiliyorsanız bu son satır çok değerli.
+
+Ölçemiyorsanız kesinlikle rakam uydurmayın.
+
+8. Ticket açıldıktan sonraki ekran çok önemli
+
+Bence burayı şimdiden düşünün.
+
+Örneğin:
+
+Destek Talebi #1042
+
+Öğrenci eklerken hata alıyorum
+
+🟠 İnceleniyor
+
+Kategori: Öğrenci İşlemleri
+Oluşturulma: 5 Eylül 2026
+
+Siz
+
+Öğrenciyi ekledikten sonra kaydet butonuna bastığımda hata alıyorum.
+
+10:42
+
+İZ Destek
+
+Merhaba Burak, sorununuzu inceliyoruz. Öğrenci bilgilerinde...
+
+11:15
+
+Yanıtınızı yazın...
+
+Mesajınızı yazın...
+
+[ Yanıt Gönder ]
+
+Böyle bir yapı ürünü bir anda çok daha profesyonel gösterir.
+
+9. "Durum" sistemi ekleyin
+
+Ticket'larda:
+
+🟡 Bekliyor
+
+🔵 İnceleniyor
+
+🟢 Çözüldü
+
+gibi durumlar kullanabilirsiniz.
+
+Ama burada benim önerim:
+
+Kullanıcıya gösterilen statüler
+
+Yeni
+
+İnceleniyor
+
+Sizden bilgi bekleniyor
+
+Çözüldü
+
+Bu özellikle çok iyi.
+
+Çünkü:
+
+"Neden cevap gelmedi?"
+
+sorusunu azaltır.
+
+10. "Sizden bilgi bekleniyor" çok önemli
+
+Örneğin destek ekibi:
+
+Sorunu inceleyebilmemiz için kullandığınız tarayıcıyı öğrenebilir miyiz?
+
+dedi.
+
+Ticket:
+
+🟠 Sizden bilgi bekleniyor
+
+şeklinde görünür.
+
+Bu kullanıcı açısından çok net.
+
+11. Destek ekranını sadece "ticket sistemi" yapmayın
+
+Burada bence daha büyük bir fırsat var.
+
+İZ'in kullanıcı kitlesi öğretmenler.
+
+Dolayısıyla destek sayfasına küçük bir:
+
+Sık Sorulanlar
+
+alanı koyabilirsiniz.
+
+Örneğin:
+
+Öğrenci nasıl eklerim?
+
+Veli nasıl davet edilir?
+
+Ödev nasıl oluşturulur?
+
+Kitap nasıl tanımlanır?
+
+Öğrencinin ilerlemesini nasıl onaylarım?
+
+Ve:
+
+Aradığınızı bulamadınız mı?
+
+[ Destek Talebi Oluştur ]
+
+Bu, destek ekibinin yükünü de azaltır.
+
+12. Hatta arama ekleyebiliriz
+
+Eğer içerik sayısı artacaksa:
+
+🔍 Nasıl yardımcı olabiliriz?
+Örn. öğrenci ekleme, ödev oluşturma...
+
+şeklinde bir help center mantığı kurulabilir.
+
+Bu aşamada çok büyük bir sistem yapmanıza gerek yok.
+
+13. Sol menü hakkında da bir şey söyleyeyim
+
+Ekranın sol tarafını da inceledim.
+
+Menü:
+
+Dashboard
+Öğrenci İşleri
+Kitaplar
+Müfredat
+Eğitim Dönemi
+Lisans
+Destek
+
+Bence genel yapı gayet iyi.
+
+Fakat:
+
+"Lisans"
+
+öğretmenin günlük kullanımında çok sık kullanacağı bir şey değil.
+
+Bunu menünün en altında:
+
+Hesap & Lisans
+
+gibi bir bölüme taşıyabilirsiniz.
+
+Örneğin:
+
+Yönetim
+
+Eğitim Dönemi
+Hesap & Lisans
+Destek
+
+Bu daha mantıklı bir IA oluşturur.
+
+14. "Koyu tema / Çıkış Yap / Daralt" kısmı iyi
+
+Buraya fazla dokunmazdım.
+
+Ancak:
+
+Koyu tema
+
+yerine switch kullanabilirsiniz:
+
+Koyu tema ○
+
+Böylece daha modern SaaS hissi verir.
+
+15. Logo ve kullanıcı alanı
+
+Sol üst:
+
+Logo + Burak Yakıcı
+
+güzel.
+
+Alt tarafta:
+
+Burak Yakıcı
+Öğretmen
+
+olması da güzel.
+
+Ancak aynı ismi iki kez göstermek biraz gereksiz.
+
+Üstte:
+
+İZ logosu
+
+altta:
+
+Burak Yakıcı
+Öğretmen
+
+yapardım.
+
+Bu sidebar'ı biraz daha temiz gösterir.

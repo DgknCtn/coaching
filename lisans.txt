@@ -1,0 +1,369 @@
+"Lisans al" başlığını değiştirelim
+
+Şu an:
+
+Lisans al
+
+Bana biraz eski tip kurumsal yazılım hissi veriyor.
+
+SaaS'ta:
+
+Planınızı seçin
+
+veya:
+
+İhtiyacınıza uygun planı oluşturun
+
+daha modern.
+
+Ben özellikle:
+
+Planınızı oluşturun
+
+kullanırdım.
+
+Altında:
+
+Öğrenci sayınızı ve kullanım sürenizi seçin. Uzun süreli kullanımda öğrenci başına maliyetiniz düşer.
+
+"Lisans dönemi" yerine "Plan / Abonelik" düşünün
+
+Şu an üst tarafta:
+
+DURUM
+LİSANS DÖNEMİ
+KALAN SÜRE
+ÖĞRENCİ LİMİTİ
+
+var.
+
+Bu yapı teknik olarak doğru fakat ürünün SaaS hissini azaltıyor.
+
+Ben:
+
+Mevcut planınız
+
+Durum: Aktif ✓
+Plan: 25 Öğrenci
+Bitiş: 4 Eylül 2027
+Kalan: 364 gün
+
+gibi gösterirdim.
+
+Ve yanında:
+
+Planı Yönet
+
+En önemli UX problemi: 8 öğrenci seçmiş ama 475 ₺ / öğrenci / ay
+
+Bu fiyat sunumu psikolojik olarak çok kötü olabilir.
+
+Çünkü kullanıcı büyük rakamı değil, küçük rakamı referans alır:
+
+475 ₺ / öğrenci / ay
+
+Ve şöyle düşünebilir:
+
+"Bir öğrenci için 475 TL mi?"
+
+Oysa öğretmen için asıl satın alma:
+
+8 öğrenci için 3.800 TL / 1 ay
+
+Bu nedenle ben öğrenci başına maliyeti ana fiyat yapmazdım.
+
+Şöyle:
+
+3.800 ₺
+
+8 öğrenci · 1 ay
+
+KDV dahil · Tek çekim
+
+Altında küçük:
+
+Öğrenci başına 475 ₺ / ay
+
+Böylece ana fiyat doğru çerçevelenir.
+
+İndirim göstergesi daha profesyonel olabilir
+
+Şu an:
+
+%5 indirim
+Liste fiyatı 4.000 ₺ yerine 3.800 ₺
+
+oldukça "kampanya sitesi" havası veriyor.
+
+SaaS tarafında:
+
+%5 uzun dönem / hacim indirimi
+
+gibi nedenini açıklamak daha iyi.
+
+Çünkü kullanıcı:
+
+"Neden %5?"
+
+diye düşünür.
+
+Örneğin:
+
+8 öğrenci için %5 avantaj
+
+veya:
+
+Öğrenci sayınız arttıkça birim maliyetiniz düşer.
+
+Ama mümkünse indirim mantığını çok açık yapın.
+
+8. Asıl satış argümanını fiyatın hemen yanına koyun
+
+Şu anda fiyatı görüyoruz ama:
+
+"Bu parayı neden vereyim?"
+
+cevabı yok.
+
+Fiyatın yanında küçük bir değer kutusu olabilir:
+
+Bu lisansla
+
+✓ Öğrencilerinizi tek ekrandan yönetin
+✓ Sınırsız ödev ve görev oluşturun
+✓ Kitap ilerlemelerini takip edin
+✓ Öğretmen onaylı ilerlemeyi görün
+✓ Velilerin ilerlemeyi takip etmesini sağlayın
+
+Tüm özellikler dahil.
+
+Bu son cümle özellikle önemli.
+
+9. "Tek çekim" konusunu çok daha görünür yapardım
+
+Şu anda:
+
+KDV dahil · tek çekim
+
+ve altında:
+
+Ödeme tek çekimdir ve otomatik yenilenmez.
+
+var.
+
+Bu çok iyi bir satış avantajı.
+
+Hatta kartın içinde:
+
+🔒 Tek seferlik ödeme
+Otomatik yenileme yok.
+
+şeklinde öne çıkarırdım.
+
+Çünkü SaaS müşterisinin en büyük korkularından biri:
+
+"Kartımı kaydedecekler ve her ay çekecekler."
+
+Siz tam tersini sunuyorsunuz.
+
+Bunu kullanın.
+
+"Devam ederek mesafeli satış sözleşmesini..." metni fazla aşağıda ve fazla hukuki
+
+Bu gerekli olabilir ama kullanıcı açısından ana karar noktasında çok yer kaplıyor.
+
+Şöyle sadeleştirebilirsiniz:
+
+🔒 Güvenli ödeme · Tek çekim · Otomatik yenileme yok
+
+Altında küçük:
+
+Satın alarak mesafeli satış sözleşmesi ve ön bilgilendirme formunu kabul etmiş olursunuz.
+
+Hukuki metin link olarak kalabilir.
+
+11. "Ödeme geçmişi" bölümü güzel ama şu an güven problemi yaratıyor
+
+Alt tarafta:
+
+04.09.2026
+10 öğrenci · 12 ay
+35.100,00 ₺
+Bekliyor
+
+var.
+
+Eğer bu gerçekten test hesabının oluşturduğu bir ödeme ise problem değil.
+
+Ama kullanıcı gerçek ödeme yapmadıysa:
+
+"35.100 TL ödeme bekliyor"
+
+görmesi ciddi güven sorunu yaratabilir.
+
+Özellikle:
+
+"Ben bu ödemeyi yaptım mı?"
+
+sorusunu doğuruyor.
+
+Bunu daha net yapın:
+
+Siparişlerim
+
+#10024 — 10 Öğrenci · 12 Ay
+
+35.100 ₺
+
+🟡 Ödeme bekleniyor
+
+[ Ödemeye Devam Et ]
+
+veya ödeme süreci tamamlanmışsa:
+
+🟢 Ödendi
+
+12. "Lisans" kelimesini bile sorgulardım
+
+Ürünün tamamında:
+
+Lisans
+
+kullanılıyor.
+
+Teknik açıdan doğru.
+
+Ama hedef müşteriniz öğretmen.
+
+Öğretmene:
+
+"Lisans satın al"
+
+demek yerine:
+
+"Planını seç"
+
+daha doğal.
+
+Örneğin sidebar:
+
+Hesap & Plan
+
+ve ekran:
+
+Planınız
+
+Bu daha SaaS.
+
+Bence çok önemli bir özellik: "Öğrenci limiti" dolmadan uyarı
+
+Örneğin öğretmenin:
+
+25 öğrencilik planı var.
+
+23 öğrencisi mevcut.
+
+2 kişilik kapasitesi kaldı.
+
+Dashboard'da:
+
+23 / 25 öğrenci
+
+Lisans sayfasında:
+
+🟠 2 öğrenci kapasiteniz kaldı.
+
+ve:
+
+25 öğrenci limitine ulaştığınızda planınızı yükseltebilirsiniz.
+
+Bu çok daha iyi bir kullanıcı deneyimi.
+
+Hatta 25/25:
+
+🔴 Öğrenci limitiniz doldu.
+
+[ Planı Yükselt ]
+
+14. "Daha uzun süre = daha ucuz" fikrini görsel yapın
+
+Bu sizin fiyatlandırmanızın önemli bir satış argümanı.
+
+Örneğin:
+
+Ne kadar uzun kullanırsanız, öğrenci başına maliyetiniz o kadar düşer.
+
+1 Ay → 475 ₺ / öğrenci / ay
+
+6 Ay → 350 ₺ / öğrenci / ay
+
+12 Ay → 292,50 ₺ / öğrenci / ay
+
+Burada kullanıcı:
+
+"12 ay alırsam ciddi avantaj var."
+
+diye düşünür.
+
+Şu anda sistem bunu hesaplıyor ama avantajı kullanıcıya yeterince sattırmıyor.
+
+15. Ben bu ekranı iki aşamalı yapardım
+AŞAMA 1
+Planınızı oluşturun
+
+Kaç öğrenciniz var?
+
+− 10 +
+
+Ne kadar süre kullanmak istiyorsunuz?
+
+1 Ay | 3 Ay | 6 Ay | 12 Ay
+
+AŞAMA 2
+
+Sağda / altında:
+
+10 Öğrenci · 12 Ay
+X.XXX ₺
+
+KDV dahil · Tek çekim
+
+X.XXX ₺
+
+%XX avantaj
+
+Öğrenci başına:
+
+XXX ₺ / ay
+
+Dahil olanlar
+
+✓ Tüm özellikler
+✓ Öğrenci paneli
+✓ Veli paneli
+✓ Kitap takibi
+✓ Ödev takibi
+✓ Raporlar
+
+Ödeme
+
+🔒 Tek çekim
+🔄 Otomatik yenileme yok
+
+[ Güvenli Ödemeye Geç ]
+
+16. "Satın Al" yerine "Güvenli Ödemeye Geç"
+
+Mevcut:
+
+🛒 Satın Al
+
+gayet standart.
+
+Ama:
+
+Güvenli Ödemeye Geç →
+
+daha güven verici.
+
+Özellikle ödeme sayfasına geçiyorsanız.

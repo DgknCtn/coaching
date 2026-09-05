@@ -23,12 +23,19 @@ export function LinkTabs({
   tabs,
   activeKey,
   action,
+  ariaLabel = 'Ders seçimi',
   className,
 }: {
   tabs: LinkTab[]
   activeKey: string
   /** Şeridin sağ ucundaki ek eylem ("+ Ders Ekle" gibi). */
   action?: React.ReactNode
+  /**
+   * Gezinme bölgesinin adı. Varsayılan "Ders seçimi" — bileşen bu iş için
+   * yazılmıştı; öğrenci çalışma masası aynı şeridi ekran seçimi için
+   * kullanıyor ve ekran okuyucuya "ders seçimi" demesi yanlış olurdu.
+   */
+  ariaLabel?: string
   className?: string
 }) {
   if (tabs.length === 0) return null
@@ -36,7 +43,7 @@ export function LinkTabs({
   return (
     <div className={cn('flex items-center gap-2 border-b', className)}>
       <nav
-        aria-label="Ders seçimi"
+        aria-label={ariaLabel}
         className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
       >
         {tabs.map(tab => {

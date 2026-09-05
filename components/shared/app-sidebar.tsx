@@ -22,7 +22,7 @@ import { logoutAction } from '@/app/(auth)/actions'
 import {
   isNavGroup,
   navByRole,
-  studentContextNav,
+  studentOverviewNav,
   type NavEntry,
   type NavGroup,
   type NavItem,
@@ -315,13 +315,17 @@ export function AppSidebar({
       </div>
     )
 
-    // Öğrenci bağlamı: bir öğrencinin herhangi bir ekranı açıkken o
-    // öğrencinin bütün ekranları tek tıkla erişilebilir olmalı. Öğrenci
-    // dışındaki sayfalarda blok hiç render edilmez — menü bugünkü hâlinde
-    // kalır. Dar rail'de başlık gizlenir, ikonlar kalır (title ile).
+    // Öğrenci bağlamı: yalnız çalışma masasının köküne dönüş yolu.
+    //
+    // 067'ye kadar burada öğrencinin BEŞ EKRANI da listeleniyordu. Artık
+    // aynı beşi içerik alanının üstündeki sekme şeridi gösteriyor
+    // (student-tabs.tsx); ikisini birden çizmek, ekranda aynı bağlantıyı
+    // iki kez göstermek ve kullanıcıya hangisinin "asıl" olduğunu tahmin
+    // ettirmek olurdu. Öğrenci dışındaki sayfalarda blok hiç render
+    // edilmez.
     const studentNavBlock = role === 'teacher' && activeStudentId && (
       <div className="mt-4 border-t border-sidebar-border pt-4">
-        {navBlock(studentContextNav(activeStudentId), 'Öğrenci menüsü', 'Öğrenci')}
+        {navBlock(studentOverviewNav(activeStudentId), 'Öğrenci menüsü', 'Öğrenci')}
       </div>
     )
 

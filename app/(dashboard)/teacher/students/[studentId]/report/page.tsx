@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation'
 import { isOverdue } from '@/lib/homework-status'
 import { BookOpen } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
-import { Badge } from '@/components/ui/badge'
 import { MetricRow } from '@/components/shared/metric-row'
 import { Section } from '@/components/shared/section'
 import { ProgressBar } from '@/components/shared/progress-bar'
@@ -84,15 +83,13 @@ export default async function StudentReportPage({
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-6 md:p-8 print:p-0">
       <PageHeader
-        backHref={`/teacher/students/${studentId}`}
-        title={`${student.full_name} — İlerleme Raporu`}
+        // BAŞLIKTA ÖĞRENCİ ADI YOK (067): ad, sınıf ve sınav rozetleri
+        // artık çalışma masasının üst şeridinde — sekmelerle birlikte
+        // gezinme boyunca yerinde duruyor. Burada tekrarlamak, aynı bilgiyi
+        // ekranda iki kez göstermek olurdu. Geri düğmesi de gereksiz:
+        // "Genel Bakış" bir sekme.
+        title="İlerleme Raporu"
         subtitle={`Oluşturulma: ${generatedAt}`}
-        badges={
-          <>
-            {student.exam_type && <Badge variant="neutral">{student.exam_type}</Badge>}
-            {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
-          </>
-        }
         action={<PrintButton />}
       />
 
