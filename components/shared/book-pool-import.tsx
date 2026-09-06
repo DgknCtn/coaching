@@ -102,7 +102,25 @@ export function BookPoolImport({
 
   function handleImport() {
     startTransition(async () => {
-      const res = await action(fileText.current)
+      // EYLEMİN KENDİSİ PATLARSA SAYFA ÇÖKMESİN.
+      //
+      // Sunucu eylemi bazen hiç ÇALIŞMADAN reddedilir: gövde platform
+      // sınırını aşarsa, ağ koparsa ya da dağıtım sırasında eylem
+      // kimliği değişirse. Yakalanmayan bu hata Next.js'te en yakın hata
+      // sınırına gider — kullanıcı, seçtiği dosyaya ne olduğunu anlatan
+      // hiçbir şey görmeden tam sayfa "Bir hata oluştu" ekranına düşer ve
+      // diyalogdaki önizleme de kaybolur.
+      let res: Awaited<ReturnType<BookImportAction>>
+      try {
+        res = await action(fileText.current)
+      } catch (error) {
+        console.error('[book-import] içe aktarma başarısız:', error)
+        toast.error(
+          'Dosya sunucuya gönderilemedi. Yedek çok büyük olabilir; ' +
+            'havuzu bölüp daha küçük dosyalarla deneyin.'
+        )
+        return
+      }
 
       if (res.error) {
         toast.error(res.error)

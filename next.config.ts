@@ -47,6 +47,21 @@ const nextConfig: NextConfig = {
     // paketin tamamını çözümlemek zorunda kalıyor. Yalnız derleme/bundle
     // düzeyinde çalışır — çalışma zamanı davranışı aynıdır.
     optimizePackageImports: ["lucide-react"],
+
+    // KİTAP HAVUZU YEDEĞİ SUNUCU EYLEMİNE METİN OLARAK GİDİYOR.
+    //
+    // Next.js'in varsayılan sunucu eylemi gövde sınırı 1 MB. İçe aktarma
+    // arayüzü ise baştan beri 4 MB vaat ediyordu (MAX_FILE_BYTES) ve
+    // 1 MB'ı aşan gerçek bir yedek denendiğinde istek PLATFORM düzeyinde
+    // reddediliyordu: eylem hiç çalışmadığı için hata yakalanamıyor,
+    // kullanıcı toast yerine "Bir hata oluştu" tam sayfa hatası görüyordu.
+    //
+    // Sınır, arayüzün vaadiyle eşitlendi. 100+ kitaplık bir havuzun JSON'u
+    // birkaç yüz KB; 4 MB bunun kat kat üstünde ve dosya boyutu zaten
+    // istemcide de sunucuda da ayrıca denetleniyor.
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
   },
 
   async headers() {
