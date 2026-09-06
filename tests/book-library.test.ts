@@ -31,6 +31,11 @@ const SQL = readFileSync(
   'utf8'
 )
 
+const SQL_070 = readFileSync(
+  join(process.cwd(), 'supabase/migrations/070_library_autopublish.sql'),
+  'utf8'
+)
+
 /** Bir fonksiyonun gövdesi: CREATE ... FUNCTION public.<ad> ... $fn$; */
 function functionBody(name: string): string {
   const start = SQL.indexOf(`FUNCTION public.${name}(`)
@@ -209,5 +214,40 @@ describe('069 — istemci tarafı doğrulama sunucuyla aynı sınırı koyar', (
     expect(
       libraryReviewSchema.safeParse({ bookId, reason: 'x'.repeat(501) }).success
     ).toBe(false)
+  })
+})
+
+describe('070 — kütüphaneye giren kitap yayına girer', () => {
+  // 069 "kütüphane alanındaki kitaplar approved'dır" diyordu ama bunu
+  // hiçbir şey YAPMIYORDU: yönetici kütüphaneyi dolduruyor, koç boş
+  // görüyor, arada hata mesajı yok.
+  it('tetikleyici books üzerinde kuruludur', () => {
+    expect(SQL_070).toContain('CREATE TRIGGER books_library_autopublish')
+    expect(SQL_070).toContain('BEFORE INSERT OR UPDATE OF workspace_id ON public.books')
+  })
+
+  it('yalnız kütüphane alanındaki kitabı yayına alır', () => {
+    expect(SQL_070).toContain('w.id = NEW.workspace_id AND w.is_library')
+    expect(SQL_070).toContain("NEW.library_status := 'approved'")
+  })
+
+  it("bilerek reddedilmiş kaynağı geri yayına almaz", () => {
+    expect(SQL_070).toContain("NEW.library_status IS DISTINCT FROM 'rejected'")
+  })
+
+  it('070 öncesi eklenmiş kitapları geriye dönük yayına alır', () => {
+    expect(SQL_070).toContain("SET library_status = 'approved'")
+    expect(SQL_070).toContain("b.library_status = 'none'")
+  })
+
+  it('kütüphane alanı deneme planında bırakılmaz', () => {
+    // trial_ends_at yazıldığı gün has_workspace_role false döner ve
+    // yönetici kendi kütüphanesine giremezdi (052).
+    expect(SQL_070).toContain("SET plan = 'institution', student_limit = NULL, trial_ends_at = NULL")
+    expect(SQL_070).toContain("'institution', NULL, NULL")
+  })
+
+  it('geri alma bloğu vardır', () => {
+    expect(SQL_070).toContain('-- ROLLBACK')
   })
 })
