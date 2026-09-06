@@ -36,7 +36,34 @@ const MAX_FILE_BYTES = 4_000_000
 /** Rapor uzun olabilir; ekranda bu kadarı listelenir, gerisi sayılır. */
 const SKIPPED_PREVIEW = 8
 
-export function BookPoolImport() {
+/** İçe aktarmayı yapan sunucu eylemi. */
+export type BookImportAction = (
+  fileText: string
+) => Promise<{ error?: string; imported?: number; skipped?: string[] }>
+
+interface BookPoolImportProps {
+  /**
+   * 069/071: aynı diyalog hem koçun havuzuna hem ortak kütüphaneye
+   * aktarıyor. Ayrıştırma, önizleme ve uyarılar İKİSİNDE DE AYNI —
+   * ikinci bir kopya çıkarmak, 4 MB sınırı ya da "alt bölümler düzleşir"
+   * uyarısı değiştiğinde bir yerde unutulacak bakım borcu olurdu.
+   * Değişen tek şey hedefi yazan sunucu eylemi ve metinler.
+   */
+  action?: BookImportAction
+  /** "havuzda" / "kütüphanede" — Türkçe ek uyumu tek bir kökten
+   *  türetilemediği için hazır biçim geçilir. */
+  targetLocative?: string
+  /** "havuza" / "kütüphaneye" */
+  targetDative?: string
+  triggerLabel?: string
+}
+
+export function BookPoolImport({
+  action = importBookBackupAction,
+  targetLocative = 'havuzda',
+  targetDative = 'havuza',
+  triggerLabel = 'İçe aktar',
+}: BookPoolImportProps = {}) {
   const [open, setOpen] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsed, setParsed] = useState<BackupParseResult | null>(null)
@@ -75,7 +102,7 @@ export function BookPoolImport() {
 
   function handleImport() {
     startTransition(async () => {
-      const res = await importBookBackupAction(fileText.current)
+      const res = await action(fileText.current)
 
       if (res.error) {
         toast.error(res.error)
@@ -85,13 +112,13 @@ export function BookPoolImport() {
       // HİÇBİRİ EKLENMEDİYSE BU BİR BAŞARI DEĞİL. Yeşil bir "0 kitap
       // eklendi" bildirimi, kullanıcıya işin yürüdüğünü söylerdi.
       if (!res.imported) {
-        toast.warning('Yeni kitap eklenmedi; dosyadaki kitaplar havuzda zaten var.')
+        toast.warning(`Yeni kitap eklenmedi; dosyadaki kitaplar ${targetLocative} zaten var.`)
       } else {
         const left = res.skipped?.length ?? 0
         toast.success(
           left > 0
             ? `${res.imported} kitap eklendi, ${left} kitap atlandı.`
-            : `${res.imported} kitap havuza eklendi.`
+            : `${res.imported} kitap ${targetDative} eklendi.`
         )
       }
 
@@ -115,7 +142,7 @@ export function BookPoolImport() {
         render={
           <Button size="sm" variant="outline">
             <Upload />
-            İçe aktar
+            {triggerLabel}
           </Button>
         }
       />
@@ -123,7 +150,7 @@ export function BookPoolImport() {
         <DialogHeader>
           <DialogTitle>Yedekten kitap aktar</DialogTitle>
           <DialogDescription>
-            &quot;Yedek al&quot; ile indirdiğiniz .json dosyasını seçin. Havuzda aynı
+            &quot;Yedek al&quot; ile indirdiğiniz .json dosyasını seçin. Hedefte aynı
             ad, yayın ve baskı yılıyla bulunan kitaplar atlanır.
           </DialogDescription>
         </DialogHeader>

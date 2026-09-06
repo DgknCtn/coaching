@@ -36,6 +36,11 @@ const SQL_070 = readFileSync(
   'utf8'
 )
 
+const SQL_071 = readFileSync(
+  join(process.cwd(), 'supabase/migrations/071_library_admin_membership.sql'),
+  'utf8'
+)
+
 /** Bir fonksiyonun gövdesi: CREATE ... FUNCTION public.<ad> ... $fn$; */
 function functionBody(name: string): string {
   const start = SQL.indexOf(`FUNCTION public.${name}(`)
@@ -249,5 +254,29 @@ describe('070 — kütüphaneye giren kitap yayına girer', () => {
 
   it('geri alma bloğu vardır', () => {
     expect(SQL_070).toContain('-- ROLLBACK')
+  })
+})
+
+describe('071 — kütüphaneye yazabilen yönetici gerçekten yazabilir', () => {
+  // ensure_library_workspace yalnız KURAN yöneticiyi üye yapıyordu;
+  // ikinci bir platform yöneticisi kütüphaneye kitap yazmaya
+  // kalktığında create_book_with_sections_and_tests "Permission denied"
+  // diyordu ve sebebi ekranda görünmüyordu.
+  it('yetki kapısı yerinde durur', () => {
+    expect(SQL_071).toContain('IF NOT public.is_platform_admin() THEN')
+  })
+
+  it('kütüphane zaten varsa da çağıranın üyeliğini tamamlar', () => {
+    expect(SQL_071).toContain('IF NOT EXISTS (')
+    expect(SQL_071).toContain('FROM public.workspace_members')
+    expect(SQL_071).toContain("VALUES (v_id, v_profile_id, 'owner', 'active')")
+  })
+
+  it('kütüphane alanı kurulurken deneme planına düşmez', () => {
+    expect(SQL_071).toContain("'institution', NULL, NULL")
+  })
+
+  it('geri alma bloğu vardır', () => {
+    expect(SQL_071).toContain('-- ROLLBACK')
   })
 })

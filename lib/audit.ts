@@ -39,6 +39,7 @@ export type AuditAction =
   | 'book.library_submit'
   | 'book.library_approve'
   | 'book.library_reject'
+  | 'book.library_import'
   // Faturalama (056). Para hareketi denetim kaydının asıl sebebidir:
   // "bu abonelik ne zaman, hangi planla açıldı" sorusunun cevabı burada.
   | 'billing.checkout_started'
@@ -70,6 +71,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'book.library_submit': 'Kitabı kütüphaneye önerdi',
   'book.library_approve': 'Kütüphane önerisini onayladı',
   'book.library_reject': 'Kütüphane önerisini reddetti',
+  'book.library_import': 'Kütüphaneye yedekten kitap aktardı',
   'invite.create': 'Davet oluşturdu',
   'invite.revoke': 'Daveti iptal etti',
   'target.set': 'Hedef belirledi',

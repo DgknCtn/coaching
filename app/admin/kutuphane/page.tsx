@@ -51,6 +51,18 @@ export default async function AdminLibraryPage() {
   const rows = (submissions ?? []) as unknown as SubmissionRowData[]
   const pending = rows.filter((r) => r.library_status === 'pending')
 
+  // Kütüphanede kaç kaynak yayında? Yöneticinin "aktardım, oldu mu?"
+  // sorusunun cevabı ekranda dursun; koç tarafına geçip bakmak
+  // gerekmesin.
+  const { count: libraryBookCount } = libraryWorkspaceId
+    ? await supabase
+        .from('books')
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', libraryWorkspaceId as string)
+        .eq('status', 'active')
+        .eq('library_status', 'approved')
+    : { count: 0 }
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -62,7 +74,10 @@ export default async function AdminLibraryPage() {
         }
       />
 
-      <LibrarySetup libraryWorkspaceId={(libraryWorkspaceId as string | null) ?? null} />
+      <LibrarySetup
+        libraryWorkspaceId={(libraryWorkspaceId as string | null) ?? null}
+        bookCount={libraryBookCount ?? 0}
+      />
 
       <Section title="Koç önerileri" variant="card">
         {rows.length === 0 ? (

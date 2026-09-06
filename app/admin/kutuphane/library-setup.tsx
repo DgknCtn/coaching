@@ -17,20 +17,46 @@ import { toast } from 'sonner'
 import { Library, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
-import { ensureLibraryWorkspaceAction } from './actions'
+import { BookPoolImport } from '@/components/shared/book-pool-import'
+import { ensureLibraryWorkspaceAction, importLibraryBackupAction } from './actions'
 
-export function LibrarySetup({ libraryWorkspaceId }: { libraryWorkspaceId: string | null }) {
+export function LibrarySetup({
+  libraryWorkspaceId,
+  bookCount,
+}: {
+  libraryWorkspaceId: string | null
+  bookCount: number
+}) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
 
   if (libraryWorkspaceId) {
     return (
-      <Section variant="card" contentClassName="px-4 py-3">
-        <p className="text-sm text-muted-foreground">
-          Kütüphane çalışma alanı hazır. Kaynak eklemek için üst menüden{' '}
-          <span className="font-medium text-foreground">Kaynak Kütüphanesi</span> alanına
-          geçip kitap havuzunu kullan.
-        </p>
+      <Section
+        variant="card"
+        contentClassName="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+      >
+        <div className="min-w-0">
+          <p className="text-sm">
+            {bookCount === 0
+              ? 'Kütüphane hazır ama boş — koçlar henüz hiçbir kaynak görmüyor.'
+              : `Kütüphanede ${bookCount} kaynak yayında.`}
+          </p>
+          {/* İçe aktarma ANA YOL; tek tek girmek isteyen için alan
+              değiştirme yolu duruyor ama artık zorunlu değil. */}
+          <p className="mt-1 text-xs text-muted-foreground">
+            &quot;Yedek al&quot; ile indirdiğin .json dosyasını buradan aktarabilir ya da
+            üst menüden <span className="font-medium text-foreground">Kaynak Kütüphanesi</span>{' '}
+            alanına geçip kitapları tek tek girebilirsin.
+          </p>
+        </div>
+
+        <BookPoolImport
+          action={importLibraryBackupAction}
+          targetLocative="kütüphanede"
+          targetDative="kütüphaneye"
+          triggerLabel="Yedekten aktar"
+        />
       </Section>
     )
   }
