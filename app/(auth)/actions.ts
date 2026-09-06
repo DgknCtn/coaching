@@ -11,7 +11,7 @@ import {
   firstIssue,
 } from '@/lib/validation'
 import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
-import { readReferralCode, clearReferralCode } from '@/lib/referral'
+import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 
 export async function loginAction(email: string, password: string) {
   const parsed = loginSchema.safeParse({ email, password })
@@ -34,9 +34,16 @@ export async function registerAction(
   fullName: string,
   email: string,
   password: string,
-  workspaceName?: string
+  workspaceName?: string,
+  partnerCode?: string
 ) {
-  const parsed = registerSchema.safeParse({ fullName, email, password, workspaceName })
+  const parsed = registerSchema.safeParse({
+    fullName,
+    email,
+    password,
+    workspaceName,
+    partnerCode,
+  })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   // Otomatik hesap üretimine karşı. Her kayıt bir workspace açtığı için
@@ -45,6 +52,10 @@ export async function registerAction(
   if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
+
+  // Biçim kuralı lib/referral-code.ts'te — middleware ve testler de aynı
+  // kuralı kullanıyor. Geçersizse null olur ve çereze düşülür.
+  const typedCode = normalizeReferralCode(parsed.data.partnerCode)
 
   // Ad ve çalışma alanı adı KULLANICI ÜST VERİSİNE yazılır.
   //
@@ -61,6 +72,11 @@ export async function registerAction(
       data: {
         full_name: parsed.data.fullName,
         workspace_name: parsed.data.workspaceName || null,
+        // Elle girilen kod ÜST VERİYE de yazılır: e-posta doğrulaması
+        // açıkken workspace burada kurulmuyor, kullanıcı doğrulama
+        // dönüşünde app/page.tsx'te kuruluyor. Kod yalnız bu istekte
+        // dursaydı o yolculukta kaybolur ve partner hakkını yitirirdi.
+        partner_code: typedCode,
       },
     },
   })
@@ -77,10 +93,15 @@ export async function registerAction(
     p_full_name: parsed.data.fullName,
     p_email: parsed.data.email,
     p_workspace_name: parsed.data.workspaceName || null,
-    // Partner atfı çerezden gelir (059). Geçersiz kod sunucuda sessizce
-    // yok sayılır; kullanıcı yanlış bir bağlantıdan geldi diye kaydı
-    // reddetmek bize müşteri kaybettirir.
-    p_partner_code: await readReferralCode(),
+    // Partner atfı: önce FORMA ELLE GİRİLEN kod, yoksa `?ref=` çerezi.
+    //
+    // Elle girilen öncelikli çünkü daha yeni ve daha bilinçli bir niyet:
+    // kullanıcı aylar önce bir bağlantıya tıklamış olabilir ama kodu şu an
+    // yazıyorsa kastettiği odur.
+    //
+    // Geçersiz kod sunucuda sessizce yok sayılır (059); kullanıcı yanlış
+    // bir kod yazdı diye kaydı reddetmek bize müşteri kaybettirir.
+    p_partner_code: typedCode ?? (await readReferralCode()),
   })
   if (rpcError) return { error: authErrorToTr(rpcError.message) }
 

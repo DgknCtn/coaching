@@ -52,7 +52,7 @@ export default async function FinancePage() {
     )
   }
 
-  const [{ data: financeRows }, { data: monthlyRows }] = await Promise.all([
+  const [{ data: financeRows }, { data: monthlyRows, error: monthlyError }] = await Promise.all([
     supabase
       .from('student_finance_view')
       .select(
@@ -85,6 +85,18 @@ export default async function FinancePage() {
 
   const totals = financeTotals(rows)
   const debtors = topDebtors(rows)
+
+  // GRAFİK SORGUSU SESSİZ DÜŞMESİN.
+  //
+  // Hata durumunda monthlyRows null oluyor ve grafik "Henüz veri yok"
+  // boş durumuna düşüyordu — yani izin hatası, eksik migration ve
+  // gerçekten boş bir kasa ekranda BİRBİRİNDEN AYIRT EDİLEMİYORDU.
+  if (monthlyError) {
+    console.error(
+      '[finans] finance_monthly_summary okunamadı:',
+      JSON.stringify({ workspaceId, message: monthlyError.message })
+    )
+  }
 
   const monthly: MonthlyPoint[] = ((monthlyRows ?? []) as Record<string, unknown>[]).map((m) => ({
     monthStart: m.month_start as string,

@@ -89,7 +89,12 @@ export const getTeacherContext = cache(async function getTeacherContext() {
   // tekrar tekrar dener.
   if (!workspaceId) redirect(await blockedRedirectTarget(supabase))
 
-  const [{ data: workspace }, { data: activeTerm }, { data: allWorkspaces }, { data: usageRows }] =
+  const [
+    { data: workspace },
+    { data: activeTerm },
+    { data: allWorkspaces },
+    { data: usageRows, error: usageError },
+  ] =
     await Promise.all([
       supabase.from('workspaces').select('id, name').eq('id', workspaceId).single(),
       supabase
@@ -103,7 +108,7 @@ export const getTeacherContext = cache(async function getTeacherContext() {
       // Seçici için: yalnız BİR workspace varsa arayüzde hiç gösterilmez.
       supabase
         .from('workspaces')
-        .select('id, name')
+        .select('id, name, is_library')
         .in('id', [...new Set(memberships.map(m => m.workspaceId))])
         .order('name'),
       // Kota ve deneme durumu (052). Kolon yerine RPC: student_limit'i
@@ -113,6 +118,32 @@ export const getTeacherContext = cache(async function getTeacherContext() {
 
   // Workspace okunamıyorsa askı ya da deneme dolumu ihtimali var.
   if (!workspace) redirect(await blockedRedirectTarget(supabase))
+
+  // KOTA/LİSANS SORGUSU SESSİZ DÜŞMESİN.
+  //
+  // Bu RPC hata verdiğinde `usage` null oluyor ve üst bardaki süre rozeti
+  // hiç çizilmiyordu — kullanıcı için "sayaç yok", geliştirici için hiçbir
+  // iz yok. Rozetin neden görünmediği ancak burada söylenirse anlaşılır.
+  if (usageError) {
+    console.error(
+      '[workspace] get_workspace_usage okunamadı:',
+      JSON.stringify({ workspaceId, message: usageError.message })
+    )
+  }
+
+  // KÜTÜPHANE ALANI SEÇİCİDE GÖRÜNMEZ (069).
+  //
+  // Kütüphane bir kiracı değil, platform altyapısı. Koçun alan listesinde
+  // durması, hiç girmemesi gereken bir yeri ona bir seçenek gibi gösterir.
+  // Yönetici oraya /admin/kutuphane'deki açık düğmeyle geçer.
+  //
+  // İSTİSNA — ŞU AN ORADAYSA GÖRÜNÜR: aksi hâlde kütüphaneye geçen
+  // yönetici tek alanlı görünür, seçici hiç çizilmez ve geri dönemez.
+  const workspaceOptions = ((allWorkspaces ?? []) as {
+    id: string
+    name: string
+    is_library: boolean | null
+  }[]).filter(w => !w.is_library || w.id === workspaceId)
 
   return {
     supabase,
@@ -129,7 +160,7 @@ export const getTeacherContext = cache(async function getTeacherContext() {
     role: memberships.find(m => m.workspaceId === workspaceId)?.role ?? 'teacher',
     activeTerm: activeTerm as { id: string; name: string; status: string } | null,
     /** Kullanıcının öğretmen olduğu tüm çalışma alanları (seçici için). */
-    workspaces: (allWorkspaces ?? []) as { id: string; name: string }[],
+    workspaces: workspaceOptions.map(w => ({ id: w.id, name: w.name })),
     /** Lisans, kota ve deneme durumu (058). RPC satır dizisi döndürür. */
     usage: (() => {
       const row = ((usageRows ?? []) as {

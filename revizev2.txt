@@ -1,0 +1,21 @@
+dashboarda girdiğimde öğrenci olmasına rağmen öğrencinizi ekleyin seçeneği çıkıyor bug var fixleyelim.
+
+sol menüde İZ yazısının altında koç adı soyadı var tıklayınca hata veriyor. 
+
+sol menüde öğrenci işleri menüsünü açınca sol taraftaki menü bozuluyor aşağı kayıyor ui ux  bozuluyor. 
+
+öğrenci ekleme alanında e posta ve telefon zorunlu olsun 
+
+üst menüde kullanıcının kalan lisans süresini gösteren sayaç olsun lgs yks sayacının orda sağda. 
+
+öğrenci detay sayfasında genel bakış sayfası güzel dokunmayalım ama kitaplar ödevler durum veliler akademik not kısmında telefon numarası düzenle rapor ödev ver butonları var hepsinde bunları sadece genel bakış sayfasında olacak şekilde düzeletelim.
+
+finans sayfasında aylık tahakkuk ve tahsilat kısmında grafik çalışmıyor düzeltelim.
+
+partner sistemi yapmıştık ancak bir partnerin koduyla koç üye olma sistemi mevcut değil bu yapıyı nasıl yaparız? 
+
+birde ayarlar ekranı yapalım hesap bilgileri plan bilgileri şifre değiştirme bildirim ayarları gibi şeyler olsun.
+
+landing page de footera whatsapp instagram e-posta bilgileri ekleyelim. 
+
+

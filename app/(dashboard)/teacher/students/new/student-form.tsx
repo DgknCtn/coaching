@@ -16,10 +16,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { EXAM_TYPE_OPTIONS, GRADE_LEVELS, LESSON_TYPE_OPTIONS } from '@/lib/validation'
 
+// İSTEMCİ ŞEMASI SUNUCUNUNKİYLE AYNI KURALI TAŞIR.
+//
+// Bu dosya lib/validation.ts'teki studentSchema'nın küçültülmüş bir
+// kopyası; ikisi ayrışırsa form kabul ettiği bir kaydı sunucuya
+// gönderip orada reddettirir ve kullanıcı hatayı alanın yanında değil,
+// gönderdikten sonra görür.
 const schema = z.object({
   fullName: z.string().min(2, 'Ad en az 2 karakter'),
-  email: z.string().email('Geçerli e-posta').optional().or(z.literal('')),
-  phone: z.string().optional(),
+  email: z.string().min(1, 'E-posta zorunlu.').email('Geçerli e-posta'),
+  phone: z
+    .string()
+    .min(7, 'Telefon numarası zorunlu.')
+    .max(30, 'Telefon numarası çok uzun.'),
   gradeLevel: z.string().optional(),
   examType: z.string().optional(),
   lessonType: z.string().optional(),
@@ -133,13 +142,17 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">E-posta</Label>
+              <Label htmlFor="email">E-posta *</Label>
               <Input id="email" type="email" placeholder="ornek@mail.com" {...register('email')} />
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Telefon</Label>
+              <Label htmlFor="phone">Telefon *</Label>
               <Input id="phone" type="tel" placeholder="05xx xxx xx xx" {...register('phone')} />
+              {/* Telefonun hata mesajı hiç render edilmiyordu: alan
+                  reddedilirse kullanıcı formun neden gönderilmediğini
+                  göremezdi. */}
+              {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
             </div>
           </div>
 

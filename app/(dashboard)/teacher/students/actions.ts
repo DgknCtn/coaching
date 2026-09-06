@@ -24,16 +24,21 @@ export async function createStudentAction(
   const { workspaceId, profile } = await getTeacherContext()
   const supabase = await createClient()
 
+  // parsed.data YAZILIR, HAM ARGÜMAN DEĞİL: şema trim uyguluyor ama
+  // yazma yolu onu atlıyordu — baştaki/sondaki boşluklar veritabanına
+  // olduğu gibi giriyor ve "  Ahmet" ile "Ahmet" iki ayrı isme dönüşüyordu.
+  const v = parsed.data
+
   const { data, error } = await supabase.from('students').insert({
     workspace_id: workspaceId,
     primary_teacher_profile_id: profile.id,
-    full_name: fullName,
-    email: email || null,
-    phone: phone || null,
-    grade_level: gradeLevel || null,
-    exam_type: examType || null,
-    lesson_type: lessonType || null,
-    notes: notes || null,
+    full_name: v.fullName,
+    email: v.email,
+    phone: v.phone,
+    grade_level: v.gradeLevel || null,
+    exam_type: v.examType || null,
+    lesson_type: v.lessonType || null,
+    notes: v.notes || null,
     status: 'active',
   }).select('id').single()
 
@@ -43,10 +48,10 @@ export async function createStudentAction(
   // geriye dönük uyum için yazılmaya devam ediyor ama TEK BAŞINA yeterli
   // değil — buraya yazılan not hiçbir ekranda görünmezdi. Bu yüzden ilk not
   // aynı zamanda bir akademik not olarak açılır.
-  if (notes && notes.trim()) {
+  if (v.notes) {
     await supabase.rpc('add_academic_note', {
       p_student_id: data.id,
-      p_note_text: notes.trim(),
+      p_note_text: v.notes,
       p_pinned: false,
     })
   }
@@ -77,16 +82,18 @@ export async function updateStudentAction(
   // yönetiliyor). Bu yüzden `notes` tanımsız geldiğinde eski değeri EZMEYİZ —
   // aksi halde düzenleme, geriye dönük uyum için tutulan kolonu sessizce
   // temizlerdi.
+  const v = parsed.data
+
   const { error } = await supabase
     .from('students')
     .update({
-      full_name: fullName,
-      email: email || null,
-      phone: phone || null,
-      grade_level: gradeLevel || null,
-      exam_type: examType || null,
-      lesson_type: lessonType || null,
-      ...(notes === undefined ? {} : { notes: notes || null }),
+      full_name: v.fullName,
+      email: v.email,
+      phone: v.phone,
+      grade_level: v.gradeLevel || null,
+      exam_type: v.examType || null,
+      lesson_type: v.lessonType || null,
+      ...(notes === undefined ? {} : { notes: v.notes || null }),
     })
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)

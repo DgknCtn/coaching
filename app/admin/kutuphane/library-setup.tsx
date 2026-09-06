@@ -14,10 +14,11 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Library, Loader2 } from 'lucide-react'
+import { ArrowRightLeft, Library, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
 import { BookPoolImport } from '@/components/shared/book-pool-import'
+import { switchWorkspaceAction } from '@/app/(dashboard)/workspace-actions'
 import { ensureLibraryWorkspaceAction, importLibraryBackupAction } from './actions'
 
 export function LibrarySetup({
@@ -51,12 +52,37 @@ export function LibrarySetup({
           </p>
         </div>
 
-        <BookPoolImport
-          action={importLibraryBackupAction}
-          targetLocative="kütüphanede"
-          targetDative="kütüphaneye"
-          triggerLabel="Yedekten aktar"
-        />
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <BookPoolImport
+            action={importLibraryBackupAction}
+            targetLocative="kütüphanede"
+            targetDative="kütüphaneye"
+            triggerLabel="Yedekten aktar"
+          />
+
+          {/* KÜTÜPHANEYE TEK GİRİŞ YOLU BURASI.
+              Kütüphane alanı sol menüdeki alan seçicisinde bilinçli olarak
+              gizli: bir kiracı değil, platform altyapısı. Kitapları tek tek
+              girmek isteyen yönetici oraya buradan geçer. */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const res = await switchWorkspaceAction(libraryWorkspaceId)
+                if (res?.error) {
+                  toast.error(res.error)
+                  return
+                }
+                router.push('/teacher/books')
+              })
+            }
+          >
+            {pending ? <Loader2 className="animate-spin" /> : <ArrowRightLeft className="size-3.5" />}
+            Kütüphane alanına geç
+          </Button>
+        </div>
       </Section>
     )
   }

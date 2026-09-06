@@ -59,10 +59,20 @@ export function FinanceMonthlyChart({ points }: { points: MonthlyPoint[] }) {
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-2" style={{ height: 176 }}>
+      {/* YÜKSEKLİK ZİNCİRİ KESİNTİSİZ OLMALI.
+          Önceden dış kap `items-end` taşıyordu: sütunlar gerilmiyor,
+          yükseklikleri içeriğe göre `auto` kalıyordu. İçteki `h-full` de
+          belirsiz bir yüksekliğe çözülünce çubukların yüzdelik
+          yükseklikleri sıfıra düşüyor ve ekranda yalnız ay etiketleriyle
+          lejant kalıyordu — "grafik çalışmıyor" denen şey buydu.
+
+          Şimdi: kap kesin yükseklikli, sütunlar `items-stretch` ile
+          geriliyor, çubuk alanı `flex-1 min-h-0` ile kesin bir yükseklik
+          alıyor. Yüzdeler ancak bu zincir tamken çözülür. */}
+      <div className="flex items-stretch justify-between gap-2" style={{ height: 176 }}>
         {points.map((p) => (
           <div key={p.monthStart} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-            <div className="flex h-full w-full items-end justify-center gap-1">
+            <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-1">
               <div
                 className="w-1/3 rounded-t-sm bg-primary/70"
                 style={{ height: `${(p.accruedKurus / max) * 100}%` }}

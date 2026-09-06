@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Check, Circle } from 'lucide-react'
+import { ArrowRight, Circle } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -89,9 +89,18 @@ export function OnboardingChecklist({
   if (steps.every(s => s.done)) return null
 
   const doneCount = steps.filter(s => s.done).length
-  // Sıradaki iş: tamamlanmamış İLK adım. Kullanıcı hangi adıma
-  // odaklanacağını aramak zorunda kalmamalı.
-  const nextIndex = steps.findIndex(s => !s.done)
+
+  // TAMAMLANAN ADIM LİSTELENMEZ.
+  //
+  // Kart dört adımın hepsi bitene kadar duruyor; önceden tamamlananları
+  // da üstü çizili olarak listeliyordu. Öğrencisini çoktan eklemiş bir
+  // koç panelinde "Öğrencinizi ekleyin" satırını görmeye devam ediyor ve
+  // bunu haklı olarak bir hata sanıyordu — üstü çizili olması, yazının
+  // orada olmasını açıklamıyor.
+  //
+  // Sayaç kalıyor: kaç adımın bittiği bilgisi kayboluyorsa kart da
+  // ilerleme hissi vermez.
+  const remaining = steps.filter(s => !s.done)
 
   return (
     <section
@@ -108,36 +117,27 @@ export function OnboardingChecklist({
       </div>
 
       <ol className="divide-y">
-        {steps.map((step, index) => {
-          const isNext = index === nextIndex
+        {remaining.map((step, index) => {
+          // Sıradaki iş: kalanların İLKİ. Kullanıcı hangi adıma
+          // odaklanacağını aramak zorunda kalmamalı.
+          const isNext = index === 0
           return (
             <li
               key={step.href}
-              className={cn(
-                'flex flex-wrap items-start gap-x-4 gap-y-3 px-5 py-4',
-                step.done && 'opacity-60'
-              )}
+              className="flex flex-wrap items-start gap-x-4 gap-y-3 px-5 py-4"
             >
               <span className="mt-0.5 shrink-0">
-                {step.done ? (
-                  <Check className="size-5 text-success-foreground" />
-                ) : (
-                  <Circle
-                    className={cn(
-                      'size-5',
-                      isNext ? 'text-primary' : 'text-muted-foreground/40'
-                    )}
-                  />
-                )}
+                <Circle
+                  className={cn(
+                    'size-5',
+                    isNext ? 'text-primary' : 'text-muted-foreground/40'
+                  )}
+                />
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className={cn('text-sm font-medium', step.done && 'line-through')}>
-                  {step.title}
-                </p>
-                {!step.done && (
-                  <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
-                )}
+                <p className="text-sm font-medium">{step.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
               </div>
 
               {/* Yalnız SIRADAKİ adımda düğme: üç düğme birden göstermek

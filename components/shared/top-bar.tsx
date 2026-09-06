@@ -42,6 +42,15 @@ interface TopBarProps {
   licenseKind?: 'trial' | 'licensed'
   /** Süre rozeti tıklanınca gidilecek yer. Verilmezse rozet bağlantı değil. */
   licenseHref?: string
+  /**
+   * Bitiş tarihi OLMADIĞINDA rozette yazacak metin ("Sınırsız",
+   * "Plan bilgisi yok"). Verilmezse rozet hiç çizilmez.
+   *
+   * NEDEN VAR: rozet önceden bitiş tarihi yoksa sessizce kayboluyordu.
+   * Kullanıcı için "sayaç yok", geliştirici için hiçbir iz yok — plan
+   * durumunu öğrenmenin ekranda hiçbir yolu kalmıyordu.
+   */
+  licenseFallbackLabel?: string | null
 }
 
 function ExamChip({ exam, now }: { exam: NextExam; now: Date }) {
@@ -78,7 +87,12 @@ function ExamChip({ exam, now }: { exam: NextExam; now: Date }) {
   )
 }
 
-export function TopBar({ licenseEndsAt, licenseKind = 'trial', licenseHref }: TopBarProps) {
+export function TopBar({
+  licenseEndsAt,
+  licenseKind = 'trial',
+  licenseHref,
+  licenseFallbackLabel,
+}: TopBarProps) {
   const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -92,23 +106,33 @@ export function TopBar({ licenseEndsAt, licenseKind = 'trial', licenseHref }: To
 
   const license = now && licenseEndsAt ? countdown(new Date(licenseEndsAt), now) : null
 
-  const licenseBadge = license && (
+  // Bitiş tarihi yoksa geri sayım yerine DURUM yazılır. Rozetin tamamen
+  // kaybolması, plan bilgisini ekrandan silmek anlamına geliyordu.
+  const licenseBadge = (license || licenseFallbackLabel) && (
     <span
       className={cn(
         'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
-        license.passed || license.days < 1
-          ? 'border-destructive-border bg-destructive-subtle text-destructive-foreground'
-          : license.days <= 7
-            ? 'border-warning-border bg-warning-subtle text-warning-foreground'
-            : 'border-border bg-muted/40'
+        !license
+          ? 'border-border bg-muted/40 text-muted-foreground'
+          : license.passed || license.days < 1
+            ? 'border-destructive-border bg-destructive-subtle text-destructive-foreground'
+            : license.days <= 7
+              ? 'border-warning-border bg-warning-subtle text-warning-foreground'
+              : 'border-border bg-muted/40'
       )}
     >
       <Timer className="size-3.5 shrink-0" aria-hidden />
-      <span className="font-medium">{licenseKind === 'trial' ? 'Deneme' : 'Plan'}</span>
-      {/* DAKİKA BURADA GÖSTERİLİR: kalan süre gün ölçeğinden saate
-          indiğinde asıl bilgi dakikadır — "1 gün" yazan bir rozet, üç
-          saat sonra kapanacak bir alanı sakinmiş gibi gösterir. */}
-      <span className="tabular-nums">{formatCountdown(license, true)}</span>
+      {license ? (
+        <>
+          <span className="font-medium">{licenseKind === 'trial' ? 'Deneme' : 'Plan'}</span>
+          {/* DAKİKA BURADA GÖSTERİLİR: kalan süre gün ölçeğinden saate
+              indiğinde asıl bilgi dakikadır — "1 gün" yazan bir rozet, üç
+              saat sonra kapanacak bir alanı sakinmiş gibi gösterir. */}
+          <span className="tabular-nums">{formatCountdown(license, true)}</span>
+        </>
+      ) : (
+        <span className="font-medium">{licenseFallbackLabel}</span>
+      )}
     </span>
   )
 

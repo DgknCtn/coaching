@@ -1,6 +1,6 @@
 import { AppSidebar } from '@/components/shared/app-sidebar'
 import { TopBar } from '@/components/shared/top-bar'
-import { licenseState } from '@/lib/plans'
+import { licenseState, LICENSE_STATE_LABEL } from '@/lib/plans'
 import { BRAND } from '@/lib/brand'
 import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
@@ -26,8 +26,11 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   // hesaplıyor. Burada "kaç gün kaldı" hesaplamak, sayfa önbelleğe
   // alındığında donmuş bir rakam basmak olurdu.
   //
-  // Sınırsız çalışma alanında rozet hiç çizilmez: dolmayan bir sayaç,
-  // olmayan bir son tarihi varmış gibi gösterir.
+  // Sınırsız çalışma alanında geri sayım çizilmez: dolmayan bir sayaç,
+  // olmayan bir son tarihi varmış gibi gösterir. Ama rozetin tamamen
+  // kaybolması da yanlıştı — kullanıcı plan durumunu hiçbir yerden
+  // okuyamıyordu ve "sayaç neden yok" sorusunun cevabı ekranda yoktu.
+  // Tarih yoksa geri sayım yerine DURUM yazılır.
   const state = usage ? licenseState(usage) : null
   const licenseKind = state === 'licensed' || state === 'license_expired' ? 'licensed' : 'trial'
   const licenseEndsAt =
@@ -36,6 +39,14 @@ export default async function TeacherLayout({ children }: { children: React.Reac
       : licenseKind === 'trial'
         ? usage?.trialEndsAt
         : usage?.licenseEndsAt
+
+  const licenseFallbackLabel = licenseEndsAt
+    ? null
+    : state === 'unlimited'
+      ? 'Sınırsız'
+      : state
+        ? LICENSE_STATE_LABEL[state]
+        : 'Plan bilgisi yok'
 
   const students = (studentRows ?? []).map((s) => ({
     id: s.student_id as string,
@@ -68,7 +79,8 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         <TopBar
           licenseEndsAt={licenseEndsAt}
           licenseKind={licenseKind}
-          licenseHref="/teacher/ayarlar/abonelik"
+          licenseFallbackLabel={licenseFallbackLabel}
+          licenseHref="/teacher/ayarlar"
         />
         <div className="flex-1">{children}</div>
       </main>

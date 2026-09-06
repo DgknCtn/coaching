@@ -66,10 +66,28 @@ export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
 
 export const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer'] as const
 
+// E-POSTA VE TELEFON ZORUNLU.
+//
+// İkisi de opsiyoneldi ve pratikte boş kalıyordu: öğrenciyi panele davet
+// etmek e-posta ister, veliye ulaşmak telefon. İletişim bilgisi olmayan
+// bir öğrenci kaydı, koçun kayıt sırasında kazandığı beş saniyeyi
+// sonradan aramakla fazlasıyla geri ödettiriyor.
+//
+// TELEFONA BİÇİM DAYATILMAZ: "0532...", "+90 532...", dahili numara —
+// hepsi geçerli girişler. Zorunlu olan bilginin VAR OLMASI, belli bir
+// kalıba uyması değil.
+//
+// VERİTABANINDA NOT NULL YOK: mevcut kayıtların bir kısmı boş ve onları
+// migration ile reddetmek uygulanmış bir geçmişi kırardı. Bu bir ürün
+// kuralı; yeri doğrulama katmanı.
 export const studentSchema = z.object({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
-  email: z.string().trim().email('Geçerli bir e-posta girin.').optional().or(z.literal('')),
-  phone: z.string().trim().max(30).optional().or(z.literal('')),
+  email: z.string().trim().min(1, 'E-posta zorunlu.').email('Geçerli bir e-posta girin.'),
+  phone: z
+    .string()
+    .trim()
+    .min(7, 'Telefon numarası zorunlu.')
+    .max(30, 'Telefon numarası çok uzun.'),
   gradeLevel: z.string().trim().max(30).optional().or(z.literal('')),
   examType: z.enum(EXAM_TYPES, { message: 'Geçersiz hazırlık programı.' }).optional().or(z.literal('')),
   lessonType: z.enum(LESSON_TYPES, { message: 'Geçersiz çalışma modeli.' }).optional().or(z.literal('')),
@@ -421,6 +439,39 @@ export const forgotPasswordSchema = z.object({
 
 // Yeni şifre belirleme. Kurallar loginSchema ile aynı; ek olarak iki alan
 // birbiriyle eşleşmeli.
+// AYARLAR — hesap bilgileri (072).
+export const accountProfileSchema = z.object({
+  fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
+  workspaceName: z
+    .string()
+    .trim()
+    .min(2, 'Çalışma alanı adı en az 2 karakter olmalı.')
+    .max(120),
+})
+
+/**
+ * AYARLAR — şifre değiştirme.
+ *
+ * Sıfırlama şemasından tek farkı MEVCUT ŞİFRE: sıfırlamada kullanıcının
+ * kimliği e-posta bağlantısıyla kanıtlanıyor, oturum içinde ise hiçbir
+ * şey kanıtlanmıyor. Açık bırakılmış bir bilgisayarın başına geçen biri,
+ * mevcut şifre sorulmazsa hesabı tek tıkla ele geçirir.
+ */
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Mevcut şifrenizi girin.').max(72),
+    password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+    passwordConfirm: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
+  })
+  .refine((v) => v.password === v.passwordConfirm, {
+    message: 'Şifreler eşleşmiyor.',
+    path: ['passwordConfirm'],
+  })
+  .refine((v) => v.password !== v.currentPassword, {
+    message: 'Yeni şifre mevcut şifreyle aynı olamaz.',
+    path: ['password'],
+  })
+
 export const passwordResetSchema = z
   .object({
     password: z.string().min(6, 'Şifre en az 6 karakter olmalı.').max(72),
@@ -434,6 +485,17 @@ export const passwordResetSchema = z
 export const registerSchema = loginSchema.extend({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
   workspaceName: z.string().trim().max(120).optional().or(z.literal('')),
+  /**
+   * Partner referans kodu — elle giriş (opsiyonel).
+   *
+   * Kod bugüne kadar YALNIZ `/?ref=KOD` bağlantısından gelebiliyordu;
+   * partnerin kodunu sözlü olarak paylaştığı durumda girilecek yer yoktu.
+   *
+   * BİÇİM BURADA DAYATILMAZ: geçersiz kod kaydı REDDETMEZ, sunucuda
+   * sessizce yok sayılır (059'un kararı). Yanlış bir kod yüzünden
+   * kaydolamayan kullanıcı, kazanılmamış bir müşteridir.
+   */
+  partnerCode: z.string().trim().max(20).optional().or(z.literal('')),
 })
 
 // Davet kabul: ad, e-posta, şifre.

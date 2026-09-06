@@ -59,7 +59,13 @@ export default function RegisterPage() {
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
-      const result = await registerAction(data.fullName, data.email, data.password)
+      const result = await registerAction(
+        data.fullName,
+        data.email,
+        data.password,
+        undefined,
+        data.partnerCode
+      )
       if (result?.error) {
         setServerError(result.error)
         return
@@ -192,6 +198,28 @@ export default function RegisterPage() {
             nedir?" sorusunu doğuruyordu ve zaten isteğe bağlıydı. Boş
             geçildiğinde sunucu adı kendisi üretiyor (064). Kullanıcı
             adı sonradan ayarlardan değiştirebilir. */}
+
+        {/* REFERANS KODU — partner atfının ELLE girilebilen yolu.
+            Kod bugüne kadar yalnız `/?ref=KOD` bağlantısından gelebiliyordu;
+            partner kodunu sözlü ya da yazılı olarak paylaştığında girilecek
+            bir yer yoktu ve atıf kayboluyordu.
+
+            Opsiyonel ve son sırada: kodu olmayan kullanıcının akışını
+            kesmemeli. Geçersiz kod kaydı reddetmez, sunucuda yok sayılır. */}
+        <div className="space-y-2">
+          <Label htmlFor="partnerCode">Referans kodu (varsa)</Label>
+          <Input
+            id="partnerCode"
+            placeholder="ORNEK123"
+            autoComplete="off"
+            autoCapitalize="characters"
+            aria-invalid={!!errors.partnerCode}
+            {...register('partnerCode')}
+          />
+          {errors.partnerCode && (
+            <p className="text-xs text-destructive">{errors.partnerCode.message}</p>
+          )}
+        </div>
 
         {serverError && (
           <p className="text-xs text-destructive">{serverError}</p>

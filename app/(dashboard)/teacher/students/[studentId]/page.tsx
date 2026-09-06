@@ -418,38 +418,51 @@ export default async function StudentDetailPage({
         //
         // Geri düğmesi kaldırıldı: "Genel Bakış" artık bir sekme, listeye
         // dönüş yolu sol menüdeki "Öğrenciler".
-        title="Genel Bakış"
+        title={tab ? tab.label : 'Genel Bakış'}
+        // İLETİŞİM VE EYLEMLER YALNIZ GENEL BAKIŞ'TA.
+        //
+        // Kitaplar / Ödevler / Durum / Veliler / Not ayrı rota değil, bu
+        // sayfanın `?sekme=` varyantları. Aşağıdaki özet blokları zaten
+        // `{!tab && ...}` ile korunuyordu ama başlık korunmuyordu: koç
+        // hangi panele geçerse geçsin "Genel Bakış" başlığını ve
+        // Düzenle / Rapor / Ödev Ver düğmelerini görmeye devam ediyordu.
+        // Bir panelin başında o panelle ilgisi olmayan üç düğme durması,
+        // hangisinin neye ait olduğunu okunamaz kılıyor.
         subtitle={
-          [student.email, student.phone].filter(Boolean).join(' · ') || undefined
+          tab
+            ? undefined
+            : [student.email, student.phone].filter(Boolean).join(' · ') || undefined
         }
         // Akış / Kaynak Planı / Koruma / Rapor üstteki sekme şeridinde;
         // başlıkta yalnız bu ekranın kendi eylemleri kalıyor.
         action={
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              render={<Link href={`/teacher/students/${studentId}/edit`} />}
-            >
-              <Pencil />
-              Düzenle
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              render={<Link href={`/teacher/students/${studentId}/report`} />}
-            >
-              <FileText />
-              Rapor
-            </Button>
-            <Button
-              size="sm"
-              render={<Link href={`/teacher/students/${studentId}/homework/new`} />}
-            >
-              <Plus />
-              Ödev Ver
-            </Button>
-          </div>
+          tab ? undefined : (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                render={<Link href={`/teacher/students/${studentId}/edit`} />}
+              >
+                <Pencil />
+                Düzenle
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                render={<Link href={`/teacher/students/${studentId}/report`} />}
+              >
+                <FileText />
+                Rapor
+              </Button>
+              <Button
+                size="sm"
+                render={<Link href={`/teacher/students/${studentId}/homework/new`} />}
+              >
+                <Plus />
+                Ödev Ver
+              </Button>
+            </div>
+          )
         }
       />
 

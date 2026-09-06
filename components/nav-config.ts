@@ -3,7 +3,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
-  CreditCard,
+  Settings,
   LifeBuoy,
   UserPlus,
   FileBarChart,
@@ -129,16 +129,17 @@ export const teacherNav: NavEntry[] = [
   // giremediğini zaten açıklıyor.
   { href: '/teacher/finans', label: 'Finans', icon: Wallet },
   { href: '/teacher/terms', label: 'Eğitim Dönemi', icon: CalendarDays },
-  // Plan yalnız SAHİBE anlamlı ama menüde herkese görünür: öğretmen
-  // tıkladığında sayfa zaten yetki hatası verir. Menüyü role göre
-  // budamak, ikinci bir yetki kaynağı yaratmak olurdu.
-  { href: '/teacher/ayarlar/abonelik', label: 'Plan', icon: CreditCard },
   { href: '/teacher/destek', label: 'Destek', icon: LifeBuoy },
-  // HESAP VE VERİ (068): silme talebi altyapısı 053'ten beri vardı ama
-  // hiçbir yerden erişilemiyordu. Menüde herkese görünür, Plan ve Finans
-  // ile aynı gerekçeyle: menüyü role göre budamak yetkinin ikinci bir
-  // kaynağını yaratırdı, sayfa neden giremediğini zaten açıklıyor.
-  { href: '/teacher/ayarlar/veri', label: 'Hesap ve Veri', icon: ShieldCheck },
+  // AYARLAR TEK GİRDİ (072).
+  //
+  // "Plan" ve "Hesap ve Veri" menüde ayrı ayrı duruyordu, /teacher/ayarlar
+  // kökünün ise sayfası bile yoktu. Hesabıyla ilgili bir şey arayan
+  // kullanıcı için ortak bir adres yoktu; ad ve şifre değiştirmenin
+  // adresi ise hiç yoktu. İkisi de artık ayarlar sayfasının içinde.
+  //
+  // Menü role göre budanmıyor — Plan ve Finans ile aynı gerekçe: sayfanın
+  // kendisi neye erişilebileceğini zaten söylüyor.
+  { href: '/teacher/ayarlar', label: 'Ayarlar', icon: Settings },
 ]
 
 /**

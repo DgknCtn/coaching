@@ -392,10 +392,24 @@ export function AppSidebar({
         {brand}
         {workspacePicker}
         {switcher}
-        {nav}
-        {studentNavBlock}
-        {adminBlock}
-        {panelBlock}
+
+        {/* GEZİNME KENDİ İÇİNDE KAYAR.
+            Kenar çubuğu `h-screen` ama hiçbir yerinde taşma kuralı yoktu.
+            "Öğrenci İşleri" grubu açılınca sekiz satır birden eklenip
+            içerik ekran boyunu aşıyor, flex çocukları sıkışıyor ve
+            footer ile "Daralt" düğmesi görünürden taşıyordu — menü
+            "aşağı kayıyor" denen şey buydu.
+
+            Marka, alan seçici ve footer sabit kalır; yalnız orta blok
+            kayar. min-h-0 zorunlu: onsuz flex çocuğu içeriğinden küçülemez
+            ve overflow hiç devreye girmez. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {nav}
+          {studentNavBlock}
+          {adminBlock}
+          {panelBlock}
+        </div>
+
         {footer}
       </>
     )
@@ -495,7 +509,10 @@ export function AppSidebar({
             id="mobile-nav"
             // 85vw tavanı: 320px'lik telefonlarda çekmece ekranı tamamen
             // kaplayıp arkadaki perdeyi görünmez bırakıyordu.
-            className="relative flex h-full w-[min(18rem,85vw)] flex-col overflow-y-auto bg-sidebar py-6"
+            // Kaydırma artık inner()'ın orta bloğunda; burada da olsaydı
+            // iç içe iki kaydırma alanı olur ve parmak hangisini
+            // sürüklediği belirsizleşirdi.
+            className="relative flex h-full w-[min(18rem,85vw)] flex-col overflow-hidden bg-sidebar py-6"
           >
             {inner(false)}
           </aside>

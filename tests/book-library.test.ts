@@ -280,3 +280,38 @@ describe('071 — kütüphaneye yazabilen yönetici gerçekten yazabilir', () =>
     expect(SQL_071).toContain('-- ROLLBACK')
   })
 })
+
+describe('072 — hesap ve çalışma alanı adı düzenleme', () => {
+  const SQL_072 = readFileSync(
+    join(process.cwd(), 'supabase/migrations/072_profile_and_workspace_rename.sql'),
+    'utf8'
+  )
+
+  it('kullanıcı yalnız KENDİ adını değiştirebilir', () => {
+    // Hedef satır parametreyle gelmiyor; auth.uid()'den bulunuyor.
+    // Parametre alsaydı başkasının adı yazılabilirdi.
+    expect(SQL_072).toContain('FUNCTION public.update_my_profile(p_full_name TEXT)')
+    expect(SQL_072).toContain('v_profile_id := public.current_profile_id()')
+    expect(SQL_072).toContain('WHERE id = v_profile_id')
+  })
+
+  it('çalışma alanı adını yalnız sahibi değiştirebilir', () => {
+    expect(SQL_072).toContain("has_workspace_role(p_workspace_id, ARRAY['owner'])")
+  })
+
+  it('kütüphane alanının adı değiştirilemez', () => {
+    // Adı ürünün parçası; değişirse yönetim ekranındaki metinler yalan
+    // söyler.
+    expect(SQL_072).toContain('AND is_library')
+    expect(SQL_072).toContain('Kütüphane çalışma alanının adı değiştirilemez')
+  })
+
+  it('uzunluk sınırları veritabanında da uygulanır', () => {
+    expect(SQL_072).toContain('length(v_name) < 2')
+    expect(SQL_072).toContain('length(v_name) > 120')
+  })
+
+  it('geri alma bloğu vardır', () => {
+    expect(SQL_072).toContain('-- ROLLBACK')
+  })
+})

@@ -24,39 +24,67 @@ const UUID = '11111111-1111-4111-8111-111111111111'
 const UUID2 = '22222222-2222-4222-8222-222222222222'
 
 describe('studentSchema', () => {
+  // E-posta ve telefon ARTIK ZORUNLU: öğrenciyi panele davet etmek
+  // e-posta, veliye ulaşmak telefon ister. İletişim bilgisi olmayan
+  // kayıt, koçun kayıt anında kazandığı saniyeleri sonradan aramakla
+  // fazlasıyla geri ödettiriyordu.
+  const valid = {
+    fullName: 'Ali Veli',
+    email: 'ali@ornek.com',
+    phone: '05001234567',
+  }
+
   it('accepts a valid student with optional fields empty', () => {
-    const r = studentSchema.safeParse({ fullName: 'Ali Veli', email: '', phone: '', gradeLevel: '', examType: '', notes: '' })
+    const r = studentSchema.safeParse({ ...valid, gradeLevel: '', examType: '', notes: '' })
     expect(r.success).toBe(true)
   })
 
   it('rejects too-short name', () => {
-    const r = studentSchema.safeParse({ fullName: 'A' })
+    const r = studentSchema.safeParse({ ...valid, fullName: 'A' })
     expect(r.success).toBe(false)
     if (!r.success) expect(firstIssue(r.error)).toContain('en az 2 karakter')
   })
 
-  it('rejects invalid email', () => {
-    const r = studentSchema.safeParse({ fullName: 'Ali Veli', email: 'not-an-email' })
+  it('rejects missing email', () => {
+    const r = studentSchema.safeParse({ ...valid, email: '' })
     expect(r.success).toBe(false)
+    if (!r.success) expect(firstIssue(r.error)).toContain('E-posta zorunlu')
+  })
+
+  it('rejects invalid email', () => {
+    expect(studentSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false)
+  })
+
+  it('rejects missing phone', () => {
+    const r = studentSchema.safeParse({ ...valid, phone: '' })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(firstIssue(r.error)).toContain('Telefon numarası zorunlu')
+  })
+
+  it('accepts phone in any human format', () => {
+    // Biçim DAYATILMAZ: zorunlu olan bilginin var olması, belli bir
+    // kalıba uyması değil.
+    for (const phone of ['05001234567', '+90 500 123 45 67', '(0500) 123 45 67']) {
+      expect(studentSchema.safeParse({ ...valid, phone }).success).toBe(true)
+    }
   })
 
   it('rejects invalid exam type', () => {
-    const r = studentSchema.safeParse({ fullName: 'Ali Veli', examType: 'ZZZ' })
-    expect(r.success).toBe(false)
+    expect(studentSchema.safeParse({ ...valid, examType: 'ZZZ' }).success).toBe(false)
   })
 
   it('accepts each valid lesson type', () => {
     for (const lessonType of ['yuz_yuze_ozel', 'online_birebir', 'online_grup', 'bireysel_kocluk']) {
-      expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType }).success).toBe(true)
+      expect(studentSchema.safeParse({ ...valid, lessonType }).success).toBe(true)
     }
   })
 
   it('accepts empty lesson type', () => {
-    expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType: '' }).success).toBe(true)
+    expect(studentSchema.safeParse({ ...valid, lessonType: '' }).success).toBe(true)
   })
 
   it('rejects invalid lesson type', () => {
-    expect(studentSchema.safeParse({ fullName: 'Ali Veli', lessonType: 'ZZZ' }).success).toBe(false)
+    expect(studentSchema.safeParse({ ...valid, lessonType: 'ZZZ' }).success).toBe(false)
   })
 })
 
@@ -215,20 +243,21 @@ describe('hazırlık programı ve seviye', () => {
   // R6-11: eski TYT/AYT daraltması KALDIRILDI. Öğrencinin neye hazırlandığı
   // ile hangi sınıfta olduğu bağımsızdır; şema ikisi arasında çapraz
   // doğrulama YAPMAZ.
+  // İletişim alanları 072'den beri zorunlu; bu testlerin konusu hazırlık
+  // programı olduğu için base onları da taşıyor.
+  const base = { fullName: 'Ali Veli', email: 'ali@ornek.com', phone: '05001234567' }
+
   it('studentSchema genişletilmiş hazırlık programlarını kabul eder', () => {
-    const base = { fullName: 'Ali Veli' }
     for (const value of ['Yok', 'LGS', 'YKS', 'TYT', 'AYT', 'IB', 'SAT', 'AP', 'DGS', 'ALES', 'KPSS', 'Diğer']) {
       expect(studentSchema.safeParse({ ...base, examType: value }).success).toBe(true)
     }
   })
 
   it('tanımsız bir hazırlık programını yine de reddeder', () => {
-    const base = { fullName: 'Ali Veli' }
     expect(studentSchema.safeParse({ ...base, examType: 'GRE' }).success).toBe(false)
   })
 
   it('kabul #63/#64: sınıf ve hazırlık programı birbirini kısıtlamaz', () => {
-    const base = { fullName: 'Ali Veli' }
     expect(
       studentSchema.safeParse({ ...base, gradeLevel: '10. Sınıf', examType: 'IB' }).success
     ).toBe(true)

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { readReferralCode, clearReferralCode } from '@/lib/referral'
+import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 import { LandingPage } from '@/components/marketing/landing-page'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,12 @@ export default async function RootPage() {
   // sırasında kurulmuş olur.
   if (!profile?.default_workspace_id) {
     const meta = user.user_metadata as
-      | { full_name?: string; name?: string; workspace_name?: string | null }
+      | {
+          full_name?: string
+          name?: string
+          workspace_name?: string | null
+          partner_code?: string | null
+        }
       | undefined
 
     // AD İÇİN YEDEK ZİNCİRİ.
@@ -54,7 +59,11 @@ export default async function RootPage() {
         p_full_name: fullName,
         p_email: user.email ?? '',
         p_workspace_name: meta?.workspace_name ?? null,
-        p_partner_code: await readReferralCode(),
+        // Kayıt formuna ELLE girilen kod üst veride taşınır; e-posta
+        // doğrulaması açıkken workspace burada kurulduğu için kodun tek
+        // hayatta kalma yolu budur. Yoksa `?ref=` çerezine düşülür.
+        p_partner_code:
+          normalizeReferralCode(meta?.partner_code) ?? (await readReferralCode()),
       })
       if (!error) await clearReferralCode()
       // Kurulum başarılıysa aynı sayfaya dönülür ve bu kez profil dolu

@@ -53,7 +53,44 @@ function DropdownMenuGroup({ ...props }: MenuPrimitive.Group.Props) {
   return <MenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />
 }
 
+// MENÜ BAŞLIĞI — DÜZ BİR DIV, Menu.GroupLabel DEĞİL.
+//
+// Base UI'ın GroupLabel parçası `<Menu.Group>` bağlamı OLMADAN çağrılınca
+// istisna fırlatıyor ("MenuGroupContext is missing"). Bu istisna popup
+// içeriği render edilirken oluştuğu için menü AÇILIR AÇILMAZ tüm sayfa
+// hata sınırına düşüyordu — üç ayrı menü (çalışma alanı seçici, mobil
+// kullanıcı menüsü, kitap bölüm satır menüsü) aynı hatayı taşıyordu ve
+// hiçbiri etiketi gerçek bir grupla ilişkilendirmiyordu.
+//
+// Etiket burada bir BAŞLIK olarak kullanılıyor, bir grubun erişilebilir
+// adı olarak değil. Düz div tam olarak bu işi yapıyor ve hiçbir bağlam
+// gerektirmiyor.
+//
+// Gerçekten gruplanmış bir menü gerekirse doğru kalıp DropdownMenuGroup
+// + DropdownMenuGroupLabel'dır (aşağıda); o zaman bağlam da var olur.
 function DropdownMenuLabel({
+  className,
+  inset,
+  ...props
+}: React.ComponentProps<"div"> & {
+  inset?: boolean
+}) {
+  return (
+    <div
+      data-slot="dropdown-menu-label"
+      data-inset={inset}
+      role="presentation"
+      className={cn(
+        "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+/** Yalnız `DropdownMenuGroup` İÇİNDE kullanılır — grubun erişilebilir adı. */
+function DropdownMenuGroupLabel({
   className,
   inset,
   ...props
@@ -62,7 +99,7 @@ function DropdownMenuLabel({
 }) {
   return (
     <MenuPrimitive.GroupLabel
-      data-slot="dropdown-menu-label"
+      data-slot="dropdown-menu-group-label"
       data-inset={inset}
       className={cn(
         "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
@@ -256,6 +293,7 @@ export {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuGroupLabel,
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
   DropdownMenuRadioGroup,

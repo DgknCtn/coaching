@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { BRAND, contactMailto } from '@/lib/brand'
+import { AtSign, Mail, MessageCircle } from 'lucide-react'
+import { BRAND, contactMailto, whatsappLink, instagramLink } from '@/lib/brand'
 import { BrandMark } from '@/components/shared/brand-mark'
 
 export function Footer() {
@@ -16,12 +17,42 @@ export function Footer() {
             <p className="text-sm text-muted-foreground">
               Öğrenci takibini tek ekranda yönetin.
             </p>
-            <a
-              href={contactMailto(`${BRAND.name} hakkında`)}
-              className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              {BRAND.contactEmail}
-            </a>
+            {/* İLETİŞİM KANALLARI.
+                Footer'da yalnız e-posta vardı. Türkiye'de öğretmen ve veli
+                iletişiminin çoğu WhatsApp üzerinden yürüyor; yalnız
+                e-posta bırakmak, en çok kullanılan kanalı kapatmaktı.
+                Sosyal bağlantılar rel="noopener" ile açılır. */}
+            <div className="flex flex-col items-center gap-2 md:items-start">
+              <a
+                href={whatsappLink(`Merhaba, ${BRAND.name} hakkında bilgi almak istiyorum.`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <MessageCircle className="size-4 shrink-0" aria-hidden />
+                {BRAND.phoneDisplay}
+              </a>
+
+              <a
+                href={instagramLink()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {/* lucide-react marka ikonları taşımıyor (telif); @ işareti
+                    Instagram kullanıcı adının yanında zaten anlaşılır. */}
+                <AtSign className="size-4 shrink-0" aria-hidden />
+                {BRAND.instagram}
+              </a>
+
+              <a
+                href={contactMailto(`${BRAND.name} hakkında`)}
+                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Mail className="size-4 shrink-0" aria-hidden />
+                {BRAND.contactEmail}
+              </a>
+            </div>
           </div>
 
           {/* Links */}
