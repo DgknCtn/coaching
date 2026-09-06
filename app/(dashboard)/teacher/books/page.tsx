@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Library, Download } from 'lucide-react'
+import { Plus, Library, LibraryBig, Download } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
@@ -110,6 +110,14 @@ export default async function BooksPage({ searchParams }: PageProps) {
                 İki düğme yan yana durunca yedeğin ne işe yaradığı da
                 anlaşılıyor. */}
             <BookPoolImport />
+            {/* 069: yeni koçun havuzu boş açılıyor ve tek çıkış yolu her
+                kaynağı elle girmekti. Kütüphane girişi "Yeni Kitap"ın
+                YANINDA duruyor — iki yol da aynı anda görünmezse koç
+                zaten bildiği zor yolu seçer. */}
+            <Button size="sm" variant="outline" render={<Link href="/teacher/books/library" />}>
+              <LibraryBig />
+              Kütüphaneden Ekle
+            </Button>
             <Button size="sm" render={<Link href="/teacher/books/new" />}>
               <Plus />
               Yeni Kitap
@@ -120,12 +128,21 @@ export default async function BooksPage({ searchParams }: PageProps) {
 
       {!hasAnyBook ? (
         <Section variant="card">
+          {/* Boş havuzda ASIL kazanç kütüphanededir: 60 bölümlük bir
+              kaynağı elle kurmak yerine seçip kopyalamak. Bu yüzden burada
+              birincil eylem odur; elle ekleme ikinci sırada durur. */}
           <EmptyState
             icon={Library}
             title="Kitap havuzu boş"
-            description="Kitap havuzuna ilk kitabı ekleyerek başla."
-            action={{ label: 'İlk kitabı ekle', href: '/teacher/books/new' }}
+            description="Hazır kaynakları kütüphaneden seçerek başlayabilir ya da kendi kitabını elle ekleyebilirsin."
+            action={{ label: 'Kütüphaneden ekle', href: '/teacher/books/library' }}
           />
+          <div className="pb-8 text-center">
+            <Button variant="ghost" size="sm" render={<Link href="/teacher/books/new" />}>
+              <Plus />
+              Kendi kitabımı elle ekle
+            </Button>
+          </div>
         </Section>
       ) : (
         <>

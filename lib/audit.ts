@@ -34,6 +34,11 @@ export type AuditAction =
   | 'workspace.switch'
   | 'book.outline_import'
   | 'book.import'
+  // Kütüphane (069).
+  | 'book.library_copy'
+  | 'book.library_submit'
+  | 'book.library_approve'
+  | 'book.library_reject'
   // Faturalama (056). Para hareketi denetim kaydının asıl sebebidir:
   // "bu abonelik ne zaman, hangi planla açıldı" sorusunun cevabı burada.
   | 'billing.checkout_started'
@@ -61,6 +66,10 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'book.subsection_delete': 'Kitap alt bölümü sildi',
   'book.outline_import': 'Kitap içindekiler aktardı',
   'book.import': 'Yedekten kitap aktardı',
+  'book.library_copy': 'Kütüphaneden kitap ekledi',
+  'book.library_submit': 'Kitabı kütüphaneye önerdi',
+  'book.library_approve': 'Kütüphane önerisini onayladı',
+  'book.library_reject': 'Kütüphane önerisini reddetti',
   'invite.create': 'Davet oluşturdu',
   'invite.revoke': 'Daveti iptal etti',
   'target.set': 'Hedef belirledi',

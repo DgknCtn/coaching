@@ -236,3 +236,22 @@ export const getParentContext = cache(async function getParentContext() {
     }>,
   }
 })
+
+/**
+ * Kütüphane çalışma alanının id'si (069).
+ *
+ * Kütüphane, `is_library` bayraklı TEK bir çalışma alanıdır ve kitapları
+ * sıradan `books` satırlarıdır. Bu fonksiyon yalnız o alanın id'sini
+ * çözer; okuma iznini RLS verir (koç, herhangi bir alanda owner/teacher
+ * ise yayındaki kütüphane kitaplarını görebilir).
+ *
+ * Alan henüz açılmamışsa null döner — arayüz "kütüphane hazırlanıyor"
+ * boş durumunu gösterir, çökmez.
+ */
+export const getLibraryWorkspaceId = cache(async function getLibraryWorkspaceId() {
+  const supabase = await createClient()
+  // RPC, tablo sorgusu DEĞİL: koç kütüphane alanının üyesi olmadığı için
+  // workspaces satırını RLS ile okuyamaz.
+  const { data } = await supabase.rpc('library_workspace_id')
+  return (data as string | null) ?? null
+})

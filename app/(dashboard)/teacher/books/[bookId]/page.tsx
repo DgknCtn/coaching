@@ -8,6 +8,7 @@ import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { LibrarySubmitButton } from './library-submit-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export default async function BookDetailPage({
     .from('books')
     .select(`
       id, title, subject, publisher, exam_type, level_exam, description, status,
-      tracking_mode,
+      tracking_mode, library_status, library_review_note,
       book_sections(
         id, title, order_index, status, parent_section_id, test_start, test_end,
         book_tests(id, title, order_index, status)
@@ -69,14 +70,22 @@ export default async function BookDetailPage({
           </div>
           <p className="text-sm text-muted-foreground">{book.subject}{book.publisher ? ` · ${book.publisher}` : ''}</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href={`/teacher/books/${bookId}/edit`} />}
-        >
-          <Pencil className="size-4" />
-          Düzenle
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* 069: iyi kurulmuş bir kaynağı ortak kütüphaneye taşımanın yolu. */}
+          <LibrarySubmitButton
+            bookId={bookId}
+            libraryStatus={book.library_status}
+            reviewNote={book.library_review_note}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={`/teacher/books/${bookId}/edit`} />}
+          >
+            <Pencil className="size-4" />
+            Düzenle
+          </Button>
+        </div>
       </div>
 
       {book.description && (

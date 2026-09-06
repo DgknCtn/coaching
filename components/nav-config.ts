@@ -237,6 +237,7 @@ export function studentOverviewNav(studentId: string): NavItem[] {
 export const adminNav: NavItem[] = [
   { href: '/admin', label: 'Özet', icon: LayoutDashboard, exact: true },
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
+  { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
 ]
 

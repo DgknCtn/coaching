@@ -194,6 +194,25 @@ export const bookEditionSchema = z.object({
   title: z.string().trim().max(200).optional().or(z.literal('')),
 })
 
+// Kütüphaneden toplu kopyalama (069).
+//
+// Üst sınır 50: her kitap onlarca bölüm ve yüzlerce test satırı demek;
+// tek istekte binlerce satır yazmak hem yavaş hem de kazayla "tümünü
+// seç"e basan koç için geri alması zor bir sonuç.
+export const librarySelectionSchema = z.object({
+  bookIds: z
+    .array(uuid)
+    .min(1, 'En az bir kitap seçin.')
+    .max(50, 'Tek seferde en fazla 50 kitap eklenebilir.'),
+})
+
+// Kütüphaneye öneri kararı (069). Gerekçe reddetmede anlamlıdır; koç
+// neden geri çevrildiğini görmeden kaynağı düzeltemez.
+export const libraryReviewSchema = z.object({
+  bookId: uuid,
+  reason: z.string().trim().max(500).optional().or(z.literal('')),
+})
+
 export const sectionTitleSchema = z.object({
   sectionId: uuid,
   title: z.string().trim().min(1, 'Bölüm adı boş olamaz.').max(200),

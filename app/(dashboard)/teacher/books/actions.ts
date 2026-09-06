@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { bookSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import {
+  bookSchema,
+  uuidSchema,
+  librarySelectionSchema,
+  firstIssue,
+} from '@/lib/validation'
 import { parseBookBackup, bookIdentityKey } from '@/lib/book-backup'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
@@ -241,4 +246,77 @@ export async function archiveBookAction(bookId: string) {
 
   revalidatePath('/teacher/books')
   redirect('/teacher/books')
+}
+
+
+/**
+ * KÜTÜPHANEDEN HAVUZA KOPYALA (069).
+ *
+ * Yeni koçun havuzu bomboş açılıyor ve tek çıkış yolu her kaynağı elle
+ * girmekti. Kütüphane, o kaynakların bir kez düzgün kurulmuş hâlini
+ * herkese açar; koç filtreyle bulur, çoklu seçer, kopyalar.
+ *
+ * ATLAMA HATA DEĞİL: seçilen 12 kitabın ikisi havuzda zaten varsa
+ * işlemin tamamını geri almak koça hiçbir şey kazandırmaz. RPC atlananı
+ * sayar, kullanıcı sonucu okur.
+ */
+export async function copyLibraryBooksAction(bookIds: string[]) {
+  const parsed = librarySelectionSchema.safeParse({ bookIds })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('copy_library_books', {
+    p_workspace_id: workspaceId,
+    p_book_ids: parsed.data.bookIds,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  const result = (data ?? {}) as { copied?: number; skipped?: number }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'book.library_copy',
+    entityType: 'book',
+    detail: { copied: result.copied ?? 0, skipped: result.skipped ?? 0 },
+  })
+
+  revalidatePath('/teacher/books')
+  revalidatePath('/teacher/books/library')
+
+  return { success: true, copied: result.copied ?? 0, skipped: result.skipped ?? 0 }
+}
+
+/**
+ * KİTABI KÜTÜPHANEYE ÖNER (069).
+ *
+ * Kitap TAŞINMAZ, yalnız 'pending' işaretlenir: koçun öğrencileri
+ * kaynağı kullanmaya devam eder. Onay anında kütüphaneye ayrı bir kopya
+ * girer, böylece koç kendi kitabını sonradan değiştirdiğinde yayındaki
+ * sürüm sessizce değişmez.
+ */
+export async function submitBookToLibraryAction(bookId: string) {
+  const parsed = uuidSchema.safeParse(bookId)
+  if (!parsed.success) return { error: 'Geçersiz kayıt kimliği.' }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('submit_book_to_library', {
+    p_book_id: parsed.data,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'book.library_submit',
+    entityType: 'book',
+    entityId: parsed.data,
+  })
+
+  revalidatePath(`/teacher/books/${parsed.data}`)
+  return { success: true }
 }

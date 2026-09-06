@@ -28,11 +28,26 @@ interface Props {
   /** Havuzda gerçekten bulunan baskı yılları. */
   editionYears: number[]
   resultCount: number
+  /** Arama kutusunun yer tutucusu; kütüphanede "kütüphanede ara" olur. */
+  searchPlaceholder?: string
+  /** Sonuç sayacının sonundaki isim: "kitap listeleniyor". */
+  resultNoun?: string
 }
 
 const SEARCH_DEBOUNCE_MS = 300
 
-export function BookPoolFilters({ publishers, editionYears, resultCount }: Props) {
+// 069: aynı çubuk hem Kitap Havuzu'nda hem Kütüphane'de kullanılıyor.
+// Filtre alanları ikisinde de birebir aynı olduğu için ikinci bir kopya
+// çıkarmak, bir alan eklendiğinde iki yerde unutulacak bir bakım borcu
+// olurdu. Sayfaya özgü tek şey metinler; URL yolunu usePathname zaten
+// kendisi okuyor.
+export function BookPoolFilters({
+  publishers,
+  editionYears,
+  resultCount,
+  searchPlaceholder = 'Kitap adı veya yayın ara',
+  resultNoun = 'kitap',
+}: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -75,8 +90,8 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Kitap adı veya yayın ara"
-          aria-label="Kitap havuzunda ara"
+          placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -185,7 +200,7 @@ export function BookPoolFilters({ publishers, editionYears, resultCount }: Props
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{resultCount} kitap listeleniyor</p>
+        <p className="text-sm text-muted-foreground">{resultCount} {resultNoun} listeleniyor</p>
         {activeFilters.length > 0 && (
           <Button
             variant="ghost"
