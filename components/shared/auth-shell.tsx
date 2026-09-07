@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { GraduationCap, Lock, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { GraduationCap, Lock, UserCheck, Users } from 'lucide-react'
 import { BRAND } from '@/lib/brand'
 import { BrandMark } from '@/components/shared/brand-mark'
 
@@ -16,7 +16,8 @@ interface AuthShellProps {
   hero?: {
     eyebrow: string
     title: React.ReactNode
-    description: string
+    /** Başlığın altındaki cümle. Verilmezse yalnız başlık görünür. */
+    description?: string
   }
 }
 
@@ -60,8 +61,6 @@ const DEFAULT_HERO = {
       Geride kalan öğrenciyi <span className="text-sidebar-primary">hafta bitmeden</span> görün.
     </>
   ),
-  description:
-    'Öğretmen, öğrenci ve veli aynı kapıdan girer; herkes yalnız kendi yetkili olduğu ekrana düşer.',
 }
 
 export function AuthShell({
@@ -97,9 +96,11 @@ export function AuthShell({
             {hero.title}
           </p>
 
-          <p className="mt-5 max-w-md text-sm leading-relaxed text-sidebar-foreground/70">
-            {hero.description}
-          </p>
+          {hero.description && (
+            <p className="mt-5 max-w-md text-sm leading-relaxed text-sidebar-foreground/70">
+              {hero.description}
+            </p>
+          )}
 
           <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
             {PANELS.map((panel) => (
@@ -116,15 +117,9 @@ export function AuthShell({
           </div>
         </div>
 
-        <div className="relative space-y-2">
-          <p className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-            <ShieldCheck className="size-3.5 text-emerald-400" aria-hidden />
-            Her hesap yalnız yetkili olduğu veriyi görür
-          </p>
-          <p className="text-xs text-sidebar-foreground/50">
-            © {BRAND.since} {BRAND.name}
-          </p>
-        </div>
+        <p className="relative text-xs text-sidebar-foreground/50">
+          © {BRAND.since} {BRAND.name}
+        </p>
       </div>
 
       <div className="flex min-h-screen items-center justify-center bg-background p-6 md:p-10 lg:min-h-0">

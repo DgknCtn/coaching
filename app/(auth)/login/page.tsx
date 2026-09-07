@@ -54,7 +54,6 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      badge="Tek giriş, üç panel"
       title="Tekrar hoş geldiniz"
       description="Kaldığınız yerden devam edin."
       footer={
