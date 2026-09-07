@@ -31,33 +31,37 @@ interface AuthShellProps {
 
 // Üç panel kartı; sol tanıtımın tek değişmeyen parçası olduğu için
 // bileşen dışında sabit duruyor, her render'da yeniden kurulmuyor.
+//
+// Metinler middleware'deki gerçek rol alanlarını anlatıyor
+// (/teacher, /student, /parent) — giriş ekranında verilen söz ile
+// giriş sonrası görülen ekran birbirini tutmalı.
 const PANELS = [
   {
     icon: UserCheck,
-    title: 'Koç Paneli',
-    description: 'Öğrenci, randevu ve akademik süreç yönetimi',
+    title: 'Öğretmen',
+    description: 'Öğrenci listesi, ödev dağıtımı ve haftalık ilerleme',
   },
   {
     icon: GraduationCap,
-    title: 'Öğrenci Paneli',
-    description: 'Günlük program, ödev ve gelişim takibi',
+    title: 'Öğrenci',
+    description: 'Kendi programı, ödevleri ve çözdüğü testler',
   },
   {
     icon: Users,
-    title: 'Veli Paneli',
-    description: 'Yetkili öğrenci sürecine güvenli görünüm',
+    title: 'Veli',
+    description: 'Yalnız kendi öğrencisinin ilerlemesi, düzenleme yetkisi yok',
   },
 ] as const
 
 const DEFAULT_HERO = {
-  eyebrow: 'Akademik gelişim tek merkezde',
+  eyebrow: 'Öğrenci, ödev ve kitap takibi tek ekranda',
   title: (
     <>
-      Planınızı uygulayın, gelişimi <span className="text-sidebar-primary">birlikte takip</span> edin.
+      Geride kalan öğrenciyi <span className="text-sidebar-primary">hafta bitmeden</span> görün.
     </>
   ),
   description:
-    'Koç, öğrenci ve veli hesapları aynı güvenli giriş alanını kullanır; her kullanıcı kendi yetkili çalışma alanına otomatik yönlendirilir.',
+    'Öğretmen, öğrenci ve veli aynı kapıdan girer; herkes yalnız kendi yetkili olduğu ekrana düşer.',
 }
 
 export function AuthShell({
@@ -115,7 +119,7 @@ export function AuthShell({
         <div className="relative space-y-2">
           <p className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
             <ShieldCheck className="size-3.5 text-emerald-400" aria-hidden />
-            Güvenli rol yönlendirmesi ve yetkili veri erişimi
+            Her hesap yalnız yetkili olduğu veriyi görür
           </p>
           <p className="text-xs text-sidebar-foreground/50">
             © {BRAND.since} {BRAND.name}

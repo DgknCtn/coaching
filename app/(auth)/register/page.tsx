@@ -45,14 +45,15 @@ const TRUST = [
 // Kayıt ekranındaki tanıtım, girişteki "tekrar hoş geldiniz" tonundan
 // ayrılmalı: buradaki kullanıcı ürünü ilk kez kuruyor.
 const REGISTER_HERO = {
-  eyebrow: 'Kurulum birkaç dakika sürer',
+  eyebrow: 'Çalışma alanınız hesabınızla birlikte kurulur',
   title: (
     <>
-      Öğrenci takibini <span className="text-sidebar-primary">bugün kurun</span>, yarın uygulayın.
+      İlk öğrencinizi <span className="text-sidebar-primary">bugün ekleyin</span>, takip bu hafta
+      başlasın.
     </>
   ),
   description:
-    'Çalışma alanınız hesabınızla birlikte kurulur; öğrencilerinizi ve velileri davet ederek aynı gün takibe başlayabilirsiniz.',
+    'Kayıt biter bitmez kendi çalışma alanınız açılır. Öğrencilerinizi davet edip ödev vermeye aynı gün başlayabilirsiniz.',
 }
 
 export default function RegisterPage() {
@@ -117,7 +118,7 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      badge="Ücretsiz deneme"
+      badge={`${TRIAL_DAYS} gün ücretsiz`}
       badgeIcon={Sparkles}
       title="Öğrencilerinizi yönetmeye başlayın."
       description={`${TRIAL_DAYS} gün boyunca tüm özellikleri ücretsiz deneyin. Kredi kartı gerekmez.`}

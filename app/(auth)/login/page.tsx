@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
 import { GoogleButton } from '@/components/shared/google-button'
 import { TRIAL_DAYS } from '@/lib/plans'
-import { BRAND } from '@/lib/brand'
 
 // E-POSTA BOŞLUKLARI KIRPILIR.
 //
@@ -55,9 +54,9 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      badge="Güvenli ortak giriş"
+      badge="Tek giriş, üç panel"
       title="Tekrar hoş geldiniz"
-      description={`${BRAND.name} hesabınıza erişmek için kullanıcı bilgilerinizi girin.`}
+      description="Kaldığınız yerden devam edin."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Hesabınız yok mu?{' '}
@@ -195,11 +194,13 @@ export default function LoginPage() {
         </fieldset>
       </form>
 
-      {/* Giriş ekranı rol seçmiyor; hangi panele düşeceğini bilmeyen
-          kullanıcı "yanlış yerden mi giriyorum" diye duraksıyordu. */}
+      {/* Ekranda rol seçimi YOK. Öğretmen, öğrenci ve veli aynı formu
+          kullandığı için veli "bana ayrı bir giriş verilmedi mi?" diye
+          duraksıyor, öğretmene yazıyordu. Rolün e-postadan okunduğunu
+          söylemek bu soruyu formun içinde bitiriyor. */}
       <p className="mt-6 flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
-        Hesabınız rolünüze göre doğru panele güvenli biçimde yönlendirilir.
+        Ayrı bir öğrenci veya veli girişi yok. E-postanız hangi rolle kayıtlıysa o panel açılır.
       </p>
     </AuthShell>
   )
