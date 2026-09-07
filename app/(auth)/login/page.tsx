@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
-import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
 import { loginAction } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
 import { GoogleButton } from '@/components/shared/google-button'
 import { TRIAL_DAYS } from '@/lib/plans'
+import { BRAND } from '@/lib/brand'
 
 // E-POSTA BOŞLUKLARI KIRPILIR.
 //
@@ -54,8 +55,9 @@ export default function LoginPage() {
 
   return (
     <AuthShell
+      badge="Güvenli ortak giriş"
       title="Tekrar hoş geldiniz"
-      description="Kaldığınız yerden devam edin."
+      description={`${BRAND.name} hesabınıza erişmek için kullanıcı bilgilerinizi girin.`}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Hesabınız yok mu?{' '}
@@ -192,6 +194,13 @@ export default function LoginPage() {
           </Button>
         </fieldset>
       </form>
+
+      {/* Giriş ekranı rol seçmiyor; hangi panele düşeceğini bilmeyen
+          kullanıcı "yanlış yerden mi giriyorum" diye duraksıyordu. */}
+      <p className="mt-6 flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
+        Hesabınız rolünüze göre doğru panele güvenli biçimde yönlendirilir.
+      </p>
     </AuthShell>
   )
 }

@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react'
+import { GraduationCap, Lock, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { BRAND } from '@/lib/brand'
 import { BrandMark } from '@/components/shared/brand-mark'
 
@@ -6,45 +8,137 @@ interface AuthShellProps {
   description: string
   children: React.ReactNode
   footer?: React.ReactNode
+  /** Sağ karttaki başlığın üstündeki küçük rozet. Verilmezse gösterilmez. */
+  badge?: string
+  /** Rozetin ikonu. Varsayılan kilit; güvenlikle ilgisi olmayan rozetlerde değiştirin. */
+  badgeIcon?: LucideIcon
+  /** Sol paneldeki tanıtım içeriği. Verilmezse giriş odaklı varsayılan. */
+  hero?: {
+    eyebrow: string
+    title: React.ReactNode
+    description: string
+  }
 }
 
 /**
- * Giriş/kayıt/davet ekranlarının ortak kabuğu. Sol panel düz sidebar yüzeyi —
- * gradient, glow ve dot-grid dekorasyonu bilinçli olarak yok.
+ * Giriş/kayıt/davet ekranlarının ortak kabuğu.
+ *
+ * Solda ürünü anlatan tanıtım paneli, sağda yüzen form kartı. Tanıtım
+ * paneli yalnız lg ve üstünde görünür: dar ekranda formu aşağı iterek
+ * kullanıcıyı kaydırmaya zorlardı. Mobilde marka satırı kartın içine
+ * taşınır, yoksa ekranda hiç marka kalmazdı.
  */
-export function AuthShell({ title, description, children, footer }: AuthShellProps) {
+
+// Üç panel kartı; sol tanıtımın tek değişmeyen parçası olduğu için
+// bileşen dışında sabit duruyor, her render'da yeniden kurulmuyor.
+const PANELS = [
+  {
+    icon: UserCheck,
+    title: 'Koç Paneli',
+    description: 'Öğrenci, randevu ve akademik süreç yönetimi',
+  },
+  {
+    icon: GraduationCap,
+    title: 'Öğrenci Paneli',
+    description: 'Günlük program, ödev ve gelişim takibi',
+  },
+  {
+    icon: Users,
+    title: 'Veli Paneli',
+    description: 'Yetkili öğrenci sürecine güvenli görünüm',
+  },
+] as const
+
+const DEFAULT_HERO = {
+  eyebrow: 'Akademik gelişim tek merkezde',
+  title: (
+    <>
+      Planınızı uygulayın, gelişimi <span className="text-sidebar-primary">birlikte takip</span> edin.
+    </>
+  ),
+  description:
+    'Koç, öğrenci ve veli hesapları aynı güvenli giriş alanını kullanır; her kullanıcı kendi yetkili çalışma alanına otomatik yönlendirilir.',
+}
+
+export function AuthShell({
+  title,
+  description,
+  children,
+  footer,
+  badge,
+  badgeIcon: BadgeIcon = Lock,
+  hero = DEFAULT_HERO,
+}: AuthShellProps) {
   return (
-    <div className="flex min-h-screen">
-      <div className="hidden w-[420px] shrink-0 flex-col justify-between bg-sidebar p-10 lg:flex">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen lg:grid lg:grid-cols-2">
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-10 xl:p-14 lg:flex">
+        {/* Dekoratif: içeriği taşımadığı için ekran okuyucudan gizli. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -top-32 size-96 rounded-full bg-sidebar-primary/15 blur-3xl"
+        />
+
+        <div className="relative flex items-center gap-3">
           <BrandMark size={32} />
           <span className="text-sm font-semibold text-sidebar-foreground">{BRAND.name}</span>
         </div>
 
-        <div>
-          <p className="text-xl font-semibold leading-snug tracking-tight text-sidebar-foreground">
-            Öğrencilerinizi tek yerden takip edin.
+        <div className="relative">
+          <span className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/50 px-3 py-1 text-xs text-sidebar-foreground/80">
+            <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden />
+            {hero.eyebrow}
+          </span>
+
+          <p className="mt-6 max-w-lg text-4xl font-semibold leading-[1.15] tracking-tight text-sidebar-foreground xl:text-5xl">
+            {hero.title}
           </p>
-          <p className="mt-3 max-w-xs text-sm text-sidebar-foreground/60">
-            Kitaplar, testler, ödevler ve veli iletişimi — Excel&apos;e gerek kalmadan.
+
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-sidebar-foreground/70">
+            {hero.description}
           </p>
+
+          <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
+            {PANELS.map((panel) => (
+              <div key={panel.title} className="rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-4">
+                <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary">
+                  <panel.icon className="size-4" aria-hidden />
+                </div>
+                <p className="mt-3 text-sm font-medium text-sidebar-foreground">{panel.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-sidebar-foreground/60">
+                  {panel.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <p className="text-xs text-sidebar-foreground/60">
-          © {BRAND.since} {BRAND.name}
-        </p>
+        <div className="relative space-y-2">
+          <p className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+            <ShieldCheck className="size-3.5 text-emerald-400" aria-hidden />
+            Güvenli rol yönlendirmesi ve yetkili veri erişimi
+          </p>
+          <p className="text-xs text-sidebar-foreground/50">
+            © {BRAND.since} {BRAND.name}
+          </p>
+        </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center bg-background p-6 md:p-8">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 md:p-10 lg:min-h-0">
+        <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl shadow-black/5 sm:p-8">
+          <div className="mb-6 flex items-center gap-3 lg:hidden">
             <BrandMark size={32} />
             <span className="text-sm font-semibold">{BRAND.name}</span>
           </div>
 
-          <div className="mb-8">
-            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <div className="mb-7">
+            {badge && (
+              <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                <BadgeIcon className="size-3" aria-hidden />
+                {badge}
+              </span>
+            )}
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
           </div>
 
           {children}

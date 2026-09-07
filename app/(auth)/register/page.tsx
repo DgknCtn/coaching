@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
-import { Check, ShieldCheck } from 'lucide-react'
+import { Check, ShieldCheck, Sparkles } from 'lucide-react'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { registerSchema } from '@/lib/validation'
 import { GoogleButton } from '@/components/shared/google-button'
@@ -41,6 +41,19 @@ const TRUST = [
   'Otomatik ödeme yok',
   'Kurulum gerektirmez',
 ]
+
+// Kayıt ekranındaki tanıtım, girişteki "tekrar hoş geldiniz" tonundan
+// ayrılmalı: buradaki kullanıcı ürünü ilk kez kuruyor.
+const REGISTER_HERO = {
+  eyebrow: 'Kurulum birkaç dakika sürer',
+  title: (
+    <>
+      Öğrenci takibini <span className="text-sidebar-primary">bugün kurun</span>, yarın uygulayın.
+    </>
+  ),
+  description:
+    'Çalışma alanınız hesabınızla birlikte kurulur; öğrencilerinizi ve velileri davet ederek aynı gün takibe başlayabilirsiniz.',
+}
 
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition()
@@ -104,8 +117,11 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
+      badge="Ücretsiz deneme"
+      badgeIcon={Sparkles}
       title="Öğrencilerinizi yönetmeye başlayın."
       description={`${TRIAL_DAYS} gün boyunca tüm özellikleri ücretsiz deneyin. Kredi kartı gerekmez.`}
+      hero={REGISTER_HERO}
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Zaten hesabın var mı?{' '}
