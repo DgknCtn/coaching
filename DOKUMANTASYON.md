@@ -743,3 +743,19 @@ Aynı hata Haftalık Akış ekranında da vardı: teslim sayısı, tempo bandı,
 Sorgu metni hâlâ çekiyor çünkü aynı dizi Öğretmen Hafızası panelini de besliyor; server component yalnız RENDER ETTİĞİNİ istemciye gönderir, yani panel açık değilken metin tarayıcıya hiç inmez.
 
 **İki ekranın "son teslim" kapsamı farklı ve bu artık metinden anlaşılıyor.** Haftalık Akış yalnız o haftanın gönderimlerine bakıyor, Genel Bakış ise öğrencinin tümüne — belgenin ifadesi *"sisteme yeni teslim gelmediğini söyler"*. İkisi de "Henüz teslim yok" deseydi, aynı öğrenci için biri "yok" öteki "2 gün önce" derken ekranlar çelişiyor görünürdü. `deliverySilence` artık çağırandan boş metni alıyor.
+
+### R7 / Site Testi 02 — 7 derslik Akademik Akış, Kaynak Planı özeti ve ikinci bir not sızıntısı
+
+**Akademik Akış tek dersten yedi derse çıktı.** Kart daha önce bir dersin "şu an / yaklaşan" ikilisini gösterip gerisini sayıyordu: *"AYT Matematik · +2 ders daha"*. Belgenin tespiti: *"Akademik Akış birden fazla dersi tek bakışta okutacak yapıda değil."* Öğretmenin sorusu "bu öğrenci HER derste nerede?" ve tek ders bu sorunun yedide birini cevaplıyordu. Artık iki sütunlu bir blok; her derste tamamlanan → işleniyor → sıradaki üçlüsü ve alt sinyal.
+
+**Zaman ile gerçek durum ayrı tutuldu** (§2 "Veri mantığı"). "İşlenen konu" = öğretmenin tamamlamadığı ilk konu; tarihe bakılmaz, çünkü planlanan bitişin geçmesi bir konuyu tamamlamaz (MA-08'in aynı ilkesi). Zamansal yorum ise ayrı bir eksen ve konunun **kendi penceresine** göre ölçülüyor — belge "planlanan **başlangıç-bitiş** haftasına göre" diyor: bugün pencerenin içindeyse uyumlu, bitişten sonraysa geride, başlangıçtan önceyse önde. Yuvarlama bilinçli olarak `round`: planlanan bitişi iki gün aşmış bir konuya "1 hafta geride" demek, küçük kaymaları haftalık gecikme gibi göstererek sinyali gürültüye çevirirdi.
+
+**Kaynak Planı tek tek kitap listelemeyi bıraktı.** Belge: *"Öğrencide 30-40 kaynak olabilir; kartın görevi 'kaynak sistemi hedeflenen süre ve müfredat akışına göre sağlıklı mı?' sorusuna cevap vermektir."* Üç kitap gösterip gerisini saymak, otuz kaynaklı öğrencide karar vermeye yetmiyordu. Kart artık aktif/ana/tamamlanan sayıları, plan temposu dağılımı ve ana kaynak riskini veriyor.
+
+İki problem **ayrı** tutuluyor (§3 son bölüm): plan temposu kitabın yıl/dönem bitiş hedefini, müfredat uyumu ise akademik sırayı ölçer; biri iyi diğeri kötü olabilir ve tek bir "sağlık" rakamına indirgemek ikisini de gizlerdi. Tamamlanan kaynaklar sağlık hesabından çıkarılıyor — biten kitaplar toplama girseydi "çoğu uyumlu" cümlesi onların sayesinde doğru görünürdü. Hedefi olmayan kaynak da "uyumlu" sayılmıyor: kurulmamış bir planı kurulmuş göstermek olurdu.
+
+**Müfredat uyumu "hafif hesap" olarak kaldı.** Ölçüt kitabın ham içeriği değil, öğretmenin verdiği ve hâlâ açık duran iş (`student_topic_open_work_view`). Belgenin uyarısı: *"Bir konuda kitapta 12 test olması, öğretmenin 12 testin tamamını istemesi anlamına gelmez."* Yalnız akıştaki konular sayılıyor — akışa girmemiş bir konudaki açık iş müfredat birikmesi değil, sıradan ödevdir.
+
+**Not içeriği ARKA KAPIDAN sızıyormuş.** Genel Bakış kartından metni kaldırmak yetmemiş: hemen altındaki **Son Akademik İz** notun metnini satır olarak basıyordu. Kart "1 not · son güncelleme 13 gün önce" derken iz bloğu notun kendisini gösteriyordu — ekran paylaşımı gerekçesi tam olarak bunu yasaklıyor.
+
+Belge bu bloğu zaten olay kaydı diye tanımlıyor: *"Akademik İz yorum değil, sistemde gerçekleşen olay kaydıdır"* — örnekleri "8 çalışma teslim edildi", "Haftalık plan yayınlandı". Hiçbiri alıntı değil. Artık "Akademik not eklendi" yazıyor ve `buildAcademicTrail`'in **imzası** metni kabul etmiyor: `note_text` parametre listesinden çıkarıldı, böylece metin oraya geri sızarsa derleme kırılır.

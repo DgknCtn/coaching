@@ -1,15 +1,13 @@
 import Link from 'next/link'
-import { ArrowRight, BookOpen, CalendarRange, ShieldCheck } from 'lucide-react'
-import type {
-  AcademicFlowSummary,
-  PoolSummaryItem,
-  ResourcePlanSummary,
-} from '@/lib/student-overview'
-import { ProgressBar } from '@/components/shared/progress-bar'
-import { Badge } from '@/components/ui/badge'
-import { bookPlanStatusLabel, bookRoleLabel } from '@/lib/resource-plan'
+import { ArrowRight, BookOpen, ShieldCheck } from 'lucide-react'
+import type { PoolSummaryItem, ResourcePlanSummary } from '@/lib/student-overview'
 
-// R5 Öğrenci Genel Bakış — üç özet kart (R5.5 §7.1).
+// R5 Öğrenci Genel Bakış — özet kartlar (R5.5 §7.1).
+//
+// AKADEMİK AKIŞ BURADAN ÇIKTI (R7/02 §2): yedi dersi iki sütunda
+// gösteren ayrı ve geniş bir blok oldu — components/shared/
+// academic-flow-card.tsx. Bu şeritte tek dersin "şu an / yaklaşan"
+// ikilisine sıkışıyordu.
 //
 // Amaç R5'in TAMAMINI ana ekrana yığmak değil; üç sistemin NABZINI
 // göstermek ve detay ekranlarına geçiş sağlamak.
@@ -24,37 +22,13 @@ import { bookPlanStatusLabel, bookRoleLabel } from '@/lib/resource-plan'
 
 interface Props {
   studentId: string
-  flow: AcademicFlowSummary
   resources: ResourcePlanSummary
   pool: { top: PoolSummaryItem[]; total: number }
 }
 
-export function R5SummaryCards({ studentId, flow, resources, pool }: Props) {
+export function R5SummaryCards({ studentId, resources, pool }: Props) {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
-      <SummaryCard
-        icon={CalendarRange}
-        title="Akademik Akış"
-        description="Müfredat akışının mevcut durumu"
-        href={`/teacher/students/${studentId}/curriculum`}
-        linkLabel="Akışı aç"
-      >
-        {!flow.current && !flow.upcoming ? (
-          <Empty>Henüz müfredat akışı atanmadı.</Empty>
-        ) : (
-          <dl className="space-y-2 text-sm">
-            {flow.scopeName && (
-              <p className="text-xs text-muted-foreground">
-                {flow.scopeName}
-                {flow.otherScopeCount > 0 && ` · +${flow.otherScopeCount} ders daha`}
-              </p>
-            )}
-            <Row label="Şu an" value={flow.current?.topicName ?? '—'} />
-            <Row label="Yaklaşan" value={flow.upcoming?.topicName ?? '—'} />
-          </dl>
-        )}
-      </SummaryCard>
-
+    <div className="grid gap-4 md:grid-cols-2">
       <SummaryCard
         icon={BookOpen}
         title="Kaynak Planı"
@@ -65,44 +39,63 @@ export function R5SummaryCards({ studentId, flow, resources, pool }: Props) {
         {resources.activeCount + resources.pendingCount + resources.completedCount === 0 ? (
           <Empty>Henüz kaynak atanmadı.</Empty>
         ) : (
-          <div className="space-y-2.5">
-            <p className="text-xs text-muted-foreground">
-              {resources.activeCount} aktif · {resources.pendingCount} bekliyor ·{' '}
-              {resources.completedCount} tamamlandı
-            </p>
+          /* TEK TEK KİTAP LİSTESİ KALKTI (R7/02 §3).
 
-            {/* Kaynak başına iki ayrı yüzde: PLAN (karar verici) ve KİTAP
-                (fiziksel kapsam). İkisi yan yana durur çünkü plan %100
-                olsa bile kitap kapsamı daha düşük olabilir (R6-04 #34). */}
-            <ul className="divide-y">
-              {resources.topActive.map(r => (
-                <li key={r.bookId} className="space-y-1.5 py-2 first:pt-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="min-w-0 truncate text-sm">{r.title}</span>
-                    {r.role && bookRoleLabel(r.role) && (
-                      <Badge variant="neutral" className="shrink-0">
-                        {bookRoleLabel(r.role)}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <PercentBar label="Plan" value={r.planPercentage} />
-                    <PercentBar label="Kitap" value={r.bookPercentage} muted />
-                  </div>
-                  {(r.scopeLabel || r.status) && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {[r.scopeLabel, r.status ? bookPlanStatusLabel(r.status) : null]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+             Belge: *"Genel Bakışta tek tek kitap isimleri gösterilmez.
+             Öğrencide 30-40 kaynak olabilir; kartın görevi 'kaynak
+             sistemi hedeflenen süre ve müfredat akışına göre sağlıklı
+             mı?' sorusuna cevap vermektir."* Üç kitap gösterip
+             gerisini saymak, otuz kaynaklı öğrencide karar vermeye
+             yetmiyordu.
 
-            <p className="text-[11px] text-muted-foreground">
-              Plan %100 tamamlanmış olsa bile kitap kapsamı daha düşük olabilir.
-            </p>
+             İKİ PROBLEM AYRI TUTULUYOR (§3 son bölüm): plan temposu
+             kitabın YIL/DÖNEM bitiş hedefini, müfredat uyumu ise
+             akademik sırayı ölçer. Biri iyi diğeri kötü olabilir ve
+             tek bir "sağlık" rakamına indirgemek ikisini de gizlerdi. */
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <Tile value={resources.activeCount} label="aktif kaynak" />
+              <Tile value={resources.mainCount} label="ana kaynak" />
+              <Tile value={resources.completedCount} label="tamamlandı" />
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Plan temposu</p>
+              <p className="text-sm">
+                {resources.pace.onTrack} uyumlu · {resources.pace.behind} geride ·{' '}
+                {resources.pace.notStarted} henüz başlamadı
+              </p>
+            </div>
+
+            {/* ANA KAYNAK UYARILARDA ÖNCELİKLİ (§3): otuz kaynaklı bir
+                öğrencide "3 kaynak geride" tek başına bir şey söylemez;
+                hangi üçü olduğu söyler. */}
+            {resources.mainCount > 0 && (
+              <div className="space-y-1">
+                {resources.mainBehindCount > 0 ? (
+                  <p className="text-sm text-warning-foreground">
+                    {resources.mainBehindCount} / {resources.mainCount} ana kaynak planın
+                    gerisinde
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Ana kaynakların hepsi planında
+                  </p>
+                )}
+
+                {resources.mainBacklogCount > 0 && (
+                  <p className="text-sm text-warning-foreground">
+                    {resources.mainBacklogCount} ana kaynakta müfredat birikmesi var
+                  </p>
+                )}
+              </div>
+            )}
+
+            {resources.pendingCount > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {resources.pendingCount} kaynak henüz planlanmadı.
+              </p>
+            )}
           </div>
         )}
       </SummaryCard>
@@ -188,36 +181,16 @@ function SummaryCard({
   )
 }
 
-/** Etiket + ince ilerleme çubuğu + yüzde. Kaynak satırında iki kez kullanılır. */
-function PercentBar({
-  label,
-  value,
-  muted = false,
-}: {
-  label: string
-  value: number
-  muted?: boolean
-}) {
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-baseline justify-between gap-1 text-[11px]">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums">%{value}</span>
-      </div>
-      <ProgressBar
-        value={value}
-        label={`${label} ilerlemesi`}
-        className={muted ? 'opacity-60' : undefined}
-      />
-    </div>
-  )
-}
+// `PercentBar` BURADAN KALKTI: tek kullanıcısı kaynak başına Plan/Kitap
+// yüzdelerini çizen satırdı ve o liste R7/02 §3 ile kaldırıldı
+// ("Genel Bakışta tek tek kitap isimleri gösterilmez"). Yüzde çubukları
+// Kaynak Planı ekranında yaşamaya devam ediyor.
 
-function Row({ label, value }: { label: string; value: string }) {
+function Tile({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate text-sm">{value}</dd>
+    <div className="rounded-md border py-2">
+      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
     </div>
   )
 }

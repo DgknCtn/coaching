@@ -40,12 +40,13 @@ import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 import { R5SummaryCards } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
 import { resolvePlanScope } from '@/lib/plan-scope'
+import { calculatePlanPace } from '@/lib/plan-pace'
 import { bookPlanGroup } from '@/lib/resource-plan'
 import { buildProtectionPool } from '@/lib/protection-pool'
 import {
   buildAcademicTrail,
   buildWeeklyFocus,
-  summarizeAcademicFlow,
+  summarizeAcademicFlowByScope,
   summarizeProtectionPool,
   summarizeResourcePlan,
   type FlowSummaryItem,
@@ -54,6 +55,7 @@ import {
 import { formatUnitCount } from '@/lib/unit-labels'
 import { calculateFlowPace, deliverySilence } from '@/lib/weekly-flow'
 import { ThisWeekCard, type ThisWeekView } from '@/components/shared/this-week-card'
+import { AcademicFlowCard } from '@/components/shared/academic-flow-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -351,11 +353,40 @@ export default async function StudentDetailPage({
     passed: r.passed_at !== null,
   }))
 
-  const flowSummary = summarizeAcademicFlow(flowItems)
+  // R7/02 §2: TEK ders değil, YEDİSİ birden. Eski özet
+  // (summarizeAcademicFlow) diğer dersleri yalnız sayıyordu.
+  const flowScopes = summarizeAcademicFlowByScope(flowItems)
+
+  // MÜFREDAT BİRİKMESİ — §3'ün "hafif hesabı".
+  //
+  // Ölçüt kitabın ham içeriği DEĞİL, öğretmenin VERDİĞİ ve hâlâ açık
+  // duran iş: `student_topic_open_work_view` tam olarak bunu sayıyor
+  // (pending + pending_approval kalemler, konu bazında). Belge: *"Bir
+  // konuda kitapta 12 test olması, öğretmenin 12 testin tamamını
+  // istemesi anlamına gelmez."*
+  //
+  // Yalnız AKIŞTAKİ konular sayılıyor: akışa hiç girmemiş bir konudaki
+  // açık iş "müfredat birikmesi" değildir, sıradan ödevdir.
+  const flowTopicIds = new Set(flowItems.map(i => i.topicId))
+  const backlogTopicIds = new Set(
+    ((openWorkRows ?? []) as { topic_id: string; open_items: number }[])
+      .filter(r => r.open_items > 0 && flowTopicIds.has(r.topic_id))
+      .map(r => r.topic_id)
+  )
 
   const resourceSummary = summarizeResourcePlan(
     (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map<ResourceSummaryItem>(b => {
       const scope = resolvePlanScope(b)
+      // Tempo hesabı lib/plan-pace.ts'te: aynı kural Kaynak Planı
+      // ekranında da kullanılıyor, burada ikinci kez yazılsaydı aynı
+      // kaynak iki ekranda farklı tempo gösterirdi.
+      const pace = calculatePlanPace({
+        startDate: scope.startDate,
+        targetEndDate: scope.targetEndDate,
+        totalUnits: scope.totalUnits,
+        completedUnits: scope.completedUnits,
+        trackingMode: b.trackingMode,
+      })
       return {
         bookId: b.bookId,
         title: b.title,
@@ -367,6 +398,11 @@ export default async function StudentDetailPage({
         role: b.role,
         status: b.status,
         scopeLabel: formatUnitCount(scope.totalUnits, b.trackingMode),
+        isMain: b.role === 'ana_calisma',
+        paceKey: pace.phraseKey,
+        hasCurriculumBacklog: b.sections.some(
+          s => s.topicId !== null && backlogTopicIds.has(s.topicId)
+        ),
       }
     })
   )
@@ -423,9 +459,12 @@ export default async function StudentDetailPage({
   // Son Akademik İz ve Bu Hafta Odak: ikisi de SAYFANIN ZATEN ÇEKTİĞİ
   // kümelerden türer, yeni sorgu yoktur (lib/student-overview.ts).
   const academicTrail = buildAcademicTrail({
+    // `note_text` GEÇİLMİYOR: Son Akademik İz bir OLAY kaydı, metin
+    // alıntısı değil (R7/02 §4). Fonksiyonun imzası da onu kabul
+    // etmiyor — metin buraya geri sızamasın diye.
     notes: academicNotes.map(n => ({
       id: n.id,
-      note_text: n.note_text,
+      pinned: n.pinned,
       created_at: n.created_at,
       author_name: n.author_name,
     })),
@@ -599,9 +638,13 @@ export default async function StudentDetailPage({
 
       {/* R5.5: üç sistemin nabzı. Mevcut R4 operasyon sayaçları
           (yukarıda) AYRI KATMANDIR ve bu bloktan etkilenmez (OG-09). */}
+      {/* Akademik Akış artık AYRI ve GENİŞ bir blok: yedi ders iki
+          sütunda okunuyor (§2). Eski üçlü kart şeridinde tek dersin
+          "şu an / yaklaşan" ikilisine sıkışmıştı. */}
+      <AcademicFlowCard studentId={studentId} scopes={flowScopes} />
+
       <R5SummaryCards
         studentId={studentId}
-        flow={flowSummary}
         resources={resourceSummary}
         pool={poolSummary}
       />
