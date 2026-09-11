@@ -68,3 +68,17 @@ image.png
 /uyelik.jpg
 WhatsApp Image *.jpeg
 WhatsApp Image *.jpg
+
+# KÖKTEKİ TÜM EKRAN GÖRÜNTÜLERİ (dashboard.JPG, haftalikakis.JPG ...).
+#
+# Tek tek ad yazmak yetmedi: R7 turunda yedi yeni referans görseli
+# geldi ve hiçbiri yukarıdaki kalıplara uymadığı için depoya girdi.
+# Kural artık deseni yakalıyor.
+#
+# BAŞTA "/" VAR ve bu kasıtlı: yalnız depo KÖKÜNÜ kapsar. public/ ve
+# brand/ altındaki ikonlar ile logo ürünün kendisi; onlar izlenmeye
+# devam eder.
+/*.jpg
+/*.JPG
+/*.jpeg
+/*.JPEG
