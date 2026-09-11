@@ -12,6 +12,8 @@ import {
 } from '@/lib/weekly-flow'
 import { formatSessionLong, WEEKDAY_LABEL, type Weekday } from '@/lib/service-structure'
 import { LinkTabs, type LinkTab } from '@/components/shared/link-tabs'
+import { Legend } from '@/components/shared/legend'
+import { ProgressRing } from '@/components/shared/progress-ring'
 import { moodLabel, formatRelativeTime } from '@/lib/student-attention'
 import { CheckInScheduleForm } from '../check-in-panel'
 import {
@@ -309,21 +311,34 @@ export function FlowClient({
                 <p className="text-xs font-medium tracking-wide text-muted-foreground">
                   GENEL DURUM
                 </p>
-                <p className="text-3xl font-semibold tabular-nums">%{percent}</p>
-                <dl className="space-y-0.5 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Tamamlanan</dt>
-                    <dd className="tabular-nums">{flow.delivered}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Kalan</dt>
-                    <dd className="tabular-nums">{flow.remaining}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Toplam</dt>
-                    <dd className="tabular-nums">{flow.total}</dd>
-                  </div>
-                </dl>
+                {/* HALKA VE SAYILAR YAN YANA (hedef ekran).
+
+                    Yüzde tek başına büyük punto yazıldığında kartın
+                    tamamı bir sayıya bakıyordu; halka aynı yeri
+                    kaplayıp oranı da gösteriyor. Sayılar metin olarak
+                    duruyor — halka `aria-hidden`, renk tek başına
+                    anlam taşımaz. */}
+                <div className="flex items-center gap-4">
+                  <ProgressRing
+                    value={percent}
+                    size="lg"
+                    tone={percent >= 100 ? 'success' : 'default'}
+                  />
+                  <dl className="flex-1 space-y-0.5 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Tamamlanan</dt>
+                      <dd className="tabular-nums">{flow.delivered}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Kalan</dt>
+                      <dd className="tabular-nums">{flow.remaining}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Toplam</dt>
+                      <dd className="tabular-nums">{flow.total}</dd>
+                    </div>
+                  </dl>
+                </div>
                 <p className="text-xs text-muted-foreground">{flow.distributionPhrase}</p>
               </CardContent>
             </Card>
@@ -460,7 +475,23 @@ export function FlowClient({
           />
 
           {activeTab === 'aktif' && (
-            <BatchPanel batches={batches} flow={flow} studentId={studentId} />
+            /* ÖDEV TABLOSU VE GÜNLÜK DAĞILIM YAN YANA (hedef ekran).
+
+               İkisi haftanın aynı hikâyesini iki eksenden anlatıyor:
+               tablo "ne verdim, ne kadarı geldi" (parti ekseni),
+               dağılım "hangi gün çalıştı" (zaman ekseni). Ayrı
+               sekmelerde dururken öğretmen "bu hafta 25 çalışma kaldı"
+               ile "son üç gündür teslim yok" cümlelerini yan yana
+               göremiyordu — oysa müdahale kararı tam o ikisinin
+               kesişiminden çıkıyor.
+
+               "Günlük Görünüm" sekmesi KALDI: oradaki görünüm daha
+               geniş ve haftanın penceresi dışına taşan teslimleri de
+               anlatıyor. */
+            <div className="grid gap-3 lg:grid-cols-2">
+              <BatchPanel batches={batches} flow={flow} studentId={studentId} />
+              <DailyPanel daily={flow.daily} compact />
+            </div>
           )}
           {activeTab === 'gunluk' && <DailyPanel daily={flow.daily} />}
           {activeTab === 'kaynaklar' && <BookPanel books={books} flow={flow} />}
@@ -610,8 +641,16 @@ function BookPanel({ books, flow }: { books: FlowBookRow[]; flow: FlowView }) {
   )
 }
 
-/** Günlük Görünüm — "hangi gün çalıştı?" */
-function DailyPanel({ daily }: { daily: DailyDelivery }) {
+/**
+ * Günlük Görünüm — "hangi gün çalıştı?"
+ *
+ * `compact`: Haftalık Plan sekmesinde ödev tablosunun yanında dururken
+ * yalnız grafik gösterilir. Pencere dışı teslim uyarısı ve "planlanan
+ * ekseni yok" açıklaması kendi sekmesinde kalır — iki sütunlu düzende
+ * grafiğin altındaki iki paragraf, tablonun satırlarıyla hizayı
+ * bozuyordu.
+ */
+function DailyPanel({ daily, compact }: { daily: DailyDelivery; compact?: boolean }) {
   const max = Math.max(1, ...daily.days.map(d => d.delivered))
 
   return (
@@ -647,7 +686,7 @@ function DailyPanel({ daily }: { daily: DailyDelivery }) {
           </div>
         </div>
 
-        {daily.outsideWindow > 0 && (
+        {!compact && daily.outsideWindow > 0 && (
           <p className="text-xs text-warning-foreground">
             {daily.outsideWindow} teslim haftanın penceresi dışında yapıldı; bu
             grafikte yer almaz.
@@ -659,11 +698,22 @@ function DailyPanel({ daily }: { daily: DailyDelivery }) {
             "sonraki adım"ı. Boş çubuk çizmek yerine eksikliği söylemek
             doğru: uydurulmuş bir eksen, olmayan bir planı varmış gibi
             gösterirdi. */}
-        <p className="text-xs text-muted-foreground">
-          Yalnız gerçekleşen teslimler gösterilir. Öğrencinin yükü günlere
-          kendi dağıtması ayrı bir çalışma; o geldiğinde planlanan/gerçekleşen
-          karşılaştırması buraya eklenecek.
-        </p>
+        {/* EFSANE TEK SERİ İÇİN.
+
+            Hedef görselde dört renkli bir efsane var ve iki seri
+            varsayıyor (planlanan / tamamlanan). "Planlanan/gün" verisi
+            bu üründe YOK — öğrencinin haftalık yükü günlere kendisi
+            dağıtmıyor. Olmayan seriyi efsaneye yazmak, boş kalan
+            çubukları bir eksiklik gibi gösterirdi. */}
+        <Legend entries={[{ label: 'Teslim edilen çalışma', className: 'bg-success-subtle' }]} />
+
+        {!compact && (
+          <p className="text-xs text-muted-foreground">
+            Yalnız gerçekleşen teslimler gösterilir. Öğrencinin yükü günlere
+            kendi dağıtması ayrı bir çalışma; o geldiğinde planlanan/gerçekleşen
+            karşılaştırması buraya eklenecek.
+          </p>
+        )}
       </CardContent>
     </Card>
   )

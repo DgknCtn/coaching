@@ -4,7 +4,15 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, ChevronLeft, ChevronRight, Pencil, Plus, Users } from 'lucide-react'
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Settings2,
+  Users,
+  Wallet,
+} from 'lucide-react'
 import { formatKurus } from '@/lib/billing/pricing'
 import {
   formatMinutes,
@@ -15,36 +23,38 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/native-select'
+import {
+  ServiceStructureDrawer,
+  type DrawerStudent,
+} from './service-structure-drawer'
 import { Badge } from '@/components/ui/badge'
 import { Section } from '@/components/shared/section'
 import { EmptyState } from '@/components/shared/empty-state'
+import { MetricTiles } from '@/components/shared/metric-tiles'
+import { ProgressBar } from '@/components/shared/progress-bar'
 import {
   formatServiceAxes,
   formatServiceSchedule,
   formatSessionLong,
+  formatSessionClock,
+  formatSessionDate,
   formatSessionTime,
+  formatSessionWeekdayShort,
   effectiveSessionTime,
   isAwaitingOutcome,
   SESSION_STATUS_LABEL,
   SESSION_STATUS_VARIANT,
-  WEEKDAY_LABEL,
   type SessionStatus,
   type Weekday,
 } from '@/lib/service-structure'
 import {
-  createServiceAction,
-  updateServiceAction,
   createMakeupSessionAction,
-  createStudentGroupAction,
   moveActiveFlowDueAction,
   rescheduleSessionAction,
   setGroupSessionOutcomeAction,
   setMakeupDecisionAction,
   setSessionAttendanceAction,
-  setServiceStatusAction,
   resolvePaymentNoticeAction,
-  type ServiceUpdateInput,
   setSessionOutcomeAction,
 } from './actions'
 
@@ -113,6 +123,8 @@ export interface ArchiveMonth {
   planned: number
   done: number
   missed: number
+  /** null = o ayın tahakkuku yok ya da finansı görme yetkisi yok (066). */
+  finance: { accruedKurus: number; collectedKurus: number } | null
 }
 
 const FINANCE_LABEL: Record<ServiceRow['financeLink'], string> = {
@@ -147,6 +159,7 @@ export function SessionsClient({
   monthFinance,
   season,
   paymentNotice,
+  student,
 }: {
   studentId: string
   services: ServiceRow[]
@@ -167,19 +180,50 @@ export function SessionsClient({
   season: SeasonSummary | null
   /** Bu ay için velinin bekleyen ödeme bildirimi. */
   paymentNotice: { id: string; note: string | null; createdAt: string } | null
+  /** Hizmet Yapısı panelinin başlığında gösterilen kimlik. */
+  student: DrawerStudent
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [showForm, setShowForm] = useState(false)
-  // Aynı anda tek hizmet düzenlenir: iki açık form, hangi tarihin
-  // hangi hizmete ait olduğunu belirsizleştirirdi.
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // Hizmet yapısı sağdan açılan panelde düzenleniyor; formların kendi
+  // durumu orada yaşıyor.
+  const [structureOpen, setStructureOpen] = useState(false)
 
   // Referans an SUNUCUDAN gelir: istemcinin saati yanlışsa bile "geçti mi"
   // kararı herkeste aynı olsun.
   const now = new Date(nowIso)
 
   const serviceById = new Map(services.map((s) => [s.id, s]))
+
+  // "5 grup dersi + 4 koçluk görüşmesi" — ayın VAADİ (§3 no.3).
+  //
+  // Planlanan sayıdan türer, yapılandan değil: cümle ayın başında ne
+  // sözü verildiğini söylüyor, çubuklar ne kadarının tutulduğunu.
+  const promiseLine =
+    serviceCounters.length === 0
+      ? null
+      : serviceCounters
+          .map((c) => {
+            const service = serviceById.get(c.serviceId)
+            if (!service) return null
+            const noun =
+              service.kind === 'kocluk'
+                ? 'koçluk görüşmesi'
+                : service.participation === 'grup'
+                  ? 'grup dersi'
+                  : 'birebir ders'
+            return `${c.planned} ${noun}`
+          })
+          .filter(Boolean)
+          .join(' + ')
+
+  // HİÇBİR OTURUM GRUPLAMADA DÜŞMEZ.
+  //
+  // Kayıtlar hizmet başlıkları altında toplanıyor; hizmeti listede
+  // olmayan bir oturum sessizce kaybolurdu. Normalde olamaz (hizmetler
+  // aynı öğrencinin tamamı, durum süzgeci yok) ama "olamaz" varsayımıyla
+  // veri gizlemek, ayın sayacıyla listenin ayrışması demek.
+  const orphanSessions = sessions.filter((x) => !serviceById.has(x.serviceId))
 
   // Ödeme durumu ay bazında; tüm zamanların bakiyesi değil (§7 no.4).
   const paymentState = monthFinance ? monthPaymentState(monthFinance) : null
@@ -193,31 +237,6 @@ export function SessionsClient({
         return
       }
       toast.success(ok)
-      router.refresh()
-    })
-  }
-
-  /**
-   * Hizmet düzenini ileri tarihten itibaren değiştirir (§5 no.7).
-   *
-   * KAÇ OTURUMUN DÜŞTÜĞÜ SÖYLENİR: değişiklik, eski desenle açılmış
-   * ileri tarihli planlı oturumları siliyor. Öğretmen takvimde eksilen
-   * satırları sonradan fark etmemeli.
-   */
-  function handleServiceUpdate(input: ServiceUpdateInput) {
-    startTransition(async () => {
-      const result = await updateServiceAction(input)
-      if (result?.error) {
-        toast.error(result.error)
-        return
-      }
-      const removed = result.removed ?? 0
-      toast.success(
-        removed > 0
-          ? `Düzen güncellendi. Eski düzenle açılmış ${removed} ileri tarihli oturum kaldırıldı; yeni düzenle tekrar üretilecek.`
-          : 'Düzen güncellendi.'
-      )
-      setEditingId(null)
       router.refresh()
     })
   }
@@ -300,15 +319,24 @@ export function SessionsClient({
 
   return (
     <div className="space-y-6">
-      {/* ---------------- Hizmet Yapısı ---------------- */}
+      {/* ---------------- Hizmet Yapısı · Bu Ayın Özeti ---------------- */}
+      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ÖZET BURADA, DÜZENLEME PANELDE (§5).
+
+          Referans ekranda bu kart öğrencinin hizmetlerini bir bakışta
+          gösteriyor; ekleme ve düzenleme sağdan açılan "Hizmet Yapısını
+          Düzenle" panelinde. Formlar sayfa gövdesinde satır içi
+          açıldığında aylık görüşme listesi ekranın çok altına düşüyor ve
+          öğretmen düzeni değiştirirken tam da baktığı listeyi
+          kaybediyordu. */}
       <Section
         title="Hizmet Yapısı"
         description="Öğrenciye sunulan aktif hizmetler. Geçmiş kayıtlar etkilenmez."
         variant="card"
         action={
-          <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-            <Plus className="size-4" />
-            Hizmet Ekle
+          <Button size="sm" variant="outline" onClick={() => setStructureOpen(true)}>
+            <Settings2 className="size-4" />
+            Hizmet Yapısını Düzenle
           </Button>
         }
       >
@@ -327,6 +355,7 @@ export function SessionsClient({
             icon={Users}
             title="Henüz hizmet tanımlanmadı"
             description="Öğrencinin haftalık ders ve koçluk düzenini tanımlayın. Haftalık Akış bu düzenden beslenir."
+            action={{ label: 'Hizmet Ekle', onClick: () => setStructureOpen(true) }}
           />
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
@@ -360,73 +389,67 @@ export function SessionsClient({
                     </Badge>
                   </div>
                 </div>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="mt-3"
-                  disabled={isPending}
-                  onClick={() =>
-                    run(
-                      () =>
-                        setServiceStatusAction(
-                          studentId,
-                          service.id,
-                          service.status === 'active' ? 'passive' : 'active'
-                        ),
-                      service.status === 'active'
-                        ? 'Hizmet pasife alındı.'
-                        : 'Hizmet yeniden aktifleştirildi.'
-                    )
-                  }
-                >
-                  {service.status === 'active' ? 'Pasife Al' : 'Aktifleştir'}
-                </Button>
-
-                {/* PASİF HİZMET DE DÜZENLENEBİLİR: Yeni Öğrenci ekranında
-                    seçilen hizmetler gün/saati bilinmediği için pasif
-                    taslak olarak açılıyor (§5). Düzenleme aktifle
-                    sınırlansaydı o taslakları tamamlamanın yolu olmazdı.
-                    Pasif satırda "şu tarihten itibaren" alanı hizmetin
-                    başlangıç tarihini belirler; silinecek ileri tarihli
-                    oturum zaten yok. */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="mt-3 ml-1"
-                  disabled={isPending}
-                  onClick={() =>
-                    setEditingId((id) => (id === service.id ? null : service.id))
-                  }
-                >
-                  <Pencil className="size-4" />
-                  {editingId === service.id ? 'Kapat' : 'Düzenle'}
-                </Button>
-
-                {editingId === service.id && (
-                  <ServiceEditForm
-                    studentId={studentId}
-                    service={service}
-                    disabled={isPending}
-                    onSubmit={handleServiceUpdate}
-                    onCancel={() => setEditingId(null)}
-                  />
-                )}
               </li>
             ))}
           </ul>
         )}
-
-        {showForm && (
-          <ServiceForm
-            studentId={studentId}
-            groups={groups}
-            disabled={isPending}
-            onDone={() => setShowForm(false)}
-            run={run}
-          />
-        )}
       </Section>
+
+        {/* BU AYIN HİZMET ÖZETİ (§3 no.3).
+
+            Sayaçlar Hizmet Yapısı'nın YANINDA duruyor: soldaki kart
+            "ne vaat ettik", sağdaki "ne kadarını verdik". Alt alta
+            dizildiklerinde vaat ile gerçekleşme arasındaki fark
+            kaydırma mesafesi kadar uzaklaşıyordu.
+
+            ÇUBUK, ORANI BİR BAKIŞTA VERİR — ama sayı da yazıyor: "4/5"
+            ile "3/4" arasındaki fark çubuk boyundan okunmaz. */}
+        <Section
+          title="Bu Ayın Hizmet Özeti"
+          description={promiseLine ?? 'Bu ay için planlanmış hizmet yok.'}
+          variant="card"
+        >
+          {serviceCounters.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Hizmet tanımlandığında ayın takviminden oturumlar otomatik üretilir.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {serviceCounters.map((c) => {
+                const service = serviceById.get(c.serviceId)
+                if (!service) return null
+                const percent = c.planned > 0 ? (c.done / c.planned) * 100 : 0
+                return (
+                  <li key={c.serviceId} className="space-y-1.5">
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate">
+                        {service.groupName ?? formatServiceAxes(service)}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {c.done} / {c.planned} tamamlandı
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={percent}
+                      tone={c.done >= c.planned ? 'success' : 'primary'}
+                      label={`${formatServiceAxes(service)}: ${c.done} / ${c.planned}`}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </Section>
+      </div>
+
+      <ServiceStructureDrawer
+        open={structureOpen}
+        onOpenChange={setStructureOpen}
+        student={student}
+        services={services}
+        groups={groups}
+        mainContactId={mainContactId}
+      />
 
       {/* ---------------- Aylık görüşme kayıtları ---------------- */}
       <Section
@@ -533,121 +556,245 @@ export function SessionsClient({
             description="Hizmet tanımlandığında ayın takviminden oturumlar otomatik üretilir."
           />
         ) : (
-          <ul className="divide-y divide-border">
-            {sessions.map((session) => {
-              const service = serviceById.get(session.serviceId)
-              const at = effectiveSessionTime(session)
-              const awaiting = isAwaitingOutcome({ status: session.status, effectiveAt: at }, now)
+          /* KAYITLAR HİZMET BAZINDA AYRILIR (§7 hedef ekran).
 
-              return (
-                <li key={session.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">
-                      {formatSessionTime(at)}
-                      {session.isMakeup && (
-                        <Badge variant="info" className="ml-2">
-                          Telafi
-                        </Badge>
+             Tek düz liste, iki hizmet hattı olan öğrencide grup dersiyle
+             koçluk görüşmesini iç içe gösteriyordu: "Çarşamba 20:00"
+             satırının hangi hizmete ait olduğu ancak alt satırdaki
+             küçük yazıdan anlaşılıyordu. Hizmet başlık olunca o bilgi
+             satırdan çıkıyor ve tablo asıl soruya yer açıyor: hangi
+             tarihte ne oldu.
+
+             Sıra HİZMET YAPISI KARTIYLA AYNI (services dizisi): iki kart
+             yan yana duruyor, farklı sıralarsa göz her seferinde eşleme
+             yapmak zorunda kalır. */
+          <div className="space-y-4">
+            {services
+              .map((service) => ({
+                service,
+                rows: sessions.filter((x) => x.serviceId === service.id),
+              }))
+              .filter((g) => g.rows.length > 0)
+              .map(({ service, rows }) => {
+                const counter = serviceCounters.find((c) => c.serviceId === service.id)
+                return (
+                  <div key={service.id} className="rounded-lg border border-border">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {formatServiceAxes(service)}
+                          {service.groupName && (
+                            <span className="text-muted-foreground"> · {service.groupName}</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatServiceSchedule(service)}
+                        </p>
+                      </div>
+                      {counter && (
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {counter.done} / {counter.planned} tamamlandı
+                        </span>
                       )}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {service ? formatServiceAxes(service) : 'Hizmet bulunamadı'}
-                      {/* İLK TAAHHÜT GÖRÜNÜR KALIR (§7.A): ertelenmiş
-                          oturumda eski tarih silinmez, yanında yazar. */}
-                      {session.actualAt && session.status === 'ertelendi' && (
-                        <span> · İlk plan: {formatSessionTime(session.plannedAt)}</span>
-                      )}
-                    </p>
-                  </div>
-
-                  {awaiting ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium text-warning-foreground">
-                        Durum güncellenmedi
-                      </span>
-                      {/* GRUP OTURUMUNDA "Yapıldı" TEK İŞLEM (§9).
-
-                          Grup dersinde tek bir gerçek vardır; on öğrenci
-                          için on ayrı "ders yapıldı mı" kararı olamaz.
-                          Bu düğme gruptaki bütün aktif öğrencilere
-                          yansır — "Katılmadı" istisnası olanlar hariç.
-                          Önceden her öğrenci ekranı tek tek açılıyor ve
-                          biri unutulduğunda aylık sayacı sessizce eksik
-                          kalıyordu. */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isPending}
-                        onClick={() =>
-                          session.groupSessionId
-                            ? handleGroupOutcome(session.groupSessionId, 'yapildi')
-                            : run(
-                                () =>
-                                  setSessionOutcomeAction(studentId, session.id, 'yapildi'),
-                                'Görüşme yapıldı olarak işaretlendi.'
-                              )
-                        }
-                      >
-                        {session.groupSessionId ? 'Yapıldı (grup)' : 'Yapıldı'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isPending}
-                        onClick={() =>
-                          run(
-                            () => setSessionOutcomeAction(studentId, session.id, 'yapilmadi'),
-                            'Görüşme yapılmadı olarak işaretlendi.'
-                          )
-                        }
-                      >
-                        Yapılmadı
-                      </Button>
-                      <RescheduleButton
-                        disabled={isPending}
-                        currentAt={at}
-                        onPick={(iso) => handleReschedule(session.id, iso)}
-                      />
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Badge variant={SESSION_STATUS_VARIANT[session.status]}>
-                        {SESSION_STATUS_LABEL[session.status]}
-                      </Badge>
 
-                      {/* TELAFİ KARARI (§7-C).
+                    {/* Tablo kendi kabında kayar; sayfa gövdesi yatay
+                        kaymaz (dar ekran kuralı). */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-xs text-muted-foreground">
+                            <th className="px-3 py-2 text-left font-medium">Tarih</th>
+                            <th className="px-3 py-2 text-left font-medium">Gün</th>
+                            <th className="px-3 py-2 text-left font-medium">Saat</th>
+                            <th className="hidden px-3 py-2 text-left font-medium sm:table-cell">
+                              Süre
+                            </th>
+                            <th className="px-3 py-2 text-left font-medium">Durum</th>
+                            <th className="hidden px-3 py-2 text-left font-medium md:table-cell">
+                              Not
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((session) => {
+                            const at = effectiveSessionTime(session)
+                            const awaiting = isAwaitingOutcome(
+                              { status: session.status, effectiveAt: at },
+                              now
+                            )
 
-                          "Telafi bekliyor" ile "telafi edilmeyecek" aynı
-                          `yapilmadi` durumuna düşüyordu; oysa ilki ayı
-                          tamamlanmamış bırakır, ikincisi ayı 3/4 olarak
-                          KAPATIR. Ayrım öğretmenin kararıdır ve veriden
-                          türetilemez — bu yüzden soruluyor. */}
-                      {session.status === 'yapilmadi' && !session.isMakeup && (
-                        <>
-                          {session.makeupDecision === 'waived' ? (
-                            <span className="text-xs text-muted-foreground">
-                              Telafi edilmeyecek
-                            </span>
-                          ) : session.makeupDecision === 'pending' ? (
-                            <span className="text-xs text-warning-foreground">
-                              Telafi bekliyor
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={isPending}
-                                onClick={() =>
-                                  run(
-                                    () =>
-                                      setMakeupDecisionAction(studentId, session.id, 'pending'),
-                                    'Telafi bekliyor olarak işaretlendi.'
-                                  )
-                                }
+                            return (
+                              <tr
+                                key={session.id}
+                                className="border-b border-border last:border-0 align-top"
                               >
-                                Telafi edilecek
-                              </Button>
+                                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                                  {formatSessionDate(at)}
+                                  {session.isMakeup && (
+                                    <Badge variant="info" className="ml-1.5">
+                                      Telafi
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                                  {formatSessionWeekdayShort(at)}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                                  {formatSessionClock(at)}
+                                </td>
+                                <td className="hidden whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground sm:table-cell">
+                                  {session.durationMinutes ?? service.plannedDurationMinutes} dk
+                                </td>
+                                <td className="px-3 py-2">
+                      {awaiting ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-warning-foreground">
+                            Durum güncellenmedi
+                          </span>
+                          {/* GRUP OTURUMUNDA "Yapıldı" TEK İŞLEM (§9).
+
+                              Grup dersinde tek bir gerçek vardır; on öğrenci
+                              için on ayrı "ders yapıldı mı" kararı olamaz.
+                              Bu düğme gruptaki bütün aktif öğrencilere
+                              yansır — "Katılmadı" istisnası olanlar hariç.
+                              Önceden her öğrenci ekranı tek tek açılıyor ve
+                              biri unutulduğunda aylık sayacı sessizce eksik
+                              kalıyordu. */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={() =>
+                              session.groupSessionId
+                                ? handleGroupOutcome(session.groupSessionId, 'yapildi')
+                                : run(
+                                    () =>
+                                      setSessionOutcomeAction(studentId, session.id, 'yapildi'),
+                                    'Görüşme yapıldı olarak işaretlendi.'
+                                  )
+                            }
+                          >
+                            {session.groupSessionId ? 'Yapıldı (grup)' : 'Yapıldı'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={() =>
+                              run(
+                                () => setSessionOutcomeAction(studentId, session.id, 'yapilmadi'),
+                                'Görüşme yapılmadı olarak işaretlendi.'
+                              )
+                            }
+                          >
+                            Yapılmadı
+                          </Button>
+                          <RescheduleButton
+                            disabled={isPending}
+                            currentAt={at}
+                            onPick={(iso) => handleReschedule(session.id, iso)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge variant={SESSION_STATUS_VARIANT[session.status]}>
+                            {SESSION_STATUS_LABEL[session.status]}
+                          </Badge>
+
+                          {/* TELAFİ KARARI (§7-C).
+
+                              "Telafi bekliyor" ile "telafi edilmeyecek" aynı
+                              `yapilmadi` durumuna düşüyordu; oysa ilki ayı
+                              tamamlanmamış bırakır, ikincisi ayı 3/4 olarak
+                              KAPATIR. Ayrım öğretmenin kararıdır ve veriden
+                              türetilemez — bu yüzden soruluyor. */}
+                          {session.status === 'yapilmadi' && !session.isMakeup && (
+                            <>
+                              {session.makeupDecision === 'waived' ? (
+                                <span className="text-xs text-muted-foreground">
+                                  Telafi edilmeyecek
+                                </span>
+                              ) : session.makeupDecision === 'pending' ? (
+                                <span className="text-xs text-warning-foreground">
+                                  Telafi bekliyor
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={isPending}
+                                    onClick={() =>
+                                      run(
+                                        () =>
+                                          setMakeupDecisionAction(studentId, session.id, 'pending'),
+                                        'Telafi bekliyor olarak işaretlendi.'
+                                      )
+                                    }
+                                  >
+                                    Telafi edilecek
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    disabled={isPending}
+                                    onClick={() =>
+                                      run(
+                                        () =>
+                                          setMakeupDecisionAction(studentId, session.id, 'waived'),
+                                        'Telafi edilmeyecek olarak işaretlendi.'
+                                      )
+                                    }
+                                  >
+                                    Edilmeyecek
+                                  </Button>
+                                </div>
+                              )}
+
+                              {session.makeupDecision !== 'waived' && (
+                                <RescheduleButton
+                                  label="Telafi Ekle"
+                                  disabled={isPending}
+                                  currentAt={at}
+                                  onPick={(iso) =>
+                                    run(
+                                      () => createMakeupSessionAction(studentId, session.id, iso),
+                                      'Telafi oluşturuldu.'
+                                    )
+                                  }
+                                />
+                              )}
+                            </>
+                          )}
+
+                          {/* KATILIM İSTİSNASI — yalnız grup oturumunda (§9).
+
+                              Grup dersi YAPILDI ama bu öğrenci gelmedi.
+                              Oturumu "Yapılmadı" işaretlemek yanlış olurdu:
+                              ders gerçekleşti, öğretmen emeğini verdi; eksik
+                              olan tek öğrencinin katılımı. Aylık sayaç bu
+                              istisnayı zaten hesaba katıyor. */}
+                          {session.groupSessionId && session.status === 'yapildi' && (
+                            session.attended === false ? (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-muted-foreground">Katılmadı</span>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={isPending}
+                                  onClick={() =>
+                                    run(
+                                      () =>
+                                        setSessionAttendanceAction(studentId, session.id, true),
+                                      'Katılım kaydı geri alındı.'
+                                    )
+                                  }
+                                >
+                                  Geri al
+                                </Button>
+                              </div>
+                            ) : (
                               <Button
                                 size="xs"
                                 variant="ghost"
@@ -655,90 +802,53 @@ export function SessionsClient({
                                 onClick={() =>
                                   run(
                                     () =>
-                                      setMakeupDecisionAction(studentId, session.id, 'waived'),
-                                    'Telafi edilmeyecek olarak işaretlendi.'
+                                      setSessionAttendanceAction(studentId, session.id, false),
+                                    'Katılmadı olarak işaretlendi.'
                                   )
                                 }
                               >
-                                Edilmeyecek
+                                Katılmadı
                               </Button>
-                            </div>
+                            )
                           )}
 
-                          {session.makeupDecision !== 'waived' && (
-                            <RescheduleButton
-                              label="Telafi Ekle"
-                              disabled={isPending}
-                              currentAt={at}
-                              onPick={(iso) =>
-                                run(
-                                  () => createMakeupSessionAction(studentId, session.id, iso),
-                                  'Telafi oluşturuldu.'
-                                )
-                              }
-                            />
+                          {/* Telafi satırı HANGİ AYIN telafisi olduğunu yazar:
+                              liste asıl aya göre süzüldüğü için satırın kendi
+                              tarihi başka bir ayda olabilir (§7-C). */}
+                          {session.isMakeup && session.originPlannedAt && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatSessionTime(session.originPlannedAt)} telafisi
+                            </span>
                           )}
-                        </>
+                        </div>
                       )}
-
-                      {/* KATILIM İSTİSNASI — yalnız grup oturumunda (§9).
-
-                          Grup dersi YAPILDI ama bu öğrenci gelmedi.
-                          Oturumu "Yapılmadı" işaretlemek yanlış olurdu:
-                          ders gerçekleşti, öğretmen emeğini verdi; eksik
-                          olan tek öğrencinin katılımı. Aylık sayaç bu
-                          istisnayı zaten hesaba katıyor. */}
-                      {session.groupSessionId && session.status === 'yapildi' && (
-                        session.attended === false ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-muted-foreground">Katılmadı</span>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              disabled={isPending}
-                              onClick={() =>
-                                run(
-                                  () =>
-                                    setSessionAttendanceAction(studentId, session.id, true),
-                                  'Katılım kaydı geri alındı.'
-                                )
-                              }
-                            >
-                              Geri al
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            disabled={isPending}
-                            onClick={() =>
-                              run(
-                                () =>
-                                  setSessionAttendanceAction(studentId, session.id, false),
-                                'Katılmadı olarak işaretlendi.'
-                              )
-                            }
-                          >
-                            Katılmadı
-                          </Button>
-                        )
-                      )}
-
-                      {/* Telafi satırı HANGİ AYIN telafisi olduğunu yazar:
-                          liste asıl aya göre süzüldüğü için satırın kendi
-                          tarihi başka bir ayda olabilir (§7-C). */}
-                      {session.isMakeup && session.originPlannedAt && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatSessionTime(session.originPlannedAt)} telafisi
-                        </span>
-                      )}
+                                </td>
+                                <td className="hidden px-3 py-2 text-xs text-muted-foreground md:table-cell">
+                                  {/* İLK TAAHHÜT GÖRÜNÜR KALIR (§7.A):
+                                      ertelenmiş oturumda eski tarih
+                                      silinmez, notta yazar. */}
+                                  {session.actualAt && session.status === 'ertelendi'
+                                    ? `İlk plan: ${formatSessionTime(session.plannedAt)}`
+                                    : (session.note ?? '—')}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+                  </div>
+                )
+              })}
+
+            {orphanSessions.length > 0 && (
+              <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning-foreground">
+                {orphanSessions.length} kayıt, artık tanımlı olmayan bir hizmete
+                bağlı ve yukarıdaki tablolarda görünmüyor. Aylık sayaçlar bu
+                kayıtları içerir.
+              </p>
+            )}
+          </div>
         )}
       </Section>
 
@@ -750,31 +860,60 @@ export function SessionsClient({
           variant="card"
         >
           {/* AY AY İLERİ GERİ GİTMEK YETMİYORDU: bir yıl öncesine
-              bakmak on iki tıklama demekti. Satırlar doğrudan o aya
-              atlıyor ve yanlarında ayın özeti duruyor — hangi aya
-              gitmek gerektiği listede görünsün diye. */}
-          <ul className="divide-y divide-border">
-            {archive.map((m) => (
-              <li key={m.param}>
-                <Link
-                  href={`?ay=${m.param}`}
-                  className="flex items-baseline justify-between gap-3 py-2 text-sm hover:underline"
-                >
-                  <span>{m.label}</span>
-                  <span className="shrink-0 text-muted-foreground">
-                    <span className="tabular-nums">
-                      {m.done} / {m.planned}
-                    </span>
-                    {m.missed > 0 && (
-                      <span className="ml-2 text-warning-foreground">
-                        {m.missed} yapılmadı
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+              bakmak on iki tıklama demekti. Ay adı doğrudan o aya
+              atlıyor ve satırda ayın özeti duruyor — hangi aya gitmek
+              gerektiği listede görünsün diye. */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="px-3 py-2 text-left font-medium">Ay</th>
+                  <th className="px-3 py-2 text-right font-medium">Planlanan</th>
+                  <th className="px-3 py-2 text-right font-medium">Yapılan</th>
+                  <th className="px-3 py-2 text-left font-medium">Durum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {archive.map((m) => {
+                  const state = m.finance ? monthPaymentState(m.finance) : null
+                  const label = monthPaymentLabel(state)
+                  return (
+                    <tr key={m.param} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2">
+                        <Link href={`?ay=${m.param}`} className="hover:underline">
+                          {m.label}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m.planned}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m.done}</td>
+                      <td className="px-3 py-2">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {/* TAHSİLAT ROZETİ VARSA ÇİZİLİR. Aylık pakete
+                              dahil bir ayda tahakkuk sıfırdır ve
+                              "Tahsil edildi" yazmak yanıltır; finansı
+                              görme yetkisi olmayan öğretmende de (066)
+                              aynı sessizlik. */}
+                          {label && (
+                            <Badge variant={state === 'paid' ? 'success' : 'warning'}>
+                              {label}
+                            </Badge>
+                          )}
+                          {m.missed > 0 && (
+                            <span className="text-xs text-warning-foreground">
+                              {m.missed} yapılmadı
+                            </span>
+                          )}
+                          {!label && m.missed === 0 && (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </Section>
       )}
 
@@ -785,7 +924,48 @@ export function SessionsClient({
           description="Aktif eğitim döneminde gerçekleşen hizmetlerin toplamı."
           variant="card"
         >
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* DÖRT BAŞLIK KARO ŞERİDİ, KIRILIM ALTINDA (§9 hedef ekran).
+
+              Dokümanın özet tablosu yedi gösterge sayıyor ama üçü
+              (birebir / grup / koçluk) diğer dördünün kırılımı. Yedisini
+              eşit ağırlıkta dizmek, "toplam temas" ile "grup dersi"ni
+              aynı seviyede gösterip toplamı kaybettiriyordu.
+
+              PARASAL KAROLAR KOŞULLU: finans 066'dan beri yalnız çalışma
+              alanı sahibine açık. Yetkisi olmayan öğretmen oturum
+              toplamlarını görmeye devam eder, para karosu hiç
+              çizilmez. */}
+          <MetricTiles
+            className={season.accruedKurus !== null ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}
+            metrics={[
+              { label: 'Toplam temas', value: season.totalCount, icon: Users },
+              { label: 'Toplam süre', value: formatMinutes(season.totalMinutes), icon: Clock },
+              ...(season.accruedKurus !== null
+                ? [
+                    {
+                      label: 'Toplam tahakkuk',
+                      value: formatKurus(season.accruedKurus),
+                      icon: Wallet,
+                    },
+                    {
+                      label: 'Tahsil edilen',
+                      value: formatKurus(season.collectedKurus ?? 0),
+                      icon: Wallet,
+                      tone:
+                        (season.balanceKurus ?? 0) > 0
+                          ? ('warning' as const)
+                          : ('success' as const),
+                      hint:
+                        (season.balanceKurus ?? 0) > 0
+                          ? `${formatKurus(season.balanceKurus ?? 0)} kaldı`
+                          : undefined,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+
+          <dl className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
             <SeasonStat
               label="Birebir ders"
               count={season.birebirDersCount}
@@ -804,25 +984,7 @@ export function SessionsClient({
               minutes={season.koclukMinutes}
               unit="görüşme"
             />
-            <SeasonStat
-              label="Toplam temas"
-              count={season.totalCount}
-              minutes={season.totalMinutes}
-              unit="temas"
-            />
           </dl>
-
-          {/* PARASAL SATIRLAR AYRI VE KOŞULLU: finans 066'dan beri
-              yalnız çalışma alanı sahibine açık. Sahip olmayan
-              öğretmen oturum toplamlarını görmeye devam eder, para
-              satırı hiç çizilmez. */}
-          {season.accruedKurus !== null && (
-            <dl className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
-              <SeasonMoney label="Toplam tahakkuk" kurus={season.accruedKurus} />
-              <SeasonMoney label="Toplam tahsil edilen" kurus={season.collectedKurus ?? 0} />
-              <SeasonMoney label="Kalan" kurus={season.balanceKurus ?? 0} emphasize />
-            </dl>
-          )}
         </Section>
       )}
     </div>
@@ -933,29 +1095,6 @@ function SeasonStat({
   )
 }
 
-function SeasonMoney({
-  label,
-  kurus,
-  emphasize,
-}: {
-  label: string
-  kurus: number
-  emphasize?: boolean
-}) {
-  return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className={`mt-0.5 text-sm tabular-nums ${
-          emphasize && kurus > 0 ? 'font-semibold text-warning-foreground' : 'font-medium'
-        }`}
-      >
-        {formatKurus(kurus)}
-      </dd>
-    </div>
-  )
-}
-
 /**
  * Tarih/saat seçtiren küçük satır içi form.
  *
@@ -1015,336 +1154,4 @@ function RescheduleButton({
 function toLocalInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-/**
- * Hizmet düzenini düzenleme formu — İLERİ TARİHLİ DEĞİŞİKLİK (§5 no.7).
- *
- * TÜR / KATILIM / GRUP ALANLARI YOK. Bu üç eksen hizmetin kimliğidir:
- * "birebir ders"in "grup koçluğu"na dönüşmesi düzenleme değil, başka
- * bir hizmettir — eskisi pasife alınır, yenisi eklenir. Formda
- * gösterilip RPC tarafından reddedilmeleri, kullanıcıyı çıkmaz bir
- * yola sokardı.
- *
- * "Şu tarihten itibaren" ALANI ZORUNLU VE AYRI: kaydedilen şey yalnız
- * yeni saat değil, değişikliğin NE ZAMAN başladığı. Varsayılanı bugün
- * yapmak geçmişi bozmaz (RPC kesimi NOW() ile koruyor) ama öğretmenin
- * "gelecek pazartesiden itibaren" demesinin de yolu açık kalır.
- */
-function ServiceEditForm({
-  studentId,
-  service,
-  disabled,
-  onSubmit,
-  onCancel,
-}: {
-  studentId: string
-  service: ServiceRow
-  disabled?: boolean
-  onSubmit: (input: ServiceUpdateInput) => void
-  onCancel: () => void
-}) {
-  const [weekday, setWeekday] = useState(String(service.weekday))
-  const [startTime, setStartTime] = useState(service.startTime.slice(0, 5))
-  const [duration, setDuration] = useState(String(service.plannedDurationMinutes))
-  const [medium, setMedium] = useState(service.medium)
-  const [financeLink, setFinanceLink] = useState(service.financeLink)
-  const [effectiveFrom, setEffectiveFrom] = useState(() =>
-    new Date().toISOString().slice(0, 10)
-  )
-
-  return (
-    <div className="mt-3 grid gap-3 rounded-md border border-border bg-muted/40 p-3 sm:grid-cols-2">
-      <Field label="Gün">
-        <NativeSelect value={weekday} onChange={(e) => setWeekday(e.target.value)}>
-          {([1, 2, 3, 4, 5, 6, 7] as Weekday[]).map((d) => (
-            <option key={d} value={d}>
-              {WEEKDAY_LABEL[d]}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
-
-      <Field label="Saat">
-        <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-      </Field>
-
-      <Field label="Süre (dk)">
-        <Input
-          type="number"
-          min={5}
-          max={600}
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-        />
-      </Field>
-
-      <Field label="Ortam">
-        <NativeSelect
-          value={medium}
-          onChange={(e) => setMedium(e.target.value as ServiceRow['medium'])}
-        >
-          <option value="online">Online</option>
-          <option value="yuz_yuze">Yüz yüze</option>
-        </NativeSelect>
-      </Field>
-
-      <Field label="Finans ilişkisi">
-        <NativeSelect
-          value={financeLink}
-          onChange={(e) => setFinanceLink(e.target.value as ServiceRow['financeLink'])}
-        >
-          <option value="haric">Finansal takibe dahil değil</option>
-          <option value="aylik_paket">Aylık pakete dahil</option>
-          <option value="ders_basi">Ders/görüşme başı</option>
-        </NativeSelect>
-      </Field>
-
-      <Field
-        label={service.status === 'active' ? 'Şu tarihten itibaren' : 'Başlangıç tarihi'}
-      >
-        <Input
-          type="date"
-          value={effectiveFrom}
-          onChange={(e) => setEffectiveFrom(e.target.value)}
-        />
-      </Field>
-
-      <p className="text-xs text-muted-foreground sm:col-span-2">
-        {service.status === 'active'
-          ? 'Geçmiş kayıtlar değişmez. Bu tarihten sonraki, henüz sonuçlanmamış oturumlar yeni düzene göre yeniden üretilir.'
-          : 'Hizmet pasif. Düzeni tamamladıktan sonra "Aktifleştir" derseniz oturumlar bu tarihten itibaren üretilir.'}
-      </p>
-
-      <div className="flex items-end gap-2 sm:col-span-2">
-        <Button
-          size="sm"
-          disabled={disabled}
-          onClick={() =>
-            onSubmit({
-              studentId,
-              serviceId: service.id,
-              weekday,
-              startTime,
-              plannedDurationMinutes: duration,
-              effectiveFrom,
-              medium,
-              submissionOffsetMinutes: service.submissionOffsetMinutes,
-              financeLink,
-            })
-          }
-        >
-          Değişikliği Kaydet
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Vazgeç
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Yeni hizmet formu.
- *
- * ÜÇ EKSEN AYRI SEÇİLİR (§5.3): Hizmet / Katılım / Ortam. Tek birleşik
- * liste ("Online Grup Ders", "Yüz Yüze Birebir Koçluk"...) sekiz seçenek
- * üretir ve yeni bir eksen eklendiğinde on altıya çıkardı.
- */
-function ServiceForm({
-  studentId,
-  groups,
-  disabled,
-  onDone,
-  run,
-}: {
-  studentId: string
-  groups: { id: string; name: string }[]
-  disabled?: boolean
-  onDone: () => void
-  run: (
-    action: () => Promise<{ error?: string; success?: boolean }>,
-    ok: string
-  ) => void
-}) {
-  const [kind, setKind] = useState<'ders' | 'kocluk'>('ders')
-  const [participation, setParticipation] = useState<'birebir' | 'grup'>('birebir')
-  const [medium, setMedium] = useState<'online' | 'yuz_yuze'>('online')
-  const [groupId, setGroupId] = useState('')
-  const [newGroupOpen, setNewGroupOpen] = useState(false)
-  const [newGroupName, setNewGroupName] = useState('')
-  const [weekday, setWeekday] = useState('3')
-  const [startTime, setStartTime] = useState('20:00')
-  const [duration, setDuration] = useState('60')
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [financeLink, setFinanceLink] = useState<ServiceRow['financeLink']>('haric')
-
-  return (
-    <div className="mt-4 grid gap-4 rounded-lg border border-border bg-muted/40 p-4 sm:grid-cols-2 lg:grid-cols-3">
-      <Field label="Hizmet">
-        <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as 'ders' | 'kocluk')}>
-          <option value="ders">Ders</option>
-          <option value="kocluk">Koçluk</option>
-        </NativeSelect>
-      </Field>
-
-      <Field label="Katılım">
-        <NativeSelect
-          value={participation}
-          onChange={(e) => setParticipation(e.target.value as 'birebir' | 'grup')}
-        >
-          <option value="birebir">Birebir</option>
-          <option value="grup">Grup</option>
-        </NativeSelect>
-      </Field>
-
-      <Field label="Ortam">
-        <NativeSelect
-          value={medium}
-          onChange={(e) => setMedium(e.target.value as 'online' | 'yuz_yuze')}
-        >
-          <option value="online">Online</option>
-          <option value="yuz_yuze">Yüz yüze</option>
-        </NativeSelect>
-      </Field>
-
-      {participation === 'grup' && (
-        <Field label="Grup">
-          <NativeSelect value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">Seçin</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </NativeSelect>
-          {/* GRUP OLUŞTURMA BURADA (§5 no.4).
-
-              Grup şimdiye kadar yalnız SEÇİLEBİLİYORDU; oluşturmanın
-              arayüzde hiçbir yolu yoktu. Grup hizmeti tanımlamak isteyen
-              öğretmen boş bir açılır listeye bakıyor ve devam
-              edemiyordu. Form ayrı bir ekrana taşınmadı: ihtiyaç tam
-              burada doğuyor. */}
-          {newGroupOpen ? (
-            <div className="mt-2 flex items-end gap-2">
-              <div className="flex-1">
-                <Label htmlFor="newGroup" className="text-xs">
-                  Yeni grup adı
-                </Label>
-                <Input
-                  id="newGroup"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  placeholder="Örn. 12. Sınıf AYT Matematik Grubu"
-                />
-              </div>
-              <Button
-                size="sm"
-                disabled={disabled || newGroupName.trim().length === 0}
-                onClick={() =>
-                  run(
-                    () => createStudentGroupAction(studentId, newGroupName.trim()),
-                    'Grup oluşturuldu.'
-                  )
-                }
-              >
-                Ekle
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setNewGroupOpen(false)}>
-                Vazgeç
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="xs"
-              variant="ghost"
-              className="mt-1 -ml-1"
-              onClick={() => setNewGroupOpen(true)}
-            >
-              <Plus className="size-3.5" />
-              Yeni grup oluştur
-            </Button>
-          )}
-        </Field>
-      )}
-
-      <Field label="Gün">
-        <NativeSelect value={weekday} onChange={(e) => setWeekday(e.target.value)}>
-          {([1, 2, 3, 4, 5, 6, 7] as Weekday[]).map((d) => (
-            <option key={d} value={d}>
-              {WEEKDAY_LABEL[d]}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
-
-      <Field label="Saat">
-        <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-      </Field>
-
-      <Field label="Süre (dk)">
-        <Input
-          type="number"
-          min={5}
-          max={600}
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-        />
-      </Field>
-
-      <Field label="Başlangıç tarihi">
-        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-      </Field>
-
-      <Field label="Finans ilişkisi">
-        <NativeSelect
-          value={financeLink}
-          onChange={(e) => setFinanceLink(e.target.value as ServiceRow['financeLink'])}
-        >
-          <option value="haric">Finansal takibe dahil değil</option>
-          <option value="aylik_paket">Aylık pakete dahil</option>
-          <option value="ders_basi">Ders/görüşme başı</option>
-        </NativeSelect>
-      </Field>
-
-      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
-        <Button
-          disabled={disabled}
-          onClick={() =>
-            run(async () => {
-              const result = await createServiceAction({
-                studentId,
-                kind,
-                participation,
-                medium,
-                groupId: participation === 'grup' ? groupId : '',
-                weekday,
-                startTime,
-                plannedDurationMinutes: duration,
-                startDate,
-                submissionOffsetMinutes: 0,
-                financeLink,
-              })
-              if (result.success) onDone()
-              return result
-            }, 'Hizmet eklendi.')
-          }
-        >
-          Hizmeti Ekle
-        </Button>
-        <Button variant="ghost" onClick={onDone}>
-          Vazgeç
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  )
 }

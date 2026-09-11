@@ -396,6 +396,24 @@ const sessionTimeFormatter = new Intl.DateTimeFormat('tr-TR', {
   minute: '2-digit',
 })
 
+const sessionDateFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+const sessionWeekdayFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  weekday: 'short',
+})
+
+const sessionClockFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 const sessionLongFormatter = new Intl.DateTimeFormat('tr-TR', {
   timeZone: APP_TIME_ZONE,
   day: 'numeric',
@@ -411,6 +429,36 @@ export function formatSessionTime(value: string | Date | null | undefined): stri
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
   return sessionTimeFormatter.format(d)
+}
+
+/**
+ * Aylık kayıt tablosunun üç ayrı sütunu (R7-04 §7 hedef ekran):
+ * Tarih · Gün · Saat.
+ *
+ * ÜÇÜ DE APP_TIME_ZONE ÜZERİNDEN. `at.getDay()` ile gün adı üretmek
+ * ÇALIŞTIRAN MAKİNENİN saat dilimini kullanır: sunucu UTC'deyse
+ * Çarşamba 00:30'daki bir oturum tabloda "Salı" görünürdü. Aynı tuzak
+ * `getHours()` için de geçerli.
+ */
+export function formatSessionDate(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return sessionDateFormatter.format(d)
+}
+
+export function formatSessionWeekdayShort(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return sessionWeekdayFormatter.format(d)
+}
+
+export function formatSessionClock(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return sessionClockFormatter.format(d)
 }
 
 /** `16 Eylül Çarşamba 20:00` — kart başlıklarında. */

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
-import { CalendarCheck, CalendarClock, CalendarX, Clock } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Clock, Wallet } from 'lucide-react'
+import { monthPaymentLabel, monthPaymentState } from '@/lib/finance'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
@@ -68,7 +69,7 @@ export default async function StudentSessionsPage({
 
   const { data: student } = await supabase
     .from('students')
-    .select('id, full_name, status')
+    .select('id, full_name, status, grade_level, exam_type')
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)
     .single()
@@ -277,6 +278,52 @@ export default async function StudentSessionsPage({
       }
     })
 
+  // ARŞİVDEKİ AYLARIN ÖDEME DURUMU (§3 no.6 ile §7 no.4 birlikte).
+  //
+  // Geçmiş aylar tablosunda "Tahsil edildi" sütunu var; tek tek ay
+  // sorgulamak on iki gidiş dönüş olurdu. Aynı view, `in` ile tek
+  // sorguda. Yetki yoksa (066: finans yalnız owner) boş döner ve sütun
+  // hiç çizilmez.
+  const archiveMonths = archive.map((a) => `${a.param}-01`)
+  const { data: archiveFinance } = archiveMonths.length
+    ? await supabase
+        .from('student_month_finance_view')
+        .select('month_start, accrued_kurus, collected_kurus')
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .in('month_start', archiveMonths)
+    : { data: null }
+
+  const financeByMonth = new Map(
+    (archiveFinance ?? []).map((r) => [
+      r.month_start as string,
+      {
+        accruedKurus: Number(r.accrued_kurus ?? 0),
+        collectedKurus: Number(r.collected_kurus ?? 0),
+      },
+    ])
+  )
+
+  const archiveWithFinance = archive.map((a) => ({
+    ...a,
+    finance: financeByMonth.get(`${a.param}-01`) ?? null,
+  }))
+
+  // Bu ayın tahakkuk/tahsilatı — karo ve rozet aynı kaynaktan okusun.
+  const monthFinance = monthFinanceRows
+    ? {
+        accruedKurus: Number(monthFinanceRows.accrued_kurus ?? 0),
+        collectedKurus: Number(monthFinanceRows.collected_kurus ?? 0),
+        balanceKurus: Number(monthFinanceRows.balance_kurus ?? 0),
+      }
+    : null
+
+  const paymentState = monthFinance ? monthPaymentState(monthFinance) : null
+  const paymentTone =
+    paymentState === 'paid' ? ('success' as const)
+    : paymentState === null ? ('default' as const)
+    : ('warning' as const)
+
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
   const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
 
@@ -287,27 +334,50 @@ export default async function StudentSessionsPage({
         subtitle="Verilen hizmetler, aylık görüşme kaydı ve ödeme durumu."
       />
 
+      {/* DÖRDÜNCÜ KARO ÖDEME DURUMU (§7 no.4).
+
+          Eskiden "Yapılmadı" vardı; o sayı "Kaldı"nın içinde zaten
+          okunuyor ve aylık detay listesinde satır satır görünüyor.
+          Ödeme durumu ise ay bölümünün içine gömülüydü — öğretmenin
+          "bu ay para geldi mi" sorusu şeridin en görünür yerinde
+          olmalı. Detay işlemler Finans ekranında (§3 no.4). */}
       <MetricTiles
+        className="xl:grid-cols-4"
         metrics={[
           {
-            label: 'Planlanan',
+            label: 'Bu ay planlanan',
             value: sum('planlanan'),
             hint: `${monthLabel(year, month)} · temas`,
             icon: CalendarClock,
           },
           { label: 'Yapıldı', value: sum('yapilan'), tone: 'success', icon: CalendarCheck },
-          { label: 'Kalan', value: sum('bekleyen'), icon: Clock },
+          { label: 'Kaldı', value: sum('bekleyen'), icon: Clock },
           {
-            label: 'Yapılmadı',
-            value: sum('yapilmayan'),
-            tone: sum('yapilmayan') > 0 ? 'destructive' : 'default',
-            icon: CalendarX,
+            label: 'Ödeme durumu',
+            // Rozet metni burada değerin KENDİSİ: karoda ay adı büyük
+            // yazıyor, durum ipucu satırında. Yetki yoksa (066) ya da
+            // bu ayın tahakkuku sıfırsa (aylık paket / takip dışı)
+            // durum uydurulmaz, "—" yazar.
+            value: monthLabel(year, month),
+            hint: monthPaymentLabel(monthPaymentState(monthFinance ?? { accruedKurus: 0, collectedKurus: 0 })) ?? '—',
+            tone: paymentTone,
+            icon: Wallet,
+            href: '/teacher/finans',
           },
         ]}
       />
 
       <SessionsClient
         studentId={studentId}
+        // Panel başlığı öğrenciyi tekrar yazar: sağdan açılan bir katmanda
+        // "kimin hizmetlerini düzenliyorum" sorusu arkadaki sayfadan
+        // okunamaz hâle geliyor.
+        student={{
+          id: studentId,
+          name: student.full_name as string,
+          meta:
+            [student.grade_level, student.exam_type].filter(Boolean).join(' · ') || null,
+        }}
         services={services}
         sessions={sessions}
         groups={(groupRows ?? []).map((g) => ({ id: g.id as string, name: g.name as string }))}
@@ -315,7 +385,7 @@ export default async function StudentSessionsPage({
         prevMonthParam={monthParam(prev.year, prev.month)}
         nextMonthParam={monthParam(next.year, next.month)}
         serviceCounters={serviceCounters}
-        archive={archive}
+        archive={archiveWithFinance}
         mainContactId={mainContact?.id ?? null}
         mainContactLabel={
           mainContact ? CONTACT_KIND_LABEL[contactKindOf(mainContact)] : null
@@ -335,15 +405,7 @@ export default async function StudentSessionsPage({
               }
             : null
         }
-        monthFinance={
-          monthFinanceRows
-            ? {
-                accruedKurus: Number(monthFinanceRows.accrued_kurus ?? 0),
-                collectedKurus: Number(monthFinanceRows.collected_kurus ?? 0),
-                balanceKurus: Number(monthFinanceRows.balance_kurus ?? 0),
-              }
-            : null
-        }
+        monthFinance={monthFinance}
         season={
           seasonRows
             ? {
