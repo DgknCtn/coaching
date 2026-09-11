@@ -693,3 +693,25 @@ Düzeltme **078**'de `CREATE OR REPLACE` ile geldi; 077 metnine dokunulmadı —
 **Sessizlik eşiği iki tarafta da aynı sayı** — `tests/check-in-rhythm-sql-parity.test.ts` migration metnindeki günü `DELIVERY_SILENCE_DAYS` ile karşılaştırıyor. Ayrışsalardı ekran *"3 gündür teslim yok, bu yüzden soruldu"* derken bildirim başka bir sebeple açılmış olurdu; öğretmene yanlış gerekçe gösterilirdi.
 
 **Ekran Haftalık Akış'ın altına taşındı** (§8). Periyot ayarı da onunla birlikte geldi: ayarı yapılandırdığı şeyden ayırmak, öğretmeni "bu sayı nereyi etkiliyor?" sorusuyla baş başa bırakırdı. Eski `?sekme=durum` bağlantıları **yönlendiriliyor** — kayıtlı linkler ve tarayıcı geçmişi özete düşseydi kullanıcı aradığı ekranı bulamadan "kaldırılmış" sanırdı. Genel Bakış'taki iki sorgu da silindi: bırakılsalardı her açılışta hiç okunmayan iki gidiş-dönüş çalışırdı.
+
+### R7 / Site Testi 01 — Dashboard operasyon ekranı oldu (080)
+
+**Ekranın sorduğu soru değişti.** Eski `teacher_student_overview_view` öğrencinin KİTAP İLERLEMESİNİ özetliyordu: toplam test, tamamlanan test, kitap sayısı. Belge bunların hepsini ekrandan çıkarıyor — *"Kitap ilerleme detayları, test/sayfa dağılımları ve uzun raporlar bu ekranda sürekli görünmemelidir."* Yerine dört soru geliyor: kim ne kadar teslim etti, kim benim kontrolümü bekliyor, kim gecikti, sıradaki temasım kiminle ne zaman.
+
+**Eski view silinmedi.** `/teacher/tasks` ve öğrenci listesi hâlâ onu okuyor; yeni ekranın ihtiyacı diye çalışan iki ekranı bozmanın karşılığı yok. İki view yan yana duruyor, her biri kendi sorusunu yanıtlıyor.
+
+**§7.2 sınırı bu revizyonla kalktı.** `lib/student-overview.ts`'in başlığı R5.5'ten beri şunu yazıyordu: *"Ana ekran YORUMLAYICI RİSK/SAĞLIK/DÜZEN PUANI ÜRETMEZ."* R7/01 tam tersini istiyor: *"Öğretmen elle 'Yolunda / Geride' seçmeyecek. Sistem dört veri kümesini birlikte okuyacak."* Değişiklik bilinçli ve buraya yazılıyor — sessizce yapılsaydı altı ay sonra hangi kuralın geçerli olduğunu kimse bilemezdi.
+
+**Durum motoru tempo bandıyla karıştırılmamalı.** `paceBand()` (R7/05) da dört etiket üretir ama başka bir soruyu yanıtlar: "bu öğrenci haftalık yükü yetiştirir mi?" — yalnız tempo. `computeStudentStatus()` ise OPERASYON TRİYAJIDIR: teslim yüzdesi, beklenen yüzde, temasa kalan süre, gecikmiş ödev ve gecikmiş bildirim birlikte okunur. Öğretmenin sorusu "kimle ilk ilgilenmeliyim?"dir. İkisi tek fonksiyona sıkıştırılsaydı, biri değiştiğinde diğeri sessizce bozulurdu.
+
+**Eşikler SQL'e GÖMÜLMEDİ.** Belge açıkça *"kodda sabit gömülmek yerine ayarlanabilir konfigürasyon olarak tutulması önerilir"* diyor; SQL'e gömülen bir eşik ayarlanabilir değildir, değiştirmek migration gerektirir. View yalnız kararın GİRDİLERİNİ döndürüyor, karar `STATUS_THRESHOLDS`'ta.
+
+**Teslim kesim saati temasın kendisi değil.** §6: *"Dashboard hesabı her zaman ders başlangıcını teslim sonu kabul etmemeli. Online grup dersinde ödev, ders başlangıcından 6 saat önce teslim edilmiş olmalı."* Bu pay 074'te zaten modellenmişti (`submission_offset_minutes`); yeni bir kural yazılmadı, hazır değer `student_next_contact_view`'da düşülüyor. Beklenen ilerleme de bu kesim üzerinden hesaplanıyor — ders saati üzerinden hesaplansaydı öğrenciye olmayan altı saat tanınırdı.
+
+**Sıralama alfabetikten `next_contact_at ASC`'ye geçti** (§6). Bugünkü görüşmeler en üstte, temassız öğrenciler sonda. Bugünkü satır yalnız küçük bir "BUGÜN" etiketiyle vurgulanıyor; belge *"tüm satır yoğun renge boyanmaz"* diyor ve renk yalnız sinyal veriyor.
+
+**Not içeriği Dashboard'a HİÇ İNMİYOR.** View `has_important_note` diye bir BOOLEAN döndürüyor, metni değil. Metni döndürüp arayüzde gizlemek yetmezdi: veri tarayıcıya inerdi. Gerekçe belgede yazılı — *"Zoom/Meet ekran paylaşımında öğretmenin özel notu açığa çıkmamalıdır."* `noticeSignal()` notun metnini parametre olarak bile almıyor; alsaydı bir gün birinin onu ekrana basması an meselesiydi.
+
+**"Bu hafta tamamlanan" kartı kaldırıldı** (*"öğrenci bazında anlamlı olmadığı için toplam kart gereksiz"*), yerine **Yaklaşan Temaslar** geldi. Bu kartın HEDEFİ YOK ve bu bilinçli: belge onu "sıradaki ders/koçluk listesi"ne bağlamak istiyor ama öyle bir ekran henüz yok. Kırık bir bağlantı koymaktansa bağlantısız bırakmak doğru — tablo zaten sıradaki temasa göre sıralı.
+
+**Bugünkü temas sayısı öğrenci başına "sıradaki" temastan türetilmiyor:** bir öğrencinin aynı gün iki görüşmesi olabilir ve yalnız biri "sıradaki"dir. Ayrı sorgu geniş bir pencere çekip günü YEREL takvimle eliyor — sabit bir +03:00 varsaymamak için.

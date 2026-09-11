@@ -52,6 +52,15 @@ const LOCKED_VIEWS = [
   'student_pending_approval_view',
   'student_topic_contact_view',
   'student_topic_open_work_view',
+  // 075 — ders/görüşme kayıtları: kiminle ne zaman görüşüldüğü.
+  'student_service_month_view',
+  'student_season_summary_view',
+  // 080 — Dashboard operasyon görünümü. Haftalık yük, gecikme, bildirim
+  // ve sıradaki temas TEK satırda; listeye girmeyen view, bu dosyanın
+  // hiç bakmadığı view'dır.
+  'student_active_flow_load_view',
+  'student_next_contact_view',
+  'teacher_student_operation_view',
 ] as const
 
 /**
@@ -212,7 +221,10 @@ describe('kiracı izolasyonu · kurulum', () => {
           'CI gizli anahtarları tanımlanmalı.'
       )
     }
-    expect(LOCKED_VIEWS).toHaveLength(8)
+    // Sayı KİLİTLİ, "en az" değil: liste kazara kısalırsa test bunu
+    // söylemeli. Yeni bir view eklendiğinde bu sayı da elle artar —
+    // eklemeyi unutmanın maliyeti, hiç bakılmayan bir view'dır.
+    expect(LOCKED_VIEWS).toHaveLength(13)
     expect(LOCKED_TABLES.length).toBeGreaterThanOrEqual(8)
   })
 })
