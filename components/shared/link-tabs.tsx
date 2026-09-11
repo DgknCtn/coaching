@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { TabGroupMenu } from '@/components/shared/tab-group-menu'
 
 // URL tabanlı sekme şeridi (ders/kapsam seçimi).
 //
@@ -14,9 +15,33 @@ import { cn } from '@/lib/utils'
 export interface LinkTab {
   key: string
   label: string
-  href: string
+  /**
+   * Sekmenin hedefi.
+   *
+   * GRUP SEKMELERİNDE İSTEĞE BAĞLI (bkz. `items`): "Ödevler" ve
+   * "Kaynaklar" tıklanınca varsayılan alt görünüme gider, "Diğer" ise
+   * hiçbir yere gitmez — yalnız listesini açar.
+   */
+  href?: string
   /** Sekme etiketinin yanındaki sayı (ör. havuzdaki konu adedi). */
   count?: number
+  /**
+   * Alt görünümler. Doluysa sekme bir AİLE başlığıdır ve yanında açılır
+   * liste oku çıkar (R7 / Site Testi 03).
+   */
+  items?: LinkTab[]
+}
+
+/** Aktif/pasif sekme görünümü — grup başlığı da aynı şeridi paylaşır. */
+export function tabLinkClass(active: boolean) {
+  return cn(
+    // Aktif sekme yalnız renkle değil alt çizgiyle de ayrılır:
+    // renk tek başına anlam taşımamalı.
+    'shrink-0 border-b-2 px-3 py-2 text-sm transition-colors',
+    active
+      ? 'border-primary font-medium text-foreground'
+      : 'border-transparent text-muted-foreground hover:text-foreground'
+  )
 }
 
 export function LinkTabs({
@@ -48,19 +73,23 @@ export function LinkTabs({
       >
         {tabs.map(tab => {
           const active = tab.key === activeKey
+
+          if (tab.items && tab.items.length > 0) {
+            return (
+              <TabGroupMenu key={tab.key} tab={tab} active={active} />
+            )
+          }
+
+          // Grup değil ve hedefi de yoksa gidilecek bir yer yok; boş bir
+          // etiket basmaktansa sekmeyi hiç göstermemek doğru.
+          if (!tab.href) return null
+
           return (
             <Link
               key={tab.key}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={cn(
-                // Aktif sekme yalnız renkle değil alt çizgiyle de ayrılır:
-                // renk tek başına anlam taşımamalı.
-                'shrink-0 border-b-2 px-3 py-2 text-sm transition-colors',
-                active
-                  ? 'border-primary font-medium text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
+              className={tabLinkClass(active)}
             >
               {tab.label}
               {tab.count !== undefined && (

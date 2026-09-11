@@ -633,3 +633,23 @@ Belgenin tespiti: mevcut "Haftalık Plan" ekranı haftayı hiç takip etmiyordu;
 **Kapsam sınırı belgenin kendisinden:** öğrencinin günlük dağıtımı (sürükle-bırak, "güne taşı", mobil görünüm) R7-05'in *"sonraki adım"* diye işaretlediği iştir, bu yüzden `planned_for_date` tablosu açılmadı. Açılsaydı kimsenin yazmadığı ve bu yüzden yalan söyleyen bir sütun olurdu. Ekrandaki dağıtım cümlesi şimdilik "akış açılışındaki yük" ile "sonradan eklenen" ayrımından üretiliyor; öğrenci ekranı geldiğinde `plannedUnits` gerçek dağıtımdan okunacak, cümle değişmeyecek.
 
 **Yan bulgu:** 074'ün dört tablosu (`student_groups`, `student_services`, `group_sessions`, `service_sessions`) kiracı izolasyon testine hiç eklenmemişti. Bunlar reşit olmayan öğrencilerin haftalık programını ve kiminle ne zaman görüştüğünü taşıyor; listeye girmeyen tablo, o dosyanın hiç bakmadığı tablodur. `weekly_flows` ile birlikte eklendi.
+
+### R7 / Site Testi 03 — Öğrenci menü mimarisi
+
+Öğrenci sekme şeridi on üç bağlantıyı aynı seviyede gösteriyordu ve bazıları farklı adlarla **aynı veri ailesine** hizmet ediyordu: Kitaplar ile Kaynak Planı aynı kaynak setinin iki derinliği, Ödevler ile Haftalık Plan aynı ödev sürecinin iki parçası. Belgenin tespiti: öğretmen "ödev vereceğim" derken hangi sekmeye gideceğini düşünmek zorundaydı.
+
+Şerit dokuz başlığa indi: **Genel Bakış | Haftalık Akış | Ödevler | Kaynaklar | Akademik Akış | Görüşmeler | Koruma Havuzu | Rapor | Diğer.**
+
+**Hiçbir rota değişmedi.** Belge bunu açıkça şart koşuyor — *"mevcut ekranların veri ve işlevleri silinmez; öncelik, rota ve menü hiyerarşisini düzeltmektir."* Değişen yalnız etiket, sıra ve gruplama; kayıtlı bağlantılar ve tarayıcı geçmişi çalışmaya devam ediyor. `mufredat` slug'ı "Akademik Akış" adını aldı ama yolu hâlâ `curriculum`.
+
+**Aile başlığı tıklanabilir, çünkü ara ekran yasak.** Belge §4: *"İki büyük karttan oluşan zorunlu bir ara açılış ekranı yapılmamalıdır."* Bu yüzden `LinkTab` grubunun kendi `href`'i var ve o `href` ilk alt görünümüyle **aynı olmak zorunda** — "Kaynaklar"a tıklayan doğrudan Kitaplar'a gider, diğer alt görünüme yanındaki okla geçer. Kural testte kilitli; ayrışırsa başlık bir seçim ekranına dönüşmüş demektir.
+
+**"Diğer"in hedefi yok** ve bu istisna bilinçli: altındaki üç ekranın (Veliler, Öğretmen Hafızası, Öğrenci Ayarları) hiçbiri varsayılan sayılamaz, hedef verilseydi tıklama rastgele birine giderdi. Tip tarafında ayrım `href`'in isteğe bağlı olmasıyla kuruldu; ayrı bir "grup" tipi açmak `LinkTabs`'ın üç sayfadaki mevcut kullanımını da değiştirmeyi gerektirirdi.
+
+**Aktif sekme kuralı saf fonksiyona çekildi** (`activeStudentTab`). İki ayrı mantık taşıyor — Genel Bakış rotasında sorgu parametresi, alt rotalarda en uzun yol eşleşmesi — ve ikisi de sessizce bozulabiliyor: `base` her alt rotanın önekidir, naif bir `startsWith`'te Genel Bakış hep aktif çıkar. Şerit bir client component içinde render edildiği için kural ekranda ancak jsdom kurarak doğrulanabilirdi; saf fonksiyon olarak `tests/student-tabs.test.ts` bunu 20 durumla kilitliyor. Test ayrıca **hiçbir ekranın düşmediğini** de doğruluyor (belge §9 kabul maddesi): bir yol gruplama sırasında listeye yazılmazsa ekran erişilemez olur ama ne tip kontrolü ne derleme ses çıkarır.
+
+**Panel etiketleri şerit etiketleriyle eşitlendi.** `studentOverviewTabs[].label` sayfa başlığı olarak da basılıyor (`title={tab.label}`); "Akademik Not" → **Öğretmen Hafızası**, "Ödevler" → **Yayınlanan Ödevler**, "Durum" → **Durum Bildirimleri**. Ayrışsalardı "Öğretmen Hafızası"na tıklayan kullanıcı "Akademik Not" başlıklı bir sayfa görürdü. Slug'lar değişmedi.
+
+**Durum Bildirimleri geçici olarak "Diğer"de.** Hedefi Haftalık Akış'ın içidir (R7/05 §8) ama o ekranın alt sekmeleri henüz yok. Şeritten şimdi silmek, çalışan bir ekranı erişilemez bırakırdı; Haftalık Akış sekmeleri gelince bu satır kalkacak.
+
+**Bu revizyonda yapılmayan:** Kaynaklar ailesi şimdilik mevcut iki ekranı tek başlık altında topluyor; Kitaplar ve Kaynak Planı **birleştirilmedi**. Belge de bunu istemiyor — *"Birleştirme, mevcut ekranları silmek veya tek bir karmaşık sayfada eritmek anlamına gelmez."*

@@ -20,6 +20,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+import type { LinkTab } from '@/components/shared/link-tabs'
+
 export type Role = 'teacher' | 'student' | 'parent'
 
 export interface NavItem {
@@ -67,8 +69,14 @@ export function isNavGroup(entry: NavEntry): entry is NavGroup {
  * değerinde okunaksız kalırdı.
  */
 export const studentScreens = [
-  { slug: 'mufredat', path: 'curriculum', label: 'Müfredat Akışı', icon: CalendarRange },
-  { slug: 'kaynak', path: 'goals', label: 'Kaynak Planı', icon: Library },
+  // SIRA R7/03'ÜN HEDEF MENÜSÜNE GÖRE. Doküman menüyü öğretmenin
+  // sorularına göre diziyor: "bu hafta nasıl gidiyor" → "ne vereceğim"
+  // → "hangi kaynaktan" → "hangi konudayız" → "ne zaman görüşüyoruz".
+  //
+  // Haftalık Akış (R7/05): "öğrenci bu haftayı nasıl götürüyor?"
+  // Ödev Planlama'dan AYRI bir ekran — biri yük yerleştirir, diğeri
+  // yerleşen yükü yönetir.
+  { slug: 'haftalik-akis', path: 'haftalik-akis', label: 'Haftalık Akış', icon: Waypoints },
   // R7/05 kabul #1: ekranın adı ve GÖREVİ ayrıştırıldı.
   //
   // Bu ekran haftayı hiç takip etmiyordu; kitap haritasından çalışma
@@ -78,12 +86,14 @@ export const studentScreens = [
   // (homework/new) DEĞİŞMEDİ: kayıtlı bağlantıları kırmanın bir
   // karşılığı yok, sorun adlandırmaydı.
   { slug: 'odev-planlama', path: 'homework/new', label: 'Ödev Planlama', icon: ListChecks },
+  { slug: 'kaynak', path: 'goals', label: 'Kaynak Planı', icon: Library },
+  // R7/03: "Müfredat Akışı" → "Akademik Akış". Ekran artık yalnız
+  // müfredatı değil konu sırası + zaman + GERÇEK akademik ilerlemeyi
+  // yönetiyor; eski ad yaptığı işin yalnız üçte birini söylüyordu.
+  // Yol (curriculum) DEĞİŞMEDİ.
+  { slug: 'mufredat', path: 'curriculum', label: 'Akademik Akış', icon: CalendarRange },
   // Ders & Görüşmeler (R7-04).
   { slug: 'gorusmeler', path: 'gorusmeler', label: 'Görüşmeler', icon: CalendarCheck },
-  // Haftalık Akış (R7/05): "öğrenci bu haftayı nasıl götürüyor?"
-  // Ödev Planlama'dan AYRI bir ekran — biri yük yerleştirir, diğeri
-  // yerleşen yükü yönetir.
-  { slug: 'haftalik-akis', path: 'haftalik-akis', label: 'Haftalık Akış', icon: Waypoints },
   { slug: 'koruma', path: 'protection', label: 'Koruma Havuzu', icon: ShieldCheck },
   { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
 ] as const
@@ -171,12 +181,21 @@ export const teacherNav: NavEntry[] = [
  * ve geri tuşuyla gezilemiyordu. Bir ödevi konuşurken "Ödevler sekmesine
  * gel" demek, karşı tarafa tıklama tarifi vermek demekti.
  */
+/*
+ * R7/03 AD DEĞİŞİKLİKLERİ. Bu etiketler sayfa başlığı olarak da
+ * basılıyor (page.tsx: `title={tab.label}`), bu yüzden şeritteki adla
+ * aynı olmak zorundalar — yoksa "Öğretmen Hafızası"na tıklayan
+ * kullanıcı "Akademik Not" başlıklı bir sayfa görürdü. Slug'lar
+ * DEĞİŞMEDİ: kayıtlı `?sekme=` bağlantıları çalışmaya devam eder.
+ */
 export const studentOverviewTabs = [
   { slug: 'kitaplar', label: 'Kitaplar', icon: BookOpen },
-  { slug: 'odevler', label: 'Ödevler', icon: ClipboardList },
-  { slug: 'durum', label: 'Durum', icon: MessageSquareDashed },
+  { slug: 'odevler', label: 'Yayınlanan Ödevler', icon: ClipboardList },
+  { slug: 'durum', label: 'Durum Bildirimleri', icon: MessageSquareDashed },
   { slug: 'veliler', label: 'Veliler', icon: Users },
-  { slug: 'not', label: 'Akademik Not', icon: StickyNote },
+  // Ad, alanın kime ait olduğunu söylemeli: burası öğrencinin notu
+  // değil, öğretmenin kendine tuttuğu kayıt.
+  { slug: 'not', label: 'Öğretmen Hafızası', icon: StickyNote },
 ] as const
 
 export type StudentOverviewTab = (typeof studentOverviewTabs)[number]
@@ -190,37 +209,134 @@ export function studentOverviewTabBySlug(
 }
 
 /**
- * Öğrenci çalışma masasının SEKMELERİ (067).
+ * Öğrenci çalışma masasının SEKMELERİ (067, R7/03 ile yeniden gruplandı).
  *
  * Bu ekranlar öğrenciye özeldir — hepsi URL'de bir öğrenci id'si taşır. Bu
- * yüzden sabit bir dizi değil, id alan bir ÜRETİCİ.
+ * yüzden sabit bir dizi değil, id alan bir ÜRETİCİ. Üstteki sekme
+ * şeridinde render ediliyor (student-tabs.tsx); sol menüde yalnız
+ * "Genel Bakış"a dönüş yolu var (studentOverviewNav).
  *
- * ARTIK SOL MENÜDE DEĞİL, ÜSTTEKİ SEKME ŞERİDİNDE render ediliyor
- * (app/(dashboard)/teacher/students/[studentId]/student-tabs.tsx). Sol
- * menüde de aynı beşini listelemek, ekranda aynı bağlantıyı iki kez
- * göstermek olurdu; sidebar artık yalnız "Genel Bakış"a bir dönüş yolu
- * bırakıyor (studentOverviewNav).
+ * ============================================================
+ * NEDEN DÜZ LİSTE DEĞİL — R7 / Site Testi 03
+ * ============================================================
+ * Şerit on üç bağlantıyı aynı seviyede gösteriyordu ve bazıları farklı
+ * adlarla AYNI veri ailesine hizmet ediyordu: Kitaplar ile Kaynak Planı
+ * aynı kaynak setinin iki derinliği, Ödevler ile Ödev Planlama aynı
+ * ödev sürecinin iki parçası. Öğretmen "ödev vereceğim" derken hangi
+ * sekmeye gideceğini düşünmek zorundaydı.
  *
- * "Genel Bakış" exact işaretlidir; olmasaydı alt rotalarda (ör. /goals) hem
- * kendisi hem Genel Bakış aktif görünürdü.
+ * Artık aile başlığı tıklanabilir: "Kaynaklar" doğrudan Kitaplar'ı açar,
+ * yanındaki ok alt görünümü verir. Doküman bunu açıkça şart koşuyor —
+ * "İki büyük karttan oluşan zorunlu bir ara açılış ekranı
+ * yapılmamalıdır." Bu yüzden grup başlığının kendi `href`'i var; tıklama
+ * bir seçim ekranına değil, işin yapıldığı yere gider.
+ *
+ * "Diğer" bunun istisnası: kendi hedefi YOK, çünkü altındaki üç ekranın
+ * hiçbiri "varsayılan" değil — seyrek kullanılan yönetim alanları.
+ *
+ * ROTALARIN HİÇBİRİ DEĞİŞMEDİ. Doküman: "mevcut ekranların veri ve
+ * işlevleri silinmez; öncelik, rota ve menü hiyerarşisini düzeltmektir."
+ * Kayıtlı bağlantılar ve tarayıcı geçmişi çalışmaya devam eder.
  */
-export function studentContextNav(studentId: string): NavItem[] {
+export function studentTabs(studentId: string): LinkTab[] {
   const base = `/teacher/students/${studentId}`
+  const screen = (path: string) => `${base}/${path}`
+  const panel = (slug: string) => `${base}?sekme=${slug}`
+
   return [
-    { href: base, label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
-    // Genel Bakış'ın panelleri hemen onun ardından: ikisi de aynı
-    // sayfanın parçası, aradaki sınır kullanıcı için yok.
-    ...studentOverviewTabs.map((t) => ({
-      href: `${base}?sekme=${t.slug}`,
-      label: t.label,
-      icon: t.icon,
-    })),
-    ...studentScreens.map((s) => ({
-      href: `${base}/${s.path}`,
-      label: s.label,
-      icon: s.icon,
-    })),
+    { key: 'genel', label: 'Genel Bakış', href: base },
+    { key: 'haftalik-akis', label: 'Haftalık Akış', href: screen('haftalik-akis') },
+    {
+      key: 'odevler',
+      label: 'Ödevler',
+      href: panel('odevler'),
+      items: [
+        { key: 'yayinlanan-odevler', label: 'Yayınlanan Ödevler', href: panel('odevler') },
+        { key: 'odev-planlama', label: 'Ödev Planlama', href: screen('homework/new') },
+      ],
+    },
+    {
+      key: 'kaynaklar',
+      label: 'Kaynaklar',
+      href: panel('kitaplar'),
+      items: [
+        { key: 'kitaplar', label: 'Kitaplar', href: panel('kitaplar') },
+        { key: 'kaynak-plani', label: 'Kaynak Planı', href: screen('goals') },
+      ],
+    },
+    { key: 'akademik-akis', label: 'Akademik Akış', href: screen('curriculum') },
+    { key: 'gorusmeler', label: 'Görüşmeler', href: screen('gorusmeler') },
+    { key: 'koruma', label: 'Koruma Havuzu', href: screen('protection') },
+    { key: 'rapor', label: 'Rapor', href: screen('report') },
+    {
+      key: 'diger',
+      label: 'Diğer',
+      items: [
+        { key: 'veliler', label: 'Veliler', href: panel('veliler') },
+        // R7/03: "Akademik Not" → "Öğretmen Hafızası". Ad, alanın kime
+        // ait olduğunu söylemeliydi: burası öğrencinin notu değil,
+        // öğretmenin kendine tuttuğu kayıt.
+        { key: 'ogretmen-hafizasi', label: 'Öğretmen Hafızası', href: panel('not') },
+        // GEÇİCİ EV. Durum Bildirimleri'nin hedefi Haftalık Akış'ın
+        // içidir (R7/05 §8) ama o ekranın alt sekmeleri henüz yok.
+        // Şeritten şimdi silmek, çalışan bir ekranı erişilemez
+        // bırakırdı; Haftalık Akış sekmeleri gelince bu satır kalkar.
+        { key: 'durum', label: 'Durum Bildirimleri', href: panel('durum') },
+        { key: 'ogrenci-ayarlari', label: 'Öğrenci Ayarları', href: screen('edit') },
+      ],
+    },
   ]
+}
+
+/**
+ * Adres çubuğundaki konumdan aktif ÜST sekmeyi bulur.
+ *
+ * Saf fonksiyon ve burada duruyor ki test edilebilsin: kural iki farklı
+ * mantık içeriyor ve ikisi de sessizce bozulabilir.
+ *
+ *  1) Genel Bakış rotasındayken sekmeyi belirleyen şey YOL DEĞİL sorgu
+ *     parametresi — beş panelin de yolu aynı.
+ *  2) Alt rotalarda sorgu hiç rol oynamaz ve EN UZUN eşleşen yol
+ *     kazanır. "Genel Bakış" her alt rotanın öneki olduğu için basit bir
+ *     startsWith'te hep aktif çıkardı.
+ *
+ * Bir grubun ALTINDAKİ bağlantı eşleşirse grubun kendi anahtarı döner:
+ * Ödev Planlama'dayken şeritte "Ödevler" işaretli olmalı.
+ */
+export function activeStudentTab(
+  tabs: LinkTab[],
+  pathname: string,
+  sekme: string | null,
+  base: string
+): string {
+  if (pathname === base) {
+    const target = sekme ? `${base}?sekme=${sekme}` : base
+    for (const tab of tabs) {
+      if (tab.href === target) return tab.key
+      if (tab.items?.some((i) => i.href === target)) return tab.key
+    }
+    // Tanınmayan bir ?sekme= değeri: sayfa özeti gösteriyor, şerit de
+    // Genel Bakış'ı işaretlemeli — hiçbiri işaretli olmayan bir şerit
+    // "buraya nasıl geldim" sorusunu doğurur.
+    return 'genel'
+  }
+
+  let bestKey = ''
+  let bestLength = 0
+  const consider = (href: string | undefined, key: string) => {
+    // Sorgulu hedefler yalnız Genel Bakış rotasında anlamlı; base'in
+    // kendisi de her alt rotanın öneki olduğu için burada elenir.
+    if (!href || href.includes('?') || href === base) return
+    if (pathname !== href && !pathname.startsWith(`${href}/`)) return
+    if (href.length <= bestLength) return
+    bestLength = href.length
+    bestKey = key
+  }
+  for (const tab of tabs) {
+    consider(tab.href, tab.key)
+    for (const item of tab.items ?? []) consider(item.href, tab.key)
+  }
+  return bestKey
 }
 
 /**
