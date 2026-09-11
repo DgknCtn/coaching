@@ -153,7 +153,15 @@ describe('activeStudentTab — Genel Bakış rotası (sorgu parametresi)', () =>
     expect(activeStudentTab(TABS, BASE, 'kitaplar', BASE)).toBe('kaynaklar')
     expect(activeStudentTab(TABS, BASE, 'veliler', BASE)).toBe('diger')
     expect(activeStudentTab(TABS, BASE, 'not', BASE)).toBe('diger')
-    expect(activeStudentTab(TABS, BASE, 'durum', BASE)).toBe('diger')
+  })
+
+  it('durum şeritte yok — Haftalık Akış\'a taşındı', () => {
+    // R7/05 §8: Durum Bildirimleri artık Haftalık Akış'ın alt sekmesi.
+    // Şeritte kalsaydı aynı ekran iki yerden açılırdı. Eski
+    // `?sekme=durum` bağlantıları sayfada yönlendiriliyor; bu fonksiyona
+    // hiç ulaşmıyorlar, ulaşsalar da Genel Bakış'a düşmeleri doğru.
+    expect(allHrefs().some(h => h.includes('sekme=durum'))).toBe(false)
+    expect(activeStudentTab(TABS, BASE, 'durum', BASE)).toBe('genel')
   })
 
   it('tanınmayan sekme değeri Genel Bakışa düşer', () => {

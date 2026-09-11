@@ -3,6 +3,7 @@ import { getTeacherContext } from '@/lib/workspace'
 import { deriveMainContact, type ServiceLike } from '@/lib/service-structure'
 import {
   calculateFlowPace,
+  checkInDue,
   dailyDelivery,
   deliverySilence,
   distributionState,
@@ -72,6 +73,33 @@ export default async function WeeklyFlowPage({
   })) as ServiceLike[]
 
   const anchorService = deriveMainContact(services)
+
+  // DURUM BİLDİRİMLERİ (R7/05 §8, kabul #10).
+  //
+  // Ekran Haftalık Akış'ın altına taşındı: bildirim artık haftanın
+  // ritmine bağlı üretiliyor (079) ve takvimden bağımsız bir üst menü
+  // sekmesi olarak durması, bağlı olduğu şeyden koparıyordu.
+  //
+  // Bekleyen bildirim satırını üreten RPC tembel çalışıyor (016) —
+  // sayfa yüklenirken çağrılır. Hatası yutuluyor: bildirim üretilememesi
+  // haftalık akış ekranını göstermemek için sebep değil.
+  await supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId })
+
+  const [{ data: checkInSchedule }, { data: checkIns }] = await Promise.all([
+    supabase
+      .from('student_check_in_schedules')
+      .select('interval_days, is_active')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    supabase
+      .from('student_check_ins')
+      .select('id, status, mood, message, due_at, submitted_at, weekly_flow_id')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .order('due_at', { ascending: false })
+      .limit(20),
+  ])
 
   const { data: flows } = await supabase
     .from('weekly_flows')
@@ -264,6 +292,20 @@ export default async function WeeklyFlowPage({
           }
         : null,
       lastActivity: deliverySilence({ lastDeliveryAt, now }),
+      // Bekleyen bildirimin GEREKÇESİ: ritim mi, sessizlik mi (§2).
+      // Karar lib/weekly-flow.ts'te; 079 aynı eşiklerle satırı üretiyor
+      // ve parite testi ikisini bağlıyor.
+      checkInReason: checkInDue({
+        flowStart: new Date(activeFlow.starts_at),
+        dueAt,
+        lastCheckInAt:
+          (checkIns ?? [])
+            .filter(c => c.status === 'submitted' && c.submitted_at)
+            .map(c => new Date(c.submitted_at as string))
+            .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+        lastDeliveryAt,
+        now,
+      }).reason,
     }
   }
 
@@ -286,6 +328,18 @@ export default async function WeeklyFlowPage({
       books={books}
       batches={batches}
       past={past}
+      checkIns={(checkIns ?? []).map(c => ({
+        id: c.id,
+        status: c.status as 'pending' | 'submitted' | 'skipped',
+        mood: c.mood,
+        message: c.message,
+        dueAt: c.due_at,
+        submittedAt: c.submitted_at,
+      }))}
+      checkInSchedule={{
+        intervalDays: checkInSchedule?.interval_days ?? 3,
+        isActive: checkInSchedule?.is_active ?? false,
+      }}
       anchorServiceId={anchorService?.id ?? null}
       suggestedDueAt={suggested?.dueAt.toISOString() ?? null}
     />

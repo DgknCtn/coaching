@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   Library,
   ListChecks,
-  MessageSquareDashed,
   ShieldCheck,
   Waypoints,
   StickyNote,
@@ -191,7 +190,11 @@ export const teacherNav: NavEntry[] = [
 export const studentOverviewTabs = [
   { slug: 'kitaplar', label: 'Kitaplar', icon: BookOpen },
   { slug: 'odevler', label: 'Yayınlanan Ödevler', icon: ClipboardList },
-  { slug: 'durum', label: 'Durum Bildirimleri', icon: MessageSquareDashed },
+  // 'durum' BURADAN KALKTI (R7/03 + R7/05 §8): Durum Bildirimleri artık
+  // Haftalık Akış'ın bir alt sekmesi. Bildirim haftanın ritmine bağlı
+  // üretiliyor (079); bağlı olduğu şeyden ayrı bir sekmede durması
+  // kavramı da koparıyordu. Eski `?sekme=durum` bağlantıları sayfada
+  // yeni adrese YÖNLENDİRİLİYOR — kırılmıyorlar.
   { slug: 'veliler', label: 'Veliler', icon: Users },
   // Ad, alanın kime ait olduğunu söylemeli: burası öğrencinin notu
   // değil, öğretmenin kendine tuttuğu kayıt.
@@ -277,11 +280,6 @@ export function studentTabs(studentId: string): LinkTab[] {
         // ait olduğunu söylemeliydi: burası öğrencinin notu değil,
         // öğretmenin kendine tuttuğu kayıt.
         { key: 'ogretmen-hafizasi', label: 'Öğretmen Hafızası', href: panel('not') },
-        // GEÇİCİ EV. Durum Bildirimleri'nin hedefi Haftalık Akış'ın
-        // içidir (R7/05 §8) ama o ekranın alt sekmeleri henüz yok.
-        // Şeritten şimdi silmek, çalışan bir ekranı erişilemez
-        // bırakırdı; Haftalık Akış sekmeleri gelince bu satır kalkar.
-        { key: 'durum', label: 'Durum Bildirimleri', href: panel('durum') },
         { key: 'ogrenci-ayarlari', label: 'Öğrenci Ayarları', href: screen('edit') },
       ],
     },

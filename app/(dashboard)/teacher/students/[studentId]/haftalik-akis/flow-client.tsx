@@ -12,6 +12,8 @@ import {
 } from '@/lib/weekly-flow'
 import { formatSessionLong, WEEKDAY_LABEL, type Weekday } from '@/lib/service-structure'
 import { LinkTabs, type LinkTab } from '@/components/shared/link-tabs'
+import { moodLabel, formatRelativeTime } from '@/lib/student-attention'
+import { CheckInScheduleForm } from '../check-in-panel'
 import {
   closeWeeklyFlowAction,
   openWeeklyFlowAction,
@@ -68,6 +70,17 @@ export interface FlowView {
   } | null
   lastActivity: { silent: boolean; days: number; phrase: string }
   daily: DailyDelivery
+  /** Bekleyen bildirimin gerekçesi; yoksa null (§2 iki tetikleyici). */
+  checkInReason: 'midpoint' | 'silence' | null
+}
+
+export interface CheckInRow {
+  id: string
+  status: 'pending' | 'submitted' | 'skipped'
+  mood: string | null
+  message: string | null
+  dueAt: string
+  submittedAt: string | null
 }
 
 /**
@@ -93,6 +106,7 @@ const FLOW_TABS = [
   { slug: 'gunluk', label: 'Günlük Görünüm' },
   { slug: 'kaynaklar', label: 'Kaynaklar' },
   { slug: 'yeni', label: 'Yeni Eklenenler' },
+  { slug: 'bildirim', label: 'Durum Bildirimleri' },
   { slug: 'gecmis', label: 'Geçmiş Haftalar' },
 ] as const
 
@@ -138,6 +152,8 @@ export function FlowClient({
   books,
   batches,
   past,
+  checkIns,
+  checkInSchedule,
   anchorServiceId,
   suggestedDueAt,
 }: {
@@ -147,6 +163,8 @@ export function FlowClient({
   books: FlowBookRow[]
   batches: FlowBatchRow[]
   past: PastFlowRow[]
+  checkIns: CheckInRow[]
+  checkInSchedule: { intervalDays: number; isActive: boolean }
   anchorServiceId: string | null
   suggestedDueAt: string | null
 }) {
@@ -449,6 +467,14 @@ export function FlowClient({
           {activeTab === 'yeni' && (
             <NewlyAddedPanel batches={batches.filter(b => b.lateAdded)} />
           )}
+          {activeTab === 'bildirim' && (
+            <CheckInPanel
+              studentId={studentId}
+              checkIns={checkIns}
+              schedule={checkInSchedule}
+              reason={flow.checkInReason}
+            />
+          )}
           {activeTab === 'gecmis' && <PastPanel past={past} />}
         </>
       )}
@@ -687,6 +713,96 @@ function NewlyAddedPanel({ batches }: { batches: FlowBatchRow[] }) {
               bozulmaz; yeni çalışmalar dağıtılmayı bekler.
             </p>
           </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Durum Bildirimleri — aktif haftanın ara temas katmanı (§2, kabul #10).
+ *
+ * NEDEN BURADA: bildirim artık haftanın ritmine bağlı üretiliyor (079).
+ * Ayrı bir üst menü sekmesi olarak dururken bağlı olduğu şeyden
+ * kopuktu — "3 günde bir" sabiti takvimle konuşuyordu, haftayla değil.
+ *
+ * PERİYOT AYARI DA BURADA: ayarı yapılandırdığı şeyden ayırmak,
+ * öğretmeni "bu sayı nereyi etkiliyor?" sorusuyla baş başa bırakırdı.
+ * Sabit artık tek mantık değil, TABAN — akışı olmayan öğrencide tek
+ * ölçü budur.
+ */
+function CheckInPanel({
+  studentId,
+  checkIns,
+  schedule,
+  reason,
+}: {
+  studentId: string
+  checkIns: CheckInRow[]
+  schedule: { intervalDays: number; isActive: boolean }
+  reason: 'midpoint' | 'silence' | null
+}) {
+  const pending = checkIns.find(c => c.status === 'pending')
+  const history = checkIns.filter(c => c.status !== 'pending')
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 pt-5">
+        <div>
+          <h2 className="font-medium">Durum bildirimleri</h2>
+          <p className="text-sm text-muted-foreground">
+            Aktif haftanın ara teması. Bildirim zamanı haftanın ritminden
+            gelir; periyot yalnız tabandır.
+          </p>
+        </div>
+
+        {pending && (
+          <div className="rounded-md border border-warning-border bg-warning-subtle p-3">
+            <p className="text-sm font-medium text-warning-foreground">
+              Bildirim bekleniyor · {formatSessionLong(pending.dueAt)}
+            </p>
+            {/* Gerekçe gösteriliyor: öğretmen "neden şimdi soruldu?"
+                sorusunu ekranda cevaplayabilmeli. */}
+            <p className="text-xs text-warning-foreground">
+              {reason === 'silence'
+                ? 'Teslim hareketi durduğu için soruldu.'
+                : reason === 'midpoint'
+                  ? 'Haftanın ortası geçtiği için soruldu.'
+                  : 'Periyot dolduğu için soruldu.'}
+            </p>
+          </div>
+        )}
+
+        <CheckInScheduleForm
+          studentId={studentId}
+          intervalDays={schedule.intervalDays}
+          isActive={schedule.isActive}
+        />
+
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Henüz cevaplanmış bildirim yok.
+          </p>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {history.map(c => (
+              <div key={c.id} className="flex items-start justify-between gap-4 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {c.status === 'submitted' ? moodLabel(c.mood) : 'Cevaplanmadı'}
+                  </p>
+                  {c.message && (
+                    <p className="mt-1 text-sm text-muted-foreground">{c.message}</p>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {c.submittedAt
+                    ? formatRelativeTime(c.submittedAt)
+                    : formatSessionLong(c.dueAt)}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

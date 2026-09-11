@@ -2,14 +2,13 @@ import Link from 'next/link'
 import { isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import {
   Plus,
   BookOpen,
   ClipboardList,
   Users,
   FileText,
-  MessageSquareDashed,
   Pencil,
   CircleCheck,
   CircleAlert,
@@ -29,8 +28,6 @@ import { deriveInviteStatus } from '@/lib/invite-status'
 import { loadAssignableBooks } from '@/lib/assignable-books'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
-import { CheckInScheduleForm } from './check-in-panel'
-import { formatRelativeTime, moodLabel } from '@/lib/student-attention'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
@@ -67,12 +64,22 @@ export default async function StudentDetailPage({
   searchParams,
 }: {
   params: Promise<{ studentId: string }>
-  // ?sekme= — Kitaplar / Ödevler / Durum / Veliler / Akademik Not.
+  // ?sekme= — Kitaplar / Yayınlanan Ödevler / Veliler / Öğretmen Hafızası.
   // Değer YOKSA özet gösterilir; tanınmayan değer de özete düşer.
   searchParams: Promise<{ sekme?: string }>
 }) {
   const { studentId } = await params
-  const tab = studentOverviewTabBySlug((await searchParams).sekme)
+  const sekme = (await searchParams).sekme
+
+  // ESKİ BAĞLANTI KIRILMIYOR (R7/05 §8): Durum Bildirimleri Haftalık
+  // Akış'ın alt sekmesi oldu. `?sekme=durum` taşıyan kayıtlı linkler ve
+  // tarayıcı geçmişi özete düşseydi kullanıcı aradığı ekranı bulamadan
+  // "kaldırılmış" sanırdı.
+  if (sekme === 'durum') {
+    redirect(`/teacher/students/${studentId}/haftalik-akis?sekme=bildirim`)
+  }
+
+  const tab = studentOverviewTabBySlug(sekme)
   const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -93,8 +100,6 @@ export default async function StudentDetailPage({
   // çalışır, eleme sonuçlar geldikten sonra yapılır (aşağıda).
   const [
     { data: bookProgress },
-    { data: checkInSchedule },
-    { data: checkIns },
     { data: homeworkBatches },
     { data: pendingApprovalItems },
     { data: parentLinks },
@@ -114,17 +119,9 @@ export default async function StudentDetailPage({
       .select('*')
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId),
-    supabase
-      .from('student_check_in_schedules')
-      .select('interval_days, is_active')
-      .eq('student_id', studentId)
-      .maybeSingle(),
-    supabase
-      .from('student_check_ins')
-      .select('id, due_at, submitted_at, status, mood, message')
-      .eq('student_id', studentId)
-      .order('due_at', { ascending: false })
-      .limit(10),
+    // Durum bildirimi sorguları BURADAN KALKTI: panel Haftalık Akış'a
+    // taşındı ve veriyi orası çekiyor. Bırakılsalardı her Genel Bakış
+    // açılışında hiç okunmayan iki sorgu çalışırdı.
     supabase
       .from('homework_batches')
       .select(`
@@ -776,48 +773,9 @@ export default async function StudentDetailPage({
           </div>
       )}
 
-      {tab?.slug === 'durum' && (
-          <Section
-            title="Durum bildirimi"
-            description="Öğrencinin planlı bildirimleri ve son temas geçmişi."
-          >
-            <div className="space-y-4">
-              <CheckInScheduleForm
-                studentId={studentId}
-                intervalDays={checkInSchedule?.interval_days ?? 3}
-                isActive={checkInSchedule?.is_active ?? false}
-              />
-
-              {(checkIns?.length ?? 0) > 0 ? (
-                <div className="divide-y rounded-lg border bg-card">
-                  {checkIns!.map((c) => (
-                    <div key={c.id} className="flex items-start justify-between gap-4 p-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">
-                          {c.status === 'submitted' ? moodLabel(c.mood) : 'Cevap bekleniyor'}
-                        </p>
-                        {c.message && (
-                          <p className="mt-1 text-sm text-muted-foreground">{c.message}</p>
-                        )}
-                      </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {c.status === 'submitted'
-                          ? formatRelativeTime(c.submitted_at)
-                          : `Beklenen: ${new Date(c.due_at).toLocaleDateString('tr-TR')}`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon={MessageSquareDashed}
-                  title="Henüz durum bildirimi yok"
-                  description="Bir periyot belirlediğinde ilk bildirim otomatik planlanır."
-                />
-              )}
-            </div>
-          </Section>
-      )}
+      {/* Durum bildirimi paneli BURADAN KALKTI — Haftalık Akış >
+          Durum Bildirimleri sekmesinde yaşıyor (R7/05 §8). Yukarıdaki
+          redirect eski `?sekme=durum` bağlantılarını oraya taşıyor. */}
 
       {tab?.slug === 'veliler' && (
         <>
