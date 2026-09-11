@@ -482,3 +482,35 @@ describe('flowMembership · SQL ile aynı GÜN düzeyinde karşılaştırır', (
     ).toBe('upcoming')
   })
 })
+
+describe('deliverySilence · kapsam metni çağırana göre', () => {
+  it('varsayılan boş metin korunuyor', () => {
+    expect(
+      deliverySilence({ lastDeliveryAt: null, now: new Date('2026-09-15T10:00:00+03:00') })
+        .phrase
+    ).toBe('Henüz teslim yok')
+  })
+
+  it('çağıran kendi kapsamını yazabiliyor', () => {
+    // Haftalık Akış yalnız o haftaya bakıyor, Genel Bakış öğrencinin
+    // tüm gönderimlerine. İkisi de "Henüz teslim yok" deseydi aynı
+    // öğrenci için biri "yok" öteki "2 gün önce" derken ekranlar
+    // çelişiyor görünürdü.
+    expect(
+      deliverySilence({
+        lastDeliveryAt: null,
+        now: new Date('2026-09-15T10:00:00+03:00'),
+        emptyPhrase: 'Bu haftaya henüz teslim gelmedi',
+      }).phrase
+    ).toBe('Bu haftaya henüz teslim gelmedi')
+  })
+
+  it('teslim varken emptyPhrase yok sayılır', () => {
+    const r = deliverySilence({
+      lastDeliveryAt: new Date('2026-09-14T10:00:00+03:00'),
+      now: new Date('2026-09-15T10:00:00+03:00'),
+      emptyPhrase: 'kullanılmamalı',
+    })
+    expect(r.phrase).not.toContain('kullanılmamalı')
+  })
+})

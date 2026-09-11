@@ -729,3 +729,17 @@ Aynı hata Haftalık Akış ekranında da vardı: teslim sayısı, tempo bandı,
 **Ölçüt artık `homework_items.submitted_at`.** Onay bu sütunu koruyor, iade ise NULL'lıyor — belgenin iki kuralını da tek sütun karşılıyor: onay ilerlemeyi geriye düşürmez, iade edilen iş yeniden gönderilene kadar sayılmaz. `COALESCE(submitted_at, completed_at)` bilinçli olarak kullanılmadı: onay anına düşen her yedek, düzeltilen hatayı sessizce geri getirirdi.
 
 **Hata Dashboard ile Haftalık Akış'ı ayrıştırıyordu.** 080'deki `student_active_flow_load_view` teslimi zaten doğru ölçüyor (`status IN ('pending_approval','completed')`). Yani bu düzeltmeden önce aynı öğrenci için iki ekran iki farklı sayı gösteriyordu — ve fark tam olarak öğretmenin onay kuyruğu kadardı.
+
+### R7 / Site Testi 02 — "Bu Hafta" birinci blok oldu, not içeriği ekrandan kalktı
+
+**"Bu Hafta" artık sayfanın ilk ve tam genişlikteki bloğu.** Belgenin tespiti: *"Bu Hafta bilgisi ilk ve baskın blok değil."* Öğretmenin bir öğrenciye girerken ilk sorusu bu; oysa ekran onu önce beş sayaçla ve üç eşit ağırlıklı kartla karşılıyordu. Blok başlığın hemen altında ve yanında rakip yok.
+
+**Sayılar Dashboard ile AYNI SATIRDAN geliyor** (`teacher_student_operation_view`, 080). İkinci bir hesap yazılsaydı öğretmen listede bir sayı, öğrenciye girince başka bir sayı görürdü ve hangisinin doğru olduğunu bilmenin yolu olmazdı. Tempo bandı da `paceBand()` üzerinden — aynı öğrenci Haftalık Akış ekranında başka bir bant almasın diye.
+
+**"Kendi planı" satırı bilinçli olarak yok.** Belgenin hedef ekranında "135/135 dağıtıldı" var ama verisi yok: öğrencinin yükü günlere dağıtması R7-05'in "sonraki adım"ı ve 077 `planned_for_date` sütununu bu yüzden açmadı. Uydurulmuş bir dağıtım sayısı, öğrencinin yapmadığı bir planı yapmış gibi gösterirdi.
+
+**Akademik not içeriği Genel Bakış'tan kaldırıldı.** Kartta notun metni `line-clamp-2` ile iki satır duruyordu. Belge (§4): *"Genel Bakışta not içeriği görünmez. Yalnız '3 not · 1 önemli not · son güncelleme 4 gün önce' gibi sinyal gösterilir. Notları aç bilinçli aksiyon ister. Böylece Meet/Zoom ekran paylaşımı güvenli kalır."* Öğretmen bir öğrenciyle ekran paylaşırken Genel Bakış'ı açmak zorunda; o anda kendi özel notunun iki satırının ekranda olması, notu yazarken yaptığı varsayımı bozuyordu.
+
+Sorgu metni hâlâ çekiyor çünkü aynı dizi Öğretmen Hafızası panelini de besliyor; server component yalnız RENDER ETTİĞİNİ istemciye gönderir, yani panel açık değilken metin tarayıcıya hiç inmez.
+
+**İki ekranın "son teslim" kapsamı farklı ve bu artık metinden anlaşılıyor.** Haftalık Akış yalnız o haftanın gönderimlerine bakıyor, Genel Bakış ise öğrencinin tümüne — belgenin ifadesi *"sisteme yeni teslim gelmediğini söyler"*. İkisi de "Henüz teslim yok" deseydi, aynı öğrenci için biri "yok" öteki "2 gün önce" derken ekranlar çelişiyor görünürdü. `deliverySilence` artık çağırandan boş metni alıyor.

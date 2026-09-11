@@ -221,9 +221,20 @@ export const DELIVERY_SILENCE_DAYS = 3
 export function deliverySilence(input: {
   lastDeliveryAt: Date | null
   now: Date
+  /**
+   * Hiç teslim yokken yazılacak cümle.
+   *
+   * KAPSAM ÇAĞIRANA GÖRE DEĞİŞİYOR ve bu yüzden metin sabit olamaz:
+   * Haftalık Akış ekranı YALNIZ o haftanın tesliminlerine bakıyor,
+   * Genel Bakış'ın "Bu Hafta" bloğu ise öğrencinin TÜM gönderimlerine
+   * (belge: *"sisteme yeni teslim gelmediğini söyler"*). İkisi de
+   * "Henüz teslim yok" deseydi, aynı öğrenci için biri "yok" öteki
+   * "2 gün önce" derken ekranlar çelişiyor görünürdü.
+   */
+  emptyPhrase?: string
 }): { silent: boolean; days: number; phrase: string } {
   if (!input.lastDeliveryAt) {
-    return { silent: false, days: 0, phrase: 'Henüz teslim yok' }
+    return { silent: false, days: 0, phrase: input.emptyPhrase ?? 'Henüz teslim yok' }
   }
   const days = Math.floor(
     (input.now.getTime() - input.lastDeliveryAt.getTime()) / DAY_MS

@@ -16,9 +16,11 @@ import {
   UserRound,
   History,
   Crosshair,
+  StickyNote,
   ArrowRight,
 } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
+import { formatRelativeTime } from '@/lib/student-attention'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { studentOverviewTabBySlug } from '@/components/nav-config'
@@ -50,6 +52,8 @@ import {
   type ResourceSummaryItem,
 } from '@/lib/student-overview'
 import { formatUnitCount } from '@/lib/unit-labels'
+import { calculateFlowPace, deliverySilence } from '@/lib/weekly-flow'
+import { ThisWeekCard, type ThisWeekView } from '@/components/shared/this-week-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +111,8 @@ export default async function StudentDetailPage({
     { data: weeklySummary },
     { data: pendingApprovalSummary },
     { data: overdueSummary },
+    { data: weekOperation },
+    { data: lastSubmittedRows },
     { data: academicNoteRows },
     { data: flowRows },
     { data: contactRows },
@@ -188,6 +194,31 @@ export default async function StudentDetailPage({
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .maybeSingle(),
+    // "BU HAFTA" bloğu (R7/02 §1). DASHBOARD İLE AYNI SATIR: ikinci bir
+    // hesap yazılsaydı öğretmen listede bir sayı, öğrenciye girince
+    // başka bir sayı görürdü.
+    supabase
+      .from('teacher_student_operation_view')
+      // TEK STRING LİTERAL: supabase-js select'i TİP DÜZEYİNDE ayrıştırıyor;
+      // `+` ile birleştirilen bir ifade literal tip olmadığı için dönen
+      // satır `GenericStringError`'a düşer ve bütün alanlar kaybolur.
+      .select(
+        'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, next_contact_at, next_contact_kind'
+      )
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    // Son gönderim anı: "3+ gündür yeni teslim yok" sinyalinin girdisi.
+    // Ölçüt ÖĞRENCİNİN GÖNDERİMİ (submitted_at), onay değil — 081'in
+    // düzelttiği hatanın aynısı buraya da sızabilirdi.
+    supabase
+      .from('homework_items')
+      .select('submitted_at, homework_batches!inner(student_id, workspace_id)')
+      .eq('homework_batches.student_id', studentId)
+      .eq('homework_batches.workspace_id', workspaceId)
+      .not('submitted_at', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(1),
     // Akademik Not (R6-07). RLS gereği bu sorgu yalnız eğitmen oturumunda
     // satır döndürür; öğrenci/veli için politika tanımlı değildir.
     supabase
@@ -242,7 +273,56 @@ export default async function StudentDetailPage({
     author_name: one(row.profiles)?.full_name ?? null,
   }))
 
-  const lastAcademicNote = academicNotes.find(n => n.pinned) ?? academicNotes[0] ?? null
+  // Sinyal için sayılar — İÇERİK DEĞİL (R7/02 §4). `note_text` bu
+  // sayfada artık hiçbir yerde render edilmiyor; Genel Bakış yalnız
+  // "kaç not, kaçı önemli, en son ne zaman" diyor.
+  //
+  // Sorgu METNİ hâlâ çekiyor çünkü AYNI dizi `?sekme=not` panelini de
+  // besliyor. Server component yalnız RENDER ETTİĞİNİ istemciye
+  // gönderir: panel açık değilken metin tarayıcıya hiç inmez.
+  const lastAcademicNote = academicNotes[0] ?? null
+  const pinnedNoteCount = academicNotes.filter(n => n.pinned).length
+
+  // ============================================================
+  // "BU HAFTA" (R7/02 §1)
+  // ============================================================
+  // Hesaplar lib/weekly-flow.ts'te; sayfa yalnız veriyi topluyor.
+  // Tempo eşikleri burada YAZILMIYOR — aynı bant Haftalık Akış
+  // ekranında da gösteriliyor ve iki yerde ayrı yazılsaydı aynı öğrenci
+  // iki ekranda iki farklı bant alırdı.
+  const now = new Date()
+  const lastSubmittedAt =
+    (lastSubmittedRows?.[0]?.submitted_at as string | null | undefined) ?? null
+
+  const thisWeek: ThisWeekView = {
+    flowId: (weekOperation?.weekly_flow_id as string | null) ?? null,
+    total: Number(weekOperation?.weekly_total ?? 0),
+    submitted: Number(weekOperation?.weekly_submitted ?? 0),
+    percent: Number(weekOperation?.weekly_submitted_percent ?? 0),
+    approvalPending: Number(weekOperation?.approval_pending_count ?? 0),
+    nextContactAt: (weekOperation?.next_contact_at as string | null) ?? null,
+    nextContactKind: (weekOperation?.next_contact_kind as 'ders' | 'kocluk' | null) ?? null,
+    lastSubmittedAt,
+    silence: deliverySilence({
+      lastDeliveryAt: lastSubmittedAt ? new Date(lastSubmittedAt) : null,
+      now,
+    }),
+    pace: (() => {
+      if (!weekOperation?.flow_due_at) return null
+      const p = calculateFlowPace({
+        totalUnits: Number(weekOperation.weekly_total ?? 0),
+        deliveredUnits: Number(weekOperation.weekly_submitted ?? 0),
+        firstPublishedAt: weekOperation.first_published_at
+          ? new Date(weekOperation.first_published_at as string)
+          : null,
+        dueAt: new Date(weekOperation.flow_due_at as string),
+        now,
+      })
+      return p
+        ? { startingPerDay: p.startingPerDay, requiredPerDay: p.requiredPerDay, band: p.band }
+        : null
+    })(),
+  }
 
   // ============================================================
   // R5.5 — üç özet kartın verisi
@@ -469,6 +549,12 @@ export default async function StudentDetailPage({
           zorlardı. Panelin bağlamı zaten üstteki şeritte. */}
       {!tab && (
         <>
+      {/* BU HAFTA — sayfanın BİRİNCİ ve en güçlü operasyon bloğu
+          (R7/02 §1). Belgenin tespiti: "Bu Hafta bilgisi ilk ve baskın
+          blok değil." Öğretmenin bir öğrenciye girerken ilk sorusu bu;
+          altındaki sayaç şeridi ve nabız kartları ikinci sırada. */}
+      <ThisWeekCard studentId={studentId} view={thisWeek} now={now} />
+
       {weeklySummary && (
         <MetricTiles
           className="xl:grid-cols-5"
@@ -520,25 +606,40 @@ export default async function StudentDetailPage({
         pool={poolSummary}
       />
 
-      {/* Son Akademik Not (R6-07 kabul #48): tarih + kısa metin. Tüm notlar
-          Akademik Not sekmesinde kronolojik listelenir. Not yoksa BURASI HİÇ
-          GÖRÜNMEZ — sistem uyarı veya görev üretmez (#49). */}
-      {lastAcademicNote && (
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              {lastAcademicNote.pinned ? 'Önemli akademik not' : 'Son akademik not'}
-            </p>
-            <p className="shrink-0 text-[11px] text-muted-foreground">
-              {new Date(lastAcademicNote.created_at).toLocaleDateString('tr-TR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
+      {/* ÖĞRETMEN HAFIZASI — YALNIZ SİNYAL, İÇERİK YOK (R7/02 §4).
+
+          Burada eskiden notun METNİ duruyordu (`line-clamp-2` ile iki
+          satır). Belge bunu açıkça kaldırıyor: *"Genel Bakışta not
+          içeriği görünmez. Yalnız '3 not · 1 önemli not · son güncelleme
+          4 gün önce' gibi sinyal gösterilir. Notları aç bilinçli aksiyon
+          ister. Böylece Meet/Zoom ekran paylaşımı güvenli kalır."*
+
+          Öğretmen bir öğrenciyle ekran paylaşırken Genel Bakış'ı açmak
+          zorunda; o anda kendi özel notunun iki satırının ekranda
+          olması, notu yazarken yaptığı varsayımı bozuyordu.
+
+          Not yoksa BURASI HİÇ GÖRÜNMEZ — sistem uyarı veya görev
+          üretmez (R6-07 kabul #49 ile aynı ilke). */}
+      {academicNotes.length > 0 && (
+        <Link
+          href={`/teacher/students/${studentId}?sekme=not`}
+          className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 transition-colors hover:bg-accent"
+        >
+          <div className="flex items-center gap-2">
+            <StickyNote className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <p className="text-sm">
+              <span className="font-medium">Öğretmen Hafızası</span>
+              <span className="text-muted-foreground">
+                {' · '}
+                {academicNotes.length} not
+                {pinnedNoteCount > 0 && ` · ${pinnedNoteCount} önemli not`}
+                {lastAcademicNote &&
+                  ` · son güncelleme ${formatRelativeTime(lastAcademicNote.created_at)}`}
+              </span>
             </p>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm">{lastAcademicNote.note_text}</p>
-        </div>
+          <span className="shrink-0 text-xs text-muted-foreground">Notları aç →</span>
+        </Link>
       )}
 
       {/* Son Akademik İz + Bu Hafta Odak.

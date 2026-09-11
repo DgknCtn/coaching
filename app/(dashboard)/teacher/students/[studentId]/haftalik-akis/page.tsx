@@ -291,7 +291,14 @@ export default async function WeeklyFlowPage({
             remainingMs: pace.remainingMs,
           }
         : null,
-      lastActivity: deliverySilence({ lastDeliveryAt, now }),
+      // Kapsam BU HAFTA ile sınırlı; Genel Bakış'ın "Bu Hafta" bloğu
+      // ise öğrencinin tüm gönderimlerine bakıyor. Metin bunu söylüyor
+      // ki iki ekran çelişiyor görünmesin.
+      lastActivity: deliverySilence({
+        lastDeliveryAt,
+        now,
+        emptyPhrase: 'Bu haftaya henüz teslim gelmedi',
+      }),
       // Bekleyen bildirimin GEREKÇESİ: ritim mi, sessizlik mi (§2).
       // Karar lib/weekly-flow.ts'te; 079 aynı eşiklerle satırı üretiyor
       // ve parite testi ikisini bağlıyor.
