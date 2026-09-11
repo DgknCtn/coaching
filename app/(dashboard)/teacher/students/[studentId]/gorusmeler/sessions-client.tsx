@@ -30,6 +30,7 @@ import {
   createMakeupSessionAction,
   moveActiveFlowDueAction,
   rescheduleSessionAction,
+  setMakeupDecisionAction,
   setServiceStatusAction,
   setSessionOutcomeAction,
 } from './actions'
@@ -60,6 +61,28 @@ export interface SessionRow {
   attended: boolean | null
   note: string | null
   isMakeup: boolean
+  /**
+   * "Yapılmadı" sonrası telafi kararı (§7-C).
+   * null = karar verilmedi, 'pending' = telafi bekliyor,
+   * 'waived' = telafi edilmeyecek.
+   */
+  makeupDecision: 'pending' | 'waived' | null
+  /** Telafiyse: asıl oturumun planlanan anı. */
+  originPlannedAt: string | null
+}
+
+export interface ServiceCounter {
+  serviceId: string
+  planned: number
+  done: number
+}
+
+export interface ArchiveMonth {
+  param: string
+  label: string
+  planned: number
+  done: number
+  missed: number
 }
 
 const FINANCE_LABEL: Record<ServiceRow['financeLink'], string> = {
@@ -85,6 +108,8 @@ export function SessionsClient({
   monthLabel,
   prevMonthParam,
   nextMonthParam,
+  serviceCounters,
+  archive,
   mainContactId,
   mainContactLabel,
   nextContactAt,
@@ -97,6 +122,8 @@ export function SessionsClient({
   monthLabel: string
   prevMonthParam: string
   nextMonthParam: string
+  serviceCounters: ServiceCounter[]
+  archive: ArchiveMonth[]
   mainContactId: string | null
   mainContactLabel: string | null
   nextContactAt: string | null
@@ -298,6 +325,28 @@ export function SessionsClient({
           </div>
         }
       >
+        {/* HİZMET BAZLI SAYAÇLAR (§3 no.3): "Grup 4/5", "Koçluk 3/4".
+            Tek bir toplam, iki ayrı hizmet hattı olan öğrencide hangi
+            hattın eksik kaldığını gizliyordu. */}
+        {serviceCounters.length > 0 && (
+          <ul className="mb-4 grid gap-2 sm:grid-cols-2">
+            {serviceCounters.map((c) => {
+              const service = serviceById.get(c.serviceId)
+              if (!service) return null
+              return (
+                <li key={c.serviceId} className="rounded-md border px-3 py-2 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate">{formatServiceAxes(service)}</span>
+                    <span className="shrink-0 tabular-nums">
+                      {c.done} / {c.planned}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
         {sessions.length === 0 ? (
           <EmptyState
             icon={CalendarPlus}
@@ -375,20 +424,79 @@ export function SessionsClient({
                         {SESSION_STATUS_LABEL[session.status]}
                       </Badge>
 
-                      {/* Telafi yalnız "Yapılmadı" sonrası anlamlıdır ve
-                          asıl ayın borcunu kapatır (§7.C). */}
+                      {/* TELAFİ KARARI (§7-C).
+
+                          "Telafi bekliyor" ile "telafi edilmeyecek" aynı
+                          `yapilmadi` durumuna düşüyordu; oysa ilki ayı
+                          tamamlanmamış bırakır, ikincisi ayı 3/4 olarak
+                          KAPATIR. Ayrım öğretmenin kararıdır ve veriden
+                          türetilemez — bu yüzden soruluyor. */}
                       {session.status === 'yapilmadi' && !session.isMakeup && (
-                        <RescheduleButton
-                          label="Telafi Ekle"
-                          disabled={isPending}
-                          currentAt={at}
-                          onPick={(iso) =>
-                            run(
-                              () => createMakeupSessionAction(studentId, session.id, iso),
-                              'Telafi oluşturuldu.'
-                            )
-                          }
-                        />
+                        <>
+                          {session.makeupDecision === 'waived' ? (
+                            <span className="text-xs text-muted-foreground">
+                              Telafi edilmeyecek
+                            </span>
+                          ) : session.makeupDecision === 'pending' ? (
+                            <span className="text-xs text-warning-foreground">
+                              Telafi bekliyor
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={isPending}
+                                onClick={() =>
+                                  run(
+                                    () =>
+                                      setMakeupDecisionAction(studentId, session.id, 'pending'),
+                                    'Telafi bekliyor olarak işaretlendi.'
+                                  )
+                                }
+                              >
+                                Telafi edilecek
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                disabled={isPending}
+                                onClick={() =>
+                                  run(
+                                    () =>
+                                      setMakeupDecisionAction(studentId, session.id, 'waived'),
+                                    'Telafi edilmeyecek olarak işaretlendi.'
+                                  )
+                                }
+                              >
+                                Edilmeyecek
+                              </Button>
+                            </div>
+                          )}
+
+                          {session.makeupDecision !== 'waived' && (
+                            <RescheduleButton
+                              label="Telafi Ekle"
+                              disabled={isPending}
+                              currentAt={at}
+                              onPick={(iso) =>
+                                run(
+                                  () => createMakeupSessionAction(studentId, session.id, iso),
+                                  'Telafi oluşturuldu.'
+                                )
+                              }
+                            />
+                          )}
+                        </>
+                      )}
+
+                      {/* Telafi satırı HANGİ AYIN telafisi olduğunu yazar:
+                          liste asıl aya göre süzüldüğü için satırın kendi
+                          tarihi başka bir ayda olabilir (§7-C). */}
+                      {session.isMakeup && session.originPlannedAt && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatSessionTime(session.originPlannedAt)} telafisi
+                        </span>
                       )}
                     </div>
                   )}
@@ -398,6 +506,42 @@ export function SessionsClient({
           </ul>
         )}
       </Section>
+
+      {/* ---------------- Geçmiş aylar ---------------- */}
+      {archive.length > 0 && (
+        <Section
+          title="Geçmiş Aylar"
+          description="Aylık hizmet kayıtları silinmez; arşivlenir."
+          variant="card"
+        >
+          {/* AY AY İLERİ GERİ GİTMEK YETMİYORDU: bir yıl öncesine
+              bakmak on iki tıklama demekti. Satırlar doğrudan o aya
+              atlıyor ve yanlarında ayın özeti duruyor — hangi aya
+              gitmek gerektiği listede görünsün diye. */}
+          <ul className="divide-y divide-border">
+            {archive.map((m) => (
+              <li key={m.param}>
+                <Link
+                  href={`?ay=${m.param}`}
+                  className="flex items-baseline justify-between gap-3 py-2 text-sm hover:underline"
+                >
+                  <span>{m.label}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    <span className="tabular-nums">
+                      {m.done} / {m.planned}
+                    </span>
+                    {m.missed > 0 && (
+                      <span className="ml-2 text-warning-foreground">
+                        {m.missed} yapılmadı
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
     </div>
   )
 }

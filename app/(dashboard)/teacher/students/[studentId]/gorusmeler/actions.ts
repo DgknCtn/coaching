@@ -477,3 +477,49 @@ export async function createMakeupSessionAction(
   revalidate(studentId)
   return { success: true }
 }
+
+/**
+ * Telafi kararı: "edilecek" mi "edilmeyecek" mi? (§7-C)
+ *
+ * İKİSİ AYNI DURUMA DÜŞÜYORDU. `yapilmadi` tek başına ayın kapanıp
+ * kapanmadığını söylemiyor:
+ *
+ *   Telafi edilecek     → ay TAMAMLANMAMIŞ sayılır
+ *   Telafi edilmeyecek  → ay örn. 3/4 olarak KAPANIR
+ *
+ * Karar veriden türetilemez — telafi kaydı henüz açılmamışken
+ * "bekliyor mu, vazgeçildi mi" sorusunun cevabı yalnız öğretmende.
+ */
+export async function setMakeupDecisionAction(
+  studentId: string,
+  sessionId: string,
+  decision: 'pending' | 'waived'
+) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      sessionId: uuidSchema,
+      decision: z.enum(['pending', 'waived']),
+    })
+    .safeParse({ studentId, sessionId, decision })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('set_makeup_decision', {
+    p_session_id: parsed.data.sessionId,
+    p_decision: parsed.data.decision,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'session.makeup',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { sessionId: parsed.data.sessionId, decision: parsed.data.decision },
+  })
+
+  revalidate(studentId)
+  return { success: true }
+}

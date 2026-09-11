@@ -759,3 +759,15 @@ Sorgu metni hâlâ çekiyor çünkü aynı dizi Öğretmen Hafızası panelini d
 **Not içeriği ARKA KAPIDAN sızıyormuş.** Genel Bakış kartından metni kaldırmak yetmemiş: hemen altındaki **Son Akademik İz** notun metnini satır olarak basıyordu. Kart "1 not · son güncelleme 13 gün önce" derken iz bloğu notun kendisini gösteriyordu — ekran paylaşımı gerekçesi tam olarak bunu yasaklıyor.
 
 Belge bu bloğu zaten olay kaydı diye tanımlıyor: *"Akademik İz yorum değil, sistemde gerçekleşen olay kaydıdır"* — örnekleri "8 çalışma teslim edildi", "Haftalık plan yayınlandı". Hiçbiri alıntı değil. Artık "Akademik not eklendi" yazıyor ve `buildAcademicTrail`'in **imzası** metni kabul etmiyor: `note_text` parametre listesinden çıkarıldı, böylece metin oraya geri sızarsa derleme kırılır.
+
+### R7 / Site Testi 04 — telafinin ayı ekranda yanlıştı (082)
+
+**Kural veritabanında doğru, ekranda yanlıştı.** 075 `student_service_month_view` içinde §7-C'yi doğru kurmuş: satırın ayı, telafi ise bağlı olduğu asıl oturumun ayıdır (`COALESCE(asil.planned_at, ss.planned_at)`). Ama Ders & Görüşmeler ekranı o view'ı **hiç sorgulamıyordu**; ham `service_sessions` tablosunu `planned_at` aralığıyla çekip sayıları JavaScript'te yeniden hesaplıyordu.
+
+Sonuç, şemanın garanti ettiğinin tam tersi: Eylül'de yapılmayan ders için Ekim'e telafi girildiğinde telafi **Ekim** listesinde ve **Ekim** sayaçlarında görünüyor, Eylül ise "3/4" olarak eksik kalıyordu. Kabul kriteri bunu açıkça yasaklıyor — *"Sonraki ay yapılan telafi asıl ayın hizmet borcunu kapatıyor; yeni aya ekstra hizmet yazmıyor."*
+
+082 satır düzeyinde `student_service_session_view` ekliyor; listenin de sayaçla **aynı** ay ifadesini kullanabilmesi için. İki ifade `tests/session-month-parity.test.ts` ile karakter karakter karşılaştırılıyor: ayrışırlarsa aynı ekranda sayaç bir ay, liste başka bir ay gösterir ve ikisi de sessizdir.
+
+**"Telafi bekliyor" ile "telafi edilmeyecek" aynı şeydi.** §7-C dört sonuç tanımlıyor ve ikisi aynı `yapilmadi` durumuna düşüyordu; oysa ilki ayı tamamlanmamış bırakır, ikincisi ayı 3/4 olarak **kapatır**. Ayrım öğretmenin kararıdır ve veriden türetilemez — telafi kaydı henüz açılmamışken "bekliyor mu, vazgeçildi mi" sorusunun cevabı yalnız öğretmende. Bu yüzden yeni bir sütun (`makeup_decision`) ve NULL'ın kendisi bir durum: "karar verilmedi"yi 'pending' ile karıştırmak, öğretmenin vermediği bir sözü kaydetmek olurdu.
+
+**Hizmet bazlı sayaçlar ve ay arşivi geldi.** §3 no.3 "Grup 4/5", "Koçluk 3/4" diyor — tek bir toplam, iki ayrı hizmet hattı olan öğrencide hangi hattın eksik kaldığını gizliyordu. Geçmiş aylar için de ileri/geri oklarından başka yol yoktu; bir yıl öncesine bakmak on iki tıklamaydı. Arşiv listesi doğrudan o aya atlıyor ve yanında ayın özeti duruyor.

@@ -61,6 +61,9 @@ const LOCKED_VIEWS = [
   'student_active_flow_load_view',
   'student_next_contact_view',
   'teacher_student_operation_view',
+  // 082 — satır düzeyinde ay atfı; hangi öğrenciyle ne zaman
+  // görüşüldüğünü taşır.
+  'student_service_session_view',
 ] as const
 
 /**
@@ -224,7 +227,7 @@ describe('kiracı izolasyonu · kurulum', () => {
     // Sayı KİLİTLİ, "en az" değil: liste kazara kısalırsa test bunu
     // söylemeli. Yeni bir view eklendiğinde bu sayı da elle artar —
     // eklemeyi unutmanın maliyeti, hiç bakılmayan bir view'dır.
-    expect(LOCKED_VIEWS).toHaveLength(13)
+    expect(LOCKED_VIEWS).toHaveLength(14)
     expect(LOCKED_TABLES.length).toBeGreaterThanOrEqual(8)
   })
 })

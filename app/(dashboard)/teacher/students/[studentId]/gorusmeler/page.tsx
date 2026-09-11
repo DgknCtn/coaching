@@ -93,12 +93,21 @@ export default async function StudentSessionsPage({
     )
   }
 
-  // Ayın sınırları — sorgu için gerçek anlara çevrilir.
-  const monthStart = new Date(Date.UTC(year, month - 1, 1))
-  const monthEnd = new Date(Date.UTC(month === 12 ? year + 1 : year, month % 12, 1))
+  // AYIN KİMLİĞİ — 'YYYY-MM-01'.
+  //
+  // Artık tarih ARALIĞI değil, view'ın hesapladığı `attributed_month`
+  // kullanılıyor. Fark kritik: telafi kaydının kendi `planned_at`'i
+  // Ekim'de olsa bile Eylül'ün borcuna aittir (§7-C) ve aralıkla
+  // süzülen bir sorgu onu Ekim'e koyuyordu.
+  const attributedMonth = `${year}-${String(month).padStart(2, '0')}-01`
 
-  const [{ data: serviceRows }, { data: sessionRows }, { data: groupRows }] =
-    await Promise.all([
+  const [
+    { data: serviceRows },
+    { data: sessionRows },
+    { data: groupRows },
+    { data: monthCounters },
+    { data: archiveRows },
+  ] = await Promise.all([
       supabase
         .from('student_services')
         .select(
@@ -108,15 +117,16 @@ export default async function StudentSessionsPage({
         .eq('workspace_id', workspaceId)
         .order('status')
         .order('weekday'),
+      // 082: satırın ayı `attributed_month`'tan gelir — telafi asıl
+      // ayın listesinde görünür, kendi ayında değil.
       supabase
-        .from('service_sessions')
+        .from('student_service_session_view')
         .select(
-          'id, service_id, planned_at, actual_at, duration_minutes, status, attended, note, makeup_of_session_id'
+          'id, service_id, planned_at, actual_at, duration_minutes, status, attended, note, makeup_of_session_id, makeup_decision, origin_planned_at'
         )
         .eq('student_id', studentId)
         .eq('workspace_id', workspaceId)
-        .gte('planned_at', monthStart.toISOString())
-        .lt('planned_at', monthEnd.toISOString())
+        .eq('attributed_month', attributedMonth)
         .order('planned_at'),
       supabase
         .from('student_groups')
@@ -124,6 +134,24 @@ export default async function StudentSessionsPage({
         .eq('workspace_id', workspaceId)
         .eq('status', 'active')
         .order('name'),
+      // Sayaçlar da AYNI kuraldan (075). Ekran kendi toplamını
+      // hesaplasaydı listeyle ayrışabilirdi.
+      supabase
+        .from('student_service_month_view')
+        .select('service_id, kind, planlanan, yapilan, bekleyen, yapilmayan, iptal')
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .eq('ay', attributedMonth),
+      // GEÇMİŞ AYLAR (§3 no.6: "Aylık hizmet kayıtları silinmez;
+      // arşivlenir"). Ay ay ileri geri gitmek yerine doğrudan atlamak
+      // için son on iki ayın özeti.
+      supabase
+        .from('student_service_month_view')
+        .select('ay, planlanan, yapilan, yapilmayan')
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .order('ay', { ascending: false })
+        .limit(60),
     ])
 
   const groupNames = new Map((groupRows ?? []).map((g) => [g.id, g.name as string]))
@@ -154,6 +182,8 @@ export default async function StudentSessionsPage({
     attended: (r.attended as boolean | null) ?? null,
     note: (r.note as string | null) ?? null,
     isMakeup: r.makeup_of_session_id !== null,
+    makeupDecision: (r.makeup_decision as 'pending' | 'waived' | null) ?? null,
+    originPlannedAt: (r.origin_planned_at as string | null) ?? null,
   }))
 
   // Ana temas ve sıradaki temas SAF MODÜLDEN gelir (lib/service-structure).
@@ -166,12 +196,48 @@ export default async function StudentSessionsPage({
     new Date()
   )
 
-  // Aylık sayaçlar. İPTAL PLANLANANA SAYILMAZ: taraflar önceden
-  // anlaşmışsa o hizmet hiç borç doğurmamıştır.
-  const counted = sessions.filter((s) => s.status !== 'iptal')
-  const done = counted.filter((s) => s.status === 'yapildi' && s.attended !== false)
-  const pending = counted.filter((s) => s.status === 'planlandi' || s.status === 'ertelendi')
-  const missed = counted.filter((s) => s.status === 'yapilmadi')
+  // AYLIK SAYAÇLAR ARTIK VIEW'DAN (075).
+  //
+  // Burada JavaScript'te yeniden hesaplanıyordu ve telafi ay atfını
+  // görmüyordu. İki yerde iki hesap, iki farklı sayı demekti; şimdi
+  // toplama yalnız view satırlarını topluyor.
+  //
+  // İPTAL PLANLANANA SAYILMAZ: view'ın `planlanan` sütunu zaten iptali
+  // dışarıda bırakıyor — taraflar önceden anlaşmışsa o hizmet hiç borç
+  // doğurmamıştır.
+  const counters = (monthCounters ?? []) as {
+    service_id: string
+    kind: 'ders' | 'kocluk'
+    planlanan: number
+    yapilan: number
+    bekleyen: number
+    yapilmayan: number
+    iptal: number
+  }[]
+  const sum = (key: 'planlanan' | 'yapilan' | 'bekleyen' | 'yapilmayan') =>
+    counters.reduce((n, c) => n + Number(c[key] ?? 0), 0)
+
+  // Hizmet bazlı sayaçlar (§3 no.3: "Grup 4/5", "Koçluk 3/4").
+  const serviceCounters = counters.map((c) => ({
+    serviceId: c.service_id,
+    planned: Number(c.planlanan ?? 0),
+    done: Number(c.yapilan ?? 0),
+  }))
+
+  // Geçmiş aylar — bulunulan ay listede tekrar edilmez.
+  const archive = ((archiveRows ?? []) as { ay: string; planlanan: number; yapilan: number; yapilmayan: number }[])
+    .filter((r) => r.ay !== attributedMonth)
+    .slice(0, 12)
+    .map((r) => {
+      const [ry, rm] = r.ay.split('-').map(Number)
+      return {
+        param: monthParam(ry, rm),
+        label: monthLabel(ry, rm),
+        planned: Number(r.planlanan ?? 0),
+        done: Number(r.yapilan ?? 0),
+        missed: Number(r.yapilmayan ?? 0),
+      }
+    })
 
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
   const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
@@ -187,16 +253,16 @@ export default async function StudentSessionsPage({
         metrics={[
           {
             label: 'Planlanan',
-            value: counted.length,
+            value: sum('planlanan'),
             hint: `${monthLabel(year, month)} · temas`,
             icon: CalendarClock,
           },
-          { label: 'Yapıldı', value: done.length, tone: 'success', icon: CalendarCheck },
-          { label: 'Kalan', value: pending.length, icon: Clock },
+          { label: 'Yapıldı', value: sum('yapilan'), tone: 'success', icon: CalendarCheck },
+          { label: 'Kalan', value: sum('bekleyen'), icon: Clock },
           {
             label: 'Yapılmadı',
-            value: missed.length,
-            tone: missed.length > 0 ? 'destructive' : 'default',
+            value: sum('yapilmayan'),
+            tone: sum('yapilmayan') > 0 ? 'destructive' : 'default',
             icon: CalendarX,
           },
         ]}
@@ -210,6 +276,8 @@ export default async function StudentSessionsPage({
         monthLabel={monthLabel(year, month)}
         prevMonthParam={monthParam(prev.year, prev.month)}
         nextMonthParam={monthParam(next.year, next.month)}
+        serviceCounters={serviceCounters}
+        archive={archive}
         mainContactId={mainContact?.id ?? null}
         mainContactLabel={
           mainContact ? CONTACT_KIND_LABEL[contactKindOf(mainContact)] : null
