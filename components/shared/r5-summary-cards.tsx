@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, BookOpen, ShieldCheck } from 'lucide-react'
 import type { PoolSummaryItem, ResourcePlanSummary } from '@/lib/student-overview'
+import { cn } from '@/lib/utils'
 
 // R5 Öğrenci Genel Bakış — özet kartlar (R5.5 §7.1).
 //
@@ -26,9 +27,32 @@ interface Props {
   pool: { top: PoolSummaryItem[]; total: number }
 }
 
+/**
+ * İKİ KART AYRI DA KULLANILABİLİR (R7/02 hedef ekran).
+ *
+ * Hedef yerleşimde Kaynak Planı, Akademik Akış'ın YANINDA duruyor;
+ * Koruma Havuzu ise alt sırada. İkisi tek bir `<div grid>` içine
+ * kilitliyken bu mümkün değildi. Bu sarmalayıcı eski çağrı biçimini
+ * koruyor (başka ekranlar bozulmasın), altındaki iki kart ayrı ayrı
+ * dışa açık.
+ */
 export function R5SummaryCards({ studentId, resources, pool }: Props) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <ResourcePlanCard studentId={studentId} resources={resources} />
+      <ProtectionPoolCard studentId={studentId} pool={pool} />
+    </div>
+  )
+}
+
+export function ResourcePlanCard({
+  studentId,
+  resources,
+}: {
+  studentId: string
+  resources: ResourcePlanSummary
+}) {
+  return (
       <SummaryCard
         icon={BookOpen}
         title="Kaynak Planı"
@@ -53,19 +77,32 @@ export function R5SummaryCards({ studentId, resources, pool }: Props) {
              akademik sırayı ölçer. Biri iyi diğeri kötü olabilir ve
              tek bir "sağlık" rakamına indirgemek ikisini de gizlerdi. */
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <Tile value={resources.activeCount} label="aktif kaynak" />
-              <Tile value={resources.mainCount} label="ana kaynak" />
-              <Tile value={resources.completedCount} label="tamamlandı" />
-            </div>
+            {/* AKTİF KAYNAK SAYISI VURGULU BİR SATIR, ızgaranın bir
+                hücresi değil: kartın ilk cevapladığı soru "kaç kaynak
+                var?" ve o sayı diğer beşiyle aynı boyutta yazılınca
+                kayboluyordu. */}
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+              <span className="text-lg font-semibold tabular-nums text-foreground">
+                {resources.activeCount}
+              </span>{' '}
+              aktif kaynak
+              <span className="text-muted-foreground"> · planlanan kaynaklar arasında</span>
+            </p>
 
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Plan temposu</p>
-              <p className="text-sm">
-                {resources.pace.onTrack} uyumlu · {resources.pace.behind} geride ·{' '}
-                {resources.pace.notStarted} henüz başlamadı
-              </p>
-            </div>
+            {/* Plan temposu ve müfredat uyumu AYNI IZGARADA ama ayrı
+                hücrelerde. Tek cümleye sıkıştırıldığında ("3 uyumlu · 2
+                geride · 1 başlamadı") hangi sayının hangi soruya ait
+                olduğu okunmuyordu. */}
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Tile value={resources.mainCount} label="ana kaynak" />
+              <Tile value={resources.pace.onTrack} label="planla uyumlu" tone="success" />
+              <Tile value={resources.pace.behind} label="plan geride" tone="warning" />
+              <Tile value={resources.completedCount} label="tamamlandı" />
+              <Tile value={resources.pace.notStarted} label="henüz başlanmayan" />
+              {resources.pendingCount > 0 && (
+                <Tile value={resources.pendingCount} label="henüz planlanmadı" />
+              )}
+            </dl>
 
             {/* ANA KAYNAK UYARILARDA ÖNCELİKLİ (§3): otuz kaynaklı bir
                 öğrencide "3 kaynak geride" tek başına bir şey söylemez;
@@ -91,15 +128,20 @@ export function R5SummaryCards({ studentId, resources, pool }: Props) {
               </div>
             )}
 
-            {resources.pendingCount > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                {resources.pendingCount} kaynak henüz planlanmadı.
-              </p>
-            )}
           </div>
         )}
       </SummaryCard>
+  )
+}
 
+export function ProtectionPoolCard({
+  studentId,
+  pool,
+}: {
+  studentId: string
+  pool: { top: PoolSummaryItem[]; total: number }
+}) {
+  return (
       <SummaryCard
         icon={ShieldCheck}
         title="Koruma Havuzu"
@@ -134,7 +176,6 @@ export function R5SummaryCards({ studentId, resources, pool }: Props) {
           </div>
         )}
       </SummaryCard>
-    </div>
   )
 }
 
@@ -186,11 +227,33 @@ function SummaryCard({
 // ("Genel Bakışta tek tek kitap isimleri gösterilmez"). Yüzde çubukları
 // Kaynak Planı ekranında yaşamaya devam ediyor.
 
-function Tile({ value, label }: { value: number; label: string }) {
+/**
+ * Tek sayı + etiket.
+ *
+ * TON YALNIZ SIFIRDAN BÜYÜKKEN: "0 plan geride" satırını uyarı rengine
+ * boyamak, olmayan bir sorunu varmış gibi gösterirdi.
+ */
+function Tile({
+  value,
+  label,
+  tone,
+}: {
+  value: number
+  label: string
+  tone?: 'success' | 'warning'
+}) {
   return (
-    <div className="rounded-md border py-2">
-      <p className="text-xl font-semibold tabular-nums">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className="rounded-md border px-2 py-2 text-center">
+      <dd
+        className={cn(
+          'text-xl font-semibold tabular-nums',
+          value > 0 && tone === 'success' && 'text-success-foreground',
+          value > 0 && tone === 'warning' && 'text-warning-foreground'
+        )}
+      >
+        {value}
+      </dd>
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
     </div>
   )
 }

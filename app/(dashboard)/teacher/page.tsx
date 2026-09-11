@@ -1,24 +1,20 @@
 import Link from 'next/link'
-import { ArrowUpRight, Plus, Users } from 'lucide-react'
+import { ArrowUpRight, Bell, CalendarDays, Clock, FileText, Plus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import {
   computeStudentStatus,
   expectedProgressPercent,
   noticeSignal,
-  STATUS_LABEL,
-  type StudentStatus,
 } from '@/lib/student-status'
 import { localDateString, todayDateString } from '@/lib/homework-status'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist'
 import { TrialBanner } from '@/components/shared/trial-banner'
 import { QuotaNotice } from '@/components/shared/quota-notice'
-import { MetricRow } from '@/components/shared/metric-row'
+import { MetricTiles } from '@/components/shared/metric-tiles'
 import { Section } from '@/components/shared/section'
-import { DataTable, type Column } from '@/components/shared/data-table'
-import { cn } from '@/lib/utils'
+import { StudentsTable, type DashboardRow } from './students-table'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,16 +38,6 @@ type StudentRow = {
   next_contact_participation: 'birebir' | 'grup' | null
   submission_cutoff_at: string | null
 }
-
-/** Durum etiketinin rozet varyantı — renk YALNIZ sinyal verir (§8). */
-const STATUS_VARIANT: Record<StudentStatus, 'success' | 'warning' | 'destructive' | 'neutral'> = {
-  yolunda: 'success',
-  takip_et: 'warning',
-  geride: 'warning',
-  mudahale: 'destructive',
-}
-
-type Row = StudentRow & { computed: ReturnType<typeof computeStudentStatus> }
 
 const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi']
 
@@ -205,129 +191,53 @@ export default async function TeacherDashboard() {
 
   const firstName = profile.full_name.split(' ')[0]
 
-  // §5'in kolon sırası: Öğrenci | Teslim | Onay | Bildirim / Not |
-  // Sonraki Temas | Durum. "Bu hafta" sütunu KALDIRILDI — belge: "0/0
-  // veya 0/75 gibi değerler tek başına neyi temsil ettiğini yeterince
-  // anlatmıyor."
-  const columns: Column<Row>[] = [
-    {
-      key: 'student',
-      header: 'Öğrenci',
-      render: (s) => (
-        <div>
-          <p className="font-medium">{s.student_full_name}</p>
-          {(s.grade_level || s.exam_type) && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {[s.grade_level, s.exam_type].filter(Boolean).join(' · ')}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'submitted',
-      header: 'Teslim',
-      align: 'center',
-      render: (s) => {
-        const total = Number(s.weekly_total ?? 0)
-        if (total === 0) {
-          return <span className="text-muted-foreground">—</span>
-        }
-        return (
-          <span className="tabular-nums">
-            {s.weekly_submitted ?? 0}
-            <span className="text-muted-foreground">/{total}</span>
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              %{s.weekly_submitted_percent ?? 0}
-            </span>
-          </span>
-        )
-      },
-    },
-    {
-      key: 'approval',
-      header: 'Onay',
-      align: 'center',
-      hideBelow: 'sm',
-      render: (s) =>
-        Number(s.approval_pending_count) > 0 ? (
-          <span className="font-medium tabular-nums">{s.approval_pending_count}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    },
-    {
-      key: 'notice',
-      header: 'Bildirim / Not',
-      hideBelow: 'md',
-      render: (s) => {
-        // NOT İÇERİĞİ BURAYA HİÇ GELMİYOR — view yalnız boolean
-        // döndürüyor (§8, ekran paylaşımı gerekçesi).
-        const notice = noticeSignal({
-          checkInOverdueHours: s.status_update_due_at
-            ? Math.max(
-                0,
-                (now.getTime() - new Date(s.status_update_due_at).getTime()) / 3_600_000
-              )
-            : 0,
-          hasImportantNote: s.has_important_note === true,
-          hasCheckedIn: s.last_check_in_at !== null,
-        })
-        return (
-          <span
-            className={cn(
-              'text-sm',
-              notice.kind === 'check_in_late' && 'font-medium text-warning-foreground',
-              notice.kind === 'none' && 'text-muted-foreground'
-            )}
-          >
-            {notice.kind === 'check_in_done' && '✓ '}
-            {notice.label}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'contact',
-      header: 'Sonraki Temas',
-      render: (s) => {
-        if (!s.next_contact_at) {
-          return <span className="text-sm text-muted-foreground">Planlanmadı</span>
-        }
-        const at = new Date(s.next_contact_at)
-        const isToday = localDateString(at) === today
-        return (
-          <div className="text-sm">
-            <p className={cn(isToday && 'font-medium')}>
-              {/* BUGÜN yalnız küçük bir etiketle vurgulanır; satır
-                  yoğun renge boyanmaz (§6, §10.7). */}
-              {isToday && (
-                <span className="mr-1.5 rounded border border-warning-border bg-warning-subtle px-1 py-0.5 text-[10px] font-medium tracking-wide text-warning-foreground">
-                  BUGÜN
-                </span>
-              )}
-              {formatContactMoment(at, now)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {s.next_contact_kind === 'kocluk' ? 'Koçluk' : 'Ders'}
-              {' · '}
-              {formatTimeLeft(at.getTime() - now.getTime())}
-            </p>
-          </div>
-        )
-      },
-    },
-    {
-      key: 'status',
-      header: 'Durum',
-      align: 'right',
-      render: (s) => (
-        <Badge variant={STATUS_VARIANT[s.computed.status]}>
-          {STATUS_LABEL[s.computed.status]}
-        </Badge>
-      ),
-    },
-  ]
+  // SATIRLAR SUNUCUDA HAZIRLANIR (§5'in kolon sırasıyla: Öğrenci |
+  // Teslim | Onay | Bildirim / Not | Sonraki Temas | Durum).
+  //
+  // Tablo artık istemci bileşeni (arama ve filtre için) ama eşikler,
+  // saat farkları ve bildirim sinyali BURADA hesaplanıyor. İstemciye
+  // ham zaman damgası geçilseydi, saati kaymış bir kullanıcıda "Bugün"
+  // etiketi başka bir güne düşerdi.
+  const tableRows: DashboardRow[] = rows.map((s) => {
+    const notice = noticeSignal({
+      checkInOverdueHours: s.status_update_due_at
+        ? Math.max(
+            0,
+            (now.getTime() - new Date(s.status_update_due_at).getTime()) / 3_600_000
+          )
+        : 0,
+      hasImportantNote: s.has_important_note === true,
+      hasCheckedIn: s.last_check_in_at !== null,
+    })
+
+    const contactAt = s.next_contact_at ? new Date(s.next_contact_at) : null
+
+    return {
+      id: s.student_id,
+      name: s.student_full_name ?? 'İsimsiz öğrenci',
+      meta: [s.grade_level, s.exam_type].filter(Boolean).join(' · ') || null,
+
+      weeklyTotal: Number(s.weekly_total ?? 0),
+      weeklySubmitted: Number(s.weekly_submitted ?? 0),
+      weeklyPercent: Number(s.weekly_submitted_percent ?? 0),
+
+      approvalPending: Number(s.approval_pending_count ?? 0),
+
+      noticeLabel: notice.label,
+      noticeKind: notice.kind,
+
+      contactLabel: contactAt ? formatContactMoment(contactAt, now) : null,
+      contactLeft: contactAt ? formatTimeLeft(contactAt.getTime() - now.getTime()) : null,
+      contactKindLabel: contactAt
+        ? s.next_contact_kind === 'kocluk'
+          ? 'Koçluk'
+          : 'Ders'
+        : null,
+      contactIsToday: contactAt !== null && localDateString(contactAt) === today,
+
+      status: s.computed.status,
+    }
+  })
 
   return (
     <div className="max-w-6xl space-y-8 p-6 md:p-8">
@@ -370,32 +280,35 @@ export default async function TeacherDashboard() {
           "öğrenci bazında anlamlı olmadığı için toplam kart gereksiz"
           diyor. Kalan üçü tek sayı yerine YAYILIMI gösteriyor —
           "27 çalışma · 4 öğrenci" bir sayıdan fazlasını söyler. */}
-      <MetricRow
+      <MetricTiles
+        className="xl:grid-cols-4"
         metrics={[
           {
             label: 'Öğrenciden Teslim Edilen',
             value: submittedWork,
-            subValue: 'çalışma',
+            icon: FileText,
             hint: `${submittedStudents} öğrenci · kontrol bekliyor`,
             href: '/teacher/tasks?filter=approval',
           },
           {
             label: 'Süresi Geçen',
             value: overdueWork,
-            subValue: 'çalışma',
             // OVERDUE_HINT ("Beklenenler içinde") burada KULLANILMIYOR:
             // o ipucu, yanında "Bekleyen" sayacı dururken gecikenlerin
             // onun alt kümesi olduğunu anlatmak için vardı. Bu şeritte
             // öyle bir komşu yok; ipucu bağlamsız kalıp kafa karıştırırdı.
             hint: `${overdueStudents} öğrenci · teslim tarihi geçen`,
             href: '/teacher/tasks?filter=overdue',
+            icon: Clock,
+            tone: overdueWork > 0 ? 'destructive' : 'default',
           },
           {
             label: 'Durum Bildirimi Bekleyen',
             value: checkInWaiting,
-            subValue: 'öğrenci',
-            hint: 'beklenen bildirimi geciken',
+            hint: 'öğrenci · beklenen bildirimi geciken',
             href: '/teacher/tasks?filter=checkin',
+            icon: Bell,
+            tone: checkInWaiting > 0 ? 'warning' : 'default',
           },
           {
             // HEDEFİ YOK ve bu bilinçli: belge bu kartı "sıradaki
@@ -404,8 +317,8 @@ export default async function TeacherDashboard() {
             // doğru — aşağıdaki tablo zaten sıradaki temasa göre sıralı
             // ve bugünküler en üstte.
             label: 'Yaklaşan Temaslar',
-            value: todaySessions.length,
-            subValue: todaySessions.length === 0 ? 'bugün yok' : 'bugün',
+            value: todaySessions.length === 0 ? 'Bugün yok' : `Bugün ${todaySessions.length}`,
+            icon: CalendarDays,
             hint:
               todaySessions.length > 0
                 ? `${todayLessons} ders · ${todayCoaching} koçluk`
@@ -415,8 +328,12 @@ export default async function TeacherDashboard() {
       />
 
       <Section
-        title="Öğrenci durumu"
-        description={rows.length ? `${rows.length} öğrenci` : undefined}
+        title="Öğrenci Takibi"
+        description={
+          rows.length
+            ? `Toplam ${rows.length} öğrenci · sonraki temas tarihine göre sıralanır.`
+            : undefined
+        }
         variant="card"
         action={
           <Button variant="ghost" size="sm" render={<Link href="/teacher/students" />}>
@@ -425,19 +342,7 @@ export default async function TeacherDashboard() {
           </Button>
         }
       >
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(s) => s.student_id}
-          rowHref={(s) => `/teacher/students/${s.student_id}`}
-          rowLabel={(s) => `${s.student_full_name} detayına git`}
-          empty={{
-            icon: Users,
-            title: 'Henüz öğrenci yok',
-            description: 'İlk öğrencini ekleyerek takip etmeye başla.',
-            action: { label: 'Öğrenci Ekle', href: '/teacher/students/new' },
-          }}
-        />
+        <StudentsTable rows={tableRows} />
       </Section>
     </div>
   )

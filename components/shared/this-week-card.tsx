@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, CalendarClock, CircleCheck, Hourglass, TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { ProgressRing, type RingTone } from '@/components/shared/progress-ring'
 import { PACE_BAND_LABEL, type PaceBand } from '@/lib/weekly-flow'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,14 @@ const BAND_VARIANT: Record<PaceBand, 'success' | 'warning' | 'destructive'> = {
   critical: 'destructive',
 }
 
+/** Halka rozetle AYNI bandı gösterir; iki ayrı eşik olmaz. */
+const BAND_RING_TONE: Record<PaceBand, RingTone> = {
+  good: 'success',
+  slightly_behind: 'warning',
+  clearly_behind: 'warning',
+  critical: 'destructive',
+}
+
 export function ThisWeekCard({
   studentId,
   view,
@@ -116,22 +125,31 @@ export function ThisWeekCard({
       <div className="mt-3 grid gap-4 md:grid-cols-3">
         {/* 1 — TESLİM. Ölçüt öğrencinin gönderimi; öğretmen onayı
             ilerlemeyi geriye düşürmez (kabul #8). */}
-        <div>
-          <p className="text-2xl font-semibold tabular-nums">
-            {view.submitted}
-            <span className="text-muted-foreground"> / {view.total}</span>
-            <span className="ml-2 text-base font-normal text-muted-foreground">
-              %{view.percent}
-            </span>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            çalışma teslim edildi · {remaining} çalışma kaldı
-          </p>
-          {view.pace && (
-            <Badge variant={BAND_VARIANT[view.pace.band]} className="mt-2">
-              {PACE_BAND_LABEL[view.pace.band]}
-            </Badge>
-          )}
+        <div className="flex items-center gap-4">
+          {/* HALKA ORANI BİR BAKIŞTA VERİR. Aynı sayılar metin olarak da
+              duruyor: renk ve yay tek başına anlam taşımaz, halka
+              `aria-hidden`. Tonu tempo bandından alıyor ki rozet ile
+              halka aynı şeyi söylesin — iki ayrı eşik olsaydı halka
+              yeşilken rozet "biraz geride" diyebilirdi. */}
+          <ProgressRing
+            value={view.percent}
+            size="md"
+            tone={view.pace ? BAND_RING_TONE[view.pace.band] : 'default'}
+          />
+          <div className="min-w-0">
+            <p className="text-2xl font-semibold tabular-nums">
+              {view.submitted}
+              <span className="text-muted-foreground"> / {view.total}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              çalışma teslim edildi · {remaining} çalışma kaldı
+            </p>
+            {view.pace && (
+              <Badge variant={BAND_VARIANT[view.pace.band]} className="mt-2">
+                {PACE_BAND_LABEL[view.pace.band]}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* 2 — TEMAS VE TEMPO. Belgenin "başlangıç temposu / güncel

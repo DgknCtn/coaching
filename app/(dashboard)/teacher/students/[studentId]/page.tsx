@@ -37,7 +37,7 @@ import { MetricTiles } from '@/components/shared/metric-tiles'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
-import { R5SummaryCards } from '@/components/shared/r5-summary-cards'
+import { ProtectionPoolCard, ResourcePlanCard } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
 import { resolvePlanScope } from '@/lib/plan-scope'
 import { calculatePlanPace } from '@/lib/plan-pace'
@@ -641,13 +641,25 @@ export default async function StudentDetailPage({
       {/* Akademik Akış artık AYRI ve GENİŞ bir blok: yedi ders iki
           sütunda okunuyor (§2). Eski üçlü kart şeridinde tek dersin
           "şu an / yaklaşan" ikilisine sıkışmıştı. */}
-      <AcademicFlowCard studentId={studentId} scopes={flowScopes} />
+      {/* AKADEMİK AKIŞ VE KAYNAK PLANI YAN YANA (R7/02 hedef ekran).
 
-      <R5SummaryCards
-        studentId={studentId}
-        resources={resourceSummary}
-        pool={poolSummary}
-      />
+          İkisi aynı soruyu iki eksenden cevaplıyor: akış "müfredatta
+          neredeyiz", kaynak planı "hedeflenen süreye göre neredeyiz".
+          Alt alta dizildiklerinde öğretmen birini görmek için diğerini
+          kaydırıp geçmek zorundaydı; karşılaştırma tam da yan yana
+          okununca oluyor.
+
+          Dar ekranda tek sütuna iner — kartların ikisi de kendi içinde
+          zaten iki sütunlu. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AcademicFlowCard studentId={studentId} scopes={flowScopes} />
+        <ResourcePlanCard studentId={studentId} resources={resourceSummary} />
+      </div>
+
+      {/* KORUMA HAVUZU ALT SIRADA: yukarıdaki ikisi "bu hafta ne
+          yapmalı" sorusuna, havuz "neyi unutuyoruz" sorusuna bakıyor.
+          İkincisi daha yavaş bir sinyal. */}
+      <ProtectionPoolCard studentId={studentId} pool={poolSummary} />
 
       {/* ÖĞRETMEN HAFIZASI — YALNIZ SİNYAL, İÇERİK YOK (R7/02 §4).
 

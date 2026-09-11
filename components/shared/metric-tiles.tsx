@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import type { LucideIcon } from 'lucide-react'
+import { ChevronRight, type LucideIcon } from 'lucide-react'
+import { ProgressRing } from '@/components/shared/progress-ring'
 import { cn } from '@/lib/utils'
 
 /**
@@ -57,54 +58,6 @@ const ICON_TONE: Record<MetricTone, string> = {
   destructive: 'bg-destructive-subtle text-destructive-foreground',
 }
 
-/** Halkanın dolu kısmının rengi. Zemin her tonda aynı nötr halkadır. */
-const RING_TONE: Record<MetricTone, string> = {
-  default: 'text-primary',
-  success: 'text-success',
-  info: 'text-info',
-  warning: 'text-warning',
-  destructive: 'text-destructive',
-}
-
-/**
- * Küçük halka gösterge.
- *
- * `stroke-dasharray` ile çizilir: çevre uzunluğunun oran kadarı boyanır.
- * Yüzde metni halkanın ortasında durur; ekran okuyucu için kartın etiketi
- * zaten yanında olduğundan halka `aria-hidden`dır.
- */
-function Ring({ value, tone }: { value: number; tone: MetricTone }) {
-  const safe = Math.max(0, Math.min(100, Math.round(value)))
-  const radius = 16
-  const circumference = 2 * Math.PI * radius
-
-  return (
-    <span aria-hidden className="relative flex size-11 shrink-0 items-center justify-center">
-      <svg viewBox="0 0 40 40" className="size-11 -rotate-90">
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          strokeWidth="4"
-          className="stroke-muted"
-        />
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray={`${(circumference * safe) / 100} ${circumference}`}
-          className={cn('stroke-current transition-[stroke-dasharray]', RING_TONE[tone])}
-        />
-      </svg>
-      <span className="absolute text-[10px] font-medium tabular-nums">%{safe}</span>
-    </span>
-  )
-}
-
 export function MetricTiles({
   metrics,
   className,
@@ -140,7 +93,7 @@ export function MetricTiles({
               )}
             </div>
             {hasRing ? (
-              <Ring value={metric.progress as number} tone={tone} />
+              <ProgressRing value={metric.progress as number} tone={tone} />
             ) : (
               Icon && (
               <span
@@ -170,6 +123,13 @@ export function MetricTiles({
             )}
           >
             {body}
+            {/* KARONUN TIKLANABİLİR OLDUĞU GÖRÜNÜR OLMALI. Renk ve
+                imleç değişimi yalnız fareyle gezenlere bir şey söylüyor;
+                dokunmatikte kartın hedefi olduğu hiç anlaşılmıyordu. */}
+            <ChevronRight
+              aria-hidden
+              className="size-4 shrink-0 self-center text-muted-foreground"
+            />
           </Link>
         ) : (
           <div key={metric.label} className={shell}>
