@@ -483,6 +483,44 @@ export async function addSubsectionAction(
   return { success: true }
 }
 
+/**
+ * Bölümü alt bölümlere ayırır (076).
+ *
+ * ESKİDEN İMKÂNSIZDI: arayüz "önce bölümün test sayısını sıfırlayın"
+ * diyordu ama test sayısı UI'da, zod'da ve SQL'de birden 1'in altına
+ * inemiyordu. Bu yüzden eski usulde girilmiş kitaplarda alt bölüm
+ * özelliği hiç kullanılamıyordu.
+ *
+ * RPC bölümün kendi testlerini kaldırır ve ilk alt bölümü AYNI İŞLEMDE
+ * kurar; testlerden biri ödevde veya tamamlama kaydında kullanılmışsa
+ * reddeder. Ara bir "0 testli bölüm" durumu hiç oluşmaz.
+ */
+export async function convertSectionToSubsectionsAction(
+  bookId: string,
+  sectionId: string,
+  title: string,
+  testStart: number,
+  testEnd: number
+) {
+  const parsed = subsectionSchema.safeParse({ sectionId, title, testStart, testEnd })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('convert_section_to_subsections', {
+    p_section_id: parsed.data.sectionId,
+    p_title: parsed.data.title,
+    p_test_start: parsed.data.testStart,
+    p_test_end: parsed.data.testEnd,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true }
+}
+
 export async function renameSubsectionAction(
   bookId: string,
   subsectionId: string,

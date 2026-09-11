@@ -66,6 +66,9 @@ export interface SectionRow {
   id: string
   title: string
   testCount: number
+  /** 076: bu testlerden kaçı ödevde verilmiş veya tamamlanmış. Alt
+   *  bölüme ayırma yıkıcı olduğu için düğmeyi kapatmakta kullanılır. */
+  usedTestCount: number
   /** R6-17 etiketleri. Artık DÜZENLENMEZ (R7-02 §6.4): yerini gerçek Parça
    *  nesnesi aldı. Eski kayıtlarda okunur ipucu olarak gösterilir ki
    *  öğretmen bilgiyi Parça'ya taşıyabilsin. */
@@ -804,6 +807,7 @@ function SectionRowForm({
           sectionId={section.id}
           subsections={section.subsections}
           sectionTestCount={section.testCount}
+          usedTestCount={section.usedTestCount}
           hasProgress={hasProgress}
         />
       )}

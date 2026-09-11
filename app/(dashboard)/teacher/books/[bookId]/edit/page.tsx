@@ -17,6 +17,10 @@ export default async function BookEditPage({
 
   const { data: book } = await supabase
     .from('books')
+    // 076: alt bölümlere ayırma yıkıcı bir işlem — bölümün testleri
+    // silinip yerine alt bölüm kurulur. Arayüzün düğmeyi kapatabilmesi
+    // için hangi testlerin ödevde/tamamlamada kullanıldığı gerekiyor;
+    // book_tests altındaki iki gömme bunun için.
     .select(`
       id, title, subject, publisher, exam_type, level_exam, edition_year,
       curriculum_program, resource_type, structure_kind,
@@ -25,7 +29,7 @@ export default async function BookEditPage({
       book_sections(
         id, title, order_index, group_label, theme_label, topic_id,
         part_id, page_start, page_end, parent_section_id, test_start, test_end,
-        book_tests(id),
+        book_tests(id, homework_items(id), test_completions(id)),
         book_section_topics(topic_id)
       )
     `)
@@ -125,6 +129,14 @@ export default async function BookEditPage({
       id: s.id,
       title: s.title,
       testCount: (s.book_tests ?? []).length,
+      // Kullanılmış test = ödevde verilmiş VEYA tamamlanmış. İkisi de
+      // sayılır: tamamlanmış bir testi silmek öğrencinin yaptığı işi,
+      // ödevdekini silmek verilmiş bir görevi yok ederdi.
+      usedTestCount: (s.book_tests ?? []).filter(
+        (t) =>
+          ((t as { homework_items?: unknown[] }).homework_items ?? []).length > 0 ||
+          ((t as { test_completions?: unknown[] }).test_completions ?? []).length > 0
+      ).length,
       subsections: (subsectionsByParent.get(s.id) ?? []).map((sub) => ({
         id: sub.id,
         title: sub.title,
