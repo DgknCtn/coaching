@@ -771,3 +771,23 @@ Sonuç, şemanın garanti ettiğinin tam tersi: Eylül'de yapılmayan ders için
 **"Telafi bekliyor" ile "telafi edilmeyecek" aynı şeydi.** §7-C dört sonuç tanımlıyor ve ikisi aynı `yapilmadi` durumuna düşüyordu; oysa ilki ayı tamamlanmamış bırakır, ikincisi ayı 3/4 olarak **kapatır**. Ayrım öğretmenin kararıdır ve veriden türetilemez — telafi kaydı henüz açılmamışken "bekliyor mu, vazgeçildi mi" sorusunun cevabı yalnız öğretmende. Bu yüzden yeni bir sütun (`makeup_decision`) ve NULL'ın kendisi bir durum: "karar verilmedi"yi 'pending' ile karıştırmak, öğretmenin vermediği bir sözü kaydetmek olurdu.
 
 **Hizmet bazlı sayaçlar ve ay arşivi geldi.** §3 no.3 "Grup 4/5", "Koçluk 3/4" diyor — tek bir toplam, iki ayrı hizmet hattı olan öğrencide hangi hattın eksik kaldığını gizliyordu. Geçmiş aylar için de ileri/geri oklarından başka yol yoktu; bir yıl öncesine bakmak on iki tıklamaydı. Arşiv listesi doğrudan o aya atlıyor ve yanında ayın özeti duruyor.
+
+### R7 / Site Testi 04 — grup oturumu fan-out'u hiç yazılmamıştı (083)
+
+**Tablo vardı, hiçbir şey yazmıyordu.** 074 `group_sessions` tablosunu ve `service_sessions.group_session_id` sütununu açmış. Ama `generate_service_sessions` grup oturumu üretmiyor (öğrenci başına satır açıyor, bağ NULL kalıyor) ve grup oturumunu tek noktadan işaretleyip gruba yansıtan bir RPC hiç yazılmamış.
+
+Sonuç: on kişilik bir grup dersini "Yapıldı" işaretlemek için öğretmenin **on ayrı öğrenci ekranı** açması gerekiyordu. Belgenin kabul maddesi bunu açıkça şart koşuyor — *"Grup oturumu tek işlemle aktif grup öğrencilerine yansıyor"* — ve bir öğrenci unutulduğunda aylık sayacı sessizce eksik kalıyordu.
+
+**Fan-out'un iki kuralı var ve ikisi de sessizce bozulabilir.** İkisi de teste bağlandı:
+
+*Pasif hizmet güncellenmez.* Gruptan ayrılmış bir öğrencinin geçmiş oturumu grupla birlikte değişirse §5'in *"geçmiş kayıtları geriye dönük değiştirmez"* kuralı bozulur — öğrenci o tarihte artık grupta değildi.
+
+*"Katılmadı" istisnası ezilmez.* Öğretmen önce "Ali katılmadı" deyip sonra grubu "Yapıldı" işaretlerse istisna korunur (`attended IS DISTINCT FROM FALSE`). Aksi hâlde işlem **sırası** veriyi belirlerdi.
+
+**Fan-out kaç öğrenciye yansıdığını söylüyor.** Sessiz bir fan-out, hiç yansımadığını da sessiz bırakırdı; grup boşsa ya da bütün hizmetler pasifse öğretmen bunu bilmeli.
+
+**"Katılmadı" neden ayrı bir alan:** grup dersi YAPILDI ama bir öğrenci gelmedi — bu, dersin yapılmadığı anlamına gelmez. Oturumu "Yapılmadı" işaretlemek öğretmenin verdiği emeği yok sayardı. 075'teki aylık sayaç bu istisnayı zaten hesaba katıyordu (`COALESCE(attended, TRUE)`); eksik olan yalnız onu girmenin yoluydu. Birebir oturumda ise RPC bunu reddediyor: orada doğru kayıt "Yapılmadı"dır ve telafi kararı ona bağlanır.
+
+**Grup oluşturma arayüze geldi.** Grup şimdiye kadar yalnız seçilebiliyordu; grup hizmeti tanımlamak isteyen öğretmen boş bir açılır listeye bakıyor ve devam edemiyordu. Form ayrı bir ekrana taşınmadı — ihtiyaç tam hizmet tanımlarken doğuyor.
+
+**Geriye dönük bağ:** 083 öncesinde üretilmiş satırlarda `group_session_id` NULL kalmıştı ve fan-out onları göremezdi; oturum üretimi artık o satırları da bağlıyor.

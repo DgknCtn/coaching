@@ -523,3 +523,113 @@ export async function setMakeupDecisionAction(
   revalidate(studentId)
   return { success: true }
 }
+
+/**
+ * Grup oluşturur.
+ *
+ * Grup şimdiye kadar yalnız SEÇİLEBİLİYORDU; oluşturmanın arayüzde
+ * hiçbir yolu yoktu. Grup hizmeti tanımlamak isteyen öğretmen boş bir
+ * açılır listeye bakıyordu.
+ */
+export async function createStudentGroupAction(studentId: string, name: string, subject?: string) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      name: z.string().trim().min(1, 'Grup adı gerekli.').max(120),
+      subject: z.string().trim().max(80).optional().or(z.literal('')),
+    })
+    .safeParse({ studentId, name, subject })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase.rpc('create_student_group', {
+    p_workspace_id: workspaceId,
+    p_name: parsed.data.name,
+    p_subject: parsed.data.subject || null,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidate(studentId)
+  return { success: true, groupId: data as string }
+}
+
+/**
+ * Grup oturumunu TEK İŞLEMLE sonuçlandırır (§9).
+ *
+ * Fan-out RPC'nin içinde: yalnız aktif hizmeti olan öğrencilere yansır
+ * ve "Katılmadı" istisnası ezilmez. Karar burada tekrarlanmıyor —
+ * arayüzde ikinci bir kural yazılsaydı iki taraf ayrışırdı.
+ */
+export async function setGroupSessionOutcomeAction(
+  studentId: string,
+  groupSessionId: string,
+  status: 'yapildi' | 'yapilmadi' | 'iptal' | 'planlandi'
+) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      groupSessionId: uuidSchema,
+      status: z.enum(['yapildi', 'yapilmadi', 'iptal', 'planlandi']),
+    })
+    .safeParse({ studentId, groupSessionId, status })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase.rpc('set_group_session_outcome', {
+    p_group_session_id: parsed.data.groupSessionId,
+    p_status: parsed.data.status,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'session.outcome',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { groupSessionId: parsed.data.groupSessionId, status: parsed.data.status },
+  })
+
+  revalidate(studentId)
+  // Kaç öğrenciye yansıdığı DÖNÜYOR: sessiz bir fan-out, hiç
+  // yansımadığını da sessiz bırakırdı.
+  return { success: true, affected: Number(data ?? 0) }
+}
+
+/**
+ * Öğrenci bazında "Katılmadı" istisnası (§9).
+ *
+ * Grup dersi YAPILDI ama bu öğrenci gelmedi — oturumu "Yapılmadı"
+ * işaretlemek yanlış olurdu: ders gerçekleşti, eksik olan tek
+ * öğrencinin katılımı. Aylık sayaç bu istisnayı zaten hesaba katıyor.
+ */
+export async function setSessionAttendanceAction(
+  studentId: string,
+  sessionId: string,
+  attended: boolean
+) {
+  const parsed = z
+    .object({ studentId: uuidSchema, sessionId: uuidSchema, attended: z.boolean() })
+    .safeParse({ studentId, sessionId, attended })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('set_session_attendance', {
+    p_session_id: parsed.data.sessionId,
+    p_attended: parsed.data.attended,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'session.outcome',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { sessionId: parsed.data.sessionId, attended: parsed.data.attended },
+  })
+
+  revalidate(studentId)
+  return { success: true }
+}

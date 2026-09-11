@@ -122,7 +122,7 @@ export default async function StudentSessionsPage({
       supabase
         .from('student_service_session_view')
         .select(
-          'id, service_id, planned_at, actual_at, duration_minutes, status, attended, note, makeup_of_session_id, makeup_decision, origin_planned_at'
+          'id, service_id, group_session_id, planned_at, actual_at, duration_minutes, status, attended, note, makeup_of_session_id, makeup_decision, origin_planned_at'
         )
         .eq('student_id', studentId)
         .eq('workspace_id', workspaceId)
@@ -181,6 +181,7 @@ export default async function StudentSessionsPage({
     status: r.status as SessionRow['status'],
     attended: (r.attended as boolean | null) ?? null,
     note: (r.note as string | null) ?? null,
+    groupSessionId: (r.group_session_id as string | null) ?? null,
     isMakeup: r.makeup_of_session_id !== null,
     makeupDecision: (r.makeup_decision as 'pending' | 'waived' | null) ?? null,
     originPlannedAt: (r.origin_planned_at as string | null) ?? null,

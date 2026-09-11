@@ -28,9 +28,12 @@ import {
 import {
   createServiceAction,
   createMakeupSessionAction,
+  createStudentGroupAction,
   moveActiveFlowDueAction,
   rescheduleSessionAction,
+  setGroupSessionOutcomeAction,
   setMakeupDecisionAction,
+  setSessionAttendanceAction,
   setServiceStatusAction,
   setSessionOutcomeAction,
 } from './actions'
@@ -60,6 +63,8 @@ export interface SessionRow {
   status: SessionStatus
   attended: boolean | null
   note: string | null
+  /** Grup oturumuysa ortak kaydın kimliği; birebirde null. */
+  groupSessionId: string | null
   isMakeup: boolean
   /**
    * "Yapılmadı" sonrası telafi kararı (§7-C).
@@ -148,6 +153,33 @@ export function SessionsClient({
         return
       }
       toast.success(ok)
+      router.refresh()
+    })
+  }
+
+  /**
+   * Grup oturumunu tek işlemle sonuçlandırır (§9).
+   *
+   * Kaç öğrenciye yansıdığı SÖYLENİR: sessiz bir fan-out, hiç
+   * yansımadığını da sessiz bırakırdı — grup boşsa ya da bütün
+   * hizmetler pasifse öğretmen bunu bilmeli.
+   */
+  function handleGroupOutcome(
+    groupSessionId: string,
+    status: 'yapildi' | 'yapilmadi' | 'iptal' | 'planlandi'
+  ) {
+    startTransition(async () => {
+      const result = await setGroupSessionOutcomeAction(studentId, groupSessionId, status)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+      const n = result?.affected ?? 0
+      toast.success(
+        n > 0
+          ? `Grup oturumu güncellendi · ${n} öğrenciye yansıdı.`
+          : 'Grup oturumu güncellendi ama hiçbir öğrenciye yansımadı (aktif hizmet yok).'
+      )
       router.refresh()
     })
   }
@@ -386,18 +418,30 @@ export function SessionsClient({
                       <span className="text-xs font-medium text-warning-foreground">
                         Durum güncellenmedi
                       </span>
+                      {/* GRUP OTURUMUNDA "Yapıldı" TEK İŞLEM (§9).
+
+                          Grup dersinde tek bir gerçek vardır; on öğrenci
+                          için on ayrı "ders yapıldı mı" kararı olamaz.
+                          Bu düğme gruptaki bütün aktif öğrencilere
+                          yansır — "Katılmadı" istisnası olanlar hariç.
+                          Önceden her öğrenci ekranı tek tek açılıyor ve
+                          biri unutulduğunda aylık sayacı sessizce eksik
+                          kalıyordu. */}
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={isPending}
                         onClick={() =>
-                          run(
-                            () => setSessionOutcomeAction(studentId, session.id, 'yapildi'),
-                            'Görüşme yapıldı olarak işaretlendi.'
-                          )
+                          session.groupSessionId
+                            ? handleGroupOutcome(session.groupSessionId, 'yapildi')
+                            : run(
+                                () =>
+                                  setSessionOutcomeAction(studentId, session.id, 'yapildi'),
+                                'Görüşme yapıldı olarak işaretlendi.'
+                              )
                         }
                       >
-                        Yapıldı
+                        {session.groupSessionId ? 'Yapıldı (grup)' : 'Yapıldı'}
                       </Button>
                       <Button
                         size="sm"
@@ -488,6 +532,50 @@ export function SessionsClient({
                             />
                           )}
                         </>
+                      )}
+
+                      {/* KATILIM İSTİSNASI — yalnız grup oturumunda (§9).
+
+                          Grup dersi YAPILDI ama bu öğrenci gelmedi.
+                          Oturumu "Yapılmadı" işaretlemek yanlış olurdu:
+                          ders gerçekleşti, öğretmen emeğini verdi; eksik
+                          olan tek öğrencinin katılımı. Aylık sayaç bu
+                          istisnayı zaten hesaba katıyor. */}
+                      {session.groupSessionId && session.status === 'yapildi' && (
+                        session.attended === false ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground">Katılmadı</span>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              disabled={isPending}
+                              onClick={() =>
+                                run(
+                                  () =>
+                                    setSessionAttendanceAction(studentId, session.id, true),
+                                  'Katılım kaydı geri alındı.'
+                                )
+                              }
+                            >
+                              Geri al
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            disabled={isPending}
+                            onClick={() =>
+                              run(
+                                () =>
+                                  setSessionAttendanceAction(studentId, session.id, false),
+                                'Katılmadı olarak işaretlendi.'
+                              )
+                            }
+                          >
+                            Katılmadı
+                          </Button>
+                        )
                       )}
 
                       {/* Telafi satırı HANGİ AYIN telafisi olduğunu yazar:
@@ -634,6 +722,8 @@ function ServiceForm({
   const [participation, setParticipation] = useState<'birebir' | 'grup'>('birebir')
   const [medium, setMedium] = useState<'online' | 'yuz_yuze'>('online')
   const [groupId, setGroupId] = useState('')
+  const [newGroupOpen, setNewGroupOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
   const [weekday, setWeekday] = useState('3')
   const [startTime, setStartTime] = useState('20:00')
   const [duration, setDuration] = useState('60')
@@ -679,10 +769,52 @@ function ServiceForm({
               </option>
             ))}
           </NativeSelect>
-          {groups.length === 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Henüz grup yok. Grup hizmeti için önce bir grup tanımlanmalı.
-            </p>
+          {/* GRUP OLUŞTURMA BURADA (§5 no.4).
+
+              Grup şimdiye kadar yalnız SEÇİLEBİLİYORDU; oluşturmanın
+              arayüzde hiçbir yolu yoktu. Grup hizmeti tanımlamak isteyen
+              öğretmen boş bir açılır listeye bakıyor ve devam
+              edemiyordu. Form ayrı bir ekrana taşınmadı: ihtiyaç tam
+              burada doğuyor. */}
+          {newGroupOpen ? (
+            <div className="mt-2 flex items-end gap-2">
+              <div className="flex-1">
+                <Label htmlFor="newGroup" className="text-xs">
+                  Yeni grup adı
+                </Label>
+                <Input
+                  id="newGroup"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="Örn. 12. Sınıf AYT Matematik Grubu"
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={disabled || newGroupName.trim().length === 0}
+                onClick={() =>
+                  run(
+                    () => createStudentGroupAction(studentId, newGroupName.trim()),
+                    'Grup oluşturuldu.'
+                  )
+                }
+              >
+                Ekle
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setNewGroupOpen(false)}>
+                Vazgeç
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="mt-1 -ml-1"
+              onClick={() => setNewGroupOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              Yeni grup oluştur
+            </Button>
           )}
         </Field>
       )}
