@@ -715,3 +715,17 @@ Düzeltme **078**'de `CREATE OR REPLACE` ile geldi; 077 metnine dokunulmadı —
 **"Bu hafta tamamlanan" kartı kaldırıldı** (*"öğrenci bazında anlamlı olmadığı için toplam kart gereksiz"*), yerine **Yaklaşan Temaslar** geldi. Bu kartın HEDEFİ YOK ve bu bilinçli: belge onu "sıradaki ders/koçluk listesi"ne bağlamak istiyor ama öyle bir ekran henüz yok. Kırık bir bağlantı koymaktansa bağlantısız bırakmak doğru — tablo zaten sıradaki temasa göre sıralı.
 
 **Bugünkü temas sayısı öğrenci başına "sıradaki" temastan türetilmiyor:** bir öğrencinin aynı gün iki görüşmesi olabilir ve yalnız biri "sıradaki"dir. Ayrı sorgu geniş bir pencere çekip günü YEREL takvimle eliyor — sabit bir +03:00 varsaymamak için.
+
+### R7 / Site Testi 02 — üst şerit kalktı; ve "zamanında teslim" onay saatini ölçüyordu (081)
+
+**Global üst şerit öğrenci rotalarında çizilmiyor.** Belgenin "SİL" maddesi: *"LGS / YKS / Sınırsız alanını ayrı bar olarak kaldır. Gerekli rozetleri öğrenci başlığı hizasında kompakt göster."* Rozetler kaybolmadı, yer değiştirdi; kazanılan satır "Bu Hafta" bloğunu ekranın ilk görünümüne çıkarıyor. Rozet bileşeni (`ExamBadges`) ve lisans hesabı (`licenseBadgeProps`) tek kaynağa alındı — kopyalansalardı aynı kullanıcı iki ekranda iki farklı plan durumu görebilirdi. Tema düğmesi de başlığa taşındı: bar hiç çizilmediği için orada bırakılsa bu rotalarda erişilemez olurdu.
+
+**"Zamanında teslim" öğretmenin onay saatini ölçüyormuş.** 077'nin `close_weekly_flow` fonksiyonu fotoğrafı `test_completions.completed_at` üzerinden çekiyor ve yorumunda bunu *"öğrencinin teslim ettiği an"* diye tarif ediyordu. Tarif yanlıştı: 014'e bakıldığında o satır YALNIZCA `approve_homework_item` içinde açılıyor — yani öğretmen onayladığında.
+
+Sonuç, belgenin tam olarak yasakladığı şeydi: Cumartesi her şeyi gönderen öğrenci, öğretmen Pazartesi onayladığında **geç teslim** olarak kaydediliyordu. Kabul #8 ve §6 net — *"Öğrenci 'onaya gönderdi' ise teslim sayılır. Öğretmen onayı öğrencinin ilerlemesini geriye düşürmez."* Üstelik fotoğraf kalıcı (kabul #9), yani hata sonradan düzeltilemiyordu bile.
+
+Aynı hata Haftalık Akış ekranında da vardı: teslim sayısı, tempo bandı, günlük dağılım ve "son hareket" — hepsi onay anından besleniyordu. Onay bekleyen bir öğrenci ekranda "hiç teslim etmemiş" görünüyor ve tempo kritiğe düşüyordu.
+
+**Ölçüt artık `homework_items.submitted_at`.** Onay bu sütunu koruyor, iade ise NULL'lıyor — belgenin iki kuralını da tek sütun karşılıyor: onay ilerlemeyi geriye düşürmez, iade edilen iş yeniden gönderilene kadar sayılmaz. `COALESCE(submitted_at, completed_at)` bilinçli olarak kullanılmadı: onay anına düşen her yedek, düzeltilen hatayı sessizce geri getirirdi.
+
+**Hata Dashboard ile Haftalık Akış'ı ayrıştırıyordu.** 080'deki `student_active_flow_load_view` teslimi zaten doğru ölçüyor (`status IN ('pending_approval','completed')`). Yani bu düzeltmeden önce aynı öğrenci için iki ekran iki farklı sayı gösteriyordu — ve fark tam olarak öğretmenin onay kuyruğu kadardı.

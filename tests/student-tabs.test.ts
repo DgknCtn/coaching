@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   activeStudentTab,
+  isStudentWorkbenchPath,
   studentOverviewTabs,
   studentScreens,
   studentTabs,
@@ -250,6 +251,32 @@ describe('R7/03 ad değişiklikleri', () => {
     for (const panel of studentOverviewTabs) {
       const label = byHref.get(`${BASE}?sekme=${panel.slug}`)
       expect(label, `?sekme=${panel.slug} şeritte bulunamadı`).toBe(panel.label)
+    }
+  })
+})
+
+describe('isStudentWorkbenchPath — üst şerit nerede çizilmez', () => {
+  it('öğrenci çalışma masası rotalarında true', () => {
+    expect(isStudentWorkbenchPath(BASE)).toBe(true)
+    expect(isStudentWorkbenchPath(`${BASE}/haftalik-akis`)).toBe(true)
+    expect(isStudentWorkbenchPath(`${BASE}/homework/new`)).toBe(true)
+  })
+
+  it('öğrenci LİSTESİ çalışma masası değildir', () => {
+    // Başlık hizası yok; rozetleri koyacak yer de yok.
+    expect(isStudentWorkbenchPath('/teacher/students')).toBe(false)
+  })
+
+  it('yeni öğrenci formu çalışma masası değildir', () => {
+    // ASIL TUZAK: "/teacher/students/new" de bir alt segment taşıyor.
+    // Kural yalnız segment varlığına baksaydı bu form da şeridi
+    // kaybederdi.
+    expect(isStudentWorkbenchPath('/teacher/students/new')).toBe(false)
+  })
+
+  it('diğer öğretmen rotalarında false', () => {
+    for (const p of ['/teacher', '/teacher/books', '/teacher/finans', '/admin']) {
+      expect(isStudentWorkbenchPath(p), p).toBe(false)
     }
   })
 })

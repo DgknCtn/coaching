@@ -1,7 +1,9 @@
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
+import { licenseBadgeProps } from '@/lib/plans'
 import { StudentTabs } from './student-tabs'
+import { StudentHeaderBadges } from './student-header-badges'
 
 /**
  * ÖĞRENCİ ÇALIŞMA MASASI (067).
@@ -38,7 +40,7 @@ export default async function StudentWorkbenchLayout({
   params: Promise<{ studentId: string }>
 }) {
   const { studentId } = await params
-  const { supabase, workspaceId } = await getTeacherContext()
+  const { supabase, workspaceId, usage } = await getTeacherContext()
 
   const { data: student } = await supabase
     .from('students')
@@ -70,6 +72,12 @@ export default async function StudentWorkbenchLayout({
               Arşivlendi
             </span>
           )}
+          {/* R7/02: global üst şerit bu rotalarda çizilmiyor; rozetler
+              öğrenci adının hizasına geçti. */}
+          <StudentHeaderBadges
+            licenseHref="/teacher/ayarlar"
+            {...licenseBadgeProps(usage ?? null)}
+          />
         </div>
         <div className="print:hidden">
           {/* Suspense: StudentTabs useSearchParams okuyor (aktif sekme

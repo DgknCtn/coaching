@@ -1,6 +1,6 @@
 import { AppSidebar } from '@/components/shared/app-sidebar'
 import { TopBar } from '@/components/shared/top-bar'
-import { licenseState, LICENSE_STATE_LABEL } from '@/lib/plans'
+import { licenseBadgeProps } from '@/lib/plans'
 import { BRAND } from '@/lib/brand'
 import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getTeacherContext } from '@/lib/workspace'
@@ -22,31 +22,11 @@ export default async function TeacherLayout({ children }: { children: React.Reac
 
   // ÜST BARDAKİ SÜRE ROZETİ İÇİN.
   //
-  // Sunucu yalnız BİTİŞ ANINI veriyor; kalan süreyi üst bar tarayıcıda
-  // hesaplıyor. Burada "kaç gün kaldı" hesaplamak, sayfa önbelleğe
-  // alındığında donmuş bir rakam basmak olurdu.
-  //
-  // Sınırsız çalışma alanında geri sayım çizilmez: dolmayan bir sayaç,
-  // olmayan bir son tarihi varmış gibi gösterir. Ama rozetin tamamen
-  // kaybolması da yanlıştı — kullanıcı plan durumunu hiçbir yerden
-  // okuyamıyordu ve "sayaç neden yok" sorusunun cevabı ekranda yoktu.
-  // Tarih yoksa geri sayım yerine DURUM yazılır.
-  const state = usage ? licenseState(usage) : null
-  const licenseKind = state === 'licensed' || state === 'license_expired' ? 'licensed' : 'trial'
-  const licenseEndsAt =
-    state === null || state === 'unlimited'
-      ? null
-      : licenseKind === 'trial'
-        ? usage?.trialEndsAt
-        : usage?.licenseEndsAt
-
-  const licenseFallbackLabel = licenseEndsAt
-    ? null
-    : state === 'unlimited'
-      ? 'Sınırsız'
-      : state
-        ? LICENSE_STATE_LABEL[state]
-        : 'Plan bilgisi yok'
+  // Hesap lib/plans.ts'te (licenseBadgeProps): aynı rozet öğrenci
+  // çalışma masasında da başlık hizasında çiziliyor ve iki layout'ta
+  // kopyalansaydı biri güncellenip diğeri unutulduğunda aynı kullanıcı
+  // iki ekranda iki farklı plan durumu görürdü.
+  const { licenseKind, licenseEndsAt, licenseFallbackLabel } = licenseBadgeProps(usage ?? null)
 
   const students = (studentRows ?? []).map((s) => ({
     id: s.student_id as string,

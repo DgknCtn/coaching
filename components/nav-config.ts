@@ -287,6 +287,23 @@ export function studentTabs(studentId: string): LinkTab[] {
 }
 
 /**
+ * Bu adres ÖĞRENCİ ÇALIŞMA MASASI mı?
+ *
+ * R7/02'nin "SİL" maddesi için: *"Global üst şerit — LGS / YKS / Sınırsız
+ * alanını ayrı bar olarak kaldır. Gerekli rozetleri öğrenci başlığı
+ * hizasında kompakt göster."* Üst bar bu rotalarda kendini çizmiyor;
+ * rozetler öğrenci başlığının yanına geçiyor.
+ *
+ * `/teacher/students` (liste) ve `/teacher/students/new` DAHİL DEĞİL:
+ * ikisinin de öğrenci başlığı yoktur, rozetleri koyacak bir hiza da.
+ * Bu yüzden kural "bir alt segment var ve o 'new' değil" biçiminde.
+ */
+export function isStudentWorkbenchPath(pathname: string): boolean {
+  const m = pathname.match(/^\/teacher\/students\/([^/]+)/)
+  return m !== null && m[1] !== 'new'
+}
+
+/**
  * Adres çubuğundaki konumdan aktif ÜST sekmeyi bulur.
  *
  * Saf fonksiyon ve burada duruyor ki test edilebilsin: kural iki farklı

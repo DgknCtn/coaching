@@ -234,3 +234,47 @@ export const BLOCKED_MESSAGE: Record<
     other: 'Öğretmeninizin çalışma alanı arşivlendi.',
   },
 }
+
+/**
+ * Süre rozetinin sunucu tarafındaki girdileri.
+ *
+ * NEDEN AYRI FONKSİYON: aynı altı satır artık İKİ layout'ta gerekiyor —
+ * öğretmen kabuğu üst barda, öğrenci çalışma masası ise başlık hizasında
+ * gösteriyor (R7/02: *"Global üst şerit kaldırılır ... gerekli rozetleri
+ * öğrenci başlığı hizasında kompakt göster"*). Kopyalansaydı biri
+ * güncellenip diğeri unutulduğunda aynı kullanıcı iki ekranda iki farklı
+ * plan durumu görürdü.
+ *
+ * KALAN SÜRE BURADA HESAPLANMAZ, yalnız BİTİŞ ANI döner: sayfa önbelleğe
+ * alındığında donmuş bir rakam basmamak için geri sayım istemcide yapılır.
+ */
+export function licenseBadgeProps(usage: WorkspaceUsage | null): {
+  licenseKind: 'trial' | 'licensed'
+  licenseEndsAt: string | null
+  licenseFallbackLabel: string | null
+} {
+  const state = usage ? licenseState(usage) : null
+  const licenseKind: 'trial' | 'licensed' =
+    state === 'licensed' || state === 'license_expired' ? 'licensed' : 'trial'
+
+  // Sınırsız çalışma alanında geri sayım çizilmez: dolmayan bir sayaç,
+  // olmayan bir son tarihi varmış gibi gösterir.
+  const licenseEndsAt =
+    state === null || state === 'unlimited'
+      ? null
+      : licenseKind === 'trial'
+        ? (usage?.trialEndsAt ?? null)
+        : (usage?.licenseEndsAt ?? null)
+
+  // Rozetin tamamen kaybolması da yanlıştı: kullanıcı plan durumunu
+  // hiçbir yerden okuyamıyordu. Tarih yoksa geri sayım yerine DURUM.
+  const licenseFallbackLabel = licenseEndsAt
+    ? null
+    : state === 'unlimited'
+      ? 'Sınırsız'
+      : state
+        ? LICENSE_STATE_LABEL[state]
+        : 'Plan bilgisi yok'
+
+  return { licenseKind, licenseEndsAt, licenseFallbackLabel }
+}

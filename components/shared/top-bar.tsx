@@ -1,98 +1,39 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { GraduationCap, Target, Timer } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
-import { countdown, formatCountdown, nextExam, type NextExam } from '@/lib/exam-dates'
-import { cn } from '@/lib/utils'
+import { ExamBadges, type LicenseBadgeProps } from '@/components/shared/exam-badges'
+import { isStudentWorkbenchPath } from '@/components/nav-config'
 
 // ÜST BAR — sınav geri sayımları, kalan plan süresi, tema düğmesi.
 //
 // ============================================================
-// NEDEN İSTEMCİDE HESAPLANIYOR
+// ÖĞRENCİ ÇALIŞMA MASASINDA ÇİZİLMEZ (R7/02)
 //
-// Geri sayım sunucuda render edilemez: sayfa önbelleğe alındığı anda
-// donar ve kullanıcı saatlerce eskimiş bir rakama bakar. Sunucudan
-// yalnız BİTİŞ ANI geliyor (deneme/lisans bitişi ISO metin olarak);
-// kalan süre burada, tarayıcının saatiyle hesaplanıyor.
+// Belgenin "SİL" maddesi: *"Global üst şerit — LGS / YKS / Sınırsız
+// alanını ayrı bar olarak kaldır. Gerekli rozetleri öğrenci başlığı
+// hizasında kompakt göster."* Gerekçesi de yazılı: şerit dikey alan
+// tüketiyor ve Genel Bakış'ın ilk bloğunu ekrandan aşağı itiyordu.
 //
-// HİDRASYON: ilk render'da hiçbir sayı basılmaz. Sunucunun ürettiği
-// HTML ile istemcinin ilk render'ı aynı olmak zorunda ve "kalan süre"
-// tanımı gereği ikisinde farklı. Bu yüzden sayılar `mounted` olduktan
-// sonra görünür; yer tutucu aynı yüksekliği koruduğu için düzen
-// zıplamaz.
+// Rozetler kaybolmuyor, YER DEĞİŞTİRİYOR: öğrenci layout'u aynı
+// `ExamBadges` bileşenini başlık hizasında çiziyor. Tema düğmesi de
+// oraya taşındı — bu rotalarda bar hiç render edilmediği için burada
+// bırakılsaydı erişilemez olurdu.
 //
-// DAKİKADA BİR: saniye göstermiyoruz, dolayısıyla saniyede bir
-// güncellemek boşuna iş. Sekme arka plandayken tarayıcı zaten
-// zamanlayıcıyı kısıyor; sekmeye dönüldüğünde ilk tik'e kadar en fazla
-// bir dakika eskimiş bir rakam görünür — gün/saat ölçeğinde fark etmez.
+// NEDEN İSTEMCİDE: rotayı bilmek için `usePathname` gerekiyor ve geri
+// sayım zaten tarayıcı saatiyle hesaplanıyor (bkz. exam-badges.tsx).
 // ============================================================
 
 const TICK_MS = 30_000
-
-interface TopBarProps {
-  /**
-   * Deneme ya da lisans bitiş anı (ISO). Yoksa süre rozeti çizilmez —
-   * sınırsız çalışma alanında dolmayan bir sayaç göstermek, olmayan bir
-   * son tarihi varmış gibi gösterir.
-   */
-  licenseEndsAt?: string | null
-  /** 'trial' → "Deneme", 'licensed' → "Plan". Rozet metnini belirler. */
-  licenseKind?: 'trial' | 'licensed'
-  /** Süre rozeti tıklanınca gidilecek yer. Verilmezse rozet bağlantı değil. */
-  licenseHref?: string
-  /**
-   * Bitiş tarihi OLMADIĞINDA rozette yazacak metin ("Sınırsız",
-   * "Plan bilgisi yok"). Verilmezse rozet hiç çizilmez.
-   *
-   * NEDEN VAR: rozet önceden bitiş tarihi yoksa sessizce kayboluyordu.
-   * Kullanıcı için "sayaç yok", geliştirici için hiçbir iz yok — plan
-   * durumunu öğrenmenin ekranda hiçbir yolu kalmıyordu.
-   */
-  licenseFallbackLabel?: string | null
-}
-
-function ExamChip({ exam, now }: { exam: NextExam; now: Date }) {
-  const c = countdown(exam.date, now)
-  const Icon = exam.id === 'lgs' ? Target : GraduationCap
-
-  // Son 30 gün vurgulanır: bu eşikte geri sayım bir bilgi olmaktan çıkıp
-  // günlük planlamayı belirleyen şeye dönüşür.
-  const urgent = !c.passed && c.days <= 30
-
-  return (
-    <span
-      title={`${exam.fullName}${exam.estimated ? ' (tahmini tarih)' : ''} · ${exam.date.toLocaleDateString(
-        'tr-TR',
-        { day: 'numeric', month: 'long', year: 'numeric' }
-      )}`}
-      className={cn(
-        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
-        urgent ? 'border-warning-border bg-warning-subtle' : 'border-border bg-muted/40'
-      )}
-    >
-      <Icon
-        className={cn('size-3.5 shrink-0', urgent ? 'text-warning-foreground' : 'text-muted-foreground')}
-        aria-hidden
-      />
-      <span className="font-medium">{exam.label}</span>
-      <span className={cn('tabular-nums', urgent ? 'text-warning-foreground' : 'text-muted-foreground')}>
-        {/* "~" tahmini tarihi işaretler: kesin olmayanı kesin göstermek,
-            geri sayımı hiç göstermemekten kötüdür. */}
-        {exam.estimated && '~'}
-        {formatCountdown(c)}
-      </span>
-    </span>
-  )
-}
 
 export function TopBar({
   licenseEndsAt,
   licenseKind = 'trial',
   licenseHref,
   licenseFallbackLabel,
-}: TopBarProps) {
+}: LicenseBadgeProps) {
+  const pathname = usePathname()
   const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -101,40 +42,7 @@ export function TopBar({
     return () => clearInterval(id)
   }, [])
 
-  const lgs = now ? nextExam('lgs', now) : null
-  const yks = now ? nextExam('yks', now) : null
-
-  const license = now && licenseEndsAt ? countdown(new Date(licenseEndsAt), now) : null
-
-  // Bitiş tarihi yoksa geri sayım yerine DURUM yazılır. Rozetin tamamen
-  // kaybolması, plan bilgisini ekrandan silmek anlamına geliyordu.
-  const licenseBadge = (license || licenseFallbackLabel) && (
-    <span
-      className={cn(
-        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
-        !license
-          ? 'border-border bg-muted/40 text-muted-foreground'
-          : license.passed || license.days < 1
-            ? 'border-destructive-border bg-destructive-subtle text-destructive-foreground'
-            : license.days <= 7
-              ? 'border-warning-border bg-warning-subtle text-warning-foreground'
-              : 'border-border bg-muted/40'
-      )}
-    >
-      <Timer className="size-3.5 shrink-0" aria-hidden />
-      {license ? (
-        <>
-          <span className="font-medium">{licenseKind === 'trial' ? 'Deneme' : 'Plan'}</span>
-          {/* DAKİKA BURADA GÖSTERİLİR: kalan süre gün ölçeğinden saate
-              indiğinde asıl bilgi dakikadır — "1 gün" yazan bir rozet, üç
-              saat sonra kapanacak bir alanı sakinmiş gibi gösterir. */}
-          <span className="tabular-nums">{formatCountdown(license, true)}</span>
-        </>
-      ) : (
-        <span className="font-medium">{licenseFallbackLabel}</span>
-      )}
-    </span>
-  )
+  if (isStudentWorkbenchPath(pathname)) return null
 
   return (
     <div className="z-20 flex h-12 items-center justify-end gap-2 border-b bg-background/95 px-3 backdrop-blur md:sticky md:top-0 md:h-14 md:px-6">
@@ -147,18 +55,13 @@ export function TopBar({
         {!now ? (
           <span className="h-6" aria-hidden />
         ) : (
-          <>
-            {lgs && <ExamChip exam={lgs} now={now} />}
-            {yks && <ExamChip exam={yks} now={now} />}
-            {licenseBadge &&
-              (licenseHref ? (
-                <Link href={licenseHref} className="shrink-0 rounded-full">
-                  {licenseBadge}
-                </Link>
-              ) : (
-                <span className="shrink-0">{licenseBadge}</span>
-              ))}
-          </>
+          <ExamBadges
+            now={now}
+            licenseEndsAt={licenseEndsAt}
+            licenseKind={licenseKind}
+            licenseHref={licenseHref}
+            licenseFallbackLabel={licenseFallbackLabel}
+          />
         )}
       </div>
 

@@ -90,3 +90,68 @@ describe('attach_batch_to_flow · aidiyet karşılaştırması', () => {
     expect(body).toMatch(/status\s*=\s*'active'/)
   })
 })
+
+// ============================================================
+// ZAMANINDA TESLİM — ÖLÇÜT ÖĞRENCİNİN GÖNDERİMİ
+//
+// NEDEN BU TEST VAR
+//
+// 077 kapanış fotoğrafını `test_completions.completed_at` üzerinden
+// çekiyordu ve yorumunda bunu "öğrencinin teslim ettiği an" diye tarif
+// ediyordu. Tarif yanlıştı: o satır 014'te YALNIZCA
+// `approve_homework_item` içinde açılıyor — yani öğretmen onayladığında.
+//
+// Sonuç: Cumartesi her şeyi gönderen öğrenci, öğretmen Pazartesi
+// onayladığında "geç teslim" olarak KALICI biçimde kaydediliyordu
+// (kabul #9: fotoğraf bir daha değişmez). Yani hata sonradan
+// düzeltilemiyordu bile.
+//
+// Kural artık `homework_items.submitted_at`. Bu test, ölçütün onay
+// saatine geri kaymasını yakalar.
+// ============================================================
+
+const FIX_PATH = join(process.cwd(), 'supabase/migrations/081_on_time_uses_submission.sql')
+const FIX_SQL = readFileSync(FIX_PATH, 'utf8')
+
+function onTimeBlock(): string {
+  const re = /--\s*PARITY-BEGIN\s+on_time_source\r?\n([\s\S]*?)--\s*PARITY-END\s+on_time_source/
+  const m = FIX_SQL.match(re)
+  if (!m) {
+    throw new Error(
+      '081\'de "PARITY-BEGIN on_time_source" bloğu bulunamadı. ' +
+        'Blok bu testin okuduğu tek yer; taşındıysa test de güncellenmeli.'
+    )
+  }
+  return m[1]
+}
+
+describe('close_weekly_flow · zamanında teslim ölçütü', () => {
+  const block = onTimeBlock()
+
+  it('blok gerçekten okunabildi (test boşa geçmesin)', () => {
+    expect(block).toContain('COUNT(*)')
+    expect(block.length).toBeGreaterThan(150)
+  })
+
+  it('ölçüt öğrencinin GÖNDERİM anıdır', () => {
+    expect(block).toMatch(/hi\.submitted_at\s*<=\s*v_flow\.due_at/)
+  })
+
+  it('onay saati (test_completions) ölçüte HİÇ girmiyor', () => {
+    // Asıl regresyon: buraya geri dönen her JOIN, öğrenciyi
+    // öğretmenin gecikmesinden cezalandırır.
+    expect(block).not.toContain('test_completions')
+    expect(block).not.toContain('completed_at')
+  })
+
+  it('hiç gönderilmemiş iş zamanında sayılmıyor', () => {
+    // submitted_at NULL ise karşılaştırma NULL döner; FILTER bunu
+    // saymaz ama niyeti açık yazmak, sonradan COALESCE eklenmesini de
+    // zorlaştırır.
+    expect(block).toMatch(/hi\.submitted_at\s+IS NOT NULL/)
+  })
+
+  it('iptal edilmiş iş toplama girmiyor', () => {
+    expect(block).toMatch(/hi\.status\s*<>\s*'cancelled'/)
+  })
+})

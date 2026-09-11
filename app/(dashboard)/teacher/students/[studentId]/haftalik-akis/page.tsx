@@ -130,10 +130,9 @@ export default async function WeeklyFlowPage({
     const { data: items } = await supabase
       .from('homework_items')
       .select(
-        `id, status, created_at,
+        `id, status, created_at, submitted_at,
          homework_batches!inner(id, weekly_flow_id, created_at, title),
-         books(id, title),
-         test_completions(id, completed_at, status)`
+         books(id, title)`
       )
       .eq('workspace_id', workspaceId)
       .eq('homework_batches.weekly_flow_id', activeFlow.id)
@@ -155,19 +154,20 @@ export default async function WeeklyFlowPage({
         }
       )
       const book = one(r.books as unknown as { id: string; title: string })
-      const completions = ((r.test_completions ?? []) as unknown as {
-        completed_at: string
-        status: string
-      }[]).filter(c => c.status === 'active')
 
-      // TESLİM = öğrencinin gönderimi, öğretmenin onayı DEĞİL (kabul
-      // #8): "Öğretmen onayı öğrencinin ilerlemesini geriye düşürmez."
-      // İade edilen (reverted) kayıt teslim sayılmaz ama satırı
-      // silinmediği için ilk gönderim anı geçmişte korunur.
-      const deliveredAt =
-        completions.length === 0
-          ? null
-          : new Date(Math.min(...completions.map(c => new Date(c.completed_at).getTime())))
+      // TESLİM = ÖĞRENCİNİN GÖNDERİMİ, öğretmenin onayı DEĞİL (kabul #8).
+      //
+      // BURASI ÖNCEDEN `test_completions`'a bakıyordu ve YANLIŞTI: o
+      // satır 014'te yalnız `approve_homework_item` içinde açılıyor,
+      // yani öğretmen onayladığında. Cumartesi her şeyi gönderen bir
+      // öğrenci, öğretmen Pazartesi onaylayınca ekranda "hiç teslim
+      // etmemiş" görünüyor ve tempo bandı kritiğe düşüyordu.
+      //
+      // `submitted_at` onayda KORUNUYOR, iadede NULL'lanıyor — yani
+      // belgenin iki kuralını da tek sütun karşılıyor: onay ilerlemeyi
+      // geriye düşürmez, iade edilen iş yeniden gönderilene kadar
+      // sayılmaz.
+      const deliveredAt = r.submitted_at ? new Date(r.submitted_at as string) : null
 
       return {
         batchId: batch?.id ?? null,
