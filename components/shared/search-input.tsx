@@ -44,7 +44,13 @@ export function SearchInput({
         aria-label={ariaLabel ?? placeholder}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="pl-8 pr-8"
+        // TARAYICININ KENDİ TEMİZLEME DÜĞMESİ GİZLENİYOR.
+        //
+        // `type="search"` Chromium'da bir ✕ çiziyor ve aşağıdaki kendi
+        // düğmemizle yan yana düşüyordu: aynı işi yapan iki düğme,
+        // hangisinin ne yaptığı belirsiz. Kendi düğmemiz kalıyor çünkü
+        // erişilebilir adı var ve her tarayıcıda aynı görünüyor.
+        className="pl-8 pr-8 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
       />
       {value !== '' && (
         <button

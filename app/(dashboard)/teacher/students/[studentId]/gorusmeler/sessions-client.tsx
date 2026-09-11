@@ -527,27 +527,10 @@ export function SessionsClient({
           </div>
         )}
 
-        {/* HİZMET BAZLI SAYAÇLAR (§3 no.3): "Grup 4/5", "Koçluk 3/4".
-            Tek bir toplam, iki ayrı hizmet hattı olan öğrencide hangi
-            hattın eksik kaldığını gizliyordu. */}
-        {serviceCounters.length > 0 && (
-          <ul className="mb-4 grid gap-2 sm:grid-cols-2">
-            {serviceCounters.map((c) => {
-              const service = serviceById.get(c.serviceId)
-              if (!service) return null
-              return (
-                <li key={c.serviceId} className="rounded-md border px-3 py-2 text-sm">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate">{formatServiceAxes(service)}</span>
-                    <span className="shrink-0 tabular-nums">
-                      {c.done} / {c.planned}
-                    </span>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
+        {/* SAYAÇLAR BURADA DEĞİL: "Bu Ayın Hizmet Özeti" kartına
+            taşındılar ve orada çubukla birlikte duruyorlar. Aynı
+            "0 / 3" iki blok arayla iki kez yazıldığında, ikisinin
+            farklı şeyleri sayıp saymadığı sorusu doğuyordu. */}
 
         {sessions.length === 0 ? (
           <EmptyState

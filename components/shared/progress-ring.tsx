@@ -69,16 +69,25 @@ export function ProgressRing({
           strokeWidth={dims.stroke}
           className="stroke-muted"
         />
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          strokeWidth={dims.stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${(circumference * safe) / 100} ${circumference}`}
-          className={cn('stroke-current transition-[stroke-dasharray]', RING_TONE[tone])}
-        />
+        {/* SIFIRDA HİÇ YAY ÇİZİLMEZ.
+
+            `strokeLinecap="round"` uzunluğu sıfır olan yayı bile
+            yuvarlak bir NOKTA olarak boyuyor: %0'lık bir halkada
+            tepede küçük renkli bir iz kalıyor ve "biraz ilerlemiş"
+            gibi okunuyordu. Yayı hiç çizmemek, sıfırı sıfır
+            gösteriyor. */}
+        {safe > 0 && (
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            fill="none"
+            strokeWidth={dims.stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${(circumference * safe) / 100} ${circumference}`}
+            className={cn('stroke-current transition-[stroke-dasharray]', RING_TONE[tone])}
+          />
+        )}
       </svg>
       <span className={cn('absolute font-medium tabular-nums', dims.text)}>%{safe}</span>
     </span>
