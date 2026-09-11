@@ -20,6 +20,8 @@ import {
   Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { flowMembership } from '@/lib/weekly-flow'
+import { formatSessionLong } from '@/lib/service-structure'
 import { createHomeworkBatchAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
@@ -89,6 +91,18 @@ interface Props {
   initialDueDate: string
   initialTitle: string
   initialNote: string
+  /**
+   * Öğrencinin açık haftalık akışı (R7/05 §5). Yoksa null: ödev yine
+   * verilir, yalnız bir haftaya bağlanmaz.
+   */
+  activeFlow: {
+    id: string
+    /** Kesinleşmiş kapanış — saatiyle, ekranda gösterilir. */
+    dueAt: string
+    /** Kapanışın YEREL günü — teslim tarihi alanının varsayılanı. */
+    dueDate: string
+    dueSource: 'anchor' | 'custom'
+  } | null
   /** Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü için (041). */
   keepActiveTopicIds: string[]
 }
@@ -104,6 +118,7 @@ export function HomeworkBuilder({
   initialDueDate,
   initialTitle,
   initialNote,
+  activeFlow,
   keepActiveTopicIds,
 }: Props) {
   // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
@@ -118,6 +133,13 @@ export function HomeworkBuilder({
         : books[0]?.bookId) ?? ''
   )
   const [dueDate, setDueDate] = useState(initialDueDate)
+  // Son teslim akıştan MİRAS alınır; tarih alanı yalnız istisnada açılır
+  // (§5: "Öğretmen isterse Farklı son teslim seçebilir"). Taslakta akışın
+  // gününden farklı bir tarih kaydedilmişse istisna zaten seçilmiş
+  // demektir ve alan açık gelir.
+  const [customDue, setCustomDue] = useState(
+    () => !activeFlow || (initialDueDate !== '' && initialDueDate !== activeFlow.dueDate)
+  )
   const [title, setTitle] = useState(initialTitle)
   // Ödev notu (R6-05): ödev başına TEK isteğe bağlı alan.
   const [note, setNote] = useState(initialNote)
@@ -432,6 +454,12 @@ export function HomeworkBuilder({
       setTitle('')
       setNote('')
       toast.success('Plan yayınlandı. Harita güncellendi.')
+      // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
+      // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
+      // artmadığını bilmeden ekranda eksik sayı görürdü.
+      if (result?.flowWarning) {
+        toast.warning(result.flowWarning, { duration: 8000 })
+      }
       router.refresh()
     })
   }
@@ -772,18 +800,99 @@ export function HomeworkBuilder({
                       onChange={e => setTitle(e.target.value)}
                     />
                   </div>
+                  {/* SON TESLİM — varsayılan aktif Haftalık Akış'tan.
+                      §1'in istediği satır: "Son teslim: 20 Eylül Pazar
+                      10:00 — Aktif Haftalık Akış'tan otomatik. Yanında
+                      yalnızca Değiştir işlemi bulunur." */}
                   <div className="space-y-1.5">
                     <Label htmlFor="dueDate" className="text-xs">
-                      Teslim Tarihi
+                      Son Teslim
                     </Label>
-                    <Input
-                      id="dueDate"
-                      ref={dueDateRef}
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      min={todayDateString()}
-                    />
+
+                    {activeFlow && !customDue ? (
+                      <div className="rounded-md border bg-muted/40 p-2.5">
+                        <p className="text-sm font-medium">
+                          {formatSessionLong(activeFlow.dueAt)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Aktif Haftalık Akış&apos;tan otomatik
+                          {activeFlow.dueSource === 'custom'
+                            ? ' (haftaya özel tarih seçilmiş)'
+                            : ' (ana temastan)'}
+                        </p>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="mt-1.5 -ml-1"
+                          onClick={() => setCustomDue(true)}
+                        >
+                          Değiştir
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          id="dueDate"
+                          ref={dueDateRef}
+                          type="date"
+                          value={dueDate}
+                          onChange={e => setDueDate(e.target.value)}
+                          min={todayDateString()}
+                        />
+                        {activeFlow && (
+                          <>
+                            {/* Seçilen tarihin SONUCU anında yazılıyor.
+                                Kural flowMembership'ten geliyor ve
+                                sunucudaki attach_batch_to_flow ile aynı
+                                gün karşılaştırmasını yapıyor — aksi hâlde
+                                burada "bu haftaya eklenecek" yazan ödev
+                                sunucuda bağlanmadan kalırdı. */}
+                            {dueDate && (
+                              <p
+                                className={`text-[11px] ${
+                                  flowMembership({
+                                    batchDueAt: new Date(`${dueDate}T12:00:00`),
+                                    flow: {
+                                      dueAt: new Date(activeFlow.dueAt),
+                                      status: 'active',
+                                    },
+                                  }) === 'active_flow'
+                                    ? 'text-muted-foreground'
+                                    : 'text-warning-foreground'
+                                }`}
+                              >
+                                {flowMembership({
+                                  batchDueAt: new Date(`${dueDate}T12:00:00`),
+                                  flow: {
+                                    dueAt: new Date(activeFlow.dueAt),
+                                    status: 'active',
+                                  },
+                                }) === 'active_flow'
+                                  ? 'Aktif haftanın içinde kalıyor; bu haftanın toplam yüküne eklenir.'
+                                  : 'Aktif haftanın kapanışını aşıyor: bu haftanın toplamına karışmaz, gelecek akışa alınır.'}
+                              </p>
+                            )}
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="-ml-1"
+                              onClick={() => {
+                                setCustomDue(false)
+                                setDueDate(activeFlow.dueDate)
+                              }}
+                            >
+                              Akışın son teslimine dön
+                            </Button>
+                          </>
+                        )}
+                        {!activeFlow && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Bu öğrencide açık haftalık akış yok; ödev bir
+                            haftaya bağlanmaz.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="note" className="text-xs">

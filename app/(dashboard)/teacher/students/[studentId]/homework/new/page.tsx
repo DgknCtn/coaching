@@ -4,6 +4,7 @@ import { ArrowLeft, AlertCircle } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
 import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
+import { localDateString } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { HomeworkBuilder } from './homework-builder'
 
@@ -68,6 +69,32 @@ export default async function NewHomeworkPage({
       .maybeSingle(),
   ])
 
+  // AKTİF HAFTALIK AKIŞ (R7/05 kabul #4).
+  //
+  // Ekranın varsayılan son teslimi buradan gelir: "Öğretmene aynı tarihi
+  // tekrar seçtirmek gerekmez." Akış yoksa alan boş kalır ve öğretmen
+  // eskisi gibi elle girer — aktif akışı olmayan öğrenciye ödev
+  // verilememesi saçma olurdu.
+  const { data: activeFlowRow } = await supabase
+    .from('weekly_flows')
+    .select('id, due_at, due_source')
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  const activeFlow = activeFlowRow
+    ? {
+        id: activeFlowRow.id,
+        dueAt: activeFlowRow.due_at as string,
+        // Kapanışın günü: ödevin `due_date`'i bir DATE olduğu için
+        // varsayılan da gün olarak veriliyor. Dönüşüm YEREL takvimle —
+        // sunucudaki aidiyet kuralı da yerel günü kullanıyor (077:367).
+        dueDate: localDateString(new Date(activeFlowRow.due_at)),
+        dueSource: activeFlowRow.due_source as 'anchor' | 'custom',
+      }
+    : null
+
   let draftTestIds: string[] = []
   if (draft?.id) {
     const { data: draftItems } = await supabase
@@ -108,7 +135,11 @@ export default async function NewHomeworkPage({
         books={books}
         initialBookId={initialBookId}
         initialSelectedTestIds={draftTestIds}
-        initialDueDate={draft?.due_date ?? ''}
+        activeFlow={activeFlow}
+        // Taslak, akışın varsayılanını EZER: öğretmen o taslakta tarihi
+        // bilinçle değiştirmiş olabilir ve kaydedilmiş bir tercihi
+        // sessizce geri almak, yaptığı işi silmek olurdu.
+        initialDueDate={draft?.due_date ?? activeFlow?.dueDate ?? ''}
         initialTitle={draft?.title ?? ''}
         initialNote={draft?.note ?? ''}
         keepActiveTopicIds={[...keepActiveTopicIds]}

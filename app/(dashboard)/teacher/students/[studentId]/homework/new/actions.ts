@@ -65,15 +65,28 @@ export async function createHomeworkBatchAction(
   // Karar RPC'nin içinde: aidiyet kuralı tek yerde kalsın diye. Burada
   // tarih karşılaştırılsaydı arayüzle sunucu bir gün ayrışırdı.
   const batchId = (data as { homework_batch_id?: string } | null)?.homework_batch_id
+
+  // Bağlanıp bağlanmadığı KULLANICIYA SÖYLENİR.
+  //
+  // Önceden sonuç yalnız console'a yazılıyordu: son teslimi akışın
+  // kapanışını aşan bir ödev sessizce akışsız kalıyor, öğretmen ise
+  // "yayınlandı" görüp haftanın toplamına eklendiğini sanıyordu. Yayın
+  // BAŞARILIDIR — bu yüzden hata değil, uyarı olarak dönüyor.
+  let flowWarning: string | undefined
   if (batchId) {
-    const { error: attachError } = await supabase.rpc('attach_batch_to_flow', {
-      p_batch_id: batchId,
-    })
-    // Bağlama hatası yayını geri almaz — ödev verilmiştir. Sessizce
-    // yutulmuyor ama kullanıcıya hata olarak da dönülmüyor: öğretmenin
-    // gördüğü iş başarılı.
+    const { data: attachedFlowId, error: attachError } = await supabase.rpc(
+      'attach_batch_to_flow',
+      { p_batch_id: batchId }
+    )
     if (attachError) {
       console.error('[weekly-flow] ödev aktif akışa bağlanamadı:', attachError.message)
+      flowWarning = 'Ödev yayınlandı ancak haftalık akışa bağlanamadı.'
+    } else if (attachedFlowId === null) {
+      // RPC null döndürdü: ya aktif akış yok ya da son teslim kapanışı
+      // aşıyor (Senaryo B). İkisi de kural gereği, ama ikisi de
+      // öğretmenin ekranda gördüğü toplamı etkiliyor.
+      flowWarning =
+        'Ödev yayınlandı. Son teslimi aktif haftanın kapanışını aştığı için bu haftanın toplamına eklenmedi; açık akış yoksa da bir haftaya bağlanmaz.'
     }
   }
 
@@ -90,6 +103,7 @@ export async function createHomeworkBatchAction(
 
 
   revalidatePath(`/teacher/students/${studentId}`)
+  revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
-  return { success: true }
+  return { success: true, flowWarning }
 }

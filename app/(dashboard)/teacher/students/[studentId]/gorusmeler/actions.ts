@@ -17,10 +17,15 @@ import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
+import { deriveMainContact, type ServiceLike } from '@/lib/service-structure'
+import { shouldAskToMoveDue } from '@/lib/weekly-flow'
 
 function revalidate(studentId: string) {
   revalidatePath(`/teacher/students/${studentId}/gorusmeler`)
   revalidatePath(`/teacher/students/${studentId}`)
+  // Ana temas değişikliği haftanın kapanışını etkileyebiliyor; akış
+  // ekranı eski tarihi göstermemeli.
+  revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
 }
 
@@ -272,6 +277,160 @@ export async function rescheduleSessionAction(
     entityId: studentId,
     detail: { sessionId, newAt: when.toISOString() },
   })
+  revalidate(studentId)
+
+  return {
+    success: true,
+    // R7/05 §4 ve kabul #11: ana temas tek seferlik değiştiyse aktif
+    // akışın son teslimi TAŞINMAZ, SORULUR.
+    moveDue: await proposeFlowDueMove({
+      supabase,
+      workspaceId,
+      studentId,
+      sessionId,
+      newAt: when,
+    }),
+  }
+}
+
+/**
+ * Ertelenen oturum ana temas mı, öyleyse akışın son teslimi ne olurdu?
+ *
+ * DÖNEN ŞEY BİR KARAR DEĞİL, BİR SORUDUR. Belge net: *"Tek seferlik
+ * görüşme değişikliğinde sistem: 'Aktif Haftalık Akış'ın son teslimi de
+ * taşınsın mı?' diye sorar."* Otomatik taşımak, öğretmenin koymadığı bir
+ * kapanışı resmi hâle getirirdi.
+ *
+ * ÜÇ DURUMDA HİÇ SORULMAZ:
+ *  - ertelenen oturum ana temasa ait değilse (haftanın ritmini kurmuyor),
+ *  - aktif akış yoksa,
+ *  - akışın son teslimi ÖZEL seçilmişse — §4: *"Özel son teslim zaten
+ *    seçilmişse otomatik değiştirme yapılmaz; öğretmene mevcut özel
+ *    tarih hatırlatılır."* Bu durumda soru yerine hatırlatma döner.
+ */
+async function proposeFlowDueMove(input: {
+  supabase: Awaited<ReturnType<typeof getTeacherContext>>['supabase']
+  workspaceId: string
+  studentId: string
+  sessionId: string
+  newAt: Date
+}): Promise<
+  | { kind: 'ask'; flowId: string; currentDueAt: string; proposedDueAt: string }
+  | { kind: 'locked'; currentDueAt: string }
+  | null
+> {
+  const { supabase, workspaceId, studentId, sessionId, newAt } = input
+
+  const { data: session } = await supabase
+    .from('service_sessions')
+    .select('service_id')
+    .eq('id', sessionId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (!session?.service_id) return null
+
+  const { data: serviceRows } = await supabase
+    .from('student_services')
+    .select(
+      'id, kind, participation, medium, weekday, start_time, start_date, status, submission_offset_minutes'
+    )
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+
+  const services: ServiceLike[] = (serviceRows ?? []).map(s => ({
+    id: s.id,
+    kind: s.kind,
+    participation: s.participation,
+    medium: s.medium,
+    weekday: s.weekday,
+    startTime: String(s.start_time).slice(0, 5),
+    startDate: s.start_date,
+    status: s.status,
+    submissionOffsetMinutes: s.submission_offset_minutes ?? 0,
+  })) as ServiceLike[]
+
+  // Ana temas kararı TEK yerde: deriveMainContact (Koçluk > Birebir >
+  // Grup). Burada ikinci bir öncelik listesi yazılsaydı iki ekran farklı
+  // hizmeti ana temas sayabilirdi.
+  const anchor = deriveMainContact(services)
+  if (!anchor || anchor.id !== session.service_id) return null
+
+  const { data: flow } = await supabase
+    .from('weekly_flows')
+    .select('id, due_at, due_source, status')
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  if (!flow) return null
+
+  if (
+    !shouldAskToMoveDue({
+      dueSource: flow.due_source as 'anchor' | 'custom',
+      status: flow.status as 'active' | 'closed',
+    })
+  ) {
+    return { kind: 'locked', currentDueAt: flow.due_at as string }
+  }
+
+  // Yeni kapanış, oturumun yeni saatinden teslim payı düşülerek bulunur
+  // — online grup dersinde "ders - 6 saat" kuralı bu paydır (074:
+  // submission_offset_minutes).
+  const proposed = new Date(
+    newAt.getTime() - (anchor.submissionOffsetMinutes ?? 0) * 60_000
+  )
+
+  return {
+    kind: 'ask',
+    flowId: flow.id,
+    currentDueAt: flow.due_at as string,
+    proposedDueAt: proposed.toISOString(),
+  }
+}
+
+/**
+ * Aktif akışın son teslimini ana temasın yeni saatine taşır.
+ *
+ * Yalnız öğretmen "evet" dedikten sonra çağrılır. Kaynak `anchor`
+ * kalır: tarih hâlâ ana temastan türüyor, öğretmenin elle koyduğu özel
+ * bir tarih değil.
+ */
+export async function moveActiveFlowDueAction(
+  studentId: string,
+  flowId: string,
+  dueAtIso: string
+) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      flowId: uuidSchema,
+      dueAtIso: z.string().min(1, 'Yeni son teslim gerekli.'),
+    })
+    .safeParse({ studentId, flowId, dueAtIso })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const when = new Date(parsed.data.dueAtIso)
+  if (Number.isNaN(when.getTime())) return { error: 'Geçerli bir tarih ve saat girin.' }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('set_weekly_flow_due', {
+    p_flow_id: parsed.data.flowId,
+    p_due_at: when.toISOString(),
+    p_source: 'anchor',
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'flow.due_change',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { flowId: parsed.data.flowId, dueAt: when.toISOString(), source: 'anchor' },
+  })
+
   revalidate(studentId)
   return { success: true }
 }

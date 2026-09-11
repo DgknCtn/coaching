@@ -454,3 +454,31 @@ describe('dailyDelivery · §7 no.6 günlük dağılım', () => {
     expect(r.days).toHaveLength(1)
   })
 })
+
+describe('flowMembership · SQL ile aynı GÜN düzeyinde karşılaştırır', () => {
+  const flow = { dueAt: new Date('2026-09-20T10:00:00+03:00'), status: 'active' as const }
+
+  it('kapanış GÜNÜNE verilen ödev, saati kapanışı geçse bile bu haftadır', () => {
+    // ASIL REGRESYON: saat düzeyinde karşılaştırma yapılsaydı 20 Eylül
+    // 23:59 son teslimli ödev "gelecek hafta" sayılırdı; oysa SQL
+    // (077:367) günleri karşılaştırıyor ve bağlıyor. Arayüz "bu haftaya
+    // eklenecek" derken sunucu bağlamazsa sayılar ayrışır.
+    expect(
+      flowMembership({ batchDueAt: new Date('2026-09-20T23:59:00+03:00'), flow })
+    ).toBe('active_flow')
+  })
+
+  it('kapanış gününden bir gün sonrası gelecek akıştır', () => {
+    expect(
+      flowMembership({ batchDueAt: new Date('2026-09-21T00:01:00+03:00'), flow })
+    ).toBe('upcoming')
+  })
+
+  it('gün sınırı YEREL takvimle çizilir', () => {
+    // 21 Eylül 01:00 (TSİ) UTC'de 20 Eylül 22:00'dır. UTC günü
+    // kullanılsaydı bu ödev yanlışlıkla bu haftaya sayılırdı.
+    expect(
+      flowMembership({ batchDueAt: new Date('2026-09-21T01:00:00+03:00'), flow })
+    ).toBe('upcoming')
+  })
+})

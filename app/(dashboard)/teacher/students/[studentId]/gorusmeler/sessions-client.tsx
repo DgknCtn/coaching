@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import {
   formatServiceAxes,
   formatServiceSchedule,
+  formatSessionLong,
   formatSessionTime,
   effectiveSessionTime,
   isAwaitingOutcome,
@@ -27,6 +28,7 @@ import {
 import {
   createServiceAction,
   createMakeupSessionAction,
+  moveActiveFlowDueAction,
   rescheduleSessionAction,
   setServiceStatusAction,
   setSessionOutcomeAction,
@@ -119,6 +121,55 @@ export function SessionsClient({
         return
       }
       toast.success(ok)
+      router.refresh()
+    })
+  }
+
+  /**
+   * Erteleme — ve ardından haftanın kapanışı sorusu (R7/05 kabul #11).
+   *
+   * Ayrı bir işleyici, çünkü `run` yalnız başarı/hata biliyor. Burada
+   * üçüncü bir sonuç var: ertelenen oturum ANA TEMAS ise aktif akışın
+   * son teslimi de taşınabilir — ama bu karar öğretmenindir. Sistem
+   * kendiliğinden taşısaydı, öğretmenin koymadığı bir kapanış resmî
+   * hâle gelirdi; hiç sormasaydı ders Pazar'dan Pazartesi'ye alınmışken
+   * hafta hâlâ Pazar 10:00'da kapanırdı.
+   */
+  function handleReschedule(sessionId: string, iso: string) {
+    startTransition(async () => {
+      const result = await rescheduleSessionAction(studentId, sessionId, iso)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Yeni tarih kaydedildi.')
+
+      const move = result?.moveDue
+      if (move?.kind === 'locked') {
+        // §4: özel son teslim seçilmişse otomatik değiştirme YOK —
+        // yalnız hatırlatma.
+        toast.info(
+          `Haftanın son teslimi özel seçilmiş (${formatSessionLong(move.currentDueAt)}); ` +
+            'ana temas değişikliği bu tarihi değiştirmedi.',
+          { duration: 8000 }
+        )
+      } else if (move?.kind === 'ask') {
+        const yes = window.confirm(
+          'Ana temas taşındı. Aktif Haftalık Akış’ın son teslimi de taşınsın mı?\n\n' +
+            `Şu an: ${formatSessionLong(move.currentDueAt)}\n` +
+            `Yeni:  ${formatSessionLong(move.proposedDueAt)}`
+        )
+        if (yes) {
+          const moved = await moveActiveFlowDueAction(
+            studentId,
+            move.flowId,
+            move.proposedDueAt
+          )
+          if (moved?.error) toast.error(moved.error)
+          else toast.success('Haftanın son teslimi de taşındı.')
+        }
+      }
+
       router.refresh()
     })
   }
@@ -315,12 +366,7 @@ export function SessionsClient({
                       <RescheduleButton
                         disabled={isPending}
                         currentAt={at}
-                        onPick={(iso) =>
-                          run(
-                            () => rescheduleSessionAction(studentId, session.id, iso),
-                            'Yeni tarih kaydedildi.'
-                          )
-                        }
+                        onPick={(iso) => handleReschedule(session.id, iso)}
                       />
                     </div>
                   ) : (

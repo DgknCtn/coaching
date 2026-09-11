@@ -98,13 +98,27 @@ export type FlowStatus = 'active' | 'closed'
  *     istisna olan tarihtir, aidiyet değil.
  *
  * Kapanmış akışa yeni ödev bağlanmaz (§5 son madde).
+ *
+ * KARŞILAŞTIRMA GÜN DÜZEYİNDE — ve bu, `attach_batch_to_flow`
+ * (077:367) ile birebir aynı olmak ZORUNDA:
+ *
+ *     v_batch.due_date > (v_flow.due_at AT TIME ZONE 'Europe/Istanbul')::DATE
+ *
+ * Ödevin son teslimi bir GÜN (`homework_batches.due_date` DATE),
+ * akışın kapanışı ise SAATLİ bir andır. Saat düzeyinde karşılaştırılsa
+ * kapanış günü Pazar 10:00 iken aynı güne verilen ödev — günün saatsiz
+ * hâli 00:00 sayıldığı için bazen "bu hafta", bazen "gelecek hafta"
+ * çıkardı. Sunucu gün, istemci saat karşılaştırsaydı ekranda "bu
+ * haftaya eklenecek" yazan ödev sunucuda bağlanmadan kalırdı.
  */
 export function flowMembership(input: {
   batchDueAt: Date
   flow: { dueAt: Date; status: FlowStatus } | null
 }): 'active_flow' | 'upcoming' | 'no_flow' {
   if (!input.flow || input.flow.status !== 'active') return 'no_flow'
-  return input.batchDueAt.getTime() <= input.flow.dueAt.getTime()
+  // Yerel gün (Europe/Istanbul) — UTC alınsaydı gece yarısına yakın
+  // kapanışlar bir gün kayardı; SQL de yerel günü kullanıyor.
+  return localDateString(input.batchDueAt) <= localDateString(input.flow.dueAt)
     ? 'active_flow'
     : 'upcoming'
 }
