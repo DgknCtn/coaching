@@ -39,6 +39,13 @@ export type AuditAction =
   | 'session.outcome'
   | 'session.reschedule'
   | 'session.makeup'
+  // Haftalık Akış (R7/05). Haftanın açılışı, kapanışı ve resmi son
+  // teslimin değişmesi izlenebilir olmalı: kapanış anında çekilen
+  // "zamanında teslim" fotoğrafı bir daha değişmiyor, dolayısıyla o
+  // fotoğrafı hangi kararın ürettiği sonradan sorulabilir.
+  | 'flow.open'
+  | 'flow.close'
+  | 'flow.due_change'
   | 'workspace.switch'
   | 'book.outline_import'
   | 'book.import'
@@ -90,6 +97,9 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'session.outcome': 'Görüşme durumunu işaretledi',
   'session.reschedule': 'Görüşmeyi erteledi',
   'session.makeup': 'Telafi oluşturdu',
+  'flow.open': 'Haftalık akış açtı',
+  'flow.close': 'Haftalık akışı kapattı',
+  'flow.due_change': 'Haftanın son teslimini değiştirdi',
   'workspace.switch': 'Çalışma alanı değiştirdi',
   'billing.checkout_started': 'Ödeme başlattı',
   'billing.order_created': 'Sipariş oluşturdu',

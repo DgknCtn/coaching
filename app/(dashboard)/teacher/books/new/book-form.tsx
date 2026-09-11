@@ -134,6 +134,20 @@ export function BookForm({ terms, defaultTermId }: Props) {
       })
       if (result?.error) {
         setServerError(result.error)
+        return
+      }
+
+      // R7-03 §2: kayıttan sonra 2. ADIM — alt bölümler.
+      //
+      // Alt bölüm kaydı bölümün ID'sine bağlanır (§3) ve o ID'ler ancak
+      // kitap kaydedildikten sonra var olur; bu yüzden ikinci adım.
+      //
+      // Sayfa ile takip edilen kaynak bu adımı hiç görmez: orada alt
+      // bölüm açılmaz (061) ve öğretmeni yapamayacağı bir ekrana
+      // göndermek, adımı gereksiz bir engele çevirirdi.
+      const newBookId = (result?.data as { book_id?: string } | null)?.book_id
+      if (newBookId && !isPageBook) {
+        router.push(`/teacher/books/${newBookId}/subsections`)
       } else {
         router.push('/teacher/books')
       }
@@ -142,6 +156,15 @@ export function BookForm({ terms, defaultTermId }: Props) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} onKeyDown={blockEnterSubmit} className="space-y-6">
+      {/* Adım göstergesi. Test ile takipte kayıttan sonra alt bölüm
+          adımına geçilir; sayfa takipli kaynakta böyle bir adım yok,
+          bu yüzden gösterge de gösterilmez. */}
+      {!isPageBook && (
+        <p className="text-xs font-medium tracking-wide text-muted-foreground">
+          ADIM 1 / 2 · KİTAP VE BÖLÜMLER
+        </p>
+      )}
+
       {/* Book info */}
       <Card>
         <CardContent className="pt-5 space-y-4">
@@ -388,7 +411,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
       <div className="flex gap-3">
         <Button type="submit" disabled={isPending}>
           {isPending && <Loader2 className="size-4 animate-spin" />}
-          Kitabı Kaydet
+          {isPageBook ? 'Kitabı Kaydet' : 'Kaydet ve alt bölümlere geç'}
         </Button>
         <Button type="button" variant="ghost" onClick={() => router.push('/teacher/books')}>
           İptal

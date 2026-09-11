@@ -13,6 +13,7 @@ import {
   ListChecks,
   MessageSquareDashed,
   ShieldCheck,
+  Waypoints,
   StickyNote,
   Users,
   Wallet,
@@ -68,11 +69,21 @@ export function isNavGroup(entry: NavEntry): entry is NavGroup {
 export const studentScreens = [
   { slug: 'mufredat', path: 'curriculum', label: 'Müfredat Akışı', icon: CalendarRange },
   { slug: 'kaynak', path: 'goals', label: 'Kaynak Planı', icon: Library },
-  { slug: 'haftalik', path: 'homework/new', label: 'Haftalık Plan', icon: ListChecks },
-  // Ders & Görüşmeler (R7-04). Menü mimarisinin tamamı Faz 3'te
-  // yeniden kurulacak; şimdilik ekran mevcut şeride ekleniyor ki
-  // Hizmet Yapısı kurulabilsin — Haftalık Akış buna bağlı.
+  // R7/05 kabul #1: ekranın adı ve GÖREVİ ayrıştırıldı.
+  //
+  // Bu ekran haftayı hiç takip etmiyordu; kitap haritasından çalışma
+  // seçip yayınlıyordu — yani "ne veriyorum?" sorusunu çözüyordu.
+  // "Haftalık Plan" adı, yapmadığı işi yapıyormuş gibi gösteriyor ve
+  // asıl haftalık takibin zaten var olduğu izlenimi veriyordu. Yol
+  // (homework/new) DEĞİŞMEDİ: kayıtlı bağlantıları kırmanın bir
+  // karşılığı yok, sorun adlandırmaydı.
+  { slug: 'odev-planlama', path: 'homework/new', label: 'Ödev Planlama', icon: ListChecks },
+  // Ders & Görüşmeler (R7-04).
   { slug: 'gorusmeler', path: 'gorusmeler', label: 'Görüşmeler', icon: CalendarCheck },
+  // Haftalık Akış (R7/05): "öğrenci bu haftayı nasıl götürüyor?"
+  // Ödev Planlama'dan AYRI bir ekran — biri yük yerleştirir, diğeri
+  // yerleşen yükü yönetir.
+  { slug: 'haftalik-akis', path: 'haftalik-akis', label: 'Haftalık Akış', icon: Waypoints },
   { slug: 'koruma', path: 'protection', label: 'Koruma Havuzu', icon: ShieldCheck },
   { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
 ] as const

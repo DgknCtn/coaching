@@ -600,3 +600,36 @@ Ayrıca ilerleme hesabı hiçbir yerde bu sütunları okumuyor; yüzdeler yalnı
 **Yan iş:** `/admin` hiçbir yerden bağlantılı değildi, adresi elle yazmak gerekiyordu. Platform yöneticisine kenar çubuğunda "Yönetim" bağlantısı eklendi. Bu bir yetki kapısı **değil**, yalnız keşfedilebilirlik — asıl kontrol `/admin` layout'unda ve her admin RPC'sinin içinde; bayrak istemcide değiştirilse bile hiçbir veri görünmez.
 
 **R7 sonrası bekleme listesi:** reddedilen ödevde öğrenciye geri bildirim metni; öğrenci mobil ödev ekranının kompakt revizyonu; aynı kitapta ardışık çoklu hedefler (Hedef 2/3) için UI; toplu kitap içe aktarma. **R7-02 dışında bırakılanlar** (bilinçli): otomatik kaynak öneri motoru, %70 ilerleme eşiği, konu eşiği ile kaynak başlatma, kaynak zorluk puanları, zorunlu tam müfredat eşleştirmesi.
+
+
+### R7-03 — Kitap eklemede alt bölüm: ikinci adım
+
+Şartnamenin değişiklik listesi ("+ Alt Bölüm Ekle") yalnız DÜZENLEME ekranında karşılanmıştı. Kitap **ekleme** ekranı hâlâ düz bölüm + test sayısı istiyordu; öğretmen 3D TYT'yi eklerken alt bölüm giremiyor, kitabı yanlış şekilde kaydedip sonra tek tek dönüştürmek zorunda kalıyordu. 076'daki dönüştürme RPC'sine ihtiyaç duyulmasının sebebi de buydu: ekleme ekranının ürettiği veri baştan yanlış biçimdeydi.
+
+**Neden tek adım değil.** Alt bölüm kaydı bölümün ID'sine bağlanır — şartnamenin kendi cümlesi: *"İç kimlik test numarasıyla değil ilgili Bölüm/Alt Bölüm kaydının ID'siyle tutulmalı."* O ID'ler kitap kaydedilmeden yoktur. Tek adımda yapılsaydı istemcinin geçici kimlik uydurup sunucuda eşlemesi gerekirdi; yani tam olarak şartnamenin kaçınmamızı istediği şey. İkinci gerekçe daha sıradan: form zaten 400 satır ve 30 bölümlü bir kitapta iç içe iki dizi alanı ekrana sığmıyor.
+
+**Adım isteğe bağlı.** Alt bölüm zorunlu değildir (§1), bu yüzden "Alt bölüm eklemeden bitir" her zaman açık. **Sayfa kitapları bu adımı hiç görmez**: 061'de `add_book_subsection` sayfa kitaplarını açıkça reddediyor, öğretmeni yapamayacağı bir ekrana göndermek adımı gereksiz bir engele çevirirdi.
+
+**Yeni bileşen yazılmadı.** İkinci adım düzenleme ekranındaki `SubsectionList`'i olduğu gibi kullanıyor — hem ekleme hem dönüştürme yolunu zaten o biliyor. Kopyalansaydı iki ekran bir gün farklı davranırdı.
+
+### R7 / Site Testi 05 — Haftalık Akış (077)
+
+Belgenin tespiti: mevcut "Haftalık Plan" ekranı haftayı hiç takip etmiyordu; kitap haritasından çalışma seçip yayınlıyordu. Yani "ne veriyorum?" sorusunu çözen bir ekrana, "öğrenci bu haftayı nasıl götürüyor?" sorusunun adı verilmişti. Ad ve görev ayrıldı: **Ödev Planlama** yük yerleştirir, **Haftalık Akış** yerleşen yükü yönetir. Yol (`homework/new`) değişmedi — kayıtlı bağlantıları kırmanın karşılığı yok, sorun adlandırmaydı.
+
+**Asıl veri sorunu tarihin yetmemesiydi.** Bir ödevin tek zaman bilgisi `homework_batches.due_date` idi. Belge (§5): *"Ödevin yalnız bir son teslim tarihi olması yeterli değildir. Her ödevin hangi Haftalık Akış'a ait olduğu da açıkça tutulmalıdır."* Aidiyeti tarihten çıkarmak neden yetmiyor: akışın kapanışı sonradan taşındığında, 20 Eylül'e verilmiş bir ödev birden başka bir haftaya ait görünürdü. `weekly_flow_id` bu yüzden türetilmiş değil **kayıtlı**; geçmiş akışların "değişmeden arşivlenmesi" (kabul #12) ancak böyle mümkün. Sütun nullable ve öyle kalmalı: akış kavramından önceki bütün ödevleri uydurma bir haftaya bağlamak, olmayan bir geçmişi kaydetmek olurdu.
+
+**İkinci deadline doğmasın diye tek sütun.** `due_at` akışın tek resmi kapanışıdır; `due_source` yalnız o tarihin nereden geldiğini söyler (`anchor` / `custom`). Ayrı bir "ana temas tarihi" sütunu açmak cazipti ama iki tarih bir gün ayrışır ve hangisinin resmi olduğunu kimse bilemezdi — kabul #3'ün tam tersi. Ana temastan gelen öneri kaydedilmez, ekranda anlık hesaplanır; öneri ile kayıt karışırsa öğretmenin koymadığı bir söz doğar.
+
+**"Tek aktif akış" kuralı şemada, arayüzde değil.** `uq_weekly_flows_one_active` kısmi tekil indeksi. Uygulama katmanında kalsaydı iki sekmeden aynı anda akış açan bir öğretmen kontrolü yarıştırabilirdi.
+
+**Zamanında teslim bir fotoğraftır, oran değil.** Kapanış anında `on_time_delivered`/`on_time_total` yazılır ve bir daha değişmez. Tamamlanma oranından türetilemez: geç teslimler sonradan eklenince oran 135/135'e çıkar, ama "110'u zamanında geldi" bilgisi o an kaydedilmezse geri getirilemez. Fotoğraf SQL'de çekiliyor — istemciye hesaplatmak, iki tarayıcının iki farklı sayı yazması demekti. Ölçüt **öğrencinin gönderimi**, öğretmenin onayı değil (kabul #8): onaya bağlansaydı öğretmenin geç bakması öğrenciyi geç teslim etmiş gösterirdi.
+
+**Tempo yayın anından başlar**, akışın açılışından değil (§4). Belgenin örneği: ödev Pazartesi 13:00'te görünür olduysa öğrenci Pazar sabahından beri gecikmiş sayılmaz. Açılış kullanılsaydı öğretmenin geç yayınladığı bir haftada öğrenci borçlu doğardı. Yük hiç yayınlanmadıysa tempo **yoktur** (null) — sıfır yükü sıfır güne bölüp "kritik" demek, henüz iş verilmemiş öğrenciyi suçlamak olurdu.
+
+**Durum bildirimindeki sabit "3 günde bir" tek mantık olmaktan çıktı** (kabul #10). İki günlük bir akışta anlamsız, on günlük bir akışta geç kalıyordu. Artık iki tetikleyici var ve ikisi de yeterli: akışın ortası geçtiyse (ritim) ya da teslim sessizliği eşiği aşıldıysa (hareket). Sessizlik metni bilinçli olarak bir olgudur, yargı değil — belgenin kendi uyarısı: *"Bu, 'çalışmıyor' anlamına gelmez."*
+
+**Ödeve bağlama yayından sonra ve ayrı yapılıyor.** Aidiyet yayının ön koşulu değil: aktif akışı olmayan öğrenciye ödev verilememesi saçma olurdu. Bağlanamazsa parti akışsız kalır — kaybolmaz, yalnız bu haftanın toplamına karışmaz (kabul #7). Karar `attach_batch_to_flow` içinde; arayüzde tarih karşılaştırılsaydı sunucuyla bir gün ayrışırdı.
+
+**Kapsam sınırı belgenin kendisinden:** öğrencinin günlük dağıtımı (sürükle-bırak, "güne taşı", mobil görünüm) R7-05'in *"sonraki adım"* diye işaretlediği iştir, bu yüzden `planned_for_date` tablosu açılmadı. Açılsaydı kimsenin yazmadığı ve bu yüzden yalan söyleyen bir sütun olurdu. Ekrandaki dağıtım cümlesi şimdilik "akış açılışındaki yük" ile "sonradan eklenen" ayrımından üretiliyor; öğrenci ekranı geldiğinde `plannedUnits` gerçek dağıtımdan okunacak, cümle değişmeyecek.
+
+**Yan bulgu:** 074'ün dört tablosu (`student_groups`, `student_services`, `group_sessions`, `service_sessions`) kiracı izolasyon testine hiç eklenmemişti. Bunlar reşit olmayan öğrencilerin haftalık programını ve kiminle ne zaman görüştüğünü taşıyor; listeye girmeyen tablo, o dosyanın hiç bakmadığı tablodur. `weekly_flows` ile birlikte eklendi.

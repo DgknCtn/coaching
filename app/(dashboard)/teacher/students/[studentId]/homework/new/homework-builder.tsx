@@ -476,7 +476,7 @@ export function HomeworkBuilder({
             <span className="text-sm text-muted-foreground">{studentName}</span>
             <span className="text-muted-foreground/50">›</span>
             <h1 className="truncate text-xl font-semibold tracking-tight">
-              {activeBook?.title ?? 'Haftalık Plan'}
+              {activeBook?.title ?? 'Ödev Planlama'}
             </h1>
             {activeBook?.examType && <Badge variant="info">{activeBook.examType}</Badge>}
           </div>
@@ -767,7 +767,7 @@ export function HomeworkBuilder({
                     </Label>
                     <Input
                       id="title"
-                      placeholder="Örn: Haftalık Plan - 12. Hafta"
+                      placeholder="Örn: 12. Hafta ödevi"
                       value={title}
                       onChange={e => setTitle(e.target.value)}
                     />
