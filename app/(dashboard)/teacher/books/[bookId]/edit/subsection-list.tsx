@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Save, Split, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { testCountFromRange } from '@/lib/book-structure'
+import { canConvertToSubsections, testCountFromRange } from '@/lib/book-structure'
 import {
   addSubsectionAction,
+  convertSectionToSubsectionsAction,
   deleteSubsectionAction,
   renameSubsectionAction,
   setSubsectionTestRangeAction,
@@ -42,13 +43,16 @@ export function SubsectionList({
   sectionId,
   subsections,
   sectionTestCount,
+  usedTestCount,
   hasProgress,
 }: {
   bookId: string
   sectionId: string
   subsections: SubsectionRow[]
-  /** Bölümün KENDİ testleri; alt bölüme geçişi engelleyen tek şey. */
+  /** Bölümün KENDİ testleri. Varsa önce dönüştürme gerekir. */
   sectionTestCount: number
+  /** Bu testlerden kaçı ödevde veya tamamlama kaydında kullanılmış. */
+  usedTestCount: number
   hasProgress: boolean
 }) {
   const router = useRouter()
@@ -59,9 +63,21 @@ export function SubsectionList({
 
   const newCount = testCountFromRange(Number(start) || null, Number(end) || null)
 
-  // Bölümün kendi testleri varsa alt bölüme geçilemez (RPC de reddediyor);
-  // kullanıcı bunu denemeden önce görmeli.
-  const blocked = subsections.length === 0 && sectionTestCount > 0
+  // BÖLÜMÜN KENDİ TESTLERİ VARSA: doğrudan ekleme yerine DÖNÜŞTÜRME.
+  //
+  // 076 öncesinde burada yalnız bir uyarı vardı ve "önce bölümün test
+  // sayısını sıfırlayın" diyordu — yapılamayan bir iş. Artık aynı form
+  // dönüştürme düğmesiyle çalışıyor; karar lib/book-structure.ts'teki
+  // saf kontrolden geliyor ki RPC ile aynı şeyi söylesin.
+  const needsConversion = subsections.length === 0 && sectionTestCount > 0
+  const convertCheck = canConvertToSubsections({
+    sectionTestCount,
+    usedTestCount,
+    // Bu bileşen sayfa kitabında zaten hiç render edilmiyor
+    // (book-edit-form.tsx: {!isPageBook && ...}).
+    isPageBook: false,
+    hasSubsections: subsections.length > 0,
+  })
 
   function add() {
     startTransition(async () => {
@@ -71,6 +87,42 @@ export function SubsectionList({
         return
       }
       toast.success('Alt bölüm eklendi.')
+      setTitle('')
+      setStart('')
+      setEnd('')
+      router.refresh()
+    })
+  }
+
+  /**
+   * Bölümü alt bölümlere ayırır.
+   *
+   * YIKICI: bölümün mevcut testleri kaldırılır. Bu yüzden onay isteniyor
+   * ve kaç testin gideceği cümlede yazıyor — "N test" soyut bir sayı
+   * değil, öğretmenin kitaba girdiği iş.
+   */
+  function convert() {
+    startTransition(async () => {
+      if (
+        !window.confirm(
+          `Bölümün mevcut ${sectionTestCount} testi kaldırılacak ve yerine ` +
+            `"${title}" alt bölümü kurulacak. Devam edilsin mi?`
+        )
+      ) {
+        return
+      }
+      const r = await convertSectionToSubsectionsAction(
+        bookId,
+        sectionId,
+        title,
+        Number(start),
+        Number(end)
+      )
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success('Bölüm alt bölümlere ayrıldı.')
       setTitle('')
       setStart('')
       setEnd('')
@@ -105,12 +157,20 @@ export function SubsectionList({
         />
       ))}
 
-      {blocked ? (
+      {needsConversion && (
         <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning-foreground">
-          Bu bölümün kendi testleri var. Alt bölüm eklemek için önce bölümün test
-          sayısını sıfırlayın; aynı bölümde iki ayrı test kaynağı olamaz.
+          {convertCheck.ok ? (
+            <>
+              Bu bölümün kendi {sectionTestCount} testi var. Aynı bölümde iki ayrı test
+              kaynağı olamaz; aşağıdaki alt bölüm kurulurken bu testler kaldırılır.
+            </>
+          ) : (
+            convertCheck.message
+          )}
         </p>
-      ) : (
+      )}
+
+      {needsConversion && !convertCheck.ok ? null : (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-2.5">
           <div className="min-w-40 flex-1 space-y-1.5">
             <Label htmlFor={`sub-title-${sectionId}`} className="text-xs">
@@ -153,14 +213,25 @@ export function SubsectionList({
               {newCount || '—'}
             </p>
           </div>
+          {/* Aynı form iki işi görür: bölümün kendi testleri varsa
+              ekleme yerine DÖNÜŞTÜRME yapılır — alanlar birebir aynı
+              olduğu için ikinci bir form kullanıcıya aynı şeyi iki
+              kez sorardı. Düğmenin metni hangi işin yapılacağını
+              söyler, çünkü dönüştürme testleri kaldırır. */}
           <Button
             size="sm"
-            variant="outline"
+            variant={needsConversion ? 'default' : 'outline'}
             disabled={isPending || !title.trim() || newCount === 0}
-            onClick={add}
+            onClick={needsConversion ? convert : add}
           >
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus />}
-            Alt bölüm ekle
+            {isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : needsConversion ? (
+              <Split />
+            ) : (
+              <Plus />
+            )}
+            {needsConversion ? 'Alt bölümlere ayır' : 'Alt bölüm ekle'}
           </Button>
         </div>
       )}

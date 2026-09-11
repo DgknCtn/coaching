@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
   ClipboardList,
@@ -68,6 +69,10 @@ export const studentScreens = [
   { slug: 'mufredat', path: 'curriculum', label: 'Müfredat Akışı', icon: CalendarRange },
   { slug: 'kaynak', path: 'goals', label: 'Kaynak Planı', icon: Library },
   { slug: 'haftalik', path: 'homework/new', label: 'Haftalık Plan', icon: ListChecks },
+  // Ders & Görüşmeler (R7-04). Menü mimarisinin tamamı Faz 3'te
+  // yeniden kurulacak; şimdilik ekran mevcut şeride ekleniyor ki
+  // Hizmet Yapısı kurulabilsin — Haftalık Akış buna bağlı.
+  { slug: 'gorusmeler', path: 'gorusmeler', label: 'Görüşmeler', icon: CalendarCheck },
   { slug: 'koruma', path: 'protection', label: 'Koruma Havuzu', icon: ShieldCheck },
   { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
 ] as const

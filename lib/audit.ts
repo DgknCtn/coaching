@@ -31,6 +31,14 @@ export type AuditAction =
   | 'target.set'
   | 'target.clear'
   | 'curriculum.flow_save'
+  // Ders & Görüşmeler (R7-04). Hizmet düzeni ve gerçekleşen oturum,
+  // veli tarafındaki hizmet kaydının ve finans tahakkukunun kaynağı;
+  // "bu ders neden yapılmadı sayıldı" sorusunun izi burada kalır.
+  | 'service.create'
+  | 'service.status'
+  | 'session.outcome'
+  | 'session.reschedule'
+  | 'session.makeup'
   | 'workspace.switch'
   | 'book.outline_import'
   | 'book.import'
@@ -77,6 +85,11 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'target.set': 'Hedef belirledi',
   'target.clear': 'Hedefi kaldırdı',
   'curriculum.flow_save': 'Müfredat akışını kaydetti',
+  'service.create': 'Hizmet tanımladı',
+  'service.status': 'Hizmet durumunu değiştirdi',
+  'session.outcome': 'Görüşme durumunu işaretledi',
+  'session.reschedule': 'Görüşmeyi erteledi',
+  'session.makeup': 'Telafi oluşturdu',
   'workspace.switch': 'Çalışma alanı değiştirdi',
   'billing.checkout_started': 'Ödeme başlattı',
   'billing.order_created': 'Sipariş oluşturdu',

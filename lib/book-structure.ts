@@ -132,3 +132,63 @@ export function formatPageAndTestRange(
 
   return parts.join(' · ')
 }
+
+// ============================================================
+// BÖLÜMÜ ALT BÖLÜMLERE AYIRMA — ön koşul (076)
+// ============================================================
+// Bu fonksiyonun varlık sebebi bir hata: arayüz, veritabanının kabul
+// etmediği bir şeyi tavsiye ediyordu. "Bölümün kendi testleri var" diyen
+// uyarı çözüm olarak "önce test sayısını sıfırlayın" öneriyordu, ama
+// test sayısı UI'da, zod'da ve SQL'de birden 1'in altına inemiyordu.
+// Talimat imkânsızdı ve alt bölüm özelliği eski kitaplarda ölüydü.
+//
+// Karar tek yerde toplandı ki arayüz ile RPC aynı şeyi söylesin. Kural
+// iki yerde ayrı yazıldığında, ikisinin ayrışması an meselesidir.
+
+export type ConvertBlockReason =
+  /** Sayfa ile takipte alt bölüm hiç açılmaz (061). */
+  | 'page_book'
+  /** Zaten alt bölümlere ayrılmış; normal ekleme yolu kullanılmalı. */
+  | 'already_split'
+  /** Dönüştürecek bir şey yok: bölümün kendi testi zaten yok. */
+  | 'nothing_to_convert'
+  /** Testlerden biri ödevde veya tamamlama kaydında kullanılmış. */
+  | 'tests_in_use'
+
+export const CONVERT_BLOCK_MESSAGE: Record<ConvertBlockReason, string> = {
+  page_book: 'Sayfa ile takip edilen kaynakta alt bölüm açılamaz.',
+  already_split: 'Bu bölüm zaten alt bölümlere ayrılmış.',
+  nothing_to_convert: 'Bu bölümün kendi testi yok; alt bölümü doğrudan ekleyebilirsiniz.',
+  tests_in_use:
+    'Bu bölümün testleri bir ödevde veya tamamlama kaydında kullanılmış; bölüm alt bölümlere ayrılamaz.',
+}
+
+export interface ConvertCheckInput {
+  /** Bölümün KENDİ testlerinin sayısı (alt bölümlerinki değil). */
+  sectionTestCount: number
+  /** Bu testlerden kaçı ödevde/tamamlamada kullanılmış. */
+  usedTestCount: number
+  isPageBook: boolean
+  hasSubsections: boolean
+}
+
+/**
+ * Bölüm alt bölümlere ayrılabilir mi?
+ *
+ * SIRA ÖNEMLİ: en kalıcı engel önce söylenir. Sayfa kitabında "testler
+ * kullanılmış" demek, öğretmeni çözülemeyecek bir işe yönlendirirdi —
+ * o kaynakta sorun testlerin kullanımı değil, kaynağın türü.
+ */
+export function canConvertToSubsections(
+  input: ConvertCheckInput
+): { ok: true } | { ok: false; reason: ConvertBlockReason; message: string } {
+  const block = (reason: ConvertBlockReason) =>
+    ({ ok: false as const, reason, message: CONVERT_BLOCK_MESSAGE[reason] })
+
+  if (input.isPageBook) return block('page_book')
+  if (input.hasSubsections) return block('already_split')
+  if (input.sectionTestCount <= 0) return block('nothing_to_convert')
+  if (input.usedTestCount > 0) return block('tests_in_use')
+
+  return { ok: true }
+}

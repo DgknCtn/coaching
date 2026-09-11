@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 import type { WorkspaceUsage } from '@/lib/plans'
 import {
   ACTIVE_WORKSPACE_COOKIE,
-  resolveActiveWorkspaceId,
+  resolveActiveWorkspace,
   type WorkspaceMembership,
 } from '@/lib/active-workspace'
 
@@ -76,11 +76,31 @@ export const getTeacherContext = cache(async function getTeacherContext() {
     .filter(m => m.status === 'active' && ['owner', 'teacher'].includes(m.role))
     .map(m => ({ workspaceId: m.workspace_id, role: m.role }))
 
-  const workspaceId = resolveActiveWorkspaceId(
+  // ÇÖZÜMLEME GEREKÇESİYLE BİRLİKTE (P0 / 07 Eylül 2026).
+  //
+  // Öğretmen hiçbir şey silmeden eski veri setini görebiliyordu. Bunun
+  // tek sessiz yolu, çerezdeki tercihin doğrulanamayıp varsayılana
+  // düşülmesi: bağlam bambaşka bir çalışma alanına kayar, ekran hatasız
+  // çizilir ve geriye hiçbir iz kalmaz. Karar doğru, görünürlük yoktu.
+  const resolution = resolveActiveWorkspace(
     memberships,
     await readActiveWorkspaceCookie(),
     profile.default_workspace_id
   )
+  const workspaceId = resolution.workspaceId
+
+  if (resolution.rejectedPreference) {
+    console.error(
+      '[workspace] çerezdeki aktif alan tercihi doğrulanamadı, düşüldü:',
+      JSON.stringify({
+        profileId: profile.id,
+        rejectedPreference: resolution.rejectedPreference,
+        fellBackTo: workspaceId,
+        source: resolution.source,
+        membershipCount: memberships.length,
+      })
+    )
+  }
 
   // Üyelik çözülemedi. İki farklı durum olabilir ve ayırt edilmeli:
   // gerçekten öğretmen değil (→ /login) ya da çalışma alanı askıya

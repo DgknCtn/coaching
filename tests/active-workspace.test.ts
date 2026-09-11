@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveActiveWorkspaceId,
+  resolveActiveWorkspace,
   rolesInWorkspace,
   type WorkspaceMembership,
 } from '@/lib/active-workspace'
@@ -54,6 +55,72 @@ describe('resolveActiveWorkspaceId', () => {
     const tek = [m('solo')]
     expect(resolveActiveWorkspaceId(tek, null, null)).toBe('solo')
     expect(resolveActiveWorkspaceId(tek, 'baska', 'baska')).toBe('solo')
+  })
+})
+
+describe('resolveActiveWorkspace (gerekçe)', () => {
+  const memberships = [m('a'), m('b')]
+
+  // P0 (07 Eylül 2026): öğretmen hiçbir şey silmeden eski veri setini
+  // görüyordu. Çözümleme doğru karar veriyor; kusur, yanlış çerezle
+  // BAŞKA bir alana düşmenin hiçbir iz bırakmamasıydı. Bu testler
+  // gerekçenin dışarı verildiğini sabitliyor.
+
+  it('geçerli tercihte kaynak cookie ve reddedilen tercih yok', () => {
+    expect(resolveActiveWorkspace(memberships, 'b', 'a')).toEqual({
+      workspaceId: 'b',
+      source: 'cookie',
+      rejectedPreference: null,
+    })
+  })
+
+  it('doğrulanamayan tercih rejectedPreference olarak dışarı verilir', () => {
+    expect(resolveActiveWorkspace(memberships, 'baskasinin-workspace-i', 'a')).toEqual({
+      workspaceId: 'a',
+      source: 'default',
+      rejectedPreference: 'baskasinin-workspace-i',
+    })
+  })
+
+  it('tercih HİÇ yoksa sessizce varsayılana düşmek normaldir', () => {
+    // Çerezsiz ilk giriş. Burada uyarılacak bir şey yok.
+    expect(resolveActiveWorkspace(memberships, null, 'a')).toEqual({
+      workspaceId: 'a',
+      source: 'default',
+      rejectedPreference: null,
+    })
+  })
+
+  it('varsayılan da tutmazsa ilk üyeliğe düşer ve bunu söyler', () => {
+    expect(resolveActiveWorkspace(memberships, 'yok', 'yok-da')).toEqual({
+      workspaceId: 'a',
+      source: 'first',
+      rejectedPreference: 'yok',
+    })
+  })
+
+  it('hiç üyelik yoksa source none', () => {
+    expect(resolveActiveWorkspace([], 'a', 'b')).toEqual({
+      workspaceId: null,
+      source: 'none',
+      rejectedPreference: 'a',
+    })
+  })
+
+  it('id döndüren sürümle her zaman aynı sonucu verir', () => {
+    // İki fonksiyon ayrı kopyalara ayrılırsa kural sessizce çatallanır.
+    const cases: [string | null, string | null][] = [
+      ['b', 'a'],
+      [null, 'a'],
+      ['yok', 'a'],
+      ['yok', 'yok-da'],
+      [null, null],
+    ]
+    for (const [pref, def] of cases) {
+      expect(resolveActiveWorkspace(memberships, pref, def).workspaceId).toBe(
+        resolveActiveWorkspaceId(memberships, pref, def)
+      )
+    }
   })
 })
 
