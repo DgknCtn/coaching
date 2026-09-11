@@ -50,12 +50,67 @@ export function resolveActiveWorkspaceId(
   preferredId: string | null,
   defaultId: string | null
 ): string | null {
+  return resolveActiveWorkspace(memberships, preferredId, defaultId).workspaceId
+}
+
+/**
+ * Hangi kaynaktan seçildi?
+ *
+ * `cookie`  kullanıcının açık tercihi kullanıldı.
+ * `default` tercih yoktu; profilin varsayılanına düşüldü.
+ * `first`   ikisi de tutmadı; ilk üyeliğe düşüldü.
+ * `none`    hiç üyelik yok.
+ */
+export type WorkspaceSource = 'cookie' | 'default' | 'first' | 'none'
+
+export interface WorkspaceResolution {
+  workspaceId: string | null
+  source: WorkspaceSource
+  /**
+   * Çerezde bir tercih VARDI ama doğrulanamadı — bu yüzden yok sayıldı.
+   *
+   * NEDEN AYRI ALAN: bu, kullanıcının hiçbir şey silmeden bambaşka bir
+   * veri seti görmesinin tek sessiz yolu (P0 / 07 Eylül 2026 raporu).
+   * Çözümlemenin kendisi doğru davranıyor — kusur, doğru davranışın
+   * hiçbir iz bırakmaması. Çağıran taraf bunu görüp loglayabilsin diye
+   * karar ile birlikte dışarı verilir.
+   */
+  rejectedPreference: string | null
+}
+
+/**
+ * `resolveActiveWorkspaceId`'nin gerekçesini de veren hâli.
+ *
+ * Karar mantığı birebir aynıdır; yalnız hangi dala girildiği de dönülür.
+ * İki fonksiyonun ayrı kopyalar olmaması önemli: kural değişirse ikisi
+ * birden değişsin diye id döndüren sürüm buna delege eder.
+ */
+export function resolveActiveWorkspace(
+  memberships: WorkspaceMembership[],
+  preferredId: string | null,
+  defaultId: string | null
+): WorkspaceResolution {
   const has = (id: string | null) =>
     !!id && memberships.some(m => m.workspaceId === id)
 
-  if (has(preferredId)) return preferredId
-  if (has(defaultId)) return defaultId
-  return memberships[0]?.workspaceId ?? null
+  if (has(preferredId)) {
+    return { workspaceId: preferredId, source: 'cookie', rejectedPreference: null }
+  }
+
+  // Tercih vardı ama üyelik doğrulanmadı: çerez elle değiştirilmiş,
+  // kullanıcı o alandan çıkarılmış ya da alan askıya alınmış olabilir.
+  const rejectedPreference = preferredId ?? null
+
+  if (has(defaultId)) {
+    return { workspaceId: defaultId, source: 'default', rejectedPreference }
+  }
+
+  const first = memberships[0]?.workspaceId ?? null
+  return {
+    workspaceId: first,
+    source: first ? 'first' : 'none',
+    rejectedPreference,
+  }
 }
 
 /** Aynı workspace'te birden çok rol olabilir (owner + teacher gibi). */

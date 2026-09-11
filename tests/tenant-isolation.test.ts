@@ -81,6 +81,15 @@ const LOCKED_TABLES = [
   'student_fees',
   'finance_lessons',
   'finance_payments',
+  // 074 (Ders & Görüşmeler) ve 077 (Haftalık Akış) tabloları. Bunlar
+  // reşit olmayan öğrencilerin haftalık programını ve kiminle ne zaman
+  // görüştüğünü taşıyor — konum ve rutin bilgisi. Listeye girmeyen bir
+  // tablo, bu dosyanın hiç bakmadığı bir tablodur.
+  'student_groups',
+  'student_services',
+  'group_sessions',
+  'service_sessions',
+  'weekly_flows',
 ] as const
 
 async function anonSelect(view: string) {

@@ -39,7 +39,7 @@ export async function createHomeworkBatchAction(
   const { workspaceId: sessionWorkspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
-  const { error } = await supabase.rpc('create_homework_batch', {
+  const { data, error } = await supabase.rpc('create_homework_batch', {
     p_workspace_id: sessionWorkspaceId,
     p_academic_term_id: termId,
     p_student_id: studentId,
@@ -52,6 +52,30 @@ export async function createHomeworkBatchAction(
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // R7/05 kabul #4: "Ödev Planlama varsayılan olarak aktif Haftalık
+  // Akış'a yayın yapmalı."
+  //
+  // Bağlama yayından SONRA ve AYRI yapılıyor, çünkü aidiyet yayının ön
+  // koşulu değil: aktif akışı olmayan öğrenciye ödev verilememesi
+  // saçma olurdu. Bağlanamazsa (akış yok ya da son teslim akışın
+  // kapanışını aşıyor — Senaryo B) parti akışsız kalır; kaybolmaz,
+  // yalnız bu haftanın toplamına karışmaz (kabul #7).
+  //
+  // Karar RPC'nin içinde: aidiyet kuralı tek yerde kalsın diye. Burada
+  // tarih karşılaştırılsaydı arayüzle sunucu bir gün ayrışırdı.
+  const batchId = (data as { homework_batch_id?: string } | null)?.homework_batch_id
+  if (batchId) {
+    const { error: attachError } = await supabase.rpc('attach_batch_to_flow', {
+      p_batch_id: batchId,
+    })
+    // Bağlama hatası yayını geri almaz — ödev verilmiştir. Sessizce
+    // yutulmuyor ama kullanıcıya hata olarak da dönülmüyor: öğretmenin
+    // gördüğü iş başarılı.
+    if (attachError) {
+      console.error('[weekly-flow] ödev aktif akışa bağlanamadı:', attachError.message)
+    }
+  }
 
   // Ödev yayınlama ürünün merkezi eylemi: hem denetim kaydına hem
   // kullanım sayacına girer.

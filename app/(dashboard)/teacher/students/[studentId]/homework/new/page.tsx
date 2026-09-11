@@ -38,7 +38,7 @@ export default async function NewHomeworkPage({
           <Link href={`/teacher/students/${studentId}`}>
             <Button variant="ghost" size="icon-sm"><ArrowLeft className="size-4" /></Button>
           </Link>
-          <h1 className="text-xl font-semibold">Haftalık Plan</h1>
+          <h1 className="text-xl font-semibold">Ödev Planlama</h1>
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive">
           <AlertCircle className="size-5 shrink-0" />
@@ -84,7 +84,7 @@ export default async function NewHomeworkPage({
           <Link href={`/teacher/students/${studentId}`}>
             <Button variant="ghost" size="icon-sm"><ArrowLeft className="size-4" /></Button>
           </Link>
-          <h1 className="text-xl font-semibold">Haftalık Plan</h1>
+          <h1 className="text-xl font-semibold">Ödev Planlama</h1>
         </div>
         <div className="py-12 text-center text-muted-foreground">
           <p>Bu öğrenciye atanmış kitap yok.</p>
