@@ -14,7 +14,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { EXAM_TYPE_OPTIONS, GRADE_LEVELS, LESSON_TYPE_OPTIONS } from '@/lib/validation'
+import { EXAM_TYPE_OPTIONS, GRADE_LEVELS, SERVICE_DRAFT_OPTIONS } from '@/lib/validation'
 
 // İSTEMCİ ŞEMASI SUNUCUNUNKİYLE AYNI KURALI TAŞIR.
 //
@@ -47,6 +47,12 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
+  // ÇOKLU HİZMET (R7-04 §5): react-hook-form'a bağlanmadı çünkü
+  // öğrenci kaydının bir alanı değil, kayıtla birlikte açılan ayrı
+  // satırlar. Düzenleme modunda hiç gösterilmiyor — var olan hizmetler
+  // Ders & Görüşmeler'de yönetiliyor, ikinci bir yazma yolu hangisinin
+  // geçerli olduğunu belirsizleştirirdi.
+  const [serviceDrafts, setServiceDrafts] = useState<string[]>([])
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -87,7 +93,8 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
         data.gradeLevel || undefined,
         data.examType || undefined,
         data.lessonType || undefined,
-        data.notes || undefined
+        data.notes || undefined,
+        serviceDrafts
       )
       if (result?.error) setServerError(result.error)
     })
@@ -129,16 +136,43 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="lessonType">Çalışma Modeli</Label>
-            <NativeSelect
-              id="lessonType"
-              {...register('lessonType')}
-            >
-              <option value="">Seçin</option>
-              {LESSON_TYPE_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </NativeSelect>
-          </div>
+{/* R7-04 §5: tek seçimli "Çalışma Modeli" kalktı. Bir öğrencinin
+              aynı anda hem grup dersi hem bireysel koçluğu olabiliyor;
+              tek seçim bunlardan birini görünmez kılıyordu. */}
+          {mode === 'create' && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                Hizmetler <span className="text-muted-foreground">(isteğe bağlı)</span>
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SERVICE_DRAFT_OPTIONS.map((o) => (
+                  <label
+                    key={o.value}
+                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={serviceDrafts.includes(o.value)}
+                      onChange={(e) =>
+                        setServiceDrafts((prev) =>
+                          e.target.checked
+                            ? [...prev, o.value]
+                            : prev.filter((v) => v !== o.value)
+                        )
+                      }
+                    />
+                    {o.label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Seçilenler pasif olarak açılır. Gün ve saat, öğrencinin Ders &amp;
+                Görüşmeler ekranından tamamlanıp aktifleştirilir. Grup dersi,
+                grubun oluşturulabildiği o ekrandan eklenir.
+              </p>
+            </fieldset>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">

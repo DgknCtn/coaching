@@ -55,8 +55,42 @@ export const EXAM_TYPE_OPTIONS: { value: string; label: string }[] = EXAM_TYPES.
   label: v,
 }))
 
+/**
+ * YENİ ÖĞRENCİDE HİZMET TASLAKLARI (R7-04 Rev.3 §5).
+ *
+ * Eski tek seçimli "Çalışma Modeli" bir öğrencinin TEK bir şeyi
+ * olduğunu varsayıyordu; gerçekte "Çarşamba grup matematik + Cumartesi
+ * bireysel koçluk" sıradan bir kombinasyon. Kayıt anında birden fazla
+ * hizmet seçilebiliyor.
+ *
+ * SEÇİLENLER PASİF AÇILIR: kayıt anında gün ve saat henüz belli değil.
+ * Pasif satır oturum üretmez, sayaçlara girmez, ana temas olmaz; Ders &
+ * Görüşmeler ekranında düzeni tamamlanıp aktifleştirilir. Alternatif —
+ * kayıt formunda gün/saat sormak — öğrenci eklemeyi bir program
+ * planlama seansına çevirirdi.
+ *
+ * GRUP BURADA YOK: grup hizmeti bir gruba bağlı olmak zorunda (074
+ * CHECK) ve grup henüz seçilemez. Grup dersi, grubun oluşturulabildiği
+ * yerde — Ders & Görüşmeler'de — eklenir.
+ */
+export const SERVICE_DRAFT_OPTIONS: {
+  value: string
+  label: string
+  kind: 'ders' | 'kocluk'
+  medium: 'online' | 'yuz_yuze'
+}[] = [
+  { value: 'ders_yuz_yuze', label: 'Yüz yüze birebir ders', kind: 'ders', medium: 'yuz_yuze' },
+  { value: 'ders_online', label: 'Online birebir ders', kind: 'ders', medium: 'online' },
+  { value: 'kocluk_yuz_yuze', label: 'Yüz yüze koçluk', kind: 'kocluk', medium: 'yuz_yuze' },
+  { value: 'kocluk_online', label: 'Online koçluk', kind: 'kocluk', medium: 'online' },
+]
+
+export const SERVICE_DRAFT_VALUES = SERVICE_DRAFT_OPTIONS.map((o) => o.value)
+
 /** R6-11: "Ders Türü" -> "Çalışma Modeli". DEĞERLER DEĞİŞMEZ; yalnız
- *  kullanıcıya görünen alan adı değişir, bu yüzden migration gerekmez. */
+ *  kullanıcıya görünen alan adı değişir, bu yüzden migration gerekmez.
+ *  R7-04: form alanı kaldırıldı (yerine çoklu hizmet geldi); sabit,
+ *  eski kayıtları okuyan yerler için duruyor. */
 export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'yuz_yuze_ozel', label: 'Yüzyüze Özel Ders' },
   { value: 'online_birebir', label: 'Online Birebir' },

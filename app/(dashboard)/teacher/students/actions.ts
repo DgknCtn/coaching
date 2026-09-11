@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { studentSchema, assignBookSchema, uuidSchema, firstIssue } from '@/lib/validation'
+import {
+  studentSchema,
+  assignBookSchema,
+  uuidSchema,
+  firstIssue,
+  SERVICE_DRAFT_OPTIONS,
+} from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
 import { trackFeature } from '@/lib/telemetry'
@@ -16,10 +22,23 @@ export async function createStudentAction(
   gradeLevel: string | undefined,
   examType: string | undefined,
   lessonType: string | undefined,
-  notes: string | undefined
+  notes: string | undefined,
+  /**
+   * Kayıt anında seçilen hizmetler (R7-04 §5).
+   *
+   * Tek seçimli "Çalışma Modeli"nin yerini aldı: bir öğrencinin aynı
+   * anda hem grup dersi hem bireysel koçluğu olabilir. Seçilenler PASİF
+   * açılır — gün/saat henüz bilinmiyor ve pasif satır oturum üretmez.
+   */
+  serviceDrafts: string[] = []
 ) {
   const parsed = studentSchema.safeParse({ fullName, email, phone, gradeLevel, examType, lessonType, notes })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  // İstemciden gelen anahtarlar sabit listeye karşı SÜZÜLÜR, doğrudan
+  // yazılmaz: bilinmeyen bir anahtar CHECK'e takılıp öğrenci kaydını da
+  // yarıda bırakırdı.
+  const drafts = SERVICE_DRAFT_OPTIONS.filter((o) => serviceDrafts.includes(o.value))
 
   const { workspaceId, profile } = await getTeacherContext()
   const supabase = await createClient()
@@ -43,6 +62,33 @@ export async function createStudentAction(
   }).select('id').single()
 
   if (error) return { error: dbErrorToTr(error.message) }
+
+  // HİZMET TASLAKLARI ÖĞRENCİDEN SONRA YAZILIR ve hatası öğrenciyi
+  // geri almaz: öğrenci kaydı zaten oluştu, taslak satırlar ekrandan
+  // tekrar eklenebilir. Tersi — hizmet yazılamadı diye kaydı iptal
+  // etmek — kullanıcının doldurduğu formu boşa çıkarırdı.
+  if (drafts.length > 0) {
+    const today = new Date().toISOString().slice(0, 10)
+    await supabase.from('student_services').insert(
+      drafts.map((d) => ({
+        workspace_id: workspaceId,
+        student_id: data.id,
+        kind: d.kind,
+        participation: 'birebir' as const,
+        medium: d.medium,
+        group_id: null,
+        // Yer tutucu düzen: pasif satır oturum üretmediği için bu
+        // değerler hiçbir yerde görünmez; öğretmen Ders & Görüşmeler'de
+        // gerçek gün/saati girip aktifleştirir.
+        weekday: 1,
+        start_time: '09:00',
+        planned_duration_minutes: 60,
+        start_date: today,
+        status: 'passive' as const,
+        created_by_profile_id: profile.id,
+      }))
+    )
+  }
 
   // R6-07: Notlar sekmesi artık academic_notes'u gösteriyor. students.notes
   // geriye dönük uyum için yazılmaya devam ediyor ama TEK BAŞINA yeterli

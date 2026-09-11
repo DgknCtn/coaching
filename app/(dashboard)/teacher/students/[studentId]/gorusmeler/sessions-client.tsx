@@ -348,23 +348,25 @@ export function SessionsClient({
                   {service.status === 'active' ? 'Pasife Al' : 'Aktifleştir'}
                 </Button>
 
-                {/* Düzenleme yalnız AKTİF hizmette: pasif bir hizmetin
-                    ileri tarihli oturumu zaten üretilmiyor, "şu tarihten
-                    itibaren" demenin karşılığı yok. */}
-                {service.status === 'active' && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="mt-3 ml-1"
-                    disabled={isPending}
-                    onClick={() =>
-                      setEditingId((id) => (id === service.id ? null : service.id))
-                    }
-                  >
-                    <Pencil className="size-4" />
-                    {editingId === service.id ? 'Kapat' : 'Düzenle'}
-                  </Button>
-                )}
+                {/* PASİF HİZMET DE DÜZENLENEBİLİR: Yeni Öğrenci ekranında
+                    seçilen hizmetler gün/saati bilinmediği için pasif
+                    taslak olarak açılıyor (§5). Düzenleme aktifle
+                    sınırlansaydı o taslakları tamamlamanın yolu olmazdı.
+                    Pasif satırda "şu tarihten itibaren" alanı hizmetin
+                    başlangıç tarihini belirler; silinecek ileri tarihli
+                    oturum zaten yok. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="mt-3 ml-1"
+                  disabled={isPending}
+                  onClick={() =>
+                    setEditingId((id) => (id === service.id ? null : service.id))
+                  }
+                >
+                  <Pencil className="size-4" />
+                  {editingId === service.id ? 'Kapat' : 'Düzenle'}
+                </Button>
 
                 {editingId === service.id && (
                   <ServiceEditForm
@@ -836,7 +838,9 @@ function ServiceEditForm({
         </NativeSelect>
       </Field>
 
-      <Field label="Şu tarihten itibaren">
+      <Field
+        label={service.status === 'active' ? 'Şu tarihten itibaren' : 'Başlangıç tarihi'}
+      >
         <Input
           type="date"
           value={effectiveFrom}
@@ -845,8 +849,9 @@ function ServiceEditForm({
       </Field>
 
       <p className="text-xs text-muted-foreground sm:col-span-2">
-        Geçmiş kayıtlar değişmez. Bu tarihten sonraki, henüz sonuçlanmamış
-        oturumlar yeni düzene göre yeniden üretilir.
+        {service.status === 'active'
+          ? 'Geçmiş kayıtlar değişmez. Bu tarihten sonraki, henüz sonuçlanmamış oturumlar yeni düzene göre yeniden üretilir.'
+          : 'Hizmet pasif. Düzeni tamamladıktan sonra "Aktifleştir" derseniz oturumlar bu tarihten itibaren üretilir.'}
       </p>
 
       <div className="flex items-end gap-2 sm:col-span-2">
