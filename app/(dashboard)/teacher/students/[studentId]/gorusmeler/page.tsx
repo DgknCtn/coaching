@@ -107,6 +107,8 @@ export default async function StudentSessionsPage({
     { data: groupRows },
     { data: monthCounters },
     { data: archiveRows },
+    { data: monthFinanceRows },
+    { data: seasonRows },
   ] = await Promise.all([
       supabase
         .from('student_services')
@@ -152,6 +154,28 @@ export default async function StudentSessionsPage({
         .eq('workspace_id', workspaceId)
         .order('ay', { ascending: false })
         .limit(60),
+      // ÖDEME DURUMU (§7 no.4) — yalnız bu ay.
+      //
+      // FİNANS 'owner'A KİLİTLİ (066). Sahip olmayan bir öğretmen için
+      // sorgu boş döner; ekran rozeti hiç göstermez. Hata verilmiyor:
+      // görmemesi gereken bir şeyin yokluğu bir arıza değil.
+      supabase
+        .from('student_month_finance_view')
+        .select('accrued_kurus, collected_kurus, balance_kurus')
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .eq('month_start', attributedMonth)
+        .maybeSingle(),
+      // SEZON ÖZETİ (§9). Oturum sayıları herkese, parasal sütunlar
+      // yalnız sahibe görünür — view security_invoker.
+      supabase
+        .from('student_season_summary_view')
+        .select(
+          'birebir_ders_count, birebir_ders_minutes, grup_ders_count, grup_ders_minutes, kocluk_count, kocluk_minutes, total_count, total_minutes, accrued_kurus, collected_kurus, balance_kurus'
+        )
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .maybeSingle(),
     ])
 
   const groupNames = new Map((groupRows ?? []).map((g) => [g.id, g.name as string]))
@@ -289,6 +313,38 @@ export default async function StudentSessionsPage({
         // geçiyor ki istemcinin saati kaymış olsa da ekran aynı şeyi
         // söylesin.
         nowIso={new Date().toISOString()}
+        monthFinance={
+          monthFinanceRows
+            ? {
+                accruedKurus: Number(monthFinanceRows.accrued_kurus ?? 0),
+                collectedKurus: Number(monthFinanceRows.collected_kurus ?? 0),
+                balanceKurus: Number(monthFinanceRows.balance_kurus ?? 0),
+              }
+            : null
+        }
+        season={
+          seasonRows
+            ? {
+                birebirDersCount: Number(seasonRows.birebir_ders_count ?? 0),
+                birebirDersMinutes: Number(seasonRows.birebir_ders_minutes ?? 0),
+                grupDersCount: Number(seasonRows.grup_ders_count ?? 0),
+                grupDersMinutes: Number(seasonRows.grup_ders_minutes ?? 0),
+                koclukCount: Number(seasonRows.kocluk_count ?? 0),
+                koclukMinutes: Number(seasonRows.kocluk_minutes ?? 0),
+                totalCount: Number(seasonRows.total_count ?? 0),
+                totalMinutes: Number(seasonRows.total_minutes ?? 0),
+                // null = finans satırlarını görme yetkisi yok.
+                accruedKurus:
+                  seasonRows.accrued_kurus == null ? null : Number(seasonRows.accrued_kurus),
+                collectedKurus:
+                  seasonRows.collected_kurus == null
+                    ? null
+                    : Number(seasonRows.collected_kurus),
+                balanceKurus:
+                  seasonRows.balance_kurus == null ? null : Number(seasonRows.balance_kurus),
+              }
+            : null
+        }
       />
     </div>
   )

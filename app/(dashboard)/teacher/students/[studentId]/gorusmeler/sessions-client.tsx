@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CalendarPlus, ChevronLeft, ChevronRight, Pencil, Plus, Users } from 'lucide-react'
+import { formatKurus } from '@/lib/billing/pricing'
+import {
+  formatMinutes,
+  monthPaymentLabel,
+  monthPaymentState,
+} from '@/lib/finance'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -78,6 +84,21 @@ export interface SessionRow {
   originPlannedAt: string | null
 }
 
+export interface SeasonSummary {
+  birebirDersCount: number
+  birebirDersMinutes: number
+  grupDersCount: number
+  grupDersMinutes: number
+  koclukCount: number
+  koclukMinutes: number
+  totalCount: number
+  totalMinutes: number
+  /** null = finans tablolarını görme yetkisi yok (066: yalnız 'owner'). */
+  accruedKurus: number | null
+  collectedKurus: number | null
+  balanceKurus: number | null
+}
+
 export interface ServiceCounter {
   serviceId: string
   planned: number
@@ -121,6 +142,8 @@ export function SessionsClient({
   mainContactLabel,
   nextContactAt,
   nowIso,
+  monthFinance,
+  season,
 }: {
   studentId: string
   services: ServiceRow[]
@@ -136,6 +159,9 @@ export function SessionsClient({
   nextContactAt: string | null
   nextContactServiceId: string | null
   nowIso: string
+  /** Bu ayın tahakkuk/tahsilatı. null = finans satırlarını görme yetkisi yok. */
+  monthFinance: { accruedKurus: number; collectedKurus: number; balanceKurus: number } | null
+  season: SeasonSummary | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -149,6 +175,10 @@ export function SessionsClient({
   const now = new Date(nowIso)
 
   const serviceById = new Map(services.map((s) => [s.id, s]))
+
+  // Ödeme durumu ay bazında; tüm zamanların bakiyesi değil (§7 no.4).
+  const paymentState = monthFinance ? monthPaymentState(monthFinance) : null
+  const paymentLabel = monthPaymentLabel(paymentState)
 
   function run(action: () => Promise<{ error?: string; success?: boolean }>, ok: string) {
     startTransition(async () => {
@@ -417,6 +447,31 @@ export function SessionsClient({
           </div>
         }
       >
+        {/* ÖDEME DURUMU (§7 no.4).
+
+            Bu ekranda yalnız DURUM var, işlem yok: "Detay işlemler
+            Finans ekranındadır." İki yerden para girilebilseydi
+            hangisinin doğru olduğu sorusu geri gelirdi.
+
+            Rozet YOKSA HİÇ ÇİZİLMEZ: aylık pakete dahil bir hizmette bu
+            ayın tahakkuku sıfırdır ve "Tahsil edildi" yazmak yanıltır.
+            Finansı görme yetkisi olmayan öğretmende de (066) aynı
+            sessizlik. */}
+        {paymentLabel && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <Badge variant={paymentState === 'paid' ? 'success' : 'warning'}>
+              {paymentLabel}
+            </Badge>
+            <span className="text-muted-foreground tabular-nums">
+              {formatKurus(monthFinance!.collectedKurus)} /{' '}
+              {formatKurus(monthFinance!.accruedKurus)}
+            </span>
+            <Button size="xs" variant="ghost" render={<Link href="/teacher/finans" />}>
+              Finans ekranı
+            </Button>
+          </div>
+        )}
+
         {/* HİZMET BAZLI SAYAÇLAR (§3 no.3): "Grup 4/5", "Koçluk 3/4".
             Tek bir toplam, iki ayrı hizmet hattı olan öğrencide hangi
             hattın eksik kaldığını gizliyordu. */}
@@ -690,6 +745,107 @@ export function SessionsClient({
           </ul>
         </Section>
       )}
+
+      {/* ---------------- Sezon özeti (§9) ---------------- */}
+      {season && season.totalCount > 0 && (
+        <Section
+          title="Sezon Özeti"
+          description="Aktif eğitim döneminde gerçekleşen hizmetlerin toplamı."
+          variant="card"
+        >
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <SeasonStat
+              label="Birebir ders"
+              count={season.birebirDersCount}
+              minutes={season.birebirDersMinutes}
+              unit="oturum"
+            />
+            <SeasonStat
+              label="Grup dersi"
+              count={season.grupDersCount}
+              minutes={season.grupDersMinutes}
+              unit="oturum"
+            />
+            <SeasonStat
+              label="Koçluk"
+              count={season.koclukCount}
+              minutes={season.koclukMinutes}
+              unit="görüşme"
+            />
+            <SeasonStat
+              label="Toplam temas"
+              count={season.totalCount}
+              minutes={season.totalMinutes}
+              unit="temas"
+            />
+          </dl>
+
+          {/* PARASAL SATIRLAR AYRI VE KOŞULLU: finans 066'dan beri
+              yalnız çalışma alanı sahibine açık. Sahip olmayan
+              öğretmen oturum toplamlarını görmeye devam eder, para
+              satırı hiç çizilmez. */}
+          {season.accruedKurus !== null && (
+            <dl className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+              <SeasonMoney label="Toplam tahakkuk" kurus={season.accruedKurus} />
+              <SeasonMoney label="Toplam tahsil edilen" kurus={season.collectedKurus ?? 0} />
+              <SeasonMoney label="Kalan" kurus={season.balanceKurus ?? 0} emphasize />
+            </dl>
+          )}
+        </Section>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Sezon özetinin tek göstergesi.
+ *
+ * SAYI VE SÜRE BİRLİKTE (§9: "36 oturum · 60 saat"). Yalnız sayı,
+ * 30 dakikalık koçluklarla 90 dakikalık dersleri eşitlerdi.
+ */
+function SeasonStat({
+  label,
+  count,
+  minutes,
+  unit,
+}: {
+  label: string
+  count: number
+  minutes: number
+  unit: string
+}) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium tabular-nums">
+        {count} {unit}
+        {count > 0 && (
+          <span className="font-normal text-muted-foreground"> · {formatMinutes(minutes)}</span>
+        )}
+      </dd>
+    </div>
+  )
+}
+
+function SeasonMoney({
+  label,
+  kurus,
+  emphasize,
+}: {
+  label: string
+  kurus: number
+  emphasize?: boolean
+}) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={`mt-0.5 text-sm tabular-nums ${
+          emphasize && kurus > 0 ? 'font-semibold text-warning-foreground' : 'font-medium'
+        }`}
+      >
+        {formatKurus(kurus)}
+      </dd>
     </div>
   )
 }

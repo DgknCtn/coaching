@@ -7,6 +7,9 @@ import {
   kurusToInput,
   balanceState,
   type StudentFinanceRow,
+  formatMinutes,
+  monthPaymentLabel,
+  monthPaymentState,
 } from '@/lib/finance'
 
 function row(over: Partial<StudentFinanceRow> = {}): StudentFinanceRow {
@@ -152,5 +155,98 @@ describe('balanceState', () => {
     expect(balanceState(0)).toBe('settled')
     expect(balanceState(1)).toBe('debt')
     expect(balanceState(-1)).toBe('credit')
+  })
+})
+
+// ============================================================
+// R7-04 Rev.3 §7 no.4 ve §9 — AY BAZINDA ÖDEME DURUMU VE SÜRE
+//
+// NEDEN BU TESTLER VAR
+//
+// Görüşmeler ekranı bir AY gösteriyor. 066'nın bakiyesi ise tüm
+// zamanların toplamı: Ağustos'tan devreden borç, Eylül'ün ödendiğini
+// gizlerdi. İki sayının aynı rozete bakması, öğretmenin veliye yanlış
+// şey söylemesi demek.
+//
+// Tahakkuk sıfırken rozet HİÇ ÇIKMAMALI: aylık pakete dahil ya da
+// finansal takip dışı bir hizmette bu ekranda söylenecek bir şey yok.
+// "Tahsil edildi" yazmak, hiç borç doğmamışken ödeme yapıldığını ima
+// ederdi.
+// ============================================================
+
+describe('monthPaymentState', () => {
+  it('tahakkuk yoksa durum da yok', () => {
+    expect(monthPaymentState({ accruedKurus: 0, collectedKurus: 0 })).toBeNull()
+    // Aylık pakete dahil bir ayda tahsilat görünse bile bu ekranın
+    // gösterecek bir borcu yok.
+    expect(monthPaymentState({ accruedKurus: 0, collectedKurus: 500000 })).toBeNull()
+  })
+
+  it('hiç tahsilat yoksa bekliyor', () => {
+    expect(monthPaymentState({ accruedKurus: 1200000, collectedKurus: 0 })).toBe('pending')
+  })
+
+  it('tam ödemede tahsil edildi', () => {
+    expect(monthPaymentState({ accruedKurus: 1200000, collectedKurus: 1200000 })).toBe('paid')
+  })
+
+  it('fazla ödeme de tahsil edildidir', () => {
+    // Kalan gelecek aya devreder; BU ayın sorusu kapanmıştır.
+    expect(monthPaymentState({ accruedKurus: 1200000, collectedKurus: 1500000 })).toBe('paid')
+  })
+
+  it('eksik ödemede kısmi', () => {
+    expect(monthPaymentState({ accruedKurus: 1200000, collectedKurus: 400000 })).toBe('partial')
+  })
+
+  it('geçmiş aydan devreden borç bu ayın durumunu bozmuyor', () => {
+    // View ayı ayırdığı için buraya yalnız o ayın sayıları gelir.
+    // Testin işi, fonksiyonun kendi içinde bir toplam tutmadığını
+    // sabitlemek.
+    expect(monthPaymentState({ accruedKurus: 500000, collectedKurus: 500000 })).toBe('paid')
+  })
+})
+
+describe('monthPaymentLabel', () => {
+  it('öğretmen dili "Tahsil edildi"', () => {
+    expect(monthPaymentLabel('paid')).toBe('Tahsil edildi')
+  })
+
+  it('veli dili "Ödendi" (§8)', () => {
+    expect(monthPaymentLabel('paid', 'parent')).toBe('Ödendi')
+  })
+
+  it('bekleyen ödemede iki dilde de aynı', () => {
+    expect(monthPaymentLabel('pending')).toBe('Bekliyor')
+    expect(monthPaymentLabel('pending', 'parent')).toBe('Bekliyor')
+  })
+
+  it('durum yoksa etiket de yok', () => {
+    expect(monthPaymentLabel(null)).toBeNull()
+  })
+})
+
+describe('formatMinutes', () => {
+  it('dokümandaki biçim: "51 saat 40 dk"', () => {
+    expect(formatMinutes(3100)).toBe('51 saat 40 dk')
+  })
+
+  it('tam saatte "0 dk" eklenmiyor', () => {
+    expect(formatMinutes(3600)).toBe('60 saat')
+    expect(formatMinutes(60)).toBe('1 saat')
+  })
+
+  it('bir saatin altında yalnız dakika', () => {
+    expect(formatMinutes(45)).toBe('45 dk')
+    expect(formatMinutes(0)).toBe('0 dk')
+  })
+
+  it('negatif süre sıfıra çekiliyor', () => {
+    // Bozuk veri ekranda "-3 saat" yazmasın.
+    expect(formatMinutes(-90)).toBe('0 dk')
+  })
+
+  it('ondalık dakika yuvarlanıyor', () => {
+    expect(formatMinutes(90.4)).toBe('1 saat 30 dk')
   })
 })

@@ -197,3 +197,55 @@ export function balanceState(balanceKurus: number): 'debt' | 'credit' | 'settled
   if (balanceKurus < 0) return 'credit'
   return 'settled'
 }
+
+/**
+ * Sezon özetindeki süre gösterimi (R7-04 §9: "51 saat 40 dk").
+ *
+ * DAKİKA ONDALIĞA ÇEVRİLMİYOR. "51,7 saat" teknik olarak doğru ama
+ * öğretmenin veliye söylediği cümle değil; doküman da saat + dakika
+ * yazıyor. Tam saatlerde "0 dk" eklenmiyor.
+ */
+export function formatMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  if (hours === 0) return `${rest} dk`
+  if (rest === 0) return `${hours} saat`
+  return `${hours} saat ${rest} dk`
+}
+
+/**
+ * Bir AYIN ödeme durumu (R7-04 §7 no.4).
+ *
+ * AY BAZINDA, BAKİYE BAZINDA DEĞİL. 066'nın bakiyesi tüm zamanların
+ * toplamı; "Eylül tahsil edildi mi" sorusunun cevabı Ağustos'tan
+ * devreden borçla bulanmamalı.
+ *
+ * TAHAKKUK YOKSA DURUM DA YOK: aylık pakete dahil ya da finansal takip
+ * dışı bir hizmette bu ekranda gösterilecek bir şey yok. `null`
+ * dönmek, "Tahsil edildi" yazıp yanıltmaktan iyidir.
+ */
+export type MonthPaymentState = 'paid' | 'partial' | 'pending' | null
+
+export function monthPaymentState(input: {
+  accruedKurus: number
+  collectedKurus: number
+}): MonthPaymentState {
+  if (input.accruedKurus <= 0) return null
+  if (input.collectedKurus <= 0) return 'pending'
+  // Fazla ödeme de "tahsil edildi"dir: kalanı gelecek aya devreder ve
+  // bu ayın sorusu kapanmıştır.
+  if (input.collectedKurus >= input.accruedKurus) return 'paid'
+  return 'partial'
+}
+
+/** Öğretmen dili "Tahsil edildi", veli dili "Ödendi" (§8). */
+export function monthPaymentLabel(
+  state: MonthPaymentState,
+  audience: 'teacher' | 'parent' = 'teacher'
+): string | null {
+  if (state === null) return null
+  if (state === 'pending') return 'Bekliyor'
+  if (state === 'partial') return 'Kısmi'
+  return audience === 'parent' ? 'Ödendi' : 'Tahsil edildi'
+}

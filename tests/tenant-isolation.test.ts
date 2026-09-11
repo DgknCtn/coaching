@@ -64,6 +64,9 @@ const LOCKED_VIEWS = [
   // 082 — satır düzeyinde ay atfı; hangi öğrenciyle ne zaman
   // görüşüldüğünü taşır.
   'student_service_session_view',
+  // 085 — öğrenci × ay tahakkuk/tahsilat. Bir ailenin ödeme yapıp
+  // yapmadığı, akademik veriden farklı bir mahremiyet sınıfı (066).
+  'student_month_finance_view',
 ] as const
 
 /**
@@ -227,7 +230,7 @@ describe('kiracı izolasyonu · kurulum', () => {
     // Sayı KİLİTLİ, "en az" değil: liste kazara kısalırsa test bunu
     // söylemeli. Yeni bir view eklendiğinde bu sayı da elle artar —
     // eklemeyi unutmanın maliyeti, hiç bakılmayan bir view'dır.
-    expect(LOCKED_VIEWS).toHaveLength(14)
+    expect(LOCKED_VIEWS).toHaveLength(15)
     expect(LOCKED_TABLES.length).toBeGreaterThanOrEqual(8)
   })
 })
