@@ -57,8 +57,20 @@ const dayFormatter = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 })
 
-function toDateString(d: Date): string {
+/**
+ * Bir anın YEREL takvim günü (YYYY-MM-DD).
+ *
+ * DIŞA AÇIK, çünkü gün bazında gruplama yapan her yer aynı takvimi
+ * kullanmak zorunda: ikinci bir `Intl.DateTimeFormat` kuran modül, gece
+ * 00:00-03:00 arasında bir günlük kayma üretir ve aynı teslim iki
+ * ekranda iki farklı güne düşer.
+ */
+export function localDateString(d: Date): string {
   return dayFormatter.format(d)
+}
+
+function toDateString(d: Date): string {
+  return localDateString(d)
 }
 
 /**

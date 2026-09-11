@@ -1,12 +1,17 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CalendarClock, Check, Loader2, Play, Plus, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
-import { PACE_BAND_LABEL, type PaceBand } from '@/lib/weekly-flow'
-import { formatSessionLong } from '@/lib/service-structure'
+import {
+  PACE_BAND_LABEL,
+  type DailyDelivery,
+  type PaceBand,
+} from '@/lib/weekly-flow'
+import { formatSessionLong, WEEKDAY_LABEL, type Weekday } from '@/lib/service-structure'
+import { LinkTabs, type LinkTab } from '@/components/shared/link-tabs'
 import {
   closeWeeklyFlowAction,
   openWeeklyFlowAction,
@@ -22,6 +27,16 @@ export interface FlowBookRow {
   title: string
   total: number
   delivered: number
+}
+
+export interface FlowBatchRow {
+  id: string
+  title: string
+  publishedAt: string | null
+  total: number
+  delivered: number
+  /** Akış açıldıktan SONRA yayınlandı — öğrencinin günlük planında yok. */
+  lateAdded: boolean
 }
 
 export interface PastFlowRow {
@@ -52,6 +67,40 @@ export interface FlowView {
     remainingMs: number
   } | null
   lastActivity: { silent: boolean; days: number; phrase: string }
+  daily: DailyDelivery
+}
+
+/**
+ * ALT SEKMELER (§8).
+ *
+ * Belge ekranın sınırını açıkça çiziyor: *"Haftalık Akış bütün sistemi
+ * tek ekrana doldurmamalı. Ana ekran kısa operasyon görünümü olmalı;
+ * ayrıntılar sekmelere bölünmeli."*
+ *
+ * Sekmeler AYNI TABLOYU iki kez göstermiyor; her biri farklı bir soruyu
+ * yanıtlıyor:
+ *   Aktif Akış      — "ne verdim, ne kadarı geldi?"      (parti ekseni)
+ *   Günlük Görünüm  — "hangi gün çalıştı?"               (zaman ekseni)
+ *   Kaynaklar       — "hangi kitaptan ne kadar?"         (kaynak ekseni)
+ *   Yeni Eklenenler — "öğrencinin planını ne bozdu?"     (sonradan gelen)
+ *   Geçmiş Haftalar — arşiv
+ *
+ * Dört özet kart sekmelerin ÜSTÜNDE sabit kalır: belgenin "3-5 saniyede
+ * cevap" ölçüsü bir sekme seçmeyi gerektirmemeli.
+ */
+const FLOW_TABS = [
+  { slug: 'aktif', label: 'Aktif Akış' },
+  { slug: 'gunluk', label: 'Günlük Görünüm' },
+  { slug: 'kaynaklar', label: 'Kaynaklar' },
+  { slug: 'yeni', label: 'Yeni Eklenenler' },
+  { slug: 'gecmis', label: 'Geçmiş Haftalar' },
+] as const
+
+type FlowTabSlug = (typeof FLOW_TABS)[number]['slug']
+
+function resolveFlowTab(raw: string | null): FlowTabSlug {
+  const hit = FLOW_TABS.find(t => t.slug === raw)
+  return hit ? hit.slug : 'aktif'
 }
 
 const BAND_CLASS: Record<PaceBand, string> = {
@@ -87,6 +136,7 @@ export function FlowClient({
   studentName,
   flow,
   books,
+  batches,
   past,
   anchorServiceId,
   suggestedDueAt,
@@ -95,12 +145,32 @@ export function FlowClient({
   studentName: string
   flow: FlowView | null
   books: FlowBookRow[]
+  batches: FlowBatchRow[]
   past: PastFlowRow[]
   anchorServiceId: string | null
   suggestedDueAt: string | null
 }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+
+  // Sekme URL'de taşınıyor (repo kalıbı: ?sekme=). Client state'te
+  // tutulsaydı yenilemede kaybolur, paylaşılamaz ve geri tuşuyla
+  // gezilemezdi. Öğrenci şeridi bu parametreyi yalnız Genel Bakış
+  // rotasında okuduğu için burada çakışma olmuyor.
+  const activeTab = resolveFlowTab(searchParams.get('sekme'))
+  const tabs: LinkTab[] = FLOW_TABS.map(t => ({
+    key: t.slug,
+    label: t.label,
+    href: t.slug === 'aktif' ? pathname : `${pathname}?sekme=${t.slug}`,
+    count:
+      t.slug === 'yeni' && flow && flow.lateAddedUnits > 0
+        ? flow.lateAddedUnits
+        : t.slug === 'gecmis' && past.length > 0
+          ? past.length
+          : undefined,
+  }))
   const [editingDue, setEditingDue] = useState(false)
   const [dueInput, setDueInput] = useState(flow ? toLocalInput(flow.dueAt) : '')
 
@@ -365,57 +435,276 @@ export function FlowClient({
             </Card>
           </div>
 
-          {/* 5 — Haftadaki Ödevler */}
-          <Card>
-            <CardContent className="space-y-3 pt-5">
-              <h2 className="font-medium">Haftadaki ödevler</h2>
-              {books.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Bu haftaya henüz çalışma yayınlanmadı. Ödev Planlama ekranından
-                  yayınlanan çalışmalar burada toplanır.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 font-medium">Kaynak</th>
-                        <th className="py-2 text-right font-medium">Toplam</th>
-                        <th className="py-2 text-right font-medium">Tamamlanan</th>
-                        <th className="py-2 text-right font-medium">Kalan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {books.map(b => (
-                        <tr key={b.id} className="border-b last:border-0">
-                          <td className="py-2">{b.title}</td>
-                          <td className="py-2 text-right tabular-nums">{b.total}</td>
-                          <td className="py-2 text-right tabular-nums">{b.delivered}</td>
-                          <td className="py-2 text-right tabular-nums">
-                            {b.total - b.delivered}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="font-medium">
-                        <td className="py-2">Toplam</td>
-                        <td className="py-2 text-right tabular-nums">{flow.total}</td>
-                        <td className="py-2 text-right tabular-nums">{flow.delivered}</td>
-                        <td className="py-2 text-right tabular-nums">{flow.remaining}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <LinkTabs
+            tabs={tabs}
+            activeKey={activeTab}
+            ariaLabel="Haftalık akış görünümü"
+          />
+
+          {activeTab === 'aktif' && (
+            <BatchPanel batches={batches} flow={flow} studentId={studentId} />
+          )}
+          {activeTab === 'gunluk' && <DailyPanel daily={flow.daily} />}
+          {activeTab === 'kaynaklar' && <BookPanel books={books} flow={flow} />}
+          {activeTab === 'yeni' && (
+            <NewlyAddedPanel batches={batches.filter(b => b.lateAdded)} />
+          )}
+          {activeTab === 'gecmis' && <PastPanel past={past} />}
         </>
       )}
 
-      {/* Geçmiş Akışlar — silinmez, arşivlenir (kabul #12) */}
-      {past.length > 0 && (
-        <Card>
-          <CardContent className="space-y-3 pt-5">
-            <h2 className="font-medium">Geçmiş akışlar</h2>
+      {/* Akış yokken de arşiv görünür: geçmiş, açık hafta olmadığı için
+          kaybolmaz (kabul #12). */}
+      {!flow && past.length > 0 && <PastPanel past={past} />}
+    </div>
+  )
+}
+
+/** Aktif Akış — "ne verdim, ne kadarı geldi?" (parti ekseni). */
+function BatchPanel({
+  batches,
+  flow,
+  studentId,
+}: {
+  batches: FlowBatchRow[]
+  flow: FlowView
+  studentId: string
+}) {
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-5">
+        <h2 className="font-medium">Haftadaki ödevler</h2>
+        {batches.length === 0 ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Bu haftaya henüz çalışma yayınlanmadı. Ödev Planlama ekranından
+              yayınlanan çalışmalar burada toplanır.
+            </p>
+            <Button
+              size="sm"
+              render={<Link href={`/teacher/students/${studentId}/homework/new`} />}
+            >
+              <Plus className="size-4" />
+              Ödev Planlama&apos;ya git
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="py-2 font-medium">Ödev</th>
+                  <th className="py-2 text-right font-medium">Toplam</th>
+                  <th className="py-2 text-right font-medium">Tamamlanan</th>
+                  <th className="py-2 text-right font-medium">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batches.map(b => (
+                  <tr key={b.id} className="border-b last:border-0">
+                    <td className="py-2">
+                      {b.title}
+                      {b.lateAdded && (
+                        <span className="ml-2 rounded-md border border-warning-border bg-warning-subtle px-1.5 py-0.5 text-xs text-warning-foreground">
+                          sonradan eklendi
+                        </span>
+                      )}
+                      {b.publishedAt && (
+                        <span className="block text-xs text-muted-foreground">
+                          {formatSessionLong(b.publishedAt)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{b.total}</td>
+                    <td className="py-2 text-right tabular-nums">{b.delivered}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {b.total - b.delivered}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="font-medium">
+                  <td className="py-2">Toplam</td>
+                  <td className="py-2 text-right tabular-nums">{flow.total}</td>
+                  <td className="py-2 text-right tabular-nums">{flow.delivered}</td>
+                  <td className="py-2 text-right tabular-nums">{flow.remaining}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Kaynaklar — "hangi kitaptan ne kadar?" */
+function BookPanel({ books, flow }: { books: FlowBookRow[]; flow: FlowView }) {
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-5">
+        <h2 className="font-medium">Kaynak kırılımı</h2>
+        {books.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Bu haftaya henüz çalışma yayınlanmadı.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="py-2 font-medium">Kaynak</th>
+                  <th className="py-2 text-right font-medium">Toplam</th>
+                  <th className="py-2 text-right font-medium">Tamamlanan</th>
+                  <th className="py-2 text-right font-medium">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {books.map(b => (
+                  <tr key={b.id} className="border-b last:border-0">
+                    <td className="py-2">{b.title}</td>
+                    <td className="py-2 text-right tabular-nums">{b.total}</td>
+                    <td className="py-2 text-right tabular-nums">{b.delivered}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {b.total - b.delivered}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="font-medium">
+                  <td className="py-2">Toplam</td>
+                  <td className="py-2 text-right tabular-nums">{flow.total}</td>
+                  <td className="py-2 text-right tabular-nums">{flow.delivered}</td>
+                  <td className="py-2 text-right tabular-nums">{flow.remaining}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Günlük Görünüm — "hangi gün çalıştı?" */
+function DailyPanel({ daily }: { daily: DailyDelivery }) {
+  const max = Math.max(1, ...daily.days.map(d => d.delivered))
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-5">
+        <h2 className="font-medium">Günlük dağılım</h2>
+
+        <div className="overflow-x-auto">
+          <div className="flex min-w-max items-end gap-2">
+            {daily.days.map(d => (
+              <div key={d.date} className="flex w-12 flex-col items-center gap-1">
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {d.delivered}
+                </span>
+                {/* Çubuk yüksekliği en yoğun güne göre ölçekleniyor;
+                    sıfır teslimde ince bir taban çizgisi kalır ki "veri
+                    yok" ile "o gün çalışılmadı" karışmasın. */}
+                <div
+                  className="w-full rounded-sm bg-success-subtle"
+                  style={{
+                    height: `${Math.max(4, Math.round((d.delivered / max) * 72))}px`,
+                  }}
+                  aria-hidden
+                />
+                <span className="text-xs text-muted-foreground">
+                  {WEEKDAY_LABEL[d.weekday as Weekday].slice(0, 3)}
+                </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {d.date.slice(8)}.{d.date.slice(5, 7)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {daily.outsideWindow > 0 && (
+          <p className="text-xs text-warning-foreground">
+            {daily.outsideWindow} teslim haftanın penceresi dışında yapıldı; bu
+            grafikte yer almaz.
+          </p>
+        )}
+
+        {/* Belgedeki hedef ekranda ikinci bir "planlanan" ekseni var ama
+            verisi henüz yok — öğrencinin günlük dağıtımı R7-05'in kendi
+            "sonraki adım"ı. Boş çubuk çizmek yerine eksikliği söylemek
+            doğru: uydurulmuş bir eksen, olmayan bir planı varmış gibi
+            gösterirdi. */}
+        <p className="text-xs text-muted-foreground">
+          Yalnız gerçekleşen teslimler gösterilir. Öğrencinin yükü günlere
+          kendi dağıtması ayrı bir çalışma; o geldiğinde planlanan/gerçekleşen
+          karşılaştırması buraya eklenecek.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Yeni Eklenenler — "öğrencinin planını ne bozdu?" */
+function NewlyAddedPanel({ batches }: { batches: FlowBatchRow[] }) {
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-5">
+        <h2 className="font-medium">Hafta açıldıktan sonra eklenenler</h2>
+        {batches.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Hafta açıldıktan sonra yeni çalışma eklenmedi.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 font-medium">Ödev</th>
+                    <th className="py-2 font-medium">Yayın</th>
+                    <th className="py-2 text-right font-medium">Çalışma</th>
+                    <th className="py-2 text-right font-medium">Tamamlanan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batches.map(b => (
+                    <tr key={b.id} className="border-b last:border-0">
+                      <td className="py-2">{b.title}</td>
+                      <td className="py-2">
+                        {b.publishedAt ? formatSessionLong(b.publishedAt) : '—'}
+                      </td>
+                      <td className="py-2 text-right tabular-nums">{b.total}</td>
+                      <td className="py-2 text-right tabular-nums">{b.delivered}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Senaryo A: toplam yük artar, kapanış saati değişmez ve
+                öğrencinin eski günlük dağılımı BOZULMAZ (kabul #6). */}
+            <p className="text-xs text-muted-foreground">
+              Bu çalışmalar haftanın toplam yükünü artırdı ama kapanış saatini
+              değiştirmedi. Öğrencinin daha önce kurduğu günlük dağılım
+              bozulmaz; yeni çalışmalar dağıtılmayı bekler.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Geçmiş Haftalar — silinmez, arşivlenir (kabul #12). */
+function PastPanel({ past }: { past: PastFlowRow[] }) {
+  return (
+    <Card>
+      <CardContent className="space-y-3 pt-5">
+        <h2 className="font-medium">Geçmiş akışlar</h2>
+        {past.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Henüz kapanmış bir hafta yok.
+          </p>
+        ) : (
+          <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -444,9 +733,9 @@ export function FlowClient({
               Zamanında teslim, haftanın kapandığı andaki fotoğraftır. Geç gelen
               teslimler tamamlanma oranını yükseltir ama bu sayıyı değiştirmez.
             </p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -18,6 +18,7 @@
 
 import type { ServiceLike } from '@/lib/service-structure'
 import { defaultSubmissionDeadline } from '@/lib/service-structure'
+import { localDateString } from '@/lib/homework-status'
 
 // ============================================================
 // RESMİ KAPANIŞ
@@ -281,6 +282,87 @@ export function distributionState(input: {
       ? `${input.plannedUnits}/${input.totalUnits} dağıtıldı`
       : `${input.plannedUnits}/${input.totalUnits} dağıtıldı — ${unplanned} yeni çalışma dağıtılmayı bekliyor`
   return { planned: input.plannedUnits, total: input.totalUnits, unplanned, phrase }
+}
+
+// ============================================================
+// GÜNLÜK DAĞILIM
+// ============================================================
+
+export interface DailyDeliveryBucket {
+  /** YEREL takvim günü (YYYY-MM-DD, Europe/Istanbul). */
+  date: string
+  /** ISO hafta günü 1..7 (Pazartesi..Pazar) — başlık için. */
+  weekday: number
+  /** O gün teslim edilen çalışma sayısı. */
+  delivered: number
+}
+
+export interface DailyDelivery {
+  days: DailyDeliveryBucket[]
+  /**
+   * Haftanın penceresi DIŞINDA kalan teslim sayısı.
+   *
+   * Kapanışı geçmiş ama hâlâ açık bir akışta geç teslimler buraya
+   * düşer. Son güne eklenmeleri grafiği yalan söyletirdi: o gün
+   * yapılmamış bir işi o güne yazmak olurdu.
+   */
+  outsideWindow: number
+}
+
+/**
+ * Haftanın gün gün teslim dağılımı (§7 no.6).
+ *
+ * YALNIZ "TAMAMLANAN" EKSENİ. Belgedeki hedef ekranda iki eksen var —
+ * "Planlanan (dağıtılan)" ve "Tamamlanan" — ama planlanan eksenin verisi
+ * YOK: öğrencinin yükü günlere kendi dağıtması R7-05'in açıkça "sonraki
+ * adım" diye işaretlediği iş ve 077 bu yüzden `planned_for_date`
+ * sütununu bilinçle açmadı. Olmayan sütundan çubuk çizmek, kimsenin
+ * yazmadığı bir veriyi grafiğe dönüştürmek olurdu; öğrenci dağıtım
+ * ekranı geldiğinde ikinci eksen buraya eklenir.
+ *
+ * Gün aralığı akışın başlangıcından kapanışına kadar; uzun süre açık
+ * kalmış bir akışta çok sayıda sütun çıkabilir, arayüz yatay kaydırır.
+ */
+export function dailyDelivery(input: {
+  deliveries: (Date | null)[]
+  startsAt: Date
+  dueAt: Date
+}): DailyDelivery {
+  const firstDay = localDateString(input.startsAt)
+  const lastDay = localDateString(input.dueAt)
+
+  const counts = new Map<string, number>()
+  let outsideWindow = 0
+  for (const d of input.deliveries) {
+    if (!d) continue
+    const key = localDateString(d)
+    // String karşılaştırması YYYY-MM-DD'de doğrudan tarih
+    // karşılaştırmasıdır (en-CA biçiminin seçilme sebebi).
+    if (key < firstDay || key > lastDay) {
+      outsideWindow += 1
+      continue
+    }
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  const days: DailyDeliveryBucket[] = []
+  // Gün ilerletme UTC üzerinden yapılıyor: 'YYYY-MM-DD' ayrıştırılıp tam
+  // gün eklemek saf takvim aritmetiğidir, yaz saati kaymasından etkilenmez.
+  for (
+    let cursor = new Date(`${firstDay}T00:00:00Z`);
+    cursor.toISOString().slice(0, 10) <= lastDay;
+    cursor = new Date(cursor.getTime() + DAY_MS)
+  ) {
+    const date = cursor.toISOString().slice(0, 10)
+    days.push({
+      date,
+      // getUTCDay: 0=Pazar. ISO'da Pazar 7.
+      weekday: cursor.getUTCDay() === 0 ? 7 : cursor.getUTCDay(),
+      delivered: counts.get(date) ?? 0,
+    })
+  }
+
+  return { days, outsideWindow }
 }
 
 // ============================================================

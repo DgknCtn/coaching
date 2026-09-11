@@ -3,11 +3,18 @@ import { getTeacherContext } from '@/lib/workspace'
 import { deriveMainContact, type ServiceLike } from '@/lib/service-structure'
 import {
   calculateFlowPace,
+  dailyDelivery,
   deliverySilence,
   distributionState,
   resolveFlowDue,
 } from '@/lib/weekly-flow'
-import { FlowClient, type FlowView, type PastFlowRow, type FlowBookRow } from './flow-client'
+import {
+  FlowClient,
+  type FlowView,
+  type PastFlowRow,
+  type FlowBookRow,
+  type FlowBatchRow,
+} from './flow-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +91,7 @@ export default async function WeeklyFlowPage({
 
   let view: FlowView | null = null
   let books: FlowBookRow[] = []
+  let batches: FlowBatchRow[] = []
 
   if (activeFlow) {
     const dueAt = new Date(activeFlow.due_at)
@@ -111,7 +119,13 @@ export default async function WeeklyFlowPage({
       Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
 
     const rows = (items ?? []).map(r => {
-      const batch = one(r.homework_batches as unknown as { id: string; created_at: string })
+      const batch = one(
+        r.homework_batches as unknown as {
+          id: string
+          created_at: string
+          title: string | null
+        }
+      )
       const book = one(r.books as unknown as { id: string; title: string })
       const completions = ((r.test_completions ?? []) as unknown as {
         completed_at: string
@@ -129,6 +143,7 @@ export default async function WeeklyFlowPage({
 
       return {
         batchId: batch?.id ?? null,
+        batchTitle: batch?.title ?? null,
         publishedAt: batch ? new Date(batch.created_at) : null,
         bookId: book?.id ?? null,
         bookTitle: book?.title ?? null,
@@ -197,6 +212,31 @@ export default async function WeeklyFlowPage({
     }
     books = [...byBook.values()].sort((a, b) => b.total - a.total)
 
+    // PARTİ BAZINDA ÖZET — kaynak bazındakinden ayrı bir soruyu
+    // yanıtlar: "ne verdim ve ne kadarı geldi?" Kaynak kırılımı ise
+    // "hangi kitaptan ne kadar?" sorusunu yanıtlıyor. Aynı satırları
+    // iki kez göstermek değil; iki farklı eksen.
+    const byBatch = new Map<string, FlowBatchRow>()
+    for (const r of rows) {
+      if (!r.batchId) continue
+      const row = byBatch.get(r.batchId) ?? {
+        id: r.batchId,
+        title: r.batchTitle ?? 'Ödev',
+        publishedAt: r.publishedAt?.toISOString() ?? null,
+        total: 0,
+        delivered: 0,
+        lateAdded:
+          r.publishedAt !== null &&
+          r.publishedAt.getTime() > new Date(activeFlow.starts_at).getTime() + 60_000,
+      }
+      row.total += 1
+      if (r.deliveredAt !== null) row.delivered += 1
+      byBatch.set(r.batchId, row)
+    }
+    batches = [...byBatch.values()].sort((a, b) =>
+      (a.publishedAt ?? '').localeCompare(b.publishedAt ?? '')
+    )
+
     view = {
       id: activeFlow.id,
       startsAt: activeFlow.starts_at,
@@ -208,6 +248,13 @@ export default async function WeeklyFlowPage({
       remaining: Math.max(0, total - delivered),
       lateAddedUnits,
       distributionPhrase: distribution.phrase,
+      // Günlük dağılımın YALNIZ teslim ekseni çizilir; "planlanan"
+      // ekseninin verisi yok (bkz. lib/weekly-flow.ts · dailyDelivery).
+      daily: dailyDelivery({
+        deliveries: rows.map(r => r.deliveredAt),
+        startsAt: new Date(activeFlow.starts_at),
+        dueAt,
+      }),
       pace: pace
         ? {
             startingPerDay: pace.startingPerDay,
@@ -237,6 +284,7 @@ export default async function WeeklyFlowPage({
       studentName={student.full_name}
       flow={view}
       books={books}
+      batches={batches}
       past={past}
       anchorServiceId={anchorService?.id ?? null}
       suggestedDueAt={suggested?.dueAt.toISOString() ?? null}

@@ -653,3 +653,17 @@ Belgenin tespiti: mevcut "Haftalık Plan" ekranı haftayı hiç takip etmiyordu;
 **Durum Bildirimleri geçici olarak "Diğer"de.** Hedefi Haftalık Akış'ın içidir (R7/05 §8) ama o ekranın alt sekmeleri henüz yok. Şeritten şimdi silmek, çalışan bir ekranı erişilemez bırakırdı; Haftalık Akış sekmeleri gelince bu satır kalkacak.
 
 **Bu revizyonda yapılmayan:** Kaynaklar ailesi şimdilik mevcut iki ekranı tek başlık altında topluyor; Kitaplar ve Kaynak Planı **birleştirilmedi**. Belge de bunu istemiyor — *"Birleştirme, mevcut ekranları silmek veya tek bir karmaşık sayfada eritmek anlamına gelmez."*
+
+### R7 / Site Testi 05 devamı — alt sekmeler, günlük dağılım ve 077'nin açık hatası
+
+**077 teslim edilmişti ama "Haftalık akışı aç" hiç çalışmıyordu.** Gerçek bir öğrencide denendiğinde her seferinde yabancı anahtar hatası veriyordu; kullanıcı yalnız genel "İşlem tamamlanamadı" mesajını görüyordu. Sebep 077:189'da akışı açan kişinin `auth.uid()` ile yazılmasıydı, oysa `created_by_profile_id` sütunu `profiles(id)`'ye referans veriyor — `auth.uid()` ise `profiles.auth_user_id`'nin karşılığı. Aynı sütunu 075:267 zaten DOĞRU yardımcıyla (`public.current_profile_id()`) yazıyordu; hata kalıp değil, 077'ye özel bir dikkatsizlikti.
+
+Düzeltme **078**'de `CREATE OR REPLACE` ile geldi; 077 metnine dokunulmadı — çalıştırılmış bir migration, veritabanında olan ile depoda yazan arasındaki tek bağdır.
+
+**Hatanın sınıfı teste bağlandı** (`tests/profile-id-usage.test.ts`). Tip kontrolü de mevcut testler de bunu yakalayamazdı: RPC gövdesi SQL, TypeScript yalnız çağırıyor ve CI'da canlı veritabanı yok. Depodaki bütün meşru `auth.uid()` kullanımları onu `auth_user_id` ile *karşılaştırıyor*; hiçbiri bir sütuna *değer olarak yazmıyor*. Kural bu: yazılırsa test kırılır. 077'nin kendi satırı adıyla istisna listesinde ve sayısı kilitli — istisna genişlerse aynı hata sessizce çoğalmış demektir.
+
+**Alt sekmeler (§8).** Ekran düz bir kart ızgarasıydı; belge *"Haftalık Akış bütün sistemi tek ekrana doldurmamalı"* diyor. Dört özet kart sekmelerin ÜSTÜNDE sabit kaldı — "3-5 saniyede cevap" ölçüsü bir sekme seçmeyi gerektirmemeli. Sekmeler aynı tabloyu iki kez göstermiyor; her biri ayrı bir eksen: **Aktif Akış** parti ekseni ("ne verdim, ne kadarı geldi?"), **Kaynaklar** kaynak ekseni ("hangi kitaptan ne kadar?"), **Günlük Görünüm** zaman ekseni, **Yeni Eklenenler** sonradan gelen yük, **Geçmiş Haftalar** arşiv. Sekme URL'de (`?sekme=`) taşınıyor; öğrenci şeridi bu parametreyi yalnız Genel Bakış rotasında okuduğu için çakışma yok.
+
+**Günlük dağılımda yalnız TEK eksen çiziliyor.** Belgedeki hedef ekranda "Planlanan (dağıtılan)" ve "Tamamlanan" diye iki çubuk sırası var; ikincisinin verisi gerçek, birincisininki yok. Öğrencinin yükü günlere kendi dağıtması R7-05'in açıkça *"sonraki adım"* diye işaretlediği iş ve 077 bu yüzden `planned_for_date` sütununu bilinçle açmadı. Olmayan sütundan çubuk çizmek, kimsenin yazmadığı bir veriyi grafiğe dönüştürmek olurdu. Ekranda eksikliğin kendisi yazıyor.
+
+`dailyDelivery()` gün sınırını **yerel takvimle** çiziyor (`localDateString`, Europe/Istanbul). `toISOString().slice(0,10)` kullanılsaydı gece 00:00-03:00 arasında yapılan teslim bir gün geriye kayardı — gece çalışan öğrencinin işi yanlış güne yazılırdı. Pencere dışındaki geç teslimler son güne EKLENMİYOR, ayrıca sayılıyor: o gün yapılmamış bir işi o güne yazmak grafiği yalan söyletirdi.

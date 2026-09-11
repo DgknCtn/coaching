@@ -3,6 +3,7 @@ import {
   calculateFlowPace,
   captureOnTime,
   checkInDue,
+  dailyDelivery,
   deliverySilence,
   distributionState,
   flowMembership,
@@ -358,5 +359,98 @@ describe('checkInDue · kabul #10, sabit 3 gün tek mantık değil', () => {
       now: new Date('2026-09-15T10:00:00+03:00'),
     })
     expect(r).toEqual({ due: false, reason: null })
+  })
+})
+
+describe('dailyDelivery · §7 no.6 günlük dağılım', () => {
+  // Belgenin örnek haftası: 13 Eylül Pazar 10:00 -> 20 Eylül Pazar 10:00.
+  const START = new Date('2026-09-13T10:00:00+03:00')
+  const DUE = new Date('2026-09-20T10:00:00+03:00')
+
+  it('başlangıçtan kapanışa her günü üretir', () => {
+    const r = dailyDelivery({ deliveries: [], startsAt: START, dueAt: DUE })
+    expect(r.days.map(d => d.date)).toEqual([
+      '2026-09-13',
+      '2026-09-14',
+      '2026-09-15',
+      '2026-09-16',
+      '2026-09-17',
+      '2026-09-18',
+      '2026-09-19',
+      '2026-09-20',
+    ])
+  })
+
+  it('ISO hafta günü verir (Pazartesi 1, Pazar 7)', () => {
+    const r = dailyDelivery({ deliveries: [], startsAt: START, dueAt: DUE })
+    // 13 Eylül 2026 Pazar, 14 Eylül Pazartesi.
+    expect(r.days[0].weekday).toBe(7)
+    expect(r.days[1].weekday).toBe(1)
+    expect(r.days[7].weekday).toBe(7)
+  })
+
+  it('teslimleri kendi gününe sayar', () => {
+    const r = dailyDelivery({
+      deliveries: [
+        new Date('2026-09-14T09:00:00+03:00'),
+        new Date('2026-09-14T21:30:00+03:00'),
+        new Date('2026-09-16T12:00:00+03:00'),
+      ],
+      startsAt: START,
+      dueAt: DUE,
+    })
+    const byDate = new Map(r.days.map(d => [d.date, d.delivered]))
+    expect(byDate.get('2026-09-14')).toBe(2)
+    expect(byDate.get('2026-09-16')).toBe(1)
+    expect(byDate.get('2026-09-15')).toBe(0)
+    expect(r.outsideWindow).toBe(0)
+  })
+
+  it('gün sınırını YEREL takvimle çizer, UTC ile değil', () => {
+    // ASIL REGRESYON: 15 Eylül 01:00 (TSİ) UTC'de 14 Eylül 22:00'dır.
+    // toISOString().slice(0,10) kullanılsaydı bu teslim bir gün geriye
+    // kayardı ve gece çalışan öğrencinin işi yanlış güne yazılırdı.
+    const r = dailyDelivery({
+      deliveries: [new Date('2026-09-15T01:00:00+03:00')],
+      startsAt: START,
+      dueAt: DUE,
+    })
+    const byDate = new Map(r.days.map(d => [d.date, d.delivered]))
+    expect(byDate.get('2026-09-15')).toBe(1)
+    expect(byDate.get('2026-09-14')).toBe(0)
+  })
+
+  it('pencere dışındaki geç teslimi son güne YAZMAZ', () => {
+    // Kapanışı geçmiş ama hâlâ açık bir akışta gelen teslim. Son güne
+    // eklemek, o gün yapılmamış bir işi o güne yazmak olurdu.
+    const r = dailyDelivery({
+      deliveries: [
+        new Date('2026-09-22T12:00:00+03:00'),
+        new Date('2026-09-18T12:00:00+03:00'),
+      ],
+      startsAt: START,
+      dueAt: DUE,
+    })
+    expect(r.outsideWindow).toBe(1)
+    expect(r.days.reduce((s, d) => s + d.delivered, 0)).toBe(1)
+  })
+
+  it('teslim edilmemiş çalışma hiçbir güne düşmez', () => {
+    const r = dailyDelivery({
+      deliveries: [null, null, new Date('2026-09-15T12:00:00+03:00')],
+      startsAt: START,
+      dueAt: DUE,
+    })
+    expect(r.days.reduce((s, d) => s + d.delivered, 0)).toBe(1)
+    expect(r.outsideWindow).toBe(0)
+  })
+
+  it('aynı gün içinde açılıp kapanan akışta tek sütun', () => {
+    const r = dailyDelivery({
+      deliveries: [],
+      startsAt: new Date('2026-09-13T09:00:00+03:00'),
+      dueAt: new Date('2026-09-13T22:00:00+03:00'),
+    })
+    expect(r.days).toHaveLength(1)
   })
 })
