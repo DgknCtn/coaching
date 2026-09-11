@@ -36,6 +36,7 @@ export type AuditAction =
   // "bu ders neden yapılmadı sayıldı" sorusunun izi burada kalır.
   | 'service.create'
   | 'service.status'
+  | 'service.update'
   | 'session.outcome'
   | 'session.reschedule'
   | 'session.makeup'
@@ -94,6 +95,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'curriculum.flow_save': 'Müfredat akışını kaydetti',
   'service.create': 'Hizmet tanımladı',
   'service.status': 'Hizmet durumunu değiştirdi',
+  'service.update': 'Hizmet düzenini değiştirdi',
   'session.outcome': 'Görüşme durumunu işaretledi',
   'session.reschedule': 'Görüşmeyi erteledi',
   'session.makeup': 'Telafi oluşturdu',

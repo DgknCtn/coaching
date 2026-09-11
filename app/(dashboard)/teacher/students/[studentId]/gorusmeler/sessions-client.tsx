@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react'
+import { CalendarPlus, ChevronLeft, ChevronRight, Pencil, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +27,7 @@ import {
 } from '@/lib/service-structure'
 import {
   createServiceAction,
+  updateServiceAction,
   createMakeupSessionAction,
   createStudentGroupAction,
   moveActiveFlowDueAction,
@@ -35,6 +36,7 @@ import {
   setMakeupDecisionAction,
   setSessionAttendanceAction,
   setServiceStatusAction,
+  type ServiceUpdateInput,
   setSessionOutcomeAction,
 } from './actions'
 
@@ -138,6 +140,9 @@ export function SessionsClient({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
+  // Aynı anda tek hizmet düzenlenir: iki açık form, hangi tarihin
+  // hangi hizmete ait olduğunu belirsizleştirirdi.
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Referans an SUNUCUDAN gelir: istemcinin saati yanlışsa bile "geçti mi"
   // kararı herkeste aynı olsun.
@@ -153,6 +158,31 @@ export function SessionsClient({
         return
       }
       toast.success(ok)
+      router.refresh()
+    })
+  }
+
+  /**
+   * Hizmet düzenini ileri tarihten itibaren değiştirir (§5 no.7).
+   *
+   * KAÇ OTURUMUN DÜŞTÜĞÜ SÖYLENİR: değişiklik, eski desenle açılmış
+   * ileri tarihli planlı oturumları siliyor. Öğretmen takvimde eksilen
+   * satırları sonradan fark etmemeli.
+   */
+  function handleServiceUpdate(input: ServiceUpdateInput) {
+    startTransition(async () => {
+      const result = await updateServiceAction(input)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+      const removed = result.removed ?? 0
+      toast.success(
+        removed > 0
+          ? `Düzen güncellendi. Eski düzenle açılmış ${removed} ileri tarihli oturum kaldırıldı; yeni düzenle tekrar üretilecek.`
+          : 'Düzen güncellendi.'
+      )
+      setEditingId(null)
       router.refresh()
     })
   }
@@ -317,6 +347,34 @@ export function SessionsClient({
                 >
                   {service.status === 'active' ? 'Pasife Al' : 'Aktifleştir'}
                 </Button>
+
+                {/* Düzenleme yalnız AKTİF hizmette: pasif bir hizmetin
+                    ileri tarihli oturumu zaten üretilmiyor, "şu tarihten
+                    itibaren" demenin karşılığı yok. */}
+                {service.status === 'active' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-3 ml-1"
+                    disabled={isPending}
+                    onClick={() =>
+                      setEditingId((id) => (id === service.id ? null : service.id))
+                    }
+                  >
+                    <Pencil className="size-4" />
+                    {editingId === service.id ? 'Kapat' : 'Düzenle'}
+                  </Button>
+                )}
+
+                {editingId === service.id && (
+                  <ServiceEditForm
+                    studentId={studentId}
+                    service={service}
+                    disabled={isPending}
+                    onSubmit={handleServiceUpdate}
+                    onCancel={() => setEditingId(null)}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -693,6 +751,130 @@ function RescheduleButton({
 function toLocalInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/**
+ * Hizmet düzenini düzenleme formu — İLERİ TARİHLİ DEĞİŞİKLİK (§5 no.7).
+ *
+ * TÜR / KATILIM / GRUP ALANLARI YOK. Bu üç eksen hizmetin kimliğidir:
+ * "birebir ders"in "grup koçluğu"na dönüşmesi düzenleme değil, başka
+ * bir hizmettir — eskisi pasife alınır, yenisi eklenir. Formda
+ * gösterilip RPC tarafından reddedilmeleri, kullanıcıyı çıkmaz bir
+ * yola sokardı.
+ *
+ * "Şu tarihten itibaren" ALANI ZORUNLU VE AYRI: kaydedilen şey yalnız
+ * yeni saat değil, değişikliğin NE ZAMAN başladığı. Varsayılanı bugün
+ * yapmak geçmişi bozmaz (RPC kesimi NOW() ile koruyor) ama öğretmenin
+ * "gelecek pazartesiden itibaren" demesinin de yolu açık kalır.
+ */
+function ServiceEditForm({
+  studentId,
+  service,
+  disabled,
+  onSubmit,
+  onCancel,
+}: {
+  studentId: string
+  service: ServiceRow
+  disabled?: boolean
+  onSubmit: (input: ServiceUpdateInput) => void
+  onCancel: () => void
+}) {
+  const [weekday, setWeekday] = useState(String(service.weekday))
+  const [startTime, setStartTime] = useState(service.startTime.slice(0, 5))
+  const [duration, setDuration] = useState(String(service.plannedDurationMinutes))
+  const [medium, setMedium] = useState(service.medium)
+  const [financeLink, setFinanceLink] = useState(service.financeLink)
+  const [effectiveFrom, setEffectiveFrom] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+
+  return (
+    <div className="mt-3 grid gap-3 rounded-md border border-border bg-muted/40 p-3 sm:grid-cols-2">
+      <Field label="Gün">
+        <NativeSelect value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+          {([1, 2, 3, 4, 5, 6, 7] as Weekday[]).map((d) => (
+            <option key={d} value={d}>
+              {WEEKDAY_LABEL[d]}
+            </option>
+          ))}
+        </NativeSelect>
+      </Field>
+
+      <Field label="Saat">
+        <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+      </Field>
+
+      <Field label="Süre (dk)">
+        <Input
+          type="number"
+          min={5}
+          max={600}
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+        />
+      </Field>
+
+      <Field label="Ortam">
+        <NativeSelect
+          value={medium}
+          onChange={(e) => setMedium(e.target.value as ServiceRow['medium'])}
+        >
+          <option value="online">Online</option>
+          <option value="yuz_yuze">Yüz yüze</option>
+        </NativeSelect>
+      </Field>
+
+      <Field label="Finans ilişkisi">
+        <NativeSelect
+          value={financeLink}
+          onChange={(e) => setFinanceLink(e.target.value as ServiceRow['financeLink'])}
+        >
+          <option value="haric">Finansal takibe dahil değil</option>
+          <option value="aylik_paket">Aylık pakete dahil</option>
+          <option value="ders_basi">Ders/görüşme başı</option>
+        </NativeSelect>
+      </Field>
+
+      <Field label="Şu tarihten itibaren">
+        <Input
+          type="date"
+          value={effectiveFrom}
+          onChange={(e) => setEffectiveFrom(e.target.value)}
+        />
+      </Field>
+
+      <p className="text-xs text-muted-foreground sm:col-span-2">
+        Geçmiş kayıtlar değişmez. Bu tarihten sonraki, henüz sonuçlanmamış
+        oturumlar yeni düzene göre yeniden üretilir.
+      </p>
+
+      <div className="flex items-end gap-2 sm:col-span-2">
+        <Button
+          size="sm"
+          disabled={disabled}
+          onClick={() =>
+            onSubmit({
+              studentId,
+              serviceId: service.id,
+              weekday,
+              startTime,
+              plannedDurationMinutes: duration,
+              effectiveFrom,
+              medium,
+              submissionOffsetMinutes: service.submissionOffsetMinutes,
+              financeLink,
+            })
+          }
+        >
+          Değişikliği Kaydet
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Vazgeç
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 /**

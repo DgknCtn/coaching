@@ -139,3 +139,75 @@ describe('create_student_group', () => {
     expect(body).toMatch(/has_workspace_role\(p_workspace_id/)
   })
 })
+
+// ============================================================
+// İLERİ TARİHLİ DÜZEN DEĞİŞİKLİĞİ — R7-04 §5 no.7
+//
+// NEDEN BU TEST VAR
+//
+// Kabul maddesi: "Kalıcı program değişikliği yalnız belirtilen tarihten
+// sonrasını etkiliyor." Bu, bir SİLME işlemiyle uygulanıyor — eski
+// desenle üretilmiş ileri tarihli 'planlandi' satırlar temizleniyor ki
+// tembel üretici onları yeni desenle açsın.
+//
+// Silmenin sınırları yanlış çizilirse gerçekleşmiş hizmet kaydı ya da
+// öğretmenin hâlâ karar vermesi gereken bir oturum yok olur. Üçü de
+// sessiz veri kaybıdır:
+//
+//   1. Sonuçlanmış oturum silinirse hizmet geçmişi bozulur.
+//   2. Geçmişte kalmış 'planlandi' silinirse "Durum güncellenmedi"
+//      sorusu ortadan kalkar (§7-B).
+//   3. Telafi silinirse öğretmenin tek seferlik kararı kaybolur.
+// ============================================================
+
+const FWD_SQL = readFileSync(
+  join(process.cwd(), 'supabase/migrations/084_service_forward_change.sql'),
+  'utf8'
+)
+
+describe('update_student_service · yalnız ileriye etki', () => {
+  const body = (() => {
+    const start = FWD_SQL.indexOf('CREATE OR REPLACE FUNCTION public.update_student_service')
+    const end = FWD_SQL.indexOf('$fn$;', start)
+    return FWD_SQL.slice(start, end)
+  })()
+
+  it('gövde okunabildi (test boşa geçmesin)', () => {
+    expect(body).toContain('service_sessions')
+    expect(body.length).toBeGreaterThan(500)
+  })
+
+  it('yalnız SONUÇLANMAMIŞ oturum siliniyor', () => {
+    expect(body).toMatch(/status\s*=\s*'planlandi'/)
+  })
+
+  it('telafi satırı silinmiyor', () => {
+    expect(body).toMatch(/makeup_of_session_id IS NULL/)
+  })
+
+  it('kesim NOW() ile korunuyor — geçmiş silinmez', () => {
+    // Yürürlük tarihi geçmişe verilse bile "Durum güncellenmedi"
+    // satırları duruyor.
+    expect(body).toMatch(/GREATEST\(/)
+    expect(body).toMatch(/NOW\(\)/)
+  })
+
+  it('kesim YEREL takvimden hesaplanıyor', () => {
+    expect(body).toMatch(/AT TIME ZONE 'Europe\/Istanbul'/)
+  })
+
+  it('hizmet eksenleri (kind / participation) DEĞİŞTİRİLMİYOR', () => {
+    // Aylık sayaçlar ve ana temas önceliği bu iki eksene dayanıyor;
+    // değişmesi gerekiyorsa o artık başka bir hizmettir.
+    expect(body).not.toMatch(/SET[\s\S]*\bkind\s*=/)
+    expect(body).not.toMatch(/participation\s*=\s*p_/)
+  })
+
+  it('kaç oturumun düştüğünü döndürüyor', () => {
+    expect(body).toMatch(/RETURN v_removed/)
+  })
+
+  it('yetki kontrolü var', () => {
+    expect(body).toMatch(/has_workspace_role\(v_service\.workspace_id/)
+  })
+})

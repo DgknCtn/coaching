@@ -112,6 +112,79 @@ export async function createServiceAction(input: ServiceInput) {
   return { success: true }
 }
 
+const serviceUpdateSchema = z.object({
+  studentId: uuidSchema,
+  serviceId: uuidSchema,
+  weekday: z.coerce.number().int().min(1).max(7),
+  startTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Geçerli bir saat girin (örn. 20:00).'),
+  plannedDurationMinutes: z.coerce
+    .number()
+    .int()
+    .min(5, 'Süre en az 5 dakika olmalı.')
+    .max(600, 'Süre en fazla 600 dakika olabilir.'),
+  effectiveFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Değişikliğin başlayacağı tarihi seçin.'),
+  medium: z.enum(['online', 'yuz_yuze']),
+  submissionOffsetMinutes: z.coerce.number().int().min(0).max(10080),
+  financeLink: z.enum(['aylik_paket', 'ders_basi', 'haric']),
+})
+
+export type ServiceUpdateInput = z.input<typeof serviceUpdateSchema>
+
+/**
+ * Hizmetin düzenini İLERİ TARİHTEN İTİBAREN değiştirir (§5 no.7).
+ *
+ * 084 öncesi düzenlemenin tek yolu "pasife al + yeniden ekle"ydi; o
+ * yolda aylık sayaç tek bir hizmeti iki hat olarak görüyor ve "Grup 4/5"
+ * yerine "2/2 + 2/3" yazıyordu. Burada hizmet satırı aynı kalır, yalnız
+ * deseni değişir.
+ *
+ * TÜR VE KATILIM EKSENİ BURADA YOK: ders/koçluk ve birebir/grup
+ * değişimi yeni bir hizmet demektir (RPC de reddeder), o yüzden forma
+ * hiç konmuyor.
+ *
+ * Dönen sayı, eski desenle açılmış kaç ileri tarihli oturumun düştüğü;
+ * ekran bunu kullanıcıya söylüyor ki silme sessiz kalmasın.
+ */
+export async function updateServiceAction(input: ServiceUpdateInput) {
+  const parsed = serviceUpdateSchema.safeParse(input)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const v = parsed.data
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase.rpc('update_student_service', {
+    p_service_id: v.serviceId,
+    p_weekday: v.weekday,
+    p_start_time: v.startTime,
+    p_duration_minutes: v.plannedDurationMinutes,
+    p_effective_from: v.effectiveFrom,
+    p_medium: v.medium,
+    p_finance_link: v.financeLink,
+    p_submission_offset: v.submissionOffsetMinutes,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'service.update',
+    entityType: 'student',
+    entityId: v.studentId,
+    detail: {
+      serviceId: v.serviceId,
+      weekday: v.weekday,
+      startTime: v.startTime,
+      effectiveFrom: v.effectiveFrom,
+      removedSessions: data ?? 0,
+    },
+  })
+  revalidate(v.studentId)
+  return { success: true, removed: (data as number | null) ?? 0 }
+}
+
 /**
  * Hizmeti pasife alır veya yeniden aktifleştirir.
  *
