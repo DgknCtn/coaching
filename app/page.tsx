@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 import { LandingPage } from '@/components/marketing/landing-page'
+import { StructuredData } from '@/components/marketing/structured-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,14 @@ export default async function RootPage() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return <LandingPage />
+    // Yapılandırılmış veri YALNIZ tanıtım sayfasında: oturumu olan
+    // kullanıcı panele yönlendiriliyor, orada arama motoru yok.
+    return (
+      <>
+        <StructuredData />
+        <LandingPage />
+      </>
+    )
   }
 
   const { data: profile } = await supabase

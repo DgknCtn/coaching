@@ -29,7 +29,7 @@ import {
 // sakatlar.
 
 export const metadata: Metadata = {
-  title: `Ön Bilgilendirme Formu · ${BRAND.name}`,
+  title: 'Ön Bilgilendirme Formu',
   description: 'Satın alma öncesi bilinmesi gereken bilgiler: hizmet, fiyat, ödeme ve cayma hakkı.',
 }
 

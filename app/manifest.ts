@@ -37,7 +37,7 @@ export default function manifest(): MetadataRoute.Manifest {
     // Açılış ekranının rengi. İkonların zemini krem; açılış ekranı da aynı
     // kremle başlasın ki ikon ile splash arasında kenar çizgisi görünmesin.
     background_color: '#f6efe8',
-    theme_color: '#bd4816',
+    theme_color: '#b8430f',
 
     icons: [
       {

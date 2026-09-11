@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { BRAND } from '@/lib/brand'
+import { BRAND, siteUrl } from '@/lib/brand'
 import { ThemeProvider } from '@/components/shared/theme-provider'
 import { Inter } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
@@ -12,13 +12,55 @@ const inter = Inter({
   display: 'swap',
 })
 
+/**
+ * Tek cümlelik ürün tanımı — <meta description>, OG ve Twitter kartı
+ * aynı metni kullanır. Üç yerde elle tekrarlanınca biri güncellenirken
+ * diğerleri eskiyor.
+ */
+const DESCRIPTION =
+  'Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride kaldı — hepsi tek ekranda. Öğretmen, öğrenci ve veli için tek sistem.'
+
 export const metadata: Metadata = {
   title: {
     default: `${BRAND.name} — ${BRAND.tagline}`,
     template: `%s · ${BRAND.name}`,
   },
-  description:
-    'Hangi öğrenci hangi kitabın neresinde, bu hafta ne verildi, kim geride kaldı — hepsi tek ekranda. Öğretmen, öğrenci ve veli için tek sistem.',
+  description: DESCRIPTION,
+
+  // MUTLAK ADRES TABANI. Bu yokken Next.js canonical ve OG adreslerini
+  // GÖRELİ bırakıyordu; WhatsApp, LinkedIn ve X önizlemeleri göreli
+  // adresi çözemediği için paylaşılan her bağlantı başlıksız ve
+  // görselsiz görünüyordu — ürünün en çok paylaşıldığı yer WhatsApp.
+  metadataBase: new URL(siteUrl()),
+
+  // Varsayılan canonical. Alt sayfalar kendi `alternates`ını verirse
+  // onunki geçerli olur.
+  alternates: { canonical: '/' },
+
+  openGraph: {
+    type: 'website',
+    locale: 'tr_TR',
+    siteName: BRAND.name,
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: DESCRIPTION,
+    url: '/',
+    // Görsel app/opengraph-image.tsx'ten otomatik bağlanır.
+  },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: DESCRIPTION,
+  },
+
+  // Varsayılan: taranabilir. Paneller kendi layout'larında bunu
+  // `index: false` ile eziyor (bkz. app/(dashboard)/layout yok —
+  // her panel layout'unda tanımlı).
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
+  },
 
   // Manifesto app/manifest.ts'ten geliyor; burada yalnız ikon yolları.
   icons: {
@@ -42,7 +84,7 @@ export const metadata: Metadata = {
 // koyu temada ekranın üstünde yanan bir şerit bırakırdı.
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#bd4816' },
+    { media: '(prefers-color-scheme: light)', color: '#b8430f' },
     { media: '(prefers-color-scheme: dark)', color: '#2a1a12' },
   ],
 }

@@ -15,7 +15,7 @@ import { BRAND } from '@/lib/brand'
 // soracağı şeylerden biri.
 
 export const metadata: Metadata = {
-  title: `Gizlilik ve KVKK Aydınlatma Metni · ${BRAND.name}`,
+  title: 'Gizlilik ve KVKK Aydınlatma Metni',
   description:
     'Hangi verileri neden işlediğimiz, ne kadar sakladığımız ve haklarınızı nasıl kullanacağınız.',
 }

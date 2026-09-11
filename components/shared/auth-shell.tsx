@@ -117,7 +117,7 @@ export function AuthShell({
           </div>
         </div>
 
-        <p className="relative text-xs text-sidebar-foreground/50">
+        <p className="relative text-xs text-sidebar-foreground/65">
           © {BRAND.since} {BRAND.name}
         </p>
       </div>

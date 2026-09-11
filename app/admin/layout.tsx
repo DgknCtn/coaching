@@ -1,8 +1,23 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { BRAND } from '@/lib/brand'
 import { AdminTabs } from './admin-tabs'
+
+/**
+ * PANELLER ARAMA MOTORUNA KAPALI.
+ *
+ * Bu sayfalar oturum arkasında ve URL'leri öğrenci id'si taşıyor;
+ * dizine girmeleri ne mümkün ne de istenir. robots.txt taramayı
+ * engelliyor, bu etiket ise dış bir bağlantıdan keşfedilen adresin
+ * dizine EKLENMESİNİ engelliyor — ikisi farklı şeydir ve ikisi de
+ * gerekli.
+ */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
+
 
 export const dynamic = 'force-dynamic'
 

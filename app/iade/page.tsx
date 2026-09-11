@@ -16,7 +16,7 @@ import { TRIAL_DAYS } from '@/lib/plans'
 // UYARI: HUKUKİ İNCELEMEDEN GEÇMEMİŞTİR.
 
 export const metadata: Metadata = {
-  title: `İade ve İptal Koşulları · ${BRAND.name}`,
+  title: 'İade ve İptal Koşulları',
   description: 'Aboneliğinizi nasıl iptal edersiniz, hangi durumlarda iade alırsınız.',
 }
 

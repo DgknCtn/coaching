@@ -36,6 +36,16 @@ function isPublicPath(pathname: string): boolean {
     pathname === '/demo' ||
     pathname === '/forgot-password' ||
     pathname === '/api/health' ||
+    // ARAMA MOTORU VE PAYLAŞIM VARLIKLARI.
+    //
+    // robots.txt ve sitemap.xml matcher'daki uzantı listesiyle zaten
+    // dışarıda; /opengraph-image DEĞİLDİ ve oturum istendiği için
+    // /login'e 307 dönüyordu. Sonuç: WhatsApp'ta paylaşılan her bağlantı
+    // görselsiz görünüyordu — görsel isteğini atan Meta/X sunucusunun
+    // oturumu yok ve olamaz da.
+    pathname === '/opengraph-image' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
     // HUKUKİ METİNLER: bunların herkese açık olması yasal zorunluluk ve
     // zaten alıcı ADAYI okur — oturumu olmayan ziyaretçi. Footer'dan
     // tıklayan ziyaretçi /login'e düşüyordu.

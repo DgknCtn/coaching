@@ -16,7 +16,7 @@ import { VAT_RATE } from '@/lib/billing/pricing'
 // lehine sakatlar. BU HÂLİYLE SATIŞA AÇILMAMALIDIR.
 
 export const metadata: Metadata = {
-  title: `Mesafeli Satış Sözleşmesi · ${BRAND.name}`,
+  title: 'Mesafeli Satış Sözleşmesi',
   description: 'İnternet üzerinden yapılan abonelik satışına ilişkin sözleşme koşulları.',
 }
 

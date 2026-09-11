@@ -15,7 +15,7 @@ import { TRIAL_DAYS } from '@/lib/plans'
 // sözün sessizce bozulması demek olurdu.
 
 export const metadata: Metadata = {
-  title: `Kullanım Koşulları · ${BRAND.name}`,
+  title: 'Kullanım Koşulları',
   description: 'Hizmetin kapsamı, hesap sorumluluğu, planlar ve fesih koşulları.',
 }
 
