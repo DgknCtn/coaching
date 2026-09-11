@@ -109,6 +109,7 @@ export default async function StudentSessionsPage({
     { data: archiveRows },
     { data: monthFinanceRows },
     { data: seasonRows },
+    { data: noticeRow },
   ] = await Promise.all([
       supabase
         .from('student_services')
@@ -175,6 +176,18 @@ export default async function StudentSessionsPage({
         )
         .eq('student_id', studentId)
         .eq('workspace_id', workspaceId)
+        .maybeSingle(),
+      // VELİNİN ÖDEME BİLDİRİMİ (§8). Bildirimde tutar yok, o yüzden
+      // 066'nın "finans yalnız owner" kuralına tabi değil: ders veren
+      // öğretmenin "veli ödediğini söylüyor" bilgisini görmesi işin
+      // akışının parçası. Parayı deftere yazmak yine sahibin işi.
+      supabase
+        .from('parent_payment_notices')
+        .select('id, note, created_at')
+        .eq('student_id', studentId)
+        .eq('workspace_id', workspaceId)
+        .eq('month_start', attributedMonth)
+        .eq('status', 'pending')
         .maybeSingle(),
     ])
 
@@ -313,6 +326,15 @@ export default async function StudentSessionsPage({
         // geçiyor ki istemcinin saati kaymış olsa da ekran aynı şeyi
         // söylesin.
         nowIso={new Date().toISOString()}
+        paymentNotice={
+          noticeRow
+            ? {
+                id: noticeRow.id as string,
+                note: (noticeRow.note as string | null) ?? null,
+                createdAt: noticeRow.created_at as string,
+              }
+            : null
+        }
         monthFinance={
           monthFinanceRows
             ? {

@@ -10,6 +10,7 @@ import {
   formatMinutes,
   monthPaymentLabel,
   monthPaymentState,
+  parseLiraToKurus,
 } from '@/lib/finance'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,7 @@ import {
   setMakeupDecisionAction,
   setSessionAttendanceAction,
   setServiceStatusAction,
+  resolvePaymentNoticeAction,
   type ServiceUpdateInput,
   setSessionOutcomeAction,
 } from './actions'
@@ -144,6 +146,7 @@ export function SessionsClient({
   nowIso,
   monthFinance,
   season,
+  paymentNotice,
 }: {
   studentId: string
   services: ServiceRow[]
@@ -162,6 +165,8 @@ export function SessionsClient({
   /** Bu ayın tahakkuk/tahsilatı. null = finans satırlarını görme yetkisi yok. */
   monthFinance: { accruedKurus: number; collectedKurus: number; balanceKurus: number } | null
   season: SeasonSummary | null
+  /** Bu ay için velinin bekleyen ödeme bildirimi. */
+  paymentNotice: { id: string; note: string | null; createdAt: string } | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -457,6 +462,33 @@ export function SessionsClient({
             ayın tahakkuku sıfırdır ve "Tahsil edildi" yazmak yanıltır.
             Finansı görme yetkisi olmayan öğretmende de (066) aynı
             sessizlik. */}
+        {/* VELİ BİLDİRİMİ (§8: "Veli 'Ödeme yaptım' bildirimi
+            gönderebilir; öğretmen onaylayınca hesap kapanır").
+
+            Bildirim para kaydı DEĞİL: onaylamak tek başına deftere satır
+            yazmaz. Tutar girilirse tahsilat o anda doğar ve bunu yalnız
+            çalışma alanı sahibi yapabilir. Öğretmen tutarsız da
+            kapatabilir — parayı Finans ekranından zaten işlemiş
+            olabilir. */}
+        {paymentNotice && (
+          <PaymentNoticeCard
+            notice={paymentNotice}
+            disabled={isPending}
+            onResolve={(status, amountKurus) =>
+              run(
+                () =>
+                  resolvePaymentNoticeAction(
+                    studentId,
+                    paymentNotice.id,
+                    status,
+                    amountKurus
+                  ),
+                status === 'confirmed' ? 'Bildirim onaylandı.' : 'Bildirim reddedildi.'
+              )
+            }
+          />
+        )}
+
         {paymentLabel && (
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
             <Badge variant={paymentState === 'paid' ? 'success' : 'warning'}>
@@ -793,6 +825,80 @@ export function SessionsClient({
           )}
         </Section>
       )}
+    </div>
+  )
+}
+
+/**
+ * Velinin bekleyen ödeme bildirimi.
+ *
+ * TUTAR ALANI BOŞ BAŞLAR VE ZORUNLU DEĞİL. Velinin söylediği rakam
+ * yok (bildirim tutar taşımıyor); buraya yazılan sayı öğretmenin kendi
+ * beyanı ve yazıldığı anda tahsilat satırı doğuruyor. Varsayılan bir
+ * değer koymak — örneğin ayın tahakkuku — öğretmenin bakmadan
+ * onaylamasına ve gerçekte gelmemiş bir parayı deftere geçirmesine yol
+ * açardı.
+ */
+function PaymentNoticeCard({
+  notice,
+  disabled,
+  onResolve,
+}: {
+  notice: { id: string; note: string | null; createdAt: string }
+  disabled?: boolean
+  onResolve: (status: 'confirmed' | 'rejected', amountKurus: number | null) => void
+}) {
+  const [amount, setAmount] = useState('')
+
+  return (
+    <div className="mb-4 rounded-lg border border-info-border bg-info-subtle p-3 text-sm">
+      <p className="font-medium text-info-foreground">
+        Veli bu ay için ödeme yaptığını bildirdi.
+      </p>
+      {notice.note && (
+        <p className="mt-1 text-info-foreground/90">&ldquo;{notice.note}&rdquo;</p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        {formatSessionTime(notice.createdAt)}
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <div className="w-40">
+          <Label htmlFor="noticeAmount" className="text-xs">
+            Tahsil edilen tutar <span className="text-muted-foreground">(isteğe bağlı)</span>
+          </Label>
+          <Input
+            id="noticeAmount"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Örn. 12000"
+          />
+        </div>
+        <Button
+          size="sm"
+          disabled={disabled}
+          onClick={() => {
+            // Boş bırakılırsa yalnız bildirim kapanır, defter
+            // değişmez.
+            const kurus = amount.trim() === '' ? null : parseLiraToKurus(amount)
+            if (amount.trim() !== '' && kurus === null) {
+              toast.error('Geçerli bir tutar girin.')
+              return
+            }
+            onResolve('confirmed', kurus)
+          }}
+        >
+          Onayla
+        </Button>
+        <Button size="sm" variant="ghost" disabled={disabled} onClick={() => onResolve('rejected', null)}>
+          Reddet
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Tutar girilirse Finans ekranına tahsilat olarak işlenir. Boş bırakılırsa
+        yalnız bildirim kapanır.
+      </p>
     </div>
   )
 }

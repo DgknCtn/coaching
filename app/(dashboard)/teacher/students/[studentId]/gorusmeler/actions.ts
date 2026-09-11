@@ -706,3 +706,60 @@ export async function setSessionAttendanceAction(
   revalidate(studentId)
   return { success: true }
 }
+
+/**
+ * Velinin "ödeme yaptım" bildirimini sonuçlandırır (§8).
+ *
+ * TUTAR İSTEĞE BAĞLI VE ÖĞRETMENİNDİR. Velinin bildirimi bir talep;
+ * defterin sahibi öğretmen (066). Tutar girilirse tahsilat satırı
+ * RPC içinde doğar ve bunu yalnız çalışma alanı SAHİBİ yapabilir —
+ * ders veren öğretmen bildirimi kapatabilir ama parayı deftere
+ * yazamaz.
+ */
+export async function resolvePaymentNoticeAction(
+  studentId: string,
+  noticeId: string,
+  status: 'confirmed' | 'rejected',
+  amountKurus?: number | null,
+  note?: string
+) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      noticeId: uuidSchema,
+      status: z.enum(['confirmed', 'rejected']),
+      amountKurus: z
+        .number()
+        .int()
+        .positive('Tutar sıfırdan büyük olmalı.')
+        .max(100000000)
+        .nullable()
+        .optional(),
+      note: z.string().trim().max(500).optional(),
+    })
+    .safeParse({ studentId, noticeId, status, amountKurus, note })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const v = parsed.data
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('resolve_payment_notice', {
+    p_notice_id: v.noticeId,
+    p_status: v.status,
+    p_amount_kurus: v.amountKurus ?? null,
+    p_method: 'havale',
+    p_resolution_note: v.note || null,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'payment.notice',
+    entityType: 'student',
+    entityId: v.studentId,
+    detail: { noticeId: v.noticeId, status: v.status, amountKurus: v.amountKurus ?? null },
+  })
+  revalidate(v.studentId)
+  return { success: true }
+}
+

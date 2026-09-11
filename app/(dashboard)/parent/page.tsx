@@ -14,6 +14,8 @@ import { AlertBanner } from '@/components/shared/alert-banner'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
+import { monthPaymentLabel, type MonthPaymentState } from '@/lib/finance'
+import { PaymentNoticeButton } from './payment-notice-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +53,40 @@ function one<T>(value: Nested<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
+/** İçinde bulunulan ayın ilk günü, YEREL takvime göre. */
+function currentMonthStartLocal(): string {
+  // UTC'den okunsaydı ayın ilk gecesi bir önceki ay açılırdı.
+  const ym = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(new Date())
+  return `${ym}-01`
+}
+
+function currentMonthLabel(): string {
+  return new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(new Date())
+}
+
+/** "19 Eyl 10:00" — velinin ekranında tarih ve saat birlikte (§8). */
+function formatSessionMoment(iso: string): string {
+  return new Intl.DateTimeFormat('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
+}
+
+const SESSION_STATUS_LABEL: Record<string, string> = {
+  planlandi: 'Planlandı',
+  yapildi: 'Yapıldı',
+  ertelendi: 'Ertelendi',
+  iptal: 'İptal edildi',
+  yapilmadi: 'Yapılmadı',
+}
+
 export default async function ParentPage({
   searchParams,
 }: {
@@ -58,6 +94,7 @@ export default async function ParentPage({
   searchParams: Promise<{ student?: string }>
 }) {
   const { student: requestedStudentId } = await searchParams
+  const currentMonthStart = currentMonthStartLocal()
   const { supabase, workspaceId, linkedStudents } = await getParentContext()
 
 
@@ -82,6 +119,10 @@ export default async function ParentPage({
         { data: allBatches },
         { data: weeklySummary },
         { data: teacherRow },
+        { data: monthSessions },
+        { data: monthCounters },
+        { data: openNotice },
+        { data: paymentState },
       ] = await Promise.all([
         supabase
           .from('student_book_progress_view')
@@ -134,6 +175,44 @@ export default async function ParentPage({
           .select('profiles:primary_teacher_profile_id(full_name)')
           .eq('id', studentId)
           .maybeSingle(),
+        // BU AYIN HİZMETLERİ (R7-04 §8: "Veli, içinde bulunulan ay kaç
+        // hizmet planlandığını ve kaçının yapıldığını TARİH/SAAT ile
+        // görür").
+        //
+        // Erişim 074'ün `service_sessions_read_self` politikasından
+        // geliyor; veli için yeni bir kapı açılmadı.
+        //
+        // 082'nin ay atfı burada da geçerli: telafi asıl ayın
+        // listesinde görünür. Veli ile öğretmen aynı ay için farklı
+        // liste görmemeli.
+        supabase
+          .from('student_service_session_view')
+          .select('id, planned_at, actual_at, duration_minutes, status, origin_planned_at')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .eq('attributed_month', currentMonthStart)
+          .order('planned_at'),
+        supabase
+          .from('student_service_month_view')
+          .select('planlanan, yapilan')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .eq('ay', currentMonthStart),
+        // Bekleyen bildirim varsa tuş yerine "onay bekleniyor" yazar.
+        supabase
+          .from('parent_payment_notices')
+          .select('id, created_at')
+          .eq('student_id', studentId)
+          .eq('month_start', currentMonthStart)
+          .eq('status', 'pending')
+          .maybeSingle(),
+        // ÖDEME DURUMU FONKSİYONDAN, TABLODAN DEĞİL. Finans tabloları
+        // veliye kapalı (066); fonksiyon yalnız üç kelimeden birini
+        // döndürüyor, hiçbir koşulda tutar sızdırmıyor.
+        supabase.rpc('student_month_payment_state', {
+          p_student_id: studentId,
+          p_month_start: currentMonthStart,
+        }),
       ])
 
       // Özet, SINIRSIZ listeden türer (yukarıdaki yorum). Gruplar
@@ -146,8 +225,22 @@ export default async function ParentPage({
         })
       )
 
+      const plannedCount = (monthCounters ?? []).reduce(
+        (sum, c) => sum + Number(c.planlanan ?? 0),
+        0
+      )
+      const doneCount = (monthCounters ?? []).reduce(
+        (sum, c) => sum + Number(c.yapilan ?? 0),
+        0
+      )
+
       return {
         student: link.students,
+        monthSessions: monthSessions ?? [],
+        plannedCount,
+        doneCount,
+        hasOpenNotice: Boolean(openNotice),
+        paymentState: (paymentState as string | null) ?? null,
         bookProgress: bookProgress ?? [],
         batches: batches ?? [],
         overdueCount: summaryStates.filter(st => st === 'overdue').length,
@@ -204,7 +297,15 @@ export default async function ParentPage({
           totalBatchCount,
           weekly,
           teacherName,
+          monthSessions,
+          plannedCount,
+          doneCount,
+          hasOpenNotice,
+          paymentState,
         }) => {
+        // Veli dili "Ödendi", öğretmen dili "Tahsil edildi" (§8).
+        const paymentLabel = monthPaymentLabel(paymentState as MonthPaymentState, 'parent')
+
         // Genel (dönem geneli) ilerleme — atanmış tüm kitaplar üzerinden.
         const overallTotal = bookProgress.reduce((s, p) => s + Number(p.total_tests ?? 0), 0)
         const overallCompleted = bookProgress.reduce((s, p) => s + Number(p.completed_tests ?? 0), 0)
@@ -265,6 +366,86 @@ export default async function ParentPage({
                     },
                   ]}
                 />
+              </Section>
+            )}
+
+            {/* BU AYIN DERSLERİ (§8).
+
+                Veli "kaç hizmet planlandı, kaçı yapıldı"yı TARİH/SAAT
+                ile görüyor. Sayılar öğretmenin ekranıyla aynı view'dan
+                geliyor (082 ay atfı dahil); ayrı hesaplansaydı iki
+                taraf aynı ay için farklı sayı görürdü.
+
+                ÖDEME DURUMU VAR, TUTAR YOK: finans tabloları veliye
+                kapalı (066). Ekran yalnız "Ödendi / Kısmi / Bekliyor"
+                diyor; rakamı öğretmen söyler. */}
+            {plannedCount > 0 && (
+              <Section
+                title={`${currentMonthLabel()} dersleri`}
+                description={`${doneCount} / ${plannedCount} hizmet yapıldı.`}
+                variant="card"
+              >
+                {paymentLabel && (
+                  <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <Badge variant={paymentState === 'paid' ? 'success' : 'warning'}>
+                      {paymentLabel}
+                    </Badge>
+                    <PaymentNoticeButton
+                      studentId={student.id}
+                      monthStart={currentMonthStart}
+                      monthLabel={currentMonthLabel()}
+                      pending={hasOpenNotice}
+                    />
+                  </div>
+                )}
+
+                <ul className="divide-y text-sm">
+                  {monthSessions.map((session) => {
+                    const planned = session.planned_at as string
+                    const actual = session.actual_at as string | null
+                    // "19 Eyl 10:00 → 20 Eyl 11:00" (§7-A no.3): ilk
+                    // planlanan tarih SİLİNMEZ, nihai durum yanında
+                    // gösterilir. Veli neyin değiştiğini görebilmeli.
+                    const moved = actual && actual !== planned
+                    return (
+                      <li
+                        key={session.id as string}
+                        className="flex flex-wrap items-baseline justify-between gap-2 py-2"
+                      >
+                        <span className="tabular-nums">
+                          {moved ? (
+                            <>
+                              <span className="text-muted-foreground line-through">
+                                {formatSessionMoment(planned)}
+                              </span>{' '}
+                              → {formatSessionMoment(actual)}
+                            </>
+                          ) : (
+                            formatSessionMoment(planned)
+                          )}
+                          {session.duration_minutes != null && (
+                            <span className="text-muted-foreground">
+                              {' '}
+                              · {session.duration_minutes} dk
+                            </span>
+                          )}
+                        </span>
+                        <Badge
+                          variant={
+                            session.status === 'yapildi'
+                              ? 'success'
+                              : session.status === 'planlandi'
+                                ? 'neutral'
+                                : 'warning'
+                          }
+                        >
+                          {SESSION_STATUS_LABEL[session.status as string] ??
+                            (session.status as string)}
+                        </Badge>
+                      </li>
+                    )
+                  })}
+                </ul>
               </Section>
             )}
 

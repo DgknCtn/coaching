@@ -37,6 +37,7 @@ export type AuditAction =
   | 'service.create'
   | 'service.status'
   | 'service.update'
+  | 'payment.notice'
   | 'session.outcome'
   | 'session.reschedule'
   | 'session.makeup'
@@ -96,6 +97,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'service.create': 'Hizmet tanımladı',
   'service.status': 'Hizmet durumunu değiştirdi',
   'service.update': 'Hizmet düzenini değiştirdi',
+  'payment.notice': 'Veli ödeme bildirimini sonuçlandırdı',
   'session.outcome': 'Görüşme durumunu işaretledi',
   'session.reschedule': 'Görüşmeyi erteledi',
   'session.makeup': 'Telafi oluşturdu',

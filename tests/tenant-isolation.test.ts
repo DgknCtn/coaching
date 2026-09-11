@@ -105,6 +105,9 @@ const LOCKED_TABLES = [
   'group_sessions',
   'service_sessions',
   'weekly_flows',
+  // 086 — velinin ödeme bildirimi. Tutar taşımıyor ama kimin hangi ay
+  // ödeme yaptığını söylediğini taşıyor; aile mahremiyeti.
+  'parent_payment_notices',
 ] as const
 
 async function anonSelect(view: string) {
