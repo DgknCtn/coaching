@@ -12,6 +12,7 @@ import {
 } from '@/lib/validation'
 import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
+import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
 
 export async function loginAction(email: string, password: string) {
   const parsed = loginSchema.safeParse({ email, password })
@@ -20,12 +21,41 @@ export async function loginAction(email: string, password: string) {
   // Kaba kuvvet savunması (050). Doğrulamadan SONRA, kimlik denemesinden
   // ÖNCE: biçimsel olarak geçersiz girdiler sayacı boşa harcamasın.
   const limit = await checkRateLimit('login', parsed.data.email)
-  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
 
+  if (!limit.allowed) {
+    // ENGELLENEN DENEME DE KAYDEDİLİR. Yalnız başarısız girişleri
+    // yazsaydık, kaba kuvvet saldırısı tam da yoğunlaştığı anda
+    // görünmez olurdu: sınıra takılan denemeler hiç loglanmadığı için
+    // panelde saldırı biter gibi görünürdü.
+    await logAuthEvent({
+      type: 'login.rate_limited',
+      profileId: await resolveProfileIdByEmail(supabase, parsed.data.email),
+      detail: { retryAfterSeconds: limit.retryAfterSeconds },
+    })
+    return { error: rateLimitMessage(limit.retryAfterSeconds) }
+  }
+
   const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) return { error: authErrorToTr(error.message) }
+
+  if (error) {
+    await logAuthEvent({
+      type: 'login.failed',
+      profileId: await resolveProfileIdByEmail(supabase, parsed.data.email),
+      // Hata METNİ değil TÜRÜ yazılır: Supabase'in mesajı zamanla
+      // değişebilir ve girilen adresi içerebilir.
+      detail: { reason: error.code ?? 'unknown' },
+    })
+    return { error: authErrorToTr(error.message) }
+  }
+
+  // Oturum artık var; profil kimliği doğrudan okunabiliyor.
+  await logAuthEvent({
+    type: 'login.success',
+    profileId: await resolveProfileIdByEmail(supabase, parsed.data.email),
+    detail: { method: 'password' },
+  })
 
   redirect('/')
 }
@@ -140,6 +170,16 @@ export async function requestPasswordResetAction(email: string) {
     return { error: authErrorToTr(error.message) }
   }
 
+  // KULLANICI NUMARALANDIRMASI BURADA DA GEÇERLİ: kayıt, adres bilinen
+  // bir hesaba aitse kimliğiyle, değilse kimliksiz yazılır. Kullanıcıya
+  // dönen cevap her iki durumda da aynı kalıyor — denetim kaydı dışarıya
+  // hiçbir şey sızdırmıyor, yalnız panele "bu hesap için sıfırlama
+  // istendi" bilgisini veriyor.
+  await logAuthEvent({
+    type: 'password_reset_requested',
+    profileId: await resolveProfileIdByEmail(supabase, parsed.data.email),
+  })
+
   return { success: true }
 }
 
@@ -159,11 +199,31 @@ export async function updatePasswordAction(password: string, passwordConfirm: st
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
   if (error) return { error: authErrorToTr(error.message) }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
+  await logAuthEvent({
+    type: 'password_changed',
+    profileId: (profile as { id: string } | null)?.id ?? null,
+  })
+
   redirect('/')
 }
 
 export async function logoutAction() {
   const supabase = await createClient()
+
+  // ÇIKIŞTAN ÖNCE kaydedilir: signOut() sonrası oturum yok, profil
+  // kimliği çözülemez ve kayıt sahipsiz kalırdı.
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('auth_user_id', (await supabase.auth.getClaims()).data?.claims?.sub ?? '')
+    .maybeSingle()
+  await logAuthEvent({ type: 'logout', profileId: (data as { id: string } | null)?.id ?? null })
+
   await supabase.auth.signOut()
   redirect('/login')
 }

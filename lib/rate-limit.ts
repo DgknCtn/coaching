@@ -1,5 +1,5 @@
-import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { clientIp } from '@/lib/request-ip'
 import { reportError } from '@/lib/observability'
 
 // Kimlik akışlarında hız sınırı (050, 068'de sertleştirildi).
@@ -48,23 +48,12 @@ export const RATE_LIMITS = {
 
 export type RateLimitAction = keyof typeof RATE_LIMITS
 
-/**
- * İstemcinin IP adresi.
- *
- * Vercel `x-forwarded-for` başlığını kendisi yazar ve istemcinin
- * gönderdiğini EZER, bu yüzden ilk değer güvenilirdir. Başlık hiç yoksa
- * sabit bir kovaya düşülür: o durumda sınır tüm anonim trafiği tek sayaçta
- * toplar — kaba ama açık bırakmaktan iyidir.
- *
- * ÖZETLENMEDEN GÖNDERİLİYOR: özet artık sunucuda, tuzla alınıyor. Ham IP
- * zaten isteğin kendisiyle veritabanı sunucusuna ulaşmıyor; yalnız bu
- * RPC'nin parametresi olarak gidiyor ve tabloya özeti yazılıyor.
- */
-async function clientIp(): Promise<string> {
-  const h = await headers()
-  const forwarded = h.get('x-forwarded-for')
-  return forwarded?.split(',')[0]?.trim() || h.get('x-real-ip') || 'bilinmeyen'
-}
+// IP okuma `lib/request-ip.ts`e TAŞINDI. Giriş denetim kaydı da aynı
+// bilgiyi yazıyor; iki kopya, biri düzeltilirken diğerinin eskimesi ve
+// hız sınırıyla denetim kaydının farklı IP görmesi demekti.
+//
+// ÖZETLENMEDEN GÖNDERİLİYOR: özet sunucuda, tuzla alınıyor. Ham IP
+// yalnız RPC'nin parametresi olarak gidiyor, tabloya özeti yazılıyor.
 
 export interface RateLimitResult {
   allowed: boolean
