@@ -141,11 +141,44 @@ export async function middleware(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims()
   const userId = claimsData?.claims?.sub ?? null
 
-  // Giriş yapmış kullanıcı auth sayfasına gitmeye çalışıyor
+  // Giriş yapmış kullanıcı auth sayfasına gitmeye çalışıyor.
+  //
+  // ============================================================
+  // BURADA getClaims() YETMEZ — KULLANICIYI DIŞARIDA KİLİTLER
+  // ============================================================
+  // getClaims JWT'yi YEREL doğruluyor: imza ve süre tutuyorsa "oturum
+  // var" der. Ama oturum SUNUCUDA iptal edilmiş olabilir — şifre başka
+  // bir cihazdan değiştirilmiş, oturum uzaktan sonlandırılmış, yenileme
+  // jetonu düşmüş ya da proje anahtarları döndürülmüş olabilir. Bu
+  // durumda erişim jetonu hâlâ "geçerli görünür" ama hiçbir işe yaramaz.
+  //
+  // GÖZLENEN ARIZA: /login açılıyor, middleware çerezi geçerli sanıp
+  // /'a atıyor; ana sayfa ise getUser() ile SUNUCUYA soruyor, "oturum
+  // yok" cevabını alıp tanıtım sayfasını çiziyor. Kullanıcı "Giriş Yap"a
+  // bastıkça tanıtım sayfasına dönüyor ve giriş ekranına ULAŞAMIYOR.
+  // Çıkış yapması da mümkün değil, çünkü çıkış oturum gerektiriyor.
+  //
+  // ÇÖZÜM, PERFORMANSI BOZMADAN: yalnız BU İKİ SAYFADA sunucuya
+  // soruluyor. getClaims'in getirdiği kazanç her gezinmede bir ağ turu
+  // tasarrufuydu; /login ve /register ise oturumu olan bir kullanıcının
+  // neredeyse hiç uğramadığı iki sayfa. Yönlendirme kararının burada
+  // KESİN olması, tasarruf edilen turdan kıyas kabul etmez biçimde
+  // değerli.
   if (userId && isAuthPage) {
-    const dashboardUrl = request.nextUrl.clone()
-    dashboardUrl.pathname = '/'
-    return NextResponse.redirect(dashboardUrl)
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+      const dashboardUrl = request.nextUrl.clone()
+      dashboardUrl.pathname = '/'
+      return NextResponse.redirect(dashboardUrl)
+    }
+
+    // Çerez var ama sunucu tanımıyor: kullanıcı gerçekte giriş yapmamış.
+    // Giriş sayfası GÖSTERİLİR ve ölü çerez temizlenir — aksi hâlde
+    // kullanıcı giriş yapana kadar her istekte aynı boşa turu öderdi.
+    // Rol önbelleği de düşürülüyor: sahibi olmayan bir role ait.
+    supabaseResponse.cookies.delete(ROLE_CACHE_COOKIE)
+    return supabaseResponse
   }
 
   // Giriş yapmamış kullanıcı korumalı rotaya girmeye çalışıyor
