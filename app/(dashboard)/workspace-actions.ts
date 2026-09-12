@@ -36,17 +36,29 @@ export async function switchWorkspaceAction(workspaceId: string) {
 
   if (!profile) return { error: 'Profil bulunamadı.' }
 
-  const { data: membership, error } = await supabase
+  // ÇOĞUL SATIR BEKLENİR, TEKİL DEĞİL.
+  //
+  // `register_teacher` her öğretmen için kendi alanına İKİ üyelik yazar
+  // (owner + teacher, 024). Burada `maybeSingle()` kullanıldığı sürece o
+  // alana geçiş PostgREST'in "multiple rows" hatasına düşüyordu; hata
+  // İngilizce olduğu için kullanıcı "Bu alana erişiminiz yok" yerine
+  // anlamsız bir "İşlem tamamlanamadı" görüyordu. Yani koç, SAHİBİ olduğu
+  // çalışma alanına hiç geçemiyordu — davetle girdiği alana (tek teacher
+  // satırı) geçebiliyordu. Üyelik burada varlık kontrolüdür; kaç rolle
+  // üye olduğu kararı değiştirmez.
+  const { data: memberships, error } = await supabase
     .from('workspace_members')
     .select('workspace_id')
     .eq('profile_id', profile.id)
     .eq('workspace_id', parsed.data)
     .eq('status', 'active')
     .in('role', ['owner', 'teacher'])
-    .maybeSingle()
+    .limit(1)
 
   if (error) return { error: dbErrorToTr(error.message) }
-  if (!membership) return { error: 'Bu çalışma alanına erişiminiz yok.' }
+  if (!memberships || memberships.length === 0) {
+    return { error: 'Bu çalışma alanına erişiminiz yok.' }
+  }
 
   const store = await cookies()
   store.set(ACTIVE_WORKSPACE_COOKIE, parsed.data, {
