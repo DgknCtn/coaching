@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Library,
   ListChecks,
+  ShieldAlert,
   ShieldCheck,
   Waypoints,
   StickyNote,
@@ -387,6 +388,7 @@ export const adminNav: NavItem[] = [
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
   { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
+  { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert },
 ]
 
 export const studentNav: NavItem[] = [

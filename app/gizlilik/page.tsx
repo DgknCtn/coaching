@@ -74,6 +74,17 @@ export default function PrivacyPage() {
           destek taleplerinin konusu ve mesaj içeriği.
         </li>
         <li>
+          <strong className="text-foreground">Giriş güvenliği kayıtları:</strong>{' '}
+          hesabınıza yapılan giriş ve çıkışlarda; işlemin tarihi, IP adresiniz,
+          tarayıcı/işletim sistemi bilgisi ve IP adresinden türetilen kabaca
+          konum (ülke ve şehir). Başarısız giriş denemeleri de kaydedilir —
+          hesabınıza izinsiz erişim girişimlerini fark edebilmek için.
+          Denenen e-posta adresi{' '}
+          <strong className="text-foreground">saklanmaz</strong>. Bu kayıtlar
+          hesap güvenliğinin sağlanması meşru menfaatine dayanır; reklam ya da
+          profilleme için kullanılmaz.
+        </li>
+        <li>
           <strong className="text-foreground">İş ortağı atfı:</strong> bir iş ortağı
           bağlantısıyla geldiyseniz, hangi bağlantıdan geldiğiniz bilgisi. İş
           ortağı yalnız getirdiği çalışma alanının adını ve tarihini görür;
@@ -124,6 +135,14 @@ export default function PrivacyPage() {
       <p>
         Denetim kayıtları ve yasal saklama yükümlülüğü bulunan ödeme kayıtları,
         kişisel veri içermeyecek şekilde anonimleştirilerek saklanabilir.
+      </p>
+      <p>
+        <strong className="text-foreground">Giriş güvenliği kayıtlarında</strong> IP
+        adresi, şehir ve tarayıcı bilgisi{' '}
+        <strong className="text-foreground">90 gün</strong> sonra silinir. Olayın
+        kendisi (&quot;şu tarihte giriş yapıldı&quot;) hesabınızın kendi geçmişi
+        olarak kalır; bu kayıt, hesabınızda ne olduğunu sonradan
+        gösterebilmemiz için gereklidir.
       </p>
 
       <LegalHeading>Haklarınız</LegalHeading>
