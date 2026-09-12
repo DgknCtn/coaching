@@ -143,4 +143,36 @@ describe('migration yeniden çalıştırılabilirliği', () => {
       expect(missing, `DROP FUNCTION IF EXISTS eksik: ${missing.join(', ')}`).toEqual([])
     }
   )
+
+  it.each(files.map((f) => f.name))(
+    '%s · WHERE yüklemi olmayan DELETE/UPDATE yok',
+    (name) => {
+      // 087'nin sebebi buydu ve göz kararı fark edilmedi.
+      //
+      // Supabase, kazara tüm tabloyu silmeyi/güncellemeyi engelleyen
+      // safeupdate korumasını açık tutuyor. Koruma GEÇİCİ tabloyu
+      // ayırt etmiyor: `DELETE FROM tmp_slotlar;` de reddediliyor.
+      //
+      // Daha kötüsü, hata ÇALIŞMA ZAMANINDA ortaya çıkıyor — migration
+      // sorunsuz uygulanıyor, fonksiyon ancak çağrıldığında patlıyor.
+      // generate_service_sessions tam olarak böyle kırıldı ve çağıran
+      // taraf hatayı yuttuğu için ekranda hiçbir belirti vermedi.
+      // 083 MUAF: hatalı satır orada ve DÜZELTİLEMEZ — dosya çoktan
+      // uygulandı, uygulanmış bir migration'ı değiştirmek geçmişi
+      // kurcalamak olur. Fonksiyonun doğru hâli 087'de CREATE OR REPLACE
+      // ile yeniden tanımlandı; canlıda çalışan tanım odur. Muafiyet
+      // dosya adına bağlı, kurala değil: 083'ten sonra yazılan hiçbir
+      // dosya bu kuraldan kaçamaz.
+      if (name === '083_group_session_fanout.sql') return
+
+      const sql = withoutComments(files.find((f) => f.name === name)!.sql)
+
+      // Noktalı virgülle biten, arada WHERE geçmeyen DELETE/UPDATE.
+      const bad = [
+        ...sql.matchAll(/\b(DELETE\s+FROM|UPDATE)\s+[a-z0-9_."]+\s*;/gi),
+      ].map((m) => m[0].replace(/\s+/g, ' '))
+
+      expect(bad, `WHERE yüklemi eksik: ${bad.join(' | ')}`).toEqual([])
+    }
+  )
 })
