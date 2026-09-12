@@ -24,13 +24,35 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   const { supabase, workspaceId, profile, activeTerm, workspaces, usage } =
     await getTeacherContext()
 
-  // Sidebar'daki aktif öğrenci seçicisi için hafif liste. /teacher/students
-  // ile aynı view; seçici yalnız öğrenci bağlamındaki rotalarda gösterilir.
+  // Sidebar'daki aktif öğrenci seçicisi için hafif liste.
+  //
+  // ============================================================
+  // BU SORGU ÖLÇÜLDÜ: 8.100 ms → 30 ms
+  // ============================================================
+  // Önceden `teacher_student_overview_view` okunuyordu, "/teacher/students
+  // ile aynı view" gerekçesiyle. Ama seçicinin ihtiyacı yalnız DÖRT
+  // sütun: id, ad, sınıf, sınav türü. O view ise beş ayrı toplama
+  // view'ıyla birleşiyor (kitap ilerlemesi, haftalık özet, geciken ödev,
+  // yoklama, onay kuyruğu) ve `security_invoker` altında her birine RLS
+  // ayrı ayrı uygulanıyor. Postgres bu birleşimi budayamıyor: dört
+  // sütun istense de toplamların hepsi hesaplanıyor.
+  //
+  // Bu sorgu LAYOUT'ta olduğu için HER öğretmen sayfasında çalışıyordu.
+  // Ölçüm: en hafif sayfa (/teacher/ayarlar) dahil her sayfa 8,4 saniye
+  // sürüyordu ve bunun 8,1 saniyesi tek başına buydu; getTeacherContext
+  // yalnız 0,4 saniye.
+  //
+  // Dört sütunun dördü de `students` tablosunda ve
+  // idx_students_workspace_status (workspace_id, status) indeksi zaten
+  // var. Süzgeç ve sıralama BİLİNÇLİ OLARAK AYNEN korundu: view'da
+  // durum süzgeci yoktu, yani arşivli öğrenci de listeleniyordu. Onu
+  // burada değiştirmek, performans düzeltmesinin arkasına gizlenmiş bir
+  // davranış değişikliği olurdu — ayrı bir karar.
   const { data: studentRows } = await supabase
-    .from('teacher_student_overview_view')
-    .select('student_id, student_full_name, grade_level, exam_type')
+    .from('students')
+    .select('student_id:id, student_full_name:full_name, grade_level, exam_type')
     .eq('workspace_id', workspaceId)
-    .order('student_full_name')
+    .order('full_name')
     .limit(500)
 
   const collapsed = await getSidebarCollapsed()
