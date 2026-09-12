@@ -175,4 +175,37 @@ describe('migration yeniden çalıştırılabilirliği', () => {
       expect(bad, `WHERE yüklemi eksik: ${bad.join(' | ')}`).toEqual([])
     }
   )
+
+  it.each(files.map((f) => f.name))(
+    '%s · anahtar kelime tanımlayıcıya yapışmamış',
+    (name) => {
+      // 092 ilk denemede bu yüzden patladı: metin veritabanından
+      // parçalar hâlinde okunup birleştirilirken bir parça sınırında
+      // boşluk kayboldu ve "SELECT can_read_library()" ifadesi
+      // "SELECTcan_read_library()" olarak yazıldı. Hata yalnız SQL
+      // çalıştırılırken görüldü.
+      //
+      // Elle yazılan SQL'de nadir, ÜRETİLEN SQL'de en sık kusur budur
+      // ve göz kararı incelemede kolayca kaçar: satır uzun, fark tek
+      // bir boşluk.
+      const sql = withoutComments(files.find((f) => f.name === name)!.sql)
+
+      // AND / OR / NOT BİLİNÇLİ OLARAK LİSTEDE YOK: bunlar başka SQL
+      // kelimelerinin ÖNEKİ (ORDER, NOTHING) ve sütun adlarının içinde
+      // geçebiliyor. Listeye alındıklarında test 24 dosyada yanlış alarm
+      // verdi. Yanlış alarm veren bir kural, bir süre sonra kapatılan
+      // kuraldır. Geriye yalnız başka hiçbir şeyin öneki olmayan
+      // kelimeler kaldı.
+      //
+      // ALT ÇİZGİ DE HARİÇ: `from_date` gibi sütun adları "FROM" ile
+      // başlıyor ve 066 tam olarak bu yüzden yanlış alarm verdi.
+      // Yapışma hatası her zaman HARFLE bitişir (SELECTfoo); alt
+      // çizgiyle bitişen bir kusur yok.
+      const bad = [
+        ...sql.matchAll(/\b(SELECT|FROM|WHERE|EXISTS|USING|VALUES)[a-z]/gi),
+      ].map((m) => m[0])
+
+      expect(bad, `anahtar kelime yapışık: ${bad.join(', ')}`).toEqual([])
+    }
+  )
 })

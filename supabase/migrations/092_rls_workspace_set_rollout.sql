@@ -116,7 +116,7 @@ CREATE POLICY "book_parts_write" ON public.book_parts
 DROP POLICY IF EXISTS "book_section_topics_select" ON public.book_section_topics;
 CREATE POLICY "book_section_topics_select" ON public.book_section_topics
   FOR SELECT
-  USING ((book_section_topics.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM (book_sections bs JOIN student_book_assignments sba ON ((sba.book_id= bs.book_id))) WHERE ((bs.id = book_section_topics.section_id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id)))))));
+  USING ((book_section_topics.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM (book_sections bs JOIN student_book_assignments sba ON ((sba.book_id = bs.book_id))) WHERE ((bs.id = book_section_topics.section_id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id)))))));
 DROP POLICY IF EXISTS "book_section_topics_write" ON public.book_section_topics;
 CREATE POLICY "book_section_topics_write" ON public.book_section_topics
   FOR ALL
@@ -131,7 +131,7 @@ CREATE POLICY "sections_insert_teacher" ON public.book_sections
 DROP POLICY IF EXISTS "sections_select" ON public.book_sections;
 CREATE POLICY "sections_select" ON public.book_sections
   FOR SELECT
-  USING ((book_sections.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.book_id = book_sections.book_id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id))))) OR (( SELECT is_library_workspace(book_sections.workspace_id) AS is_library_workspace) AND ( SELECTcan_read_library() AS can_read_library) AND (EXISTS ( SELECT 1 FROM books b WHERE ((b.id = book_sections.book_id) AND (b.status = 'active'::text) AND (b.library_status = 'approved'::text)))))));
+  USING ((book_sections.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.book_id = book_sections.book_id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id))))) OR (( SELECT is_library_workspace(book_sections.workspace_id) AS is_library_workspace) AND ( SELECT can_read_library() AS can_read_library) AND (EXISTS ( SELECT 1 FROM books b WHERE ((b.id = book_sections.book_id) AND (b.status = 'active'::text) AND (b.library_status = 'approved'::text)))))));
 DROP POLICY IF EXISTS "sections_update_teacher" ON public.book_sections;
 CREATE POLICY "sections_update_teacher" ON public.book_sections
   FOR UPDATE
@@ -159,7 +159,7 @@ CREATE POLICY "books_insert_teacher" ON public.books
 DROP POLICY IF EXISTS "books_select" ON public.books;
 CREATE POLICY "books_select" ON public.books
   FOR SELECT
-  USING ((books.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.book_id = books.id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id))))) OR ((status = 'active'::text) AND (library_status = 'approved'::text) AND ( SELECT is_library_workspace(books.workspace_id) AS is_library_workspace) AND ( SELECT can_read_library()AS can_read_library))));
+  USING ((books.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR (EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.book_id = books.id) AND (is_student_self(sba.student_id) OR is_parent_of_student(sba.student_id))))) OR ((status = 'active'::text) AND (library_status = 'approved'::text) AND ( SELECT is_library_workspace(books.workspace_id) AS is_library_workspace) AND ( SELECT can_read_library() AS can_read_library))));
 DROP POLICY IF EXISTS "books_update_teacher" ON public.books;
 CREATE POLICY "books_update_teacher" ON public.books
   FOR UPDATE
@@ -280,7 +280,7 @@ CREATE POLICY "sba_insert_teacher" ON public.student_book_assignments
 DROP POLICY IF EXISTS "sba_select" ON public.student_book_assignments;
 CREATE POLICY "sba_select" ON public.student_book_assignments
   FOR SELECT
-  USING ((student_book_assignments.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR is_student_self(student_id)OR is_parent_of_student(student_id)));
+  USING ((student_book_assignments.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text, 'assistant'::text])) OR is_student_self(student_id) OR is_parent_of_student(student_id)));
 DROP POLICY IF EXISTS "sba_update_teacher" ON public.student_book_assignments;
 CREATE POLICY "sba_update_teacher" ON public.student_book_assignments
   FOR UPDATE
@@ -399,11 +399,11 @@ CREATE POLICY "usage_counters_select" ON public.usage_counters
 DROP POLICY IF EXISTS "video_watch_marks_delete" ON public.video_watch_marks;
 CREATE POLICY "video_watch_marks_delete" ON public.video_watch_marks
   FOR DELETE
-  USING ((EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.id = video_watch_marks.student_book_assignment_id) AND(sba.workspace_id = video_watch_marks.workspace_id) AND (video_watch_marks.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text])) OR is_student_self(sba.student_id))))));
+  USING ((EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.id = video_watch_marks.student_book_assignment_id) AND (sba.workspace_id = video_watch_marks.workspace_id) AND (video_watch_marks.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text])) OR is_student_self(sba.student_id))))));
 DROP POLICY IF EXISTS "video_watch_marks_insert" ON public.video_watch_marks;
 CREATE POLICY "video_watch_marks_insert" ON public.video_watch_marks
   FOR INSERT
-  WITH CHECK ((EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.id = video_watch_marks.student_book_assignment_id) AND(sba.workspace_id = video_watch_marks.workspace_id) AND (video_watch_marks.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text])) OR is_student_self(sba.student_id))))));
+  WITH CHECK ((EXISTS ( SELECT 1 FROM student_book_assignments sba WHERE ((sba.id = video_watch_marks.student_book_assignment_id) AND (sba.workspace_id = video_watch_marks.workspace_id) AND (video_watch_marks.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text])) OR is_student_self(sba.student_id))))));
 DROP POLICY IF EXISTS "video_watch_marks_select" ON public.video_watch_marks;
 CREATE POLICY "video_watch_marks_select" ON public.video_watch_marks
   FOR SELECT
@@ -420,7 +420,7 @@ CREATE POLICY "weekly_flows_rw" ON public.weekly_flows
 DROP POLICY IF EXISTS "weekly_plan_draft_items_select_own" ON public.weekly_plan_draft_items;
 CREATE POLICY "weekly_plan_draft_items_select_own" ON public.weekly_plan_draft_items
   FOR SELECT
-  USING ((EXISTS ( SELECT 1 FROM weekly_plan_drafts d WHERE ((d.id =weekly_plan_draft_items.draft_id) AND (d.teacher_profile_id= current_profile_id()) AND d.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text]))))));
+  USING ((EXISTS ( SELECT 1 FROM weekly_plan_drafts d WHERE ((d.id = weekly_plan_draft_items.draft_id) AND (d.teacher_profile_id = current_profile_id()) AND d.workspace_id IN (SELECT public.my_workspace_ids(ARRAY['owner'::text, 'teacher'::text]))))));
 
 -- ---------- weekly_plan_drafts ----------
 DROP POLICY IF EXISTS "weekly_plan_drafts_select_own" ON public.weekly_plan_drafts;
