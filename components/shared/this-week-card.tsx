@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { ProgressRing, type RingTone } from '@/components/shared/progress-ring'
 import { PACE_BAND_LABEL, type PaceBand } from '@/lib/weekly-flow'
 import { cn } from '@/lib/utils'
+import { APP_TIME_ZONE } from '@/lib/homework-status'
 
 // "BU HAFTA" — Genel Bakış'ın BİRİNCİ ve tam genişlikteki bloğu (R7/02 §1).
 //
@@ -162,6 +163,9 @@ export function ThisWeekCard({
                 <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="font-medium">
                   {new Date(view.nextContactAt).toLocaleString('tr-TR', {
+                    // Sunucu UTC, tarayıcı kullanıcının dilimi: bölge
+                    // yazılmazsa aynı görüşme iki ekranda iki saat gösterir.
+                    timeZone: APP_TIME_ZONE,
                     weekday: 'long',
                     hour: '2-digit',
                     minute: '2-digit',

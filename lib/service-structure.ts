@@ -408,6 +408,11 @@ const sessionWeekdayFormatter = new Intl.DateTimeFormat('tr-TR', {
   weekday: 'short',
 })
 
+const sessionWeekdayLongFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  weekday: 'long',
+})
+
 const sessionClockFormatter = new Intl.DateTimeFormat('tr-TR', {
   timeZone: APP_TIME_ZONE,
   hour: '2-digit',
@@ -459,6 +464,14 @@ export function formatSessionClock(value: string | Date | null | undefined): str
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
   return sessionClockFormatter.format(d)
+}
+
+/** `Cuma` — gün adı tek başına (dashboard'un yakın temas etiketi). */
+export function formatSessionWeekdayLong(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return sessionWeekdayLongFormatter.format(d)
 }
 
 /** `16 Eylül Çarşamba 20:00` — kart başlıklarında. */

@@ -6,7 +6,8 @@ import {
   expectedProgressPercent,
   noticeSignal,
 } from '@/lib/student-status'
-import { localDateString, todayDateString } from '@/lib/homework-status'
+import { APP_TIME_ZONE, localDateString, todayDateString } from '@/lib/homework-status'
+import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-structure'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist'
@@ -39,7 +40,11 @@ type StudentRow = {
   submission_cutoff_at: string | null
 }
 
-const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi']
+const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  day: 'numeric',
+  month: 'short',
+})
 
 /**
  * "Cuma 18:00" / "Bugün 20:00" / "24 Eyl 09:00" (§6).
@@ -50,13 +55,17 @@ const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cu
  * olmaktan çıktığı için tarihe dönülüyor.
  */
 function formatContactMoment(at: Date, now: Date): string {
-  const time = at.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+  // SAAT DE GÜN ADI DA APP_TIME_ZONE ÜZERİNDEN. `toLocaleTimeString` ve
+  // `getDay()` çalıştığı makinenin dilimini kullanır: sunucu UTC'de
+  // olduğu için 20:00'deki bir görüşme dashboard'da 17:00 görünüyordu —
+  // Görüşmeler ekranıyla üç saat fark.
+  const time = formatSessionClock(at)
   if (localDateString(at) === localDateString(now)) return `Bugün ${time}`
 
   const days = Math.floor((at.getTime() - now.getTime()) / 86_400_000)
-  if (days < 7) return `${DAY_NAMES[at.getDay()]} ${time}`
+  if (days < 7) return `${formatSessionWeekdayLong(at)} ${time}`
 
-  return `${at.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })} ${time}`
+  return `${shortDateFormatter.format(at)} ${time}`
 }
 
 /** "5 saat kaldı" / "2 gün kaldı" — §6'nın operasyonel bağlamı. */
