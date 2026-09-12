@@ -129,14 +129,54 @@ async function anonSelect(view: string) {
   return { status: response.status, body }
 }
 
+/**
+ * Reddetme sayılan tek hata kodu: 42501 (insufficient_privilege).
+ *
+ * "NESNE BULUNAMADI" BİLİNÇLİ OLARAK LİSTEDE YOK (42P01, PGRST205).
+ * Onları kabul etmek, korunan bir tablo yeniden adlandırıldığında ya da
+ * listedeki ad yanlış yazıldığında testin SESSİZCE geçmesi demekti —
+ * dosyanın kendi uyarısının ("aksi hâlde aynı açık sessizce geri gelir")
+ * tam tersi. Bulunamayan bir nesne, güvenlik kanıtı değil, listenin
+ * eskidiğinin işaretidir ve test bunu gürültüyle söylemeli.
+ */
+const DENIAL_CODES = ['42501']
+
+function expectDenied(name: string, status: number, body: unknown) {
+  // DURUM KODUNA GÜVENİLMİYOR, HATA KODUNA GÜVENİLİYOR.
+  //
+  // Ölçüldü: korunan nesnelerin tamamı `401 + 42501` döndürüyor,
+  // OLMAYAN bir nesne ise `404 + PGRST205`. "401/403/404 gelirse geç"
+  // demek, ikisini aynı kefeye koymak ve yeniden adlandırılmış bir
+  // tabloyu güvenlik kanıtı saymaktı — bu testin tam da engellemek
+  // için var olduğu sessiz körlük.
+  const code = (body as { code?: string } | null)?.code ?? ''
+  expect(
+    DENIAL_CODES,
+    `${name}: reddetme kanıtı yok (HTTP ${status}) — gövde: ${JSON.stringify(body).slice(0, 200)}`
+  ).toContain(code)
+}
+
+async function expectDeniedResponse(name: string, response: Response) {
+  const text = await response.text()
+  let parsed: unknown = null
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // gövde JSON değil: kod boş kalır, iddia anlamlı hata verir
+  }
+  expectDenied(name, response.status, parsed)
+}
+
 describe.skipIf(!hasLiveCredentials)('kiracı izolasyonu · anon erişimi', () => {
   it.each(LOCKED_VIEWS)('%s anon anahtarla veri döndürmez', async view => {
     const { status, body } = await anonSelect(view)
 
     // İki kabul edilebilir sonuç var:
-    //   - 401/403: GRANT kaldırılmış, erişim kapıda kesiliyor (tercih edilen)
+    //   - 42501: GRANT yok, erişim kapıda kesiliyor (tercih edilen)
     //   - 200 + boş dizi: erişim var ama RLS hiçbir satır döndürmüyor
-    // Kabul EDİLEMEZ olan: 200 + dolu dizi.
+    // Kabul EDİLEMEZ olan iki şey: 200 + dolu dizi (sızıntı) ve
+    // "nesne bulunamadı" (liste eskimiş, test aslında hiçbir şeye
+    // bakmıyor).
     if (status === 200) {
       expect(Array.isArray(body)).toBe(true)
       expect(
@@ -144,12 +184,26 @@ describe.skipIf(!hasLiveCredentials)('kiracı izolasyonu · anon erişimi', () =
         `${view} anon anahtarla satır döndürdü — kiracı verisi açıkta.`
       ).toHaveLength(0)
     } else {
-      expect([401, 403, 404]).toContain(status)
+      // `anonSelect` gövdeyi zaten okumuş; aynı kabul kuralı burada
+      // ayrıştırılmış gövdeyle uygulanıyor.
+      expectDenied(view, status, body)
     }
   })
 
   it.each(LOCKED_TABLES)('%s anon anahtarla veri döndürmez', async table => {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id&limit=10`, {
+    // `select=*`, `select=id` DEĞİL.
+    //
+    // Eskiden `id` isteniyordu ve bu, testi iki tabloda SESSİZCE KÖR
+    // ediyordu: `usage_counters` (workspace_id, feature, day, count) ve
+    // `student_fees` (student_id, workspace_id, ...) tablolarında `id`
+    // sütunu YOK. PostgREST sorguyu daha veriye bakmadan 42703 ("column
+    // does not exist") ile reddediyordu; test bunu "erişim engellendi"
+    // sanıp geçiyordu. Yani bu iki tablo okunabilir olsaydı bile test
+    // haber vermezdi — kontrol ettiği şey yetki değil, yazım hatasıydı.
+    //
+    // `*` hem her tabloda çalışır hem de saldırganın gerçekte deneyeceği
+    // sorgudur.
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&limit=10`, {
       headers: {
         apikey: ANON_KEY as string,
         Authorization: `Bearer ${ANON_KEY}`,
@@ -161,7 +215,7 @@ describe.skipIf(!hasLiveCredentials)('kiracı izolasyonu · anon erişimi', () =
       expect(Array.isArray(rows)).toBe(true)
       expect(rows, `${table} anon anahtarla okunabiliyor.`).toHaveLength(0)
     } else {
-      expect([401, 403, 404]).toContain(response.status)
+      await expectDeniedResponse(table, response)
     }
   })
 

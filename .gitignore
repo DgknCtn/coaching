@@ -82,3 +82,6 @@ WhatsApp Image *.jpg
 /*.JPG
 /*.jpeg
 /*.JPEG
+
+# Postgres becerisinin bağlantı bilgileri — KİMLİK BİLGİSİ İÇERİR, asla işlenmez.
+.claude/skills/postgres/connections.json
