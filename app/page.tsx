@@ -23,11 +23,38 @@ export default async function RootPage() {
     )
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('id, default_workspace_id')
     .eq('auth_user_id', user.id)
     .maybeSingle()
+
+  // "PROFİL YOK" İLE "PROFİL OKUNAMADI" AYNI ŞEY DEĞİL.
+  //
+  // Bu okumanın hatası atılıyordu ve aşağıdaki `!profile?...` koşulu iki
+  // durumu tek kefeye koyuyordu:
+  //
+  //   * profil gerçekten yok  -> geç kurulum DOĞRU (Google ile ilk giriş)
+  //   * profil OKUNAMADI      -> geç kurulum TAMAMEN YANLIŞ
+  //
+  // İkincisinde sapasağlam bir hesap için sıfırdan çalışma alanı
+  // açılıyordu. 12 Eylül 2026'da bir koçun hesabında tam bu oldu:
+  // 14 Ağustos'tan beri 12 öğrenci ve 71 kitapla çalışan alanın yanına
+  // boş bir ikinci alan açıldı, `default_workspace_id` ona kaydı ve
+  // panel "henüz aktif dönem yok" demeye başladı. Kullanıcı hiçbir hata
+  // görmedi; verisi kayıp gibi göründü.
+  //
+  // Geçici bir okuma hatası (pooler, ağ, RLS) veri çoğaltmaya yol
+  // açmamalı: hata varken karar verilmez. /erisim ne olduğunu anlatıyor
+  // ve oturumu kapatma yolu sunuyor; kullanıcı sayfayı yenilediğinde
+  // okuma başarılı olursa normal akışa döner.
+  if (profileError) {
+    console.error(
+      '[kurulum] profil okunamadı; geç kurulum ÇALIŞTIRILMADI:',
+      JSON.stringify({ authUserId: user.id, message: profileError.message })
+    )
+    redirect('/erisim')
+  }
 
   // GEÇ KURULUM (Faz 3): e-posta doğrulaması açıkken kayıt anında oturum
   // olmadığı için workspace kurulamıyor — create_teacher_workspace'in
