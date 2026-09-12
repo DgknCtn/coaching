@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, CreditCard, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CreditCard, ShieldCheck, History } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { licenseState, LICENSE_STATE_LABEL, daysLeft } from '@/lib/plans'
 import { PageHeader } from '@/components/shared/page-header'
@@ -81,6 +81,27 @@ export default async function SettingsPage() {
           >
             <CreditCard className="size-3.5" />
             Planı yönet
+            <ArrowRight className="size-3.5" />
+          </Button>
+        </div>
+      </Section>
+
+      {/* HESAP HAREKETLERİ ŞİFRENİN HEMEN ALTINDA duruyor, "Hesap ve
+          veri"nin içinde değil. "Hesabıma başkası mı girdi" endişesiyle
+          gelen kullanıcı önce şifresine bakar; cevabın onun yanında
+          olması gerekir. */}
+      <Section title="Hesap hareketleri" variant="card" contentClassName="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 text-sm text-muted-foreground">
+            Çalışma alanınıza yapılan giriş ve çıkışlar; IP, konum ve cihaz bilgisiyle.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href="/teacher/ayarlar/guvenlik" />}
+          >
+            <History className="size-3.5" />
+            Hareketleri gör
             <ArrowRight className="size-3.5" />
           </Button>
         </div>

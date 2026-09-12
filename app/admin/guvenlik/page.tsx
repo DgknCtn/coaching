@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { ShieldAlert, ShieldCheck, ShieldX, Users, Globe, Trash2 } from 'lucide-react'
+import { ShieldAlert, ShieldCheck, ShieldX, Users, Globe, Trash2, Radio } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
@@ -9,6 +9,7 @@ import { MetricTiles, type MetricTile } from '@/components/shared/metric-tiles'
 import { createClient } from '@/lib/supabase/server'
 import { authEventLabel } from '@/lib/auth-audit'
 import { formatRelativeTr } from '@/lib/format'
+import { eventTone, shortUserAgent, locationLabel } from '@/lib/auth-event-display'
 import { SecurityFilters } from './security-filters'
 
 export const metadata: Metadata = { title: 'Güvenlik' }
@@ -58,6 +59,18 @@ interface SuspiciousRow {
   son_olay: string
 }
 
+interface ActiveUserRow {
+  profile_id: string
+  actor_name: string | null
+  workspace_id: string | null
+  workspace_name: string | null
+  son_giris: string
+  ip: string | null
+  country: string | null
+  city: string | null
+  user_agent: string | null
+}
+
 interface SummaryRow {
   basarili: number
   basarisiz: number
@@ -79,62 +92,6 @@ const EVENT_TYPES = [
   'session_revoked',
 ] as const
 
-/**
- * Olay türünün rozet rengi.
- *
- * RENK TEK BAŞINA ANLAM TAŞIMAZ — etiket her zaman yanında yazıyor.
- * Renk yalnız tarama hızını artırıyor: yöneticinin yüz satırlık bir
- * listede kırmızıları gözle bulabilmesi için.
- */
-function eventTone(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (type === 'login.failed' || type === 'login.rate_limited') return 'destructive'
-  if (type === 'login.success' || type === 'register') return 'default'
-  if (type === 'password_changed' || type === 'session_revoked') return 'secondary'
-  return 'outline'
-}
-
-/**
- * Tarayıcı kimliğini okunabilir hâle getirir.
- *
- * Ham user-agent 200 karakteri geçiyor ve tabloda tek satıra sığmıyor.
- * Yöneticinin sorduğu soru "hangi tarayıcı, hangi işletim sistemi" —
- * sürüm numaraları değil. Tanınmayan bir değer KIRPILIR ama gizlenmez:
- * bilinmeyen bir istemci tam da görülmek istenen şeydir.
- */
-function shortUserAgent(ua: string | null): string {
-  if (!ua) return '—'
-  const os = /Windows/i.test(ua)
-    ? 'Windows'
-    : /Android/i.test(ua)
-      ? 'Android'
-      : /iPhone|iPad|iOS/i.test(ua)
-        ? 'iOS'
-        : /Mac OS X|Macintosh/i.test(ua)
-          ? 'macOS'
-          : /Linux/i.test(ua)
-            ? 'Linux'
-            : null
-
-  const browser = /Edg\//i.test(ua)
-    ? 'Edge'
-    : /OPR\/|Opera/i.test(ua)
-      ? 'Opera'
-      : /Chrome\//i.test(ua)
-        ? 'Chrome'
-        : /Safari\//i.test(ua)
-          ? 'Safari'
-          : /Firefox\//i.test(ua)
-            ? 'Firefox'
-            : null
-
-  if (!os && !browser) return ua.slice(0, 40)
-  return [browser, os].filter(Boolean).join(' · ')
-}
-
-function locationLabel(row: { country: string | null; city: string | null }): string {
-  return [row.city, row.country].filter(Boolean).join(', ') || '—'
-}
-
 export default async function AdminSecurityPage({
   searchParams,
 }: {
@@ -146,7 +103,7 @@ export default async function AdminSecurityPage({
   const eventType = EVENT_TYPES.includes(tur as (typeof EVENT_TYPES)[number]) ? tur! : null
   const page = Math.max(Number.parseInt(sayfa ?? '1', 10) || 1, 1)
 
-  const [{ data: summaryRows }, { data: eventRows }, { data: suspiciousRows }] =
+  const [{ data: summaryRows }, { data: eventRows }, { data: suspiciousRows }, { data: activeRows }] =
     await Promise.all([
       supabase.rpc('admin_auth_summary', { p_hours: 24 }),
       supabase.rpc('admin_auth_events', {
@@ -157,11 +114,13 @@ export default async function AdminSecurityPage({
         p_since: null,
       }),
       supabase.rpc('admin_auth_suspicious', { p_hours: 168, p_limit: 20 }),
+      supabase.rpc('admin_active_users', { p_hours: 12 }),
     ])
 
   const summary = ((summaryRows ?? []) as SummaryRow[])[0]
   const events = (eventRows ?? []) as AuthEventRow[]
   const suspicious = (suspiciousRows ?? []) as SuspiciousRow[]
+  const active = (activeRows ?? []) as ActiveUserRow[]
 
   // Toplam HER SATIRDA geliyor (090): ayrı bir COUNT sorgusu farklı bir
   // anda çalışıp sayfalamayla tutarsız bir toplam verebilirdi.
@@ -261,6 +220,34 @@ export default async function AdminSecurityPage({
       )}
 
       <Section
+        title="Şu an aktif"
+        description="Son 12 saatte giriş yapmış ve çıkış yapmamış kullanıcılar."
+      >
+        {/* BU BİR YAKLAŞIKLIK VE BUNU SÖYLÜYORUZ.
+            Kesin cevap Supabase'in auth.sessions tablosunda; oraya okuma
+            yetkisi verilmediği için burada auth_events'ten türetiliyor.
+            Sekmeyi kapatan ama çıkış yapmayan kullanıcı bir süre listede
+            kalır. Yaklaşık olduğunu söyleyen bir ekran, kesin olduğunu
+            ima eden yanlış bir ekrandan iyidir. */}
+        {active.length === 0 ? (
+          <EmptyState
+            icon={Radio}
+            title="Aktif kullanıcı yok"
+            description="Son 12 saatte açık kalmış bir oturum görünmüyor."
+          />
+        ) : (
+          <>
+            <DataTable columns={activeColumns} rows={active} rowKey={(r) => r.profile_id} />
+            <p className="pt-3 text-xs text-muted-foreground">
+              Bu liste giriş/çıkış kayıtlarından türetiliyor: sekmesini kapatan ama çıkış
+              yapmayan kullanıcı bir süre daha görünür. Oturumun sunucuda gerçekten açık
+              olup olmadığı burada ölçülmüyor.
+            </p>
+          </>
+        )}
+      </Section>
+
+      <Section
         title="Şüpheli hareket"
         description="Son 7 günde birden çok hesaba dokunan ya da başarısız deneme üreten kaynaklar."
       >
@@ -303,6 +290,55 @@ export default async function AdminSecurityPage({
     </div>
   )
 }
+
+const activeColumns: Column<ActiveUserRow>[] = [
+  {
+    key: 'kisi',
+    header: 'Kişi',
+    render: (r) => <span className="text-sm font-medium">{r.actor_name ?? '—'}</span>,
+  },
+  {
+    key: 'alan',
+    header: 'Çalışma alanı',
+    hideBelow: 'md',
+    render: (r) => (
+      <span className="text-sm text-muted-foreground">{r.workspace_name ?? '—'}</span>
+    ),
+  },
+  {
+    key: 'giris',
+    header: 'Giriş',
+    render: (r) => (
+      <span className="whitespace-nowrap text-sm text-muted-foreground">
+        {formatRelativeTr(r.son_giris)}
+      </span>
+    ),
+  },
+  {
+    key: 'ip',
+    header: 'IP',
+    hideBelow: 'md',
+    render: (r) => (
+      <span className="font-mono text-xs tabular-nums">
+        {r.ip ?? <span className="font-sans text-muted-foreground">—</span>}
+      </span>
+    ),
+  },
+  {
+    key: 'konum',
+    header: 'Konum',
+    hideBelow: 'lg',
+    render: (r) => <span className="text-sm text-muted-foreground">{locationLabel(r)}</span>,
+  },
+  {
+    key: 'cihaz',
+    header: 'Cihaz',
+    hideBelow: 'lg',
+    render: (r) => (
+      <span className="text-sm text-muted-foreground">{shortUserAgent(r.user_agent)}</span>
+    ),
+  },
+]
 
 const suspiciousColumns: Column<SuspiciousRow>[] = [
   {
