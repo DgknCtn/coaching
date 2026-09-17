@@ -221,3 +221,49 @@
     }
   }
 }
+
+/* İNCE KAYDIRMA ÇUBUĞU (kenar çubuğu gezinmesi).
+ *
+ * SORUN: "Öğrenci İşleri" grubu açılınca gezinme bloğu kayar hale geliyor
+ * ve Windows/Chrome varsayılan kaydırma çubuğunu basıyor — 17 piksel
+ * genişliğinde, iki ucunda ok düğmeleri olan, kendi gri paletini getiren
+ * bir şerit. Menünün sağ kenarında uygulamanın hiçbir yerinde görünmeyen
+ * bir kontrol duruyor ve daralan menüde başlıkların yanına sokuluyor.
+ *
+ * NEDEN GİZLEMİYORUZ: çubuğu tamamen kaldırmak (scrollbar-width: none)
+ * listenin kaydığını gösteren TEK işareti de siler. Menü ekran boyunu
+ * aştığında kullanıcının aşağıda daha fazla ekran olduğunu bilmesi
+ * gerekiyor. O yüzden inceltilip sessizleştiriliyor, yok edilmiyor.
+ *
+ * Renkler currentColor üzerinden türetiliyor; böylece açık ve koyu temada
+ * ayrı ayrı tanımlamaya gerek kalmıyor.
+ */
+@utility thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, currentColor 25%, transparent) transparent;
+
+  /* WebKit tarafı `scrollbar-width`i yok sayıp yine ok düğmeli çubuğu
+     çizebiliyor; aynı görünüm burada elle kuruluyor. */
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, currentColor 22%, transparent);
+    border-radius: 9999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, currentColor 38%, transparent);
+  }
+
+  /* Uçlardaki ok düğmeleri: ekran görüntüsündeki en göze batan parça. */
+  &::-webkit-scrollbar-button {
+    display: none;
+  }
+}

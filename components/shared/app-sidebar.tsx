@@ -402,8 +402,14 @@ export function AppSidebar({
 
             Marka, alan seçici ve footer sabit kalır; yalnız orta blok
             kayar. min-h-0 zorunlu: onsuz flex çocuğu içeriğinden küçülemez
-            ve overflow hiç devreye girmez. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            ve overflow hiç devreye girmez.
+
+            thin-scrollbar (app/globals.css): varsayılan Windows çubuğu
+            17 piksel genişliğinde ve ok düğmeli; menünün sağ kenarında
+            uygulamanın geri kalanına ait olmayan bir kontrol gibi
+            duruyordu. overscroll-contain, menünün sonuna gelindiğinde
+            kaydırmanın arkadaki sayfaya taşmasını engeller. */}
+        <div className="thin-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
           {nav}
           {studentNavBlock}
           {adminBlock}

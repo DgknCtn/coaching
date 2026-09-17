@@ -32,16 +32,39 @@ export interface LinkTab {
   items?: LinkTab[]
 }
 
-/** Aktif/pasif sekme görünümü — grup başlığı da aynı şeridi paylaşır. */
-export function tabLinkClass(active: boolean) {
+/**
+ * Sekmenin ALT ÇİZGİSİ — etiketin görünümünden ayrı tutuluyor.
+ *
+ * NEDEN AYRI: grup sekmesi ("Kaynaklar ⌄") tek bir öğe değil; etiket bir
+ * bağlantı, ok ayrı bir düğme. İkisi de bu sınıfın tamamını alınca şeridin
+ * altında İKİ AYRI çizgi parçası oluşuyordu ve düğme ile bağlantının
+ * yükseklikleri birebir eşit olmadığı için parçalar farklı hizada
+ * duruyordu — çizginin etikete göre kaydığı görüntü buydu. Artık çizgiyi
+ * ikisini saran kapsayıcı çiziyor: tek parça, komşu sekmelerle aynı hizada.
+ *
+ * Aktif sekme yalnız renkle değil alt çizgiyle de ayrılır: renk tek başına
+ * anlam taşımamalı.
+ */
+export function tabUnderlineClass(active: boolean) {
   return cn(
-    // Aktif sekme yalnız renkle değil alt çizgiyle de ayrılır:
-    // renk tek başına anlam taşımamalı.
-    'shrink-0 border-b-2 px-3 py-2 text-sm transition-colors',
-    active
-      ? 'border-primary font-medium text-foreground'
-      : 'border-transparent text-muted-foreground hover:text-foreground'
+    'shrink-0 border-b-2 transition-colors',
+    active ? 'border-primary' : 'border-transparent'
   )
+}
+
+/** Sekme etiketinin yazı görünümü ve iç boşluğu (alt çizgi HARİÇ). */
+export function tabLabelClass(active: boolean) {
+  return cn(
+    'px-3 py-2 text-sm transition-colors',
+    active
+      ? 'font-medium text-foreground'
+      : 'text-muted-foreground hover:text-foreground'
+  )
+}
+
+/** Tekil sekme: çizgi ve etiket aynı öğede olduğu için ikisi birleşir. */
+export function tabLinkClass(active: boolean) {
+  return cn(tabUnderlineClass(active), tabLabelClass(active))
 }
 
 export function LinkTabs({

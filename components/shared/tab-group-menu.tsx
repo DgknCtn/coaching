@@ -8,7 +8,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { tabLinkClass, type LinkTab } from '@/components/shared/link-tabs'
+import {
+  tabLabelClass,
+  tabUnderlineClass,
+  type LinkTab,
+} from '@/components/shared/link-tabs'
 import { cn } from '@/lib/utils'
 
 /**
@@ -32,12 +36,17 @@ export function TabGroupMenu({ tab, active }: { tab: LinkTab; active: boolean })
   const items = tab.items ?? []
 
   return (
-    <div className="flex shrink-0 items-center">
+    // ALT ÇİZGİ BURADA, ÇOCUKLARDA DEĞİL: etiket ile ok ayrı öğeler olduğu
+    // için her biri kendi çizgisini çizdiğinde şeritte iki kopuk parça
+    // oluşuyor ve yükseklikleri eşitlenmediğinden hizaları kayıyordu.
+    // items-stretch, ikisinin de kapsayıcıyı aynı yüksekliğe kadar
+    // doldurmasını ve çizginin tek bir düz hat kalmasını sağlar.
+    <div className={cn(tabUnderlineClass(active), 'flex items-stretch')}>
       {tab.href ? (
         <Link
           href={tab.href}
           aria-current={active ? 'page' : undefined}
-          className={cn(tabLinkClass(active), 'pr-1')}
+          className={cn(tabLabelClass(active), 'pr-1')}
         >
           {tab.label}
         </Link>
@@ -49,7 +58,7 @@ export function TabGroupMenu({ tab, active }: { tab: LinkTab; active: boolean })
           // okuyucuya iki ayrı kontrol olduğunu söylemek gerekiyor.
           aria-label={tab.href ? `${tab.label} alt görünümleri` : tab.label}
           className={cn(
-            tabLinkClass(active),
+            tabLabelClass(active),
             'flex items-center gap-1',
             tab.href && 'pl-1'
           )}
