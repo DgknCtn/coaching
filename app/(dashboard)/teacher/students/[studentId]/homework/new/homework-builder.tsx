@@ -250,7 +250,7 @@ export function HomeworkBuilder({
     return map
   }, [books])
 
-  // Kitap başlığı altında gruplanmış sepet ("Bu Haftanın Planı").
+  // Kitap başlığı altında gruplanmış sepet ("Yeni Ödev Planı").
   const groupedSelection = useMemo(() => {
     const byBook = new Map<
       string,
@@ -278,6 +278,21 @@ export function HomeworkBuilder({
       section.units.push(t.orderIndex)
       group.sections.set(t.sectionId, section)
       byBook.set(t.bookId, group)
+    }
+    // BÖLÜM SIRASI DETERMİNİSTİK (R7-06.07). Map ekleme sırasını
+    // koruyor ve o sıra SEÇİM sırasıydı — öğretmen testleri hangi sırada
+    // tıkladıysa kopyalanan metin o sırayı taşıyordu. Belge aynı sıranın
+    // dört yüzeyde birden korunmasını istiyor; bu, metin yüzeyi.
+    //
+    // Ölçüt bölümün EN KÜÇÜK birim numarası: bir kitapta bölümler ayrık
+    // test/sayfa aralıkları taşır, bu yüzden en küçük numara bölümün
+    // kitap içindeki yerini birebir sıralar — ve bunun için sepete
+    // ayrıca bölüm sırası taşımak gerekmiyor.
+    for (const group of byBook.values()) {
+      const ordered = [...group.sections.entries()].sort(
+        (a, b) => Math.min(...a[1].units) - Math.min(...b[1].units)
+      )
+      group.sections = new Map(ordered)
     }
     return [...byBook.values()]
     // videoTasksByBookId bağımlılığı eksikti: öğretmen bir kitabın video
@@ -707,7 +722,13 @@ export function HomeworkBuilder({
           </div>
         </div>
 
-        {/* Bu Haftanın Planı — tüm kaynaklar tek sepette. */}
+        {/* YENİ ÖDEV PLANI — tüm kaynaklar tek sepette (R7-06.09).
+            Panel MEVCUT HAFTAYI DEĞİL, henüz yayınlanmamış seçim
+            sepetini temsil ediyor. "Bu Haftanın Planı" adı bu yüzden
+            yanlış bir söz veriyordu: 6 test yayınlandıktan sonra panel
+            0 kitap / 0 çalışma gösteriyor ve öğretmen haftanın
+            boşaldığını sanıyordu. Yayınlanmış haftalık yük Haftalık
+            Akış ekranında yaşıyor. */}
         <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start">
           {/* Panel bir dikey yığındır: başlık ve özet üstte sabit, seçim
               listesi TEK kaydırma alanı, yayınlama bloğu altta sabit. Böylece
@@ -716,7 +737,7 @@ export function HomeworkBuilder({
           <div className="flex max-h-full flex-col overflow-hidden rounded-xl border bg-card">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
               <div className="flex min-w-0 items-center gap-1.5">
-                <h2 className="truncate text-sm font-semibold">Bu Haftanın Planı</h2>
+                <h2 className="truncate text-sm font-semibold">Yeni Ödev Planı</h2>
                 <Info className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               </div>
               <button

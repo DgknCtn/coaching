@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
+  compareHomeworkItems,
   deriveTestState,
   testStateLabel,
   TEST_STATE_VARIANT,
@@ -30,10 +31,26 @@ interface HomeworkItem {
   submitted_at: string | null
   book_id: string | null
   books: { title: string; subject: string; tracking_mode?: string | null } | null
-  book_sections: { id: string; title: string } | null
+  /** order_index bölüm sırasıdır — ödev içi sıralamanın birincil anahtarı (R7-06.07). */
+  book_sections: { id: string; title: string; order_index?: number | null } | null
   /** order_index test/sayfa numarasıdır; sayfa kitabında page_start ile aynı
    *  fiziksel sayfayı gösterir (022). Aralık özeti bundan türetilir. */
   book_tests: { title: string; order_index?: number | null; page_start?: number | null } | null
+}
+
+/**
+ * Kalemi `compareHomeworkItems`'ın anlayacağı biçime indirir (R7-06.07).
+ *
+ * Sayfa takipli kitapta birim tek bir fiziksel sayfadır (022) ve gerçek
+ * sayfa numarası `page_start`'tadır — `order_index` ile aynı değer. Bu
+ * eşdeğerlik `summarizeGroup` içinde de kuruluyor; sıralama da aynı
+ * kaynağı okumak zorunda, yoksa özet metni ile satır sırası ayrışırdı.
+ */
+function orderableOf(item: HomeworkItem) {
+  return {
+    sectionOrderIndex: item.book_sections?.order_index ?? null,
+    unitOrderIndex: item.book_tests?.order_index ?? item.book_tests?.page_start ?? null,
+  }
 }
 
 interface HomeworkBatch {
@@ -68,7 +85,14 @@ export function HomeworkList({ batches }: { batches: HomeworkBatch[] }) {
 
 function BatchCard({ batch }: { batch: HomeworkBatch }) {
   const [isPending, startTransition] = useTransition()
-  const items = (batch.homework_items ?? []).filter(i => i.status !== 'cancelled')
+  // SIRA DETERMİNİSTİK (R7-06.07). Sorgu kalemler için `order by`
+  // vermiyordu, yani sıra Postgres'in döndürdüğü sıraydı: öğrenci
+  // 1,3,4,5,6,7 kapsamını 4,6,1,7,5,3 olarak gördü. Karar
+  // lib/homework-status.ts'te — aynı sıra öğretmen ekranlarında ve
+  // kopyalanan ödev metninde de korunmak zorunda.
+  const items = [...(batch.homework_items ?? [])]
+    .filter(i => i.status !== 'cancelled')
+    .sort((a, b) => compareHomeworkItems(orderableOf(a), orderableOf(b)))
   const states = items.map(i => stateOf(i, batch.due_date))
 
   // Grup rozeti tek aktif durumdan türetilir. Öğrenci gecikmiş bir çalışmayı
@@ -340,12 +364,29 @@ function HomeworkItemRow({
 }) {
   const [isPending, startTransition] = useTransition()
   const state = stateOf(item, dueDate)
-  const isDone = state === 'completed' || state === 'pending_approval'
   const isReturned = state === 'returned'
+
+  // ONAY SONRASI ÖĞRENCİ AKSİYONU KAPANIR (R7-06.04).
+  //
+  // Önceden tek bir `isDone` vardı ve `completed` ile `pending_approval`
+  // aynı kovaya giriyordu; ikisine de "Geri Al" basılıyordu. Oysa bunlar
+  // farklı iki hâl:
+  //
+  //   pending_approval — öğrenci gönderdi, öğretmen bakmadı. Yanlış
+  //                      gönderimi geri çekmek ÖĞRENCİNİN hakkı.
+  //   completed        — öğretmen onayladı. Çalışma nihai; geri almak
+  //                      akademik bir karar ve yalnız öğretmene ait.
+  //
+  // Testte görülen: Reddet → Yeniden Gönder → Onayla zincirinin sonunda
+  // özet "Tamamladığın 1 / Onay bekleyen 0" derken satırda hâlâ Geri Al
+  // duruyordu. Kural 097'de RPC'ye de yazıldı — burada yalnız düğmeyi
+  // gizlemek, kilidi kapı resmine takmak olurdu.
+  const isApproved = state === 'completed'
+  const canWithdraw = state === 'pending_approval'
 
   function toggle() {
     startTransition(async () => {
-      const res = isDone
+      const res = canWithdraw
         ? await revertCompletedAction(item.id)
         : await submitHomeworkItemAction(item.id, studiedOn)
 
@@ -353,14 +394,19 @@ function HomeworkItemRow({
         toast.error(res.error)
         return
       }
-      toast.success(isDone ? 'İşaret geri alındı.' : 'Onaya gönderildi.')
+      toast.success(canWithdraw ? 'İşaret geri alındı.' : 'Onaya gönderildi.')
     })
   }
 
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
-        <p className={cn('text-sm', isDone && 'text-muted-foreground line-through')}>
+        <p
+          className={cn(
+            'text-sm',
+            (isApproved || canWithdraw) && 'text-muted-foreground line-through'
+          )}
+        >
           {item.book_tests?.title ?? ''}
         </p>
         <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -382,21 +428,31 @@ function HomeworkItemRow({
           </div>
         )}
       </div>
-      <Button
-        size="sm"
-        variant={isDone ? 'outline' : 'default'}
-        disabled={isPending}
-        onClick={toggle}
-        className="shrink-0 touch-target"
-      >
-        {isPending ? (
-          <Loader2 className="animate-spin" />
-        ) : isDone ? (
-          <><RotateCcw /> Geri Al</>
-        ) : (
-          <><CheckCircle2 /> {isReturned ? 'Yeniden Gönder' : 'Onaya Gönder'}</>
-        )}
-      </Button>
+      {/* ONAYLANMIŞ ÇALIŞMADA DÜĞME YOK, ROZET VAR (R7-06.04).
+          Belge: *"Öğrenci satırında onay sonrası yeşil 'Tamamlandı'
+          etiketi gösterilmeli."* Devre dışı bir düğme bırakmak, hâlâ
+          bir şey yapılabileceğini ima ederdi. */}
+      {isApproved ? (
+        <Badge variant={TEST_STATE_VARIANT.completed} className="shrink-0">
+          {testStateLabel('completed', 'student')}
+        </Badge>
+      ) : (
+        <Button
+          size="sm"
+          variant={canWithdraw ? 'outline' : 'default'}
+          disabled={isPending}
+          onClick={toggle}
+          className="shrink-0 touch-target"
+        >
+          {isPending ? (
+            <Loader2 className="animate-spin" />
+          ) : canWithdraw ? (
+            <><RotateCcw /> Geri Al</>
+          ) : (
+            <><CheckCircle2 /> {isReturned ? 'Yeniden Gönder' : 'Onaya Gönder'}</>
+          )}
+        </Button>
+      )}
     </div>
   )
 }

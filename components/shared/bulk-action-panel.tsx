@@ -6,6 +6,7 @@ import type { BookMapBook } from '@/lib/book-map'
 import { formatSelectedUnits } from '@/lib/book-map'
 import {
   countApplicable,
+  describeAssignEligibility,
   filterApplicable,
   revertConfirmMessage,
   type BulkAction,
@@ -100,6 +101,14 @@ export function BulkActionPanel({
     }
     return [...bySection.values()]
   }, [units])
+  const unit = unitLabel(book.trackingMode)
+
+  // Yalnız "Ödeve Ekle" mevcutken anlamlı: yönetim modunda her durum
+  // seçilebilir ve "uygun değil" diye bir şey yok.
+  const eligibility = useMemo(
+    () => (onAssign ? describeAssignEligibility(units.map(u => u.state), unit) : null),
+    [onAssign, units, unit]
+  )
 
   if (units.length === 0) return null
 
@@ -134,7 +143,6 @@ export function BulkActionPanel({
     })
   }
 
-  const unit = unitLabel(book.trackingMode)
 
   return (
     <div
@@ -148,6 +156,14 @@ export function BulkActionPanel({
           <p className="text-sm font-medium tabular-nums">
             {counts.selected} {unit} seçildi
           </p>
+          {/* SEÇİMİN NEDEN KISMEN UYGUN OLDUĞU YAZILI (R7-06.10).
+              Düğme "Ödeve Ekle (2)" derken 38 sayfa seçiliyse, aradaki
+              36'nın nereye gittiği başka hiçbir yerde yazmıyordu. Cümle
+              lib/bulk-actions.ts'ten geliyor — düğmedeki sayıyla aynı
+              sayımdan, yoksa ikisi sessizce ayrışabilirdi. */}
+          {onAssign && eligibility && (
+            <p className="mt-1 text-xs text-muted-foreground">{eligibility}</p>
+          )}
           <ul className="mt-1 space-y-0.5">
             {contextRows.map(row => (
               <li key={row.title} className="flex gap-1.5 text-xs text-muted-foreground">

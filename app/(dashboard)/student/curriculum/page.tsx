@@ -168,7 +168,11 @@ export default async function StudentCurriculumPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6 md:p-8">
       <PageHeader
-        title="Akışım"
+        /* R7-06.03: menüdeki adla aynı olmak ZORUNDA — "Akademik
+           Akışım"a tıklayan öğrenci "Akışım" başlıklı bir sayfa
+           görmemeli. Haftalık çalışma alanı artık ayrı bir ekran
+           (Haftam) ve iki kavram adlarıyla ayrışıyor. */
+        title="Akademik Akışım"
         subtitle="Öğretmeninin senin için kurduğu konu planı. Şu an neredesin, sırada ne var?"
       />
 

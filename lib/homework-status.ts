@@ -327,7 +327,27 @@ export const TEST_STATE_VARIANT: Record<HomeworkTestState, TestStateVariant> = {
  * sayaç kartında OVERDUE_HINT ipucu ile birlikte gösterilmelidir —
  * aksi halde sayaçlar birbirini çelişkili biçimde topluyormuş gibi görünür.
  */
-export type CounterKey = 'assigned' | 'completed' | 'pending' | 'pendingApproval' | 'overdue'
+/**
+ * `overdueThisWeek` ve `pastDebt` — R7-06.11.
+ *
+ * Öğrenci aynı ekranda "5 gecikmiş ödev" uyarısı ile "Geciken 0"
+ * sayacını yan yana görüyordu. İkisi de DOĞRUYDU: uyarı öğrencinin tüm
+ * açık borcunu, sayaç ise yalnız bu haftayı sayıyor. Yanlış olan,
+ * etiketin kapsamını söylememesiydi — kullanıcı 0'ın neyin sıfırı
+ * olduğunu çıkarım yapmak zorunda kalıyordu.
+ *
+ * Çözüm iki sayacı ayrı ADLANDIRMAK, birini gizlemek değil: geçmiş borç
+ * gerçek bir bilgi ve öğrencinin onu görmesi gerekiyor — yalnız güncel
+ * haftanın işiyle karışmaması şartıyla (R7-06.02).
+ */
+export type CounterKey =
+  | 'assigned'
+  | 'completed'
+  | 'pending'
+  | 'pendingApproval'
+  | 'overdue'
+  | 'overdueThisWeek'
+  | 'pastDebt'
 
 const TEACHER_COUNTER: Record<CounterKey, string> = {
   assigned: 'Öğrenciye Verilen',
@@ -335,6 +355,8 @@ const TEACHER_COUNTER: Record<CounterKey, string> = {
   pending: 'Öğrenciden Beklenen',
   pendingApproval: 'Onay Bekleyen',
   overdue: 'Süresi Geçen',
+  overdueThisWeek: 'Bu Hafta Geciken',
+  pastDebt: 'Geçmiş Borç',
 }
 
 /**
@@ -351,6 +373,8 @@ const STUDENT_COUNTER: Record<CounterKey, string> = {
   pending: 'Yapmadıkların',
   pendingApproval: 'Onay Bekleyen',
   overdue: 'Süresi Geçen',
+  overdueThisWeek: 'Bu hafta geciken',
+  pastDebt: 'Geçmiş borç',
 }
 
 const PARENT_COUNTER: Record<CounterKey, string> = {
@@ -359,6 +383,8 @@ const PARENT_COUNTER: Record<CounterKey, string> = {
   pending: 'Yapılmayı Bekleyen',
   pendingApproval: 'Onay Bekleyen',
   overdue: 'Süresi Geçen',
+  overdueThisWeek: 'Bu hafta geciken',
+  pastDebt: 'Geçmiş borç',
 }
 
 const COUNTER_LABELS: Record<StatusAudience, Record<CounterKey, string>> = {
@@ -375,3 +401,123 @@ export function counterLabel(key: CounterKey, audience: StatusAudience = 'teache
 export const COUNTER_LABEL = TEACHER_COUNTER
 
 export const OVERDUE_HINT = 'Beklenenler içinde'
+
+// ============================================================
+// ÖDEV İÇİ SIRA (R7-06.07)
+// ============================================================
+
+/**
+ * Bir ödevin içindeki çalışmaların sırası — TEK karar yeri.
+ *
+ * SORUN: hiçbir sorgu kalemler için `order by` vermiyordu, yani sıra
+ * Postgres'in döndürdüğü sıraydı. Öğrenci 1,3,4,5,6,7 kapsamını
+ * 4,6,1,7,5,3 olarak gördü. Veri doğruydu; çalışma sırası rastgele
+ * hissi veriyordu ve bu, kağıt üstünde ödev yapan bir öğrenci için
+ * gereksiz bir yük.
+ *
+ * SIRA: önce kitap bölümü (`book_sections.order_index`), sonra
+ * test/sayfa numarası (`book_tests.order_index`). Belgenin şartı.
+ *
+ * SAYFA TAKİPLİ KİTAP: birim tek bir fiziksel sayfadır (022) ve gerçek
+ * sayfa numarası `page_start`'tadır — `order_index` ile aynı değer.
+ * Çağıran taraf hangisini bulursa onu verir; ikisi de yoksa kalem
+ * sonda toplanır (numarasız bir çalışmayı listenin başına koymak,
+ * numaralı olanların sırasını görünmez kılardı).
+ *
+ * NEDEN lib'DE: aynı sıra DÖRT yüzeyde birden korunmak zorunda
+ * (belge: öğrenci Ödevlerim, öğretmen Yayınlanan, onay listesi ve
+ * kopyalanan ödev metni). Dört yerde ayrı `sort` yazılsaydı biri
+ * güncellenmeyi kaçırır ve aynı ödev iki ekranda iki sırada görünürdü.
+ */
+export interface OrderableHomeworkItem {
+  /** `book_sections.order_index` — yoksa kalem sonda toplanır. */
+  sectionOrderIndex?: number | null
+  /** `book_tests.order_index` ya da sayfa kitabında `page_start`. */
+  unitOrderIndex?: number | null
+}
+
+/** Numarası olmayan kalem sonda toplanır — Infinity bunu sağlar. */
+function orderKey(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+}
+
+export function compareHomeworkItems(
+  a: OrderableHomeworkItem,
+  b: OrderableHomeworkItem
+): number {
+  const sectionDiff = orderKey(a.sectionOrderIndex) - orderKey(b.sectionOrderIndex)
+  if (sectionDiff !== 0) return sectionDiff
+  return orderKey(a.unitOrderIndex) - orderKey(b.unitOrderIndex)
+}
+
+/** `compareHomeworkItems`'ı dizi üzerinde uygular; girdiyi bozmaz. */
+export function sortHomeworkItems<T extends OrderableHomeworkItem>(items: readonly T[]): T[] {
+  return [...items].sort(compareHomeworkItems)
+}
+
+// ============================================================
+// GÜNCEL HAFTA / GEÇMİŞ BORÇ (R7-06.02)
+// ============================================================
+
+/**
+ * Öğrencinin ödevlerini "bu haftanın işi" ve "geçmiş borç" olarak ayırır.
+ *
+ * PEDAGOJİK İLKE (belge): *"Güncel hafta öğrencinin ana çalışma
+ * alanıdır; geçmiş borç öğrenciyi yıl boyu 'borçlu' tutmamalı."*
+ *
+ * Testte görülen: öğrenci ekrana girdiğinde önce 5 eski gecikmiş ödev
+ * görüyordu, güncel haftanın Mini Test Ödevi altta Yapılacak bölümüne
+ * gömülüyordu. Sebep, ekranın ödevleri YALNIZ duruma göre sıralaması
+ * ("geciken" her zaman en üstte) ve akış aidiyetinden habersiz olması.
+ * Gerçek bir öğrencide geçmiş borç arttıkça güncel haftanın işi
+ * görünmez hale gelir.
+ *
+ * AİDİYET TÜRETİLMİYOR, OKUNUYOR: karar `homework_batches.weekly_flow_id`
+ * üzerinden — 077'nin kurduğu kayıtlı aidiyet. Tarihten çıkarılsaydı
+ * akışın kapanışı sonradan taşındığında ödev başka bir haftaya ait
+ * görünürdü (077'nin açılış notu).
+ *
+ * ARŞİVLENMİŞ ÖDEV HİÇBİR KOVAYA GİRMEZ (R7-06.01): aktif yükten
+ * çıkarılmış iş, geçmiş borç olarak da sayılmaz — çıkarmanın amacı tam
+ * olarak buydu. Geçmişte görünmeye devam eder ama ayrı bir blokta.
+ */
+export interface FlowOwnedBatch {
+  /** `homework_batches.weekly_flow_id` — akış kavramından önceki ödevlerde null. */
+  weekly_flow_id?: string | null
+  /** `homework_batches.status` — 'archived' aktif borç değildir. */
+  status?: string | null
+}
+
+export interface FlowOwnershipSplit<T> {
+  /** Aktif Haftalık Akışa bağlı ödevler — ekranın ilk çalışma alanı. */
+  currentWeek: T[]
+  /** Geçmiş haftalardan kalan açık borç — varsayılan kapalı blokta. */
+  pastDebt: T[]
+  /** Aktif yükten çıkarılmış ödevler — hiçbir sayaca girmez. */
+  released: T[]
+}
+
+export function splitByFlowOwnership<T extends FlowOwnedBatch>(
+  batches: readonly T[],
+  activeFlowId: string | null
+): FlowOwnershipSplit<T> {
+  const out: FlowOwnershipSplit<T> = { currentWeek: [], pastDebt: [], released: [] }
+
+  for (const batch of batches) {
+    if (batch.status === 'archived' || batch.status === 'cancelled') {
+      out.released.push(batch)
+      continue
+    }
+    // AKTİF AKIŞ YOKKEN HİÇBİR ÖDEV "BU HAFTA" DEĞİLDİR. Haftalık Akış
+    // manuel açılır (bu turda doğrulanmış bilinçli tasarım); akış
+    // açılmamışken ödevleri güncel hafta saymak, olmayan bir haftayı
+    // varmış gibi göstermek olurdu.
+    if (activeFlowId && batch.weekly_flow_id === activeFlowId) {
+      out.currentWeek.push(batch)
+    } else {
+      out.pastDebt.push(batch)
+    }
+  }
+
+  return out
+}

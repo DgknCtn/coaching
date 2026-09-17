@@ -408,7 +408,7 @@ export async function loadBookMap(
 /**
  * Kaynak Haritasının iki çalışma modu (R6-03).
  *
- *   plan   — "Bu Haftanın Planı" sepetini doldurma. Bugünkü davranış.
+ *   plan   — "Yeni Ödev Planı" sepetini doldurma. Bugünkü davranış.
  *   manage — Eğitmenin akademik kayıt yönetimi: toplu tamamlandı işleme,
  *            onaylama, tamamlanmayı geri alma.
  *

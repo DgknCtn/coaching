@@ -393,9 +393,27 @@ export const adminNav: NavItem[] = [
 
 export const studentNav: NavItem[] = [
   { href: '/student', label: 'Ödevlerim', icon: ClipboardList, exact: true },
+  // HAFTAM (R7-06.03) — öğrencinin haftalık çalışma alanı.
+  //
+  // NEDEN AYRI BİR EKRAN: öğrenci menüsündeki "Akışım" haftalık akış
+  // DEĞİLDİ, akademik/konu takvimiydi. Öğrencinin aktif haftayı, resmi
+  // son teslimi, günlük dağılımı ve kendi planını yönetebileceği bir
+  // yer hiç yoktu — öğretmen tarafında Haftalık Akış ekranı vardı,
+  // öğrenci tarafında karşılığı boştu.
+  //
+  // İKON ÖĞRETMEN TARAFIYLA AYNI (`Waypoints`): aynı kavramın iki
+  // tarafı. Ayrı ikon, iki farklı şey olduğunu ima ederdi.
+  { href: '/student/haftam', label: 'Haftam', icon: Waypoints },
   // R8: öğrenci artık kendi akademik planını da görebiliyor. Kitap haritası
   // menüye alınmadı — kitaba ödev kartından girilir, bağlam orada.
-  { href: '/student/curriculum', label: 'Akışım', icon: CalendarRange },
+  //
+  // R7-06.03: ad "Akışım" → "Akademik Akışım". Belge: *"Akademik Akış
+  // ile Haftalık Akış iki ayrı kavram olarak görünür."* Tek başına
+  // "Akışım", yanına Haftam eklendiğinde hangi akış olduğunu
+  // söylemiyordu. Öğretmen tarafında aynı ekran çoktan "Akademik Akış"
+  // adını taşıyor (R7/03); iki taraf artık aynı dili konuşuyor.
+  // YOL DEĞİŞMEDİ — kayıtlı bağlantılar çalışmaya devam eder.
+  { href: '/student/curriculum', label: 'Akademik Akışım', icon: CalendarRange },
   { href: '/student/review', label: 'Tekrar', icon: ShieldCheck },
 ]
 

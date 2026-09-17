@@ -7,6 +7,7 @@ import {
   dailyDelivery,
   deliverySilence,
   distributionState,
+  isLateAdded,
   resolveFlowDue,
 } from '@/lib/weekly-flow'
 import {
@@ -130,12 +131,16 @@ export default async function WeeklyFlowPage({
     const { data: items } = await supabase
       .from('homework_items')
       .select(
-        `id, status, created_at, submitted_at,
-         homework_batches!inner(id, weekly_flow_id, created_at, title),
+        `id, status, created_at, submitted_at, planned_for_date,
+         homework_batches!inner(id, weekly_flow_id, created_at, title, status),
          books(id, title)`
       )
       .eq('workspace_id', workspaceId)
       .eq('homework_batches.weekly_flow_id', activeFlow.id)
+      // AKTİF YÜKTEN ÇIKARILMIŞ ÖDEV HAFTANIN YÜKÜ DEĞİLDİR (R7-06.01).
+      // `student_active_flow_load_view` (080/097) da `hb.status='active'`
+      // süzüyor; bu ekran o görünümle aynı sayıyı göstermek zorunda.
+      .eq('homework_batches.status', 'active')
       .neq('status', 'cancelled')
 
     // Supabase gömülü ilişkileri dizi olarak tipler; tek satırlık
@@ -176,6 +181,8 @@ export default async function WeeklyFlowPage({
         bookId: book?.id ?? null,
         bookTitle: book?.title ?? null,
         deliveredAt,
+        // Öğrencinin bu çalışmayı bir güne koyup koymadığı (R7-06.03).
+        plannedForDate: (r.planned_for_date as string | null) ?? null,
       }
     })
 
@@ -203,26 +210,26 @@ export default async function WeeklyFlowPage({
       now,
     })
 
-    // "Yeni eklenenler": akış açıldıktan sonra yayınlanan partiler.
-    // Öğrencinin kurduğu günlük plan bunları içermiyor — sistem de
-    // kendiliğinden dağıtmıyor (kabul #6), bu yüzden ayrı sayılır.
-    // Bir dakikalık pay, akışı açıp hemen ödev veren öğretmenin ilk
-    // yayınının "sonradan eklendi" görünmesini engelliyor.
-    const flowOpenedAt = new Date(activeFlow.starts_at)
-    const lateAddedUnits = rows.filter(
-      r => r.publishedAt !== null &&
-        r.publishedAt.getTime() > flowOpenedAt.getTime() + 60_000
+    // "Yeni eklenenler" — R7-06.08.
+    //
+    // ÖNCEDEN akış AÇILIŞIYLA, bir dakikalık payla karşılaştırılıyordu
+    // ve bu yanlış eksendi: akış 06:38'de açılıp ilk yük 06:58'de
+    // yayınlandığında haftanın başlangıç yükü "sonradan eklendi"
+    // sayılıyordu. Ölçüt artık o akışa yapılan İLK YAYIN — karar
+    // lib/weekly-flow.ts'te, çünkü aynı ayrımı bu sayfanın üç yeri
+    // birden kullanıyor (sekme rozeti, cümle, Yeni Eklenenler paneli).
+    const lateAddedUnits = rows.filter(r =>
+      isLateAdded({ publishedAt: r.publishedAt, firstPublishedAt })
     ).length
 
-    // Dağıtım durumu: öğrencinin günlük dağıtımı henüz veri modelinde
-    // YOK (077 kapsam notu — belgenin kendi "sonraki adım"ı). Bu yüzden
-    // "planlanan", akış açılışında var olan yük olarak alınıyor; yeni
-    // eklenenler dağıtılmayı bekleyen kısımdır. Öğrenci ekranı
-    // geldiğinde plannedUnits gerçek dağıtımdan okunacak, cümle
-    // değişmeyecek.
+    // Dağıtım durumu GERÇEK SAYIDAN (R7-06.03). Öğrencinin günlük
+    // dağıtımı artık veri modelinde var (097 · planned_for_date), bu
+    // yüzden "planlanan" tahmin edilmiyor: öğrencinin bir güne koyduğu
+    // çalışma sayısı okunuyor. 077'nin öngörüsü aynen gerçekleşti —
+    // cümle değişmedi, yalnız kaynağı doğrulandı.
     const distribution = distributionState({
       totalUnits: total,
-      plannedUnits: total - lateAddedUnits,
+      plannedUnits: rows.filter(r => r.plannedForDate !== null).length,
     })
 
     const byBook = new Map<string, FlowBookRow>()
@@ -253,9 +260,7 @@ export default async function WeeklyFlowPage({
         publishedAt: r.publishedAt?.toISOString() ?? null,
         total: 0,
         delivered: 0,
-        lateAdded:
-          r.publishedAt !== null &&
-          r.publishedAt.getTime() > new Date(activeFlow.starts_at).getTime() + 60_000,
+        lateAdded: isLateAdded({ publishedAt: r.publishedAt, firstPublishedAt }),
       }
       row.total += 1
       if (r.deliveredAt !== null) row.delivered += 1

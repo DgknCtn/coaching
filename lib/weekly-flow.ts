@@ -18,7 +18,7 @@
 
 import type { ServiceLike } from '@/lib/service-structure'
 import { defaultSubmissionDeadline } from '@/lib/service-structure'
-import { localDateString } from '@/lib/homework-status'
+import { APP_TIME_ZONE, localDateString } from '@/lib/homework-status'
 
 // ============================================================
 // RESMİ KAPANIŞ
@@ -242,13 +242,153 @@ export function deliverySilence(input: {
   if (days >= DELIVERY_SILENCE_DAYS) {
     return { silent: true, days, phrase: `${days} gündür yeni teslim yok` }
   }
-  return { silent: false, days, phrase: 'Son teslim: ' + relativeDays(days) }
+  // "SON TESLİM" DEĞİL "SON HAREKET" (R7-06.06).
+  //
+  // Buradaki cümle bir TARİH değil, öğrencinin son GÖNDERİMİ. Ama aynı
+  // kartta `weekly_flows.due_at` da "Son Teslim" adıyla duruyor ve
+  // Türkçede "teslim" ikisini birden adlandırıyor. Testte görülen sonuç
+  // tam olarak bu: kart bir yanda doğru biçimde "3 gün kaldı", öbür
+  // yanda "Son teslim: bugün" yazıyordu — okuyan kişi ikincisini
+  // "deadline bugün" diye okudu ve haklıydı.
+  //
+  // Hesap doğruydu, AD yanlıştı. Resmi kapanışın metni artık ayrı bir
+  // fonksiyonda (`dueLabel`) ve ileri yönlü; bu cümle geçmişe bakan
+  // hareket bilgisi olarak kendi adını taşıyor.
+  return { silent: false, days, phrase: 'Son hareket: ' + relativeDays(days) }
 }
 
 function relativeDays(days: number): string {
   if (days <= 0) return 'bugün'
   if (days === 1) return 'dün'
   return `${days} gün önce`
+}
+
+// ============================================================
+// RESMİ KAPANIŞIN METNİ
+// ============================================================
+
+/**
+ * "Son teslime ne kadar kaldı?" — TEK yanıt yeri (R7-06.06).
+ *
+ * Belgenin açık şartı: *"Aynı verinin farklı kartlarda çelişkili metin
+ * üretmesine izin verilmemeli."* Bu yüzden fonksiyon lib'de: aynı
+ * `due_at` hem Genel Bakış "Bu Hafta" kartında, hem Haftalık Akış
+ * ekranında, hem öğrencinin Haftam ekranında basılıyor.
+ *
+ * İLERİ YÖNLÜ ve bu onu `relativeDays`/`formatRelativeTr`'den ayıran
+ * şey: ikisi de geçmişe bakar ("2 gün önce"), burada sorulan ise
+ * gelecek. Aynı fonksiyona iki yön sığdırmak, "bugün"ün hangi anlamda
+ * söylendiğini yine belirsiz bırakırdı.
+ *
+ * SAAT GÖSTERİLİYOR, çünkü kapanış saatli bir andır: Pazar 10:00'da
+ * kapanan bir haftada "yarın" demek, 23:00'te teslim edilebileceğini
+ * ima ederdi. Gün sayısı ise YEREL GÜN farkından hesaplanır
+ * (Europe/Istanbul) — saat farkını 24'e bölmek, akşam 22:00'de bakan
+ * öğrenciye yarın 10:00 için "12 saat" deyip günü hiç söylemezdi.
+ */
+export function dueLabel(input: { dueAt: Date; now?: Date }): string {
+  const now = input.now ?? new Date()
+  const clock = formatClock(input.dueAt)
+
+  // Yerel gün farkı — ikisi de YYYY-MM-DD, doğrudan karşılaştırılabilir.
+  const dueDay = localDateString(input.dueAt)
+  const today = localDateString(now)
+
+  if (dueDay < today) {
+    // Kapanış geçmiş: kalan süre diye bir şey yok, mutlak tarih doğru
+    // olan tek metin.
+    return `Son teslim geçti · ${formatAbsolute(input.dueAt)}`
+  }
+
+  if (dueDay === today) {
+    // Gün aynı olsa da saat geçmiş olabilir (Pazar 10:00, şimdi 14:00).
+    return input.dueAt.getTime() < now.getTime()
+      ? `Son teslim geçti · bugün ${clock}`
+      : `Bugün ${clock}`
+  }
+
+  const days = dayDifference(today, dueDay)
+  if (days === 1) return `Yarın ${clock}`
+  return `${days} gün kaldı · ${formatAbsolute(input.dueAt)}`
+}
+
+/**
+ * `20.09.2026 10:00` — SAAT DİLİMİ SABİT.
+ *
+ * `lib/format.ts`'in `formatDateTimeTr`'i burada kullanılamaz: o
+ * fonksiyon çalıştığı ortamın saat dilimini alıyor. Sunucu bileşenleri
+ * Vercel'de UTC'de çalıştığı için Pazar 10:00 kapanışı ekranda 07:00
+ * görünürdü — bu paketin bu turda DOĞRULANMIŞ maddesi tam olarak o
+ * kaymaydı ve geri getirilmemeli.
+ */
+function formatAbsolute(value: Date): string {
+  return value.toLocaleString('tr-TR', {
+    timeZone: APP_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** `10:00` — aynı gerekçeyle saat dilimi sabit. */
+function formatClock(value: Date): string {
+  return value.toLocaleTimeString('tr-TR', {
+    timeZone: APP_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** İki YYYY-MM-DD arasındaki tam gün sayısı. */
+function dayDifference(fromDay: string, toDay: string): number {
+  // Saatsiz UTC olarak kurulur: ikisi de aynı biçimde kurulduğu için
+  // yaz saati kaymaları farkı etkilemez.
+  const from = Date.UTC(
+    Number(fromDay.slice(0, 4)),
+    Number(fromDay.slice(5, 7)) - 1,
+    Number(fromDay.slice(8, 10))
+  )
+  const to = Date.UTC(
+    Number(toDay.slice(0, 4)),
+    Number(toDay.slice(5, 7)) - 1,
+    Number(toDay.slice(8, 10))
+  )
+  return Math.round((to - from) / DAY_MS)
+}
+
+// ============================================================
+// SONRADAN EKLENEN YÜK
+// ============================================================
+
+/**
+ * Bu yayın "sonradan eklendi" mi? (R7-06.08)
+ *
+ * ESKİ KURAL VE NEDEN YANLIŞTI: karar akışın AÇILIŞ anıyla
+ * karşılaştırılıyordu, bir dakikalık payla. Testte akış 06:38'de açıldı,
+ * ilk yük 06:58'de yayınlandı — payı yirmi dakika aştı ve haftanın
+ * başlangıç yükü olan 6 çalışma "sonradan eklendi" sayıldı.
+ *
+ * Pay büyütmek çözüm değil: öğretmen haftayı sabah açıp ödevi akşam
+ * planlayabilir, arada geçen süre bir kusur değil normal iş akışı.
+ * Yanlış olan EKSEN'di.
+ *
+ * YENİ KURAL, belgenin kendi tanımı: *"Aktif akışta 0 çalışma varken
+ * yapılan ilk yayın başlangıç yükü kabul edilmeli."* Yani ölçüt akışın
+ * açılışı değil, o akışa yapılan İLK YAYIN. İlk yayın tanım gereği
+ * `firstPublishedAt`'e eşittir, bu yüzden pay da gerekmez — aynı anda
+ * yayınlanan partilerin hepsi başlangıç yükü olur.
+ *
+ * `firstPublishedAt` uydurulmuyor: `student_active_flow_load_view`
+ * zaten `MIN(hb.created_at)` olarak hesaplıyor (080).
+ */
+export function isLateAdded(input: {
+  publishedAt: Date | null
+  firstPublishedAt: Date | null
+}): boolean {
+  if (!input.publishedAt || !input.firstPublishedAt) return false
+  return input.publishedAt.getTime() > input.firstPublishedAt.getTime()
 }
 
 // ============================================================

@@ -100,6 +100,52 @@ export function filterApplicable<T extends { id: string; state: HomeworkTestStat
   return units.filter(u => isActionApplicable(action, u.state)).map(u => u.id)
 }
 
+/**
+ * "Neden 38 seçtim de yalnız 2 eklenebiliyor?" — R7-06.10.
+ *
+ * SORUN: sayfa bazlı bir kaynakta öğretmen 38 sayfa seçti, panel
+ * "38 sayfa seçildi" dedi ve düğme "Ödeve Ekle (2)" gösterdi. İki sayı
+ * da doğruydu; aradaki 36'nın nereye gittiği hiçbir yerde yazmıyordu.
+ * Test kutularında renk farkı bunu bir ölçüde anlatıyor, sayfa akışında
+ * ise anlatmıyor.
+ *
+ * Belge: *"İşleme göre uygun olmayan seçimin sebebini gizlememe."*
+ *
+ * NEDEN lib'DE: cümle bir SAYIM sonucu ve sayımın tek kaynağı bu dosya.
+ * Arayüzde kurulsaydı düğmedeki sayı ile cümledeki sayı ayrı
+ * hesaplardan gelir ve sessizce ayrışabilirdi.
+ *
+ * Uygun olmayan yoksa null döner: "36 zaten ödevde" demek için 36'nın
+ * var olması gerekir, sıfırı duyurmak gürültüdür.
+ */
+export function describeAssignEligibility(
+  states: HomeworkTestState[],
+  unit: string
+): string | null {
+  const selected = states.length
+  const eligible = states.filter(canAssign).length
+  const blocked = selected - eligible
+  if (blocked <= 0) return null
+
+  // SEBEP AYRIŞTIRILIYOR: "zaten ödevde" ile "tamamlanmış" öğretmen için
+  // aynı şey değil. Biri bekleyen bir iş, öbürü bitmiş bir kayıt.
+  const done = states.filter(s => s === 'completed').length
+  const inHomework = states.filter(
+    s => s === 'assigned' || s === 'pending_approval' || s === 'overdue' || s === 'returned'
+  ).length
+
+  const reasons: string[] = []
+  if (inHomework > 0) reasons.push(`${inHomework} zaten ödevde veya süresi geçmiş`)
+  if (done > 0) reasons.push(`${done} tamamlanmış`)
+  // Yukarıdaki iki sebep seçimdeki her engeli kapsamıyorsa (ör. 'no_test')
+  // kalanı adlandırmadan da olsa sayıya dahil et — toplamın tutmaması
+  // cümleyi güvenilmez yapardı.
+  const named = inHomework + done
+  if (blocked > named) reasons.push(`${blocked - named} uygun değil`)
+
+  return `${selected} ${unit} seçili · ${eligible} ödeve eklenebilir · ${reasons.join(' · ')}`
+}
+
 /** Onay diyaloğu metni (§9): "7 çalışmanın tamamlanma kaydı geri alınacak." */
 export function revertConfirmMessage(count: number): string {
   return `${count} çalışmanın tamamlanma kaydı geri alınacak. Devam edilsin mi?`

@@ -2,6 +2,8 @@ import Link from 'next/link'
 import {
   deriveBatchState,
   batchStateLabel,
+  counterLabel,
+  splitByFlowOwnership,
   type HomeworkBatchState,
 } from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
@@ -10,6 +12,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { MetricRow } from '@/components/shared/metric-row'
 import { getStudentContext } from '@/lib/workspace'
 import { HomeworkList } from './homework-list'
+import { PastDebtBlock } from './past-debt-block'
 import { CheckInCard } from './check-in-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
@@ -23,15 +26,21 @@ export default async function StudentPage() {
 
   // Ödevler, kitap ilerlemesi ve bildirim materyalizasyonu birbirinden
   // bağımsız — tek dalgada çalışırlar.
-  const [{ data: batches }, { data: bookProgress }, , { data: weekly }] = await Promise.all([
+  const [
+    { data: batches },
+    { data: bookProgress },
+    ,
+    { data: weekly },
+    { data: activeFlow },
+  ] = await Promise.all([
     supabase
       .from('homework_batches')
       .select(`
-        id, title, description, due_date, status,
+        id, title, description, due_date, status, weekly_flow_id,
         homework_items(
           id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
           books(title, subject, tracking_mode),
-          book_sections(id, title),
+          book_sections(id, title, order_index),
           book_tests(title, order_index, page_start)
         )
       `)
@@ -53,6 +62,16 @@ export default async function StudentPage() {
       .select('*')
       .eq('student_id', student.id)
       .eq('workspace_id', workspaceId)
+      .maybeSingle(),
+    // AKTİF HAFTALIK AKIŞ (R7-06.02). Öğrenci kendi akışını okuyabilir
+    // (077 · weekly_flows_read_self); yazma yok, haftayı öğretmen kurar.
+    // Bu satır ekranın "hangi iş bu haftanın işi" sorusunu yanıtlar.
+    supabase
+      .from('weekly_flows')
+      .select('id, due_at')
+      .eq('student_id', student.id)
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
       .maybeSingle(),
   ])
 
@@ -78,16 +97,26 @@ export default async function StudentPage() {
   //
   // Artık her grup deriveBatchState ile tam olarak BİR kovaya düşüyor.
   const allBatches = batches ?? []
-  const buckets = new Map<HomeworkBatchState, typeof allBatches>()
-  for (const batch of allBatches) {
-    const state = deriveBatchState({
-      dueDate: batch.due_date,
-      items: (batch.homework_items ?? []) as { status: string; rejected_at: string | null }[],
-    })
-    const list = buckets.get(state)
-    if (list) list.push(batch)
-    else buckets.set(state, [batch])
-  }
+
+  // ============================================================
+  // GÜNCEL HAFTA EN ÜSTTE (R7-06.02)
+  // ============================================================
+  //
+  // ÖNCEDEN: ekran ödevleri YALNIZ duruma göre diziyordu ve "geciken"
+  // her zaman en üstteydi. Doğa testinde sonuç şu oldu: öğrenci ekrana
+  // girince önce 5 eski gecikmiş ödev gördü, aktif haftanın Mini Test
+  // Ödevi aşağıda "Yapılacak" bölümüne gömüldü. Gerçek bir öğrencide
+  // geçmiş borç arttıkça güncel haftanın işi tamamen görünmez hale
+  // gelir.
+  //
+  // PEDAGOJİK İLKE (belge): *"Güncel hafta öğrencinin ana çalışma
+  // alanıdır; geçmiş borç öğrenciyi yıl boyu 'borçlu' tutmamalı."*
+  //
+  // Geçmiş borç SİLİNMİYOR, yalnız ikinci plana alınıyor: kapalı bir
+  // blokta, tek satırlık özet altında. Ayrım kararı
+  // lib/homework-status.ts'te çünkü veli paneli ve rapor da aynı
+  // soruyu soracak.
+  const split = splitByFlowOwnership(allBatches, activeFlow?.id ?? null)
 
   // Sıra ACİLİYETE göre: önce geciken, sonra öğretmenin geri gönderdiği,
   // sonra yapılacaklar. Onay bekleyen ve tamamlanan altta — öğrencinin
@@ -100,23 +129,57 @@ export default async function StudentPage() {
     'pending_approval',
     'completed',
   ]
-  const sections = ORDER.map(state => ({ state, items: buckets.get(state) ?? [] })).filter(
-    section => section.items.length > 0
-  )
 
-  const overdueCount = buckets.get('overdue')?.length ?? 0
-  const openCount =
-    overdueCount +
+  /** Bir ödev kümesini duruma göre kovalar ve ORDER sırasına dizer. */
+  function sectionsOf(list: typeof allBatches) {
+    const buckets = new Map<HomeworkBatchState, typeof allBatches>()
+    for (const batch of list) {
+      const state = deriveBatchState({
+        dueDate: batch.due_date,
+        items: (batch.homework_items ?? []) as { status: string; rejected_at: string | null }[],
+      })
+      const bucket = buckets.get(state)
+      if (bucket) bucket.push(batch)
+      else buckets.set(state, [batch])
+    }
+    return {
+      buckets,
+      sections: ORDER.map(state => ({ state, items: buckets.get(state) ?? [] })).filter(
+        section => section.items.length > 0
+      ),
+    }
+  }
+
+  const current = sectionsOf(split.currentWeek)
+  const past = sectionsOf(split.pastDebt)
+
+  const openOf = (buckets: Map<HomeworkBatchState, typeof allBatches>) =>
+    (buckets.get('overdue')?.length ?? 0) +
     (buckets.get('returned')?.length ?? 0) +
     (buckets.get('assigned')?.length ?? 0)
+
+  // "Bu hafta geciken" ile "geçmiş borç" AYRI SAYILIR (R7-06.11).
+  const overdueThisWeek = current.buckets.get('overdue')?.length ?? 0
+  const pastOverdueCount = past.buckets.get('overdue')?.length ?? 0
+  const pastOpenCount = openOf(past.buckets)
+  const openCount = openOf(current.buckets) + pastOpenCount
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-6 md:p-8">
       <PageHeader
         title="Ödevlerim"
         subtitle={
-          overdueCount > 0
-            ? `${overdueCount} gecikmiş · ${openCount} açık ödev`
+          // KAPSAM YAZILI (R7-06.11): önceden yalnız "5 gecikmiş"
+          // yazıyordu ve aynı ekranda "Geciken 0" sayacıyla çelişik
+          // görünüyordu. Hangi 5, hangi 0 olduğu artık söylenmiş.
+          overdueThisWeek + pastOverdueCount > 0
+            ? [
+                overdueThisWeek > 0 ? `Bu hafta ${overdueThisWeek} gecikmiş` : null,
+                pastOverdueCount > 0 ? `geçmişten ${pastOverdueCount} gecikmiş` : null,
+                `${openCount} açık ödev`,
+              ]
+                .filter(Boolean)
+                .join(' · ')
             : openCount > 0
               ? `${openCount} açık ödev`
               : undefined
@@ -129,29 +192,66 @@ export default async function StudentPage() {
           öğrenci kendi haftasının toplamını göremiyordu. */}
       {weekly && (
         <MetricRow
-          className="grid-cols-2 md:grid-cols-4"
+          className="grid-cols-2 md:grid-cols-5"
           metrics={[
             { label: 'Bu hafta verilen', value: Number(weekly.assigned_tests ?? 0) },
-            { label: 'Tamamladığın', value: Number(weekly.completed_tests ?? 0) },
-            { label: 'Onay bekleyen', value: Number(weekly.pending_approval_tests ?? 0) },
-            { label: 'Geciken', value: Number(weekly.overdue_tests ?? 0) },
+            { label: counterLabel('completed', 'student'), value: Number(weekly.completed_tests ?? 0) },
+            {
+              label: counterLabel('pendingApproval', 'student'),
+              value: Number(weekly.pending_approval_tests ?? 0),
+            },
+            // ETİKET KAPSAMINI SÖYLÜYOR (R7-06.11). Bu görünüm TAKVİM
+            // HAFTASINI sayıyor; "Geciken 0" derken geçmişten 5 gecikmiş
+            // ödev varsa kullanıcı çelişki görüyordu. İkisi de doğruydu,
+            // biri neyin sıfırı olduğunu söylemiyordu.
+            {
+              label: counterLabel('overdueThisWeek', 'student'),
+              value: Number(weekly.overdue_tests ?? 0),
+            },
+            { label: counterLabel('pastDebt', 'student'), value: pastOpenCount },
           ]}
         />
       )}
 
-      {overdueCount > 0 && (
+      {overdueThisWeek > 0 && (
         <AlertBanner
           tone="warning"
-          title={`${overdueCount} gecikmiş ödev`}
+          title={`Bu hafta ${overdueThisWeek} gecikmiş ödev`}
           description="Bunları en kısa sürede tamamlamayı unutma."
         />
       )}
 
-      {sections.map(section => (
-        <Section key={section.state} title={batchStateLabel(section.state, 'student')}>
-          <HomeworkList batches={section.items as any} />
+      {/* ============================================================
+          GÜNCEL HAFTA — EKRANIN İLK ÇALIŞMA ALANI (R7-06.02)
+          ============================================================ */}
+      {current.sections.length > 0 && (
+        <Section title="Bu haftaki işim">
+          <div className="space-y-6">
+            {current.sections.map(section => (
+              <div key={section.state} className="space-y-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {batchStateLabel(section.state, 'student')}
+                </p>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <HomeworkList batches={section.items as any} />
+              </div>
+            ))}
+          </div>
         </Section>
-      ))}
+      )}
+
+      {/* Aktif hafta yoksa güncel iş de yoktur: Haftalık Akış manuel
+          açılıyor (bilinçli tasarım) ve açılmamışken ödevleri "bu hafta"
+          saymak olmayan bir haftayı varmış gibi göstermek olurdu. Bu
+          durumda bütün açık ödevler aşağıdaki blokta yaşar. */}
+      {past.sections.length > 0 && (
+        <PastDebtBlock
+          openCount={pastOpenCount}
+          overdueCount={pastOverdueCount}
+          hasCurrentWeek={current.sections.length > 0}
+          sections={past.sections}
+        />
+      )}
 
       {/* HİÇ ÖDEV OLMAMASI TAMAMLANMA DEĞİLDİR (rapor bulgusu 4).
           Önceden iki durum aynı başarı şeridini gösteriyordu: henüz

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { isOverdue } from '@/lib/homework-status'
+import { compareHomeworkItems, isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
 import { notFound, redirect } from 'next/navigation'
@@ -36,7 +36,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
-import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
+import { PublishedHomeworkList } from './published-homework-list'
 import { ProtectionPoolCard, ResourcePlanCard } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
 import { resolvePlanScope } from '@/lib/plan-scope'
@@ -133,17 +133,21 @@ export default async function StudentDetailPage({
     supabase
       .from('homework_batches')
       .select(`
-        id, title, description, due_date, status,
+        id, title, description, due_date, status, weekly_flow_id,
         homework_items(
           id, status, book_id, section_id,
           books(title, tracking_mode),
-          book_sections(title),
+          book_sections(title, order_index),
           book_tests(order_index)
         )
       `)
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
-      .eq('status', 'active')
+      // ARŞİVLENMİŞ ÖDEV DE ÇEKİLİYOR (R7-06.01). Belge: *"Ödev geçmiş
+      // listede kaybolmaz; raporlanabilir durumda kalır."* Aktif yükten
+      // çıkarılan ödev listeden silinmiyor, ayrı ve kapalı bir blokta
+      // yaşıyor — bu yüzden süzgeç 'active' yerine iki durumu kapsıyor.
+      .in('status', ['active', 'archived'])
       .order('due_date', { ascending: false })
       .limit(20),
     supabase
@@ -151,8 +155,8 @@ export default async function StudentDetailPage({
       .select(`
         id, book_id, homework_batch_id,
         books(title, tracking_mode),
-        book_sections(title),
-        book_tests(title),
+        book_sections(title, order_index),
+        book_tests(title, order_index, page_start),
         homework_batches!inner(student_id, workspace_id, title, due_date)
       `)
       .eq('status', 'pending_approval')
@@ -205,7 +209,7 @@ export default async function StudentDetailPage({
       // `+` ile birleştirilen bir ifade literal tip olmadığı için dönen
       // satır `GenericStringError`'a düşer ve bütün alanlar kaybolur.
       .select(
-        'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, next_contact_at, next_contact_kind'
+        'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, weekly_pending_approval, next_contact_at, next_contact_kind'
       )
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
@@ -301,7 +305,21 @@ export default async function StudentDetailPage({
     total: Number(weekOperation?.weekly_total ?? 0),
     submitted: Number(weekOperation?.weekly_submitted ?? 0),
     percent: Number(weekOperation?.weekly_submitted_percent ?? 0),
-    approvalPending: Number(weekOperation?.approval_pending_count ?? 0),
+    // "BU HAFTA" KARTI AKIŞ KAPSAMLI SAYAR (R7-06.05).
+    //
+    // Önceden `approval_pending_count` okunuyordu ve o sayaç 017'de
+    // BİLİNÇLİ olarak hafta-bağımsız yapılmıştı — Dashboard kartı ile
+    // /teacher/tasks listesinin farklı sayı göstermesi sorununu çözmek
+    // için. O karar doğruydu, yeri yanlıştı: aktif haftada 1 çalışma
+    // onay beklerken kart "2 çalışma onay bekliyor" diyordu, ikinci
+    // kayıt kapanmış bir haftadandı. Bir haftanın özeti, haftadan
+    // bağımsız bir sayacı gösteremez.
+    //
+    // Global sayaç YERİNDE DURUYOR ve Görevler ekranı onu okumaya devam
+    // ediyor (belge: *"Eski haftadan kalan onay kuyruğu global Görevler
+    // ekranında görünmeye devam edebilir; fakat Bu Hafta özetine
+    // karışmamalı."*).
+    approvalPending: Number(weekOperation?.weekly_pending_approval ?? 0),
     nextContactAt: (weekOperation?.next_contact_at as string | null) ?? null,
     nextContactKind: (weekOperation?.next_contact_kind as 'ders' | 'kocluk' | null) ?? null,
     lastSubmittedAt,
@@ -468,7 +486,12 @@ export default async function StudentDetailPage({
       created_at: n.created_at,
       author_name: n.author_name,
     })),
-    homework: (homeworkBatches ?? []).map(batch => {
+    // AKTİF YÜKTEN ÇIKARILMIŞ ÖDEV İZDE GÖRÜNMEZ (R7-06.01). Sorgu
+    // artık arşivlenenleri de çekiyor (geçmiş listesi için), ama "Son
+    // Akademik İz" öğrencinin GÜNCEL akışını anlatıyor: öğretmenin
+    // takipten çıkardığı bir ödevi "son olan şey" diye göstermek,
+    // çıkarma işlemini geri alıyormuş gibi olurdu.
+    homework: (homeworkBatches ?? []).filter(b => b.status === 'active').map(batch => {
       const items = (batch.homework_items as unknown as { status: string }[]) ?? []
       return {
         id: batch.id,
@@ -846,8 +869,17 @@ export default async function StudentDetailPage({
                 book_id: item.book_id ?? null,
                 homework_batch_id: item.homework_batch_id,
                 books: item.books as unknown as { title: string } | null,
-                book_sections: item.book_sections as unknown as { title: string } | null,
-                book_tests: item.book_tests as unknown as { title: string } | null,
+                // order_index'ler ödev içi sıralama için (R7-06.07);
+                // liste kendi sırasını bu alanlardan kuruyor.
+                book_sections: item.book_sections as unknown as {
+                  title: string
+                  order_index: number | null
+                } | null,
+                book_tests: item.book_tests as unknown as {
+                  title: string
+                  order_index: number | null
+                  page_start: number | null
+                } | null,
               }))}
             />
 
@@ -877,8 +909,14 @@ export default async function StudentDetailPage({
                   />
                 </div>
               ) : (
-                <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-                  {homeworkBatches.map((batch) => {
+                /* R7-06.01: liste artık işlem taşıyor (tekil + toplu
+                   "Aktif Yükten Çıkar"), bu yüzden seçim durumu
+                   istemcide. Satır gövdesi ve detay hesabı DEĞİŞMEDİ —
+                   aynı `HomeworkBatchRow` ve `buildHomeworkDetail`. */
+                <PublishedHomeworkList
+                  studentId={studentId}
+                  activeFlowId={thisWeek.flowId}
+                  batches={homeworkBatches.map((batch) => {
                     // Supabase iç içe select'i tek kaydı da dizi tipinde
                     // çözebiliyor; okurken tekile indiriyoruz.
                     const items =
@@ -888,42 +926,57 @@ export default async function StudentDetailPage({
                         book_id: string | null
                         section_id: string | null
                         books: Nested<{ title: string; tracking_mode: string }>
-                        book_sections: Nested<{ title: string }>
+                        book_sections: Nested<{ title: string; order_index: number | null }>
                         book_tests: Nested<{ order_index: number }>
                       }[]) ?? []
                     const total = items.length
                     const completed = items.filter((i) => i.status === 'completed').length
                     // R6-06: detay assignment_items'tan türetilir; ödev
                     // kaydında ayrı bir kopya metin tutulmaz.
+                    //
+                    // R7-06.07: sıra deterministik — önce bölüm, sonra
+                    // test/sayfa numarası. Öğrencinin Ödevlerim ekranı
+                    // ve kopyalanan ödev metni de aynı sırayı kullanıyor.
                     const detail = buildHomeworkDetail(
-                      items.map<HomeworkDetailItem>((i) => ({
-                        bookId: i.book_id,
-                        bookTitle: one(i.books)?.title ?? null,
-                        trackingMode: one(i.books)?.tracking_mode ?? null,
-                        sectionId: i.section_id,
-                        sectionTitle: one(i.book_sections)?.title ?? null,
-                        orderIndex: one(i.book_tests)?.order_index ?? null,
-                      }))
+                      [...items]
+                        .sort((a, b) =>
+                          compareHomeworkItems(
+                            {
+                              sectionOrderIndex: one(a.book_sections)?.order_index ?? null,
+                              unitOrderIndex: one(a.book_tests)?.order_index ?? null,
+                            },
+                            {
+                              sectionOrderIndex: one(b.book_sections)?.order_index ?? null,
+                              unitOrderIndex: one(b.book_tests)?.order_index ?? null,
+                            }
+                          )
+                        )
+                        .map<HomeworkDetailItem>((i) => ({
+                          bookId: i.book_id,
+                          bookTitle: one(i.books)?.title ?? null,
+                          trackingMode: one(i.books)?.tracking_mode ?? null,
+                          sectionId: i.section_id,
+                          sectionTitle: one(i.book_sections)?.title ?? null,
+                          orderIndex: one(i.book_tests)?.order_index ?? null,
+                        }))
                     )
                     // R6-02: teslim gününün tamamı kullanılabilir. Gecikme
                     // kararı lib/homework-status.ts'ten gelir.
                     const batchOverdue =
                       isOverdue(batch.due_date) && items.some((i) => i.status === 'pending')
-                    return (
-                      <li key={batch.id}>
-                        <HomeworkBatchRow
-                          title={batch.title}
-                          dueDate={batch.due_date}
-                          completed={completed}
-                          total={total}
-                          isOverdue={batchOverdue}
-                          detail={detail}
-                          note={batch.description}
-                        />
-                      </li>
-                    )
+                    return {
+                      id: batch.id,
+                      title: batch.title,
+                      dueDate: batch.due_date,
+                      description: batch.description,
+                      completed,
+                      total,
+                      isOverdue: batchOverdue,
+                      detail,
+                      status: batch.status,
+                    }
                   })}
-                </ul>
+                />
               )}
             </Section>
           </div>

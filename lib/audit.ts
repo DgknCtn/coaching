@@ -22,6 +22,12 @@ export type AuditAction =
   | 'homework.approve'
   | 'homework.reject'
   | 'homework.revert'
+  // R7-06.01 — aktif yükten çıkarma ve geri alma. Kayıt AUDIT'TE
+  // TUTULMAK ZORUNDA: işlem öğrencinin borcunu değiştiriyor ve
+  // "bu ödev neden düştü?" sorusunun yanıtı başka hiçbir yerde yok
+  // (satır silinmediği için de kendi kendini anlatmıyor).
+  | 'homework.release_from_active_load'
+  | 'homework.restore_to_active_load'
   | 'student.archive'
   | 'book.archive'
   | 'book.section_delete'
@@ -78,6 +84,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework.approve': 'Ödev onayladı',
   'homework.reject': 'Ödev reddetti',
   'homework.revert': 'Ödev onayını geri aldı',
+  'homework.release_from_active_load': 'Ödevi aktif yükten çıkardı',
+  'homework.restore_to_active_load': 'Ödevi yeniden aktifleştirdi',
   'student.archive': 'Öğrenci arşivledi',
   'book.archive': 'Kitap arşivledi',
   'book.section_delete': 'Kitap bölümü sildi',
