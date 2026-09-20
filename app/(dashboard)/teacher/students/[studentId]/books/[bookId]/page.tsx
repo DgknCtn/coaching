@@ -32,10 +32,14 @@ export const dynamic = 'force-dynamic'
 
 export default async function StudentBookDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studentId: string; bookId: string }>
+  /** Hangi ekrandan gelindi — geri okunun hedefi (R7 §7.2). */
+  searchParams: Promise<{ from?: string }>
 }) {
   const { studentId, bookId } = await params
+  const { from } = await searchParams
   const { supabase, workspaceId } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -97,10 +101,26 @@ export default async function StudentBookDetailPage({
   const percentage =
     totalTests === 0 ? 0 : Math.round((completedTests / totalTests) * 100)
 
+  // AÇILIŞ BAĞLAMI KORUNUR (R7 §7.2): Kaynak Planı'ndan açılan detaydan
+  // geri dönüş Kaynak Planı'na, Kitaplar'dan açılan Kitaplar'a gider.
+  // Geri oku öğretmeni Genel Bakış'a fırlatmamalı — sırayla birkaç kaynağı
+  // gözden geçirirken her seferinde listeye yeniden gitmek gerekiyordu.
+  // Parametre yoksa bugünkü davranış (öğrenci kökü) korunur.
+  // Önceki/sonraki kaynak gezinmesi de bağlamı taşır: üç kaynak ileri
+  // gidip geri okuna basınca öğretmen yine geldiği listeye dönmeli.
+  const contextQuery = from === 'kaynak-plani' || from === 'kitaplar' ? `?from=${from}` : ''
+
+  const backHref =
+    from === 'kaynak-plani'
+      ? `/teacher/students/${studentId}/goals`
+      : from === 'kitaplar'
+      ? `/teacher/students/${studentId}?sekme=kitaplar`
+      : `/teacher/students/${studentId}`
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
-        backHref={`/teacher/students/${studentId}`}
+        backHref={backHref}
         title={`${student.full_name} › ${book.title}`}
         subtitle={[book.subject, book.publisher].filter(Boolean).join(' · ')}
         badges={
@@ -171,7 +191,7 @@ export default async function StudentBookDetailPage({
             render={
               previousBook ? (
                 <Link
-                  href={`/teacher/students/${studentId}/books/${previousBook.bookId}`}
+                  href={`/teacher/students/${studentId}/books/${previousBook.bookId}${contextQuery}`}
                 />
               ) : undefined
             }
@@ -192,7 +212,7 @@ export default async function StudentBookDetailPage({
             disabled={!nextBook}
             render={
               nextBook ? (
-                <Link href={`/teacher/students/${studentId}/books/${nextBook.bookId}`} />
+                <Link href={`/teacher/students/${studentId}/books/${nextBook.bookId}${contextQuery}`} />
               ) : undefined
             }
           >

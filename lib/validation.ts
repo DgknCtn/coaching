@@ -393,11 +393,17 @@ export const sectionTopicsSchema = z.object({
   topicIds: z.array(uuid).max(20, 'Bir bölüme en fazla 20 konu bağlanabilir.'),
 })
 
+// R7 §4.2: Kitap Ata yalnız ilişkiyi kurar. Tarihler artık bu akıştan
+// sorulmuyor; kaynağın planı (rol, hedef kapsam, başlangıç, hedef tarih)
+// Kaynak Planı ekranında tamamlanıyor.
+//
+// scopeId OPSİYONELDİR: alan seçilmeden de atama yapılabilmeli, aksi
+// halde henüz ders/kapsam tanımlamamış bir koç hiç kitap atayamazdı.
+// Alanı boş kaynak "Alan atanmamış" grubunda görünür ve düzeltilebilir.
 export const assignBookSchema = z.object({
   studentId: uuid,
   bookId: uuid,
-  startDate: optionalDate,
-  targetEndDate: optionalDate,
+  scopeId: uuid.nullish(),
 })
 
 const homeworkItemSchema = z.object({

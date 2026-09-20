@@ -148,6 +148,14 @@ export interface BookMapBook {
    * öğrenci-kitap ilişkisinin özelliğidir; hiçbir hesaba girmez.
    */
   role: string | null
+  /**
+   * Kaynağın bu öğrencideki akademik alanı (R7 Kaynak Mimarisi, 098).
+   *
+   * Kitaplar ve Kaynak Planı ders/kapsam bloklarını bununla kurar.
+   * null = alan atanmamış; tahmin EDİLMEZ, arayüz bunu ayrı bir grup
+   * olarak gösterip düzeltme ister.
+   */
+  scopeId: string | null
   /** Kaynak Hedefi — ana tempo bundan hesaplanır (R6-04). */
   target: BookMapTarget | null
   /** Ara Hedef — varsa kısa menzilli plan. Ana tempoyu etkilemez. */
@@ -189,7 +197,7 @@ export async function loadBookMap(
   let assignmentQuery = supabase
     .from('student_book_assignments')
     .select(`
-      id, book_id, start_date, target_end_date, video_display, status, role,
+      id, book_id, start_date, target_end_date, video_display, status, role, scope_id,
       books(
         id, title, subject, exam_type, level_exam, curriculum_program,
         publisher, tracking_mode, video_mode, video_url,
@@ -383,6 +391,7 @@ export async function loadBookMap(
       bookId: assignment.book_id,
       status: assignment.status ?? 'active',
       role: assignment.role ?? null,
+      scopeId: assignment.scope_id ?? null,
       title: book?.title ?? '',
       subject: book?.subject ?? null,
       examType: book?.exam_type ?? null,

@@ -188,3 +188,44 @@ export async function setStudentBookPlanAction(
   revalidatePath(`/teacher/students/${studentId}`)
   return { success: true }
 }
+
+/**
+ * Kaynağın akademik alanı (R7 Kaynak Mimarisi §4.2).
+ *
+ * Atama sırasında alan seçilmemiş ya da yanlış seçilmiş olabilir; ders
+ * blokları bu alanla kurulduğu için düzeltme her iki ekrandan da tek
+ * tıkla yapılabilmeli. Boş string "alanı temizle" demektir — yanlış
+ * alandaki bir kaynağı önce boşaltmak geçerli bir adımdır.
+ *
+ * Rol/durum ile aynı doğada: yalnız gruplama bilgisidir, hiçbir ilerleme
+ * veya tempo hesabına girmez.
+ */
+export async function setStudentBookScopeAction(
+  studentId: string,
+  bookId: string,
+  assignmentId: string,
+  scopeId: string | null
+) {
+  const parsed = uuidSchema.safeParse(assignmentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  if (scopeId) {
+    const scope = uuidSchema.safeParse(scopeId)
+    if (!scope.success) return { error: 'Geçersiz ders/kapsam.' }
+  }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('set_student_book_scope', {
+    p_assignment_id: parsed.data,
+    p_scope_id: scopeId || null,
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath(`/teacher/students/${studentId}/books/${bookId}`)
+  revalidatePath(`/teacher/students/${studentId}/goals`)
+  revalidatePath(`/teacher/students/${studentId}`)
+  return { success: true }
+}

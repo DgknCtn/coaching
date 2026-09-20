@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LibrarySubmitButton } from './library-submit-button'
+import { PoolCleanup } from './pool-cleanup'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,10 +39,20 @@ export default async function BookDetailPage({
 
   const { data: assignments } = await supabase
     .from('student_book_assignments')
-    .select('id, student_id, students(full_name)')
+    .select('id, student_id, status, students(full_name)')
     .eq('book_id', bookId)
     .eq('workspace_id', workspaceId)
-    .eq('status', 'active')
+    .neq('status', 'archived')
+
+  // HAVUZ TEMİZLİĞİ İÇİN HER DURUM SAYILIR (R7 §7.3): "hiç atanmamış mı?"
+  // sorusunun yanıtı yalnız aktif atamalara bakarak verilemez. Bekliyor
+  // durumundaki ya da geçmişte kaldırılmış bir ilişki de kaynağın
+  // kullanıldığını gösterir; böyle bir kaydı silmek geçmişi bozardı.
+  const { count: totalAssignmentCount } = await supabase
+    .from('student_book_assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('book_id', bookId)
+    .eq('workspace_id', workspaceId)
 
   const sections = (book.book_sections ?? []).sort((a, b) => a.order_index - b.order_index)
   const totalTests = sections.reduce((sum, s) => {
@@ -183,6 +194,12 @@ export default async function BookDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <PoolCleanup
+        bookId={book.id}
+        bookTitle={book.title}
+        assignmentCount={totalAssignmentCount ?? 0}
+      />
     </div>
   )
 }

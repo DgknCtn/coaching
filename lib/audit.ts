@@ -30,6 +30,9 @@ export type AuditAction =
   | 'homework.restore_to_active_load'
   | 'student.archive'
   | 'book.archive'
+  // R7 §7.3: hiç atanmamış havuz kaydının kalıcı silinmesi. Atanmış
+  // kaynak silinemez, arşivlenir — bu yüzden iki ayrı eylem.
+  | 'book.delete'
   | 'book.section_delete'
   | 'book.subsection_delete'
   | 'invite.create'
@@ -88,6 +91,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework.restore_to_active_load': 'Ödevi yeniden aktifleştirdi',
   'student.archive': 'Öğrenci arşivledi',
   'book.archive': 'Kitap arşivledi',
+  'book.delete': 'Kitap sildi (atanmamış kayıt)',
   'book.section_delete': 'Kitap bölümü sildi',
   'book.subsection_delete': 'Kitap alt bölümü sildi',
   'book.outline_import': 'Kitap içindekiler aktardı',

@@ -51,6 +51,7 @@ function book(sections: BookMapSection[], overrides: Partial<BookMapBook> = {}):
     bookId: 'b1',
     status: 'active',
     role: null,
+    scopeId: null,
     title: 'Metin 10. Sınıf Matematik',
     subject: 'Matematik',
     examType: null,

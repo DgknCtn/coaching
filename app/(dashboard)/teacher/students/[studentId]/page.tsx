@@ -30,7 +30,6 @@ import { deriveInviteStatus } from '@/lib/invite-status'
 import { loadAssignableBooks } from '@/lib/assignable-books'
 import { InviteDialog } from './invite-dialog'
 import { PendingApprovalList } from './pending-approval-list'
-import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
@@ -39,6 +38,13 @@ import { Section } from '@/components/shared/section'
 import { PublishedHomeworkList } from './published-homework-list'
 import { ProtectionPoolCard, ResourcePlanCard } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
+import {
+  groupByScope,
+  loadStudentScopes,
+  loadWorkspaceScopes,
+  UNASSIGNED_SCOPE_KEY,
+} from '@/lib/student-scopes'
+import { bookPlanStatusLabel } from '@/lib/resource-plan'
 import { resolvePlanScope } from '@/lib/plan-scope'
 import { calculatePlanPace } from '@/lib/plan-pace'
 import { bookPlanGroup } from '@/lib/resource-plan'
@@ -105,7 +111,6 @@ export default async function StudentDetailPage({
   // FİLTRELENİYOR ama sorgusu ondan bağımsız. Bu yüzden sorgu paralel
   // çalışır, eleme sonuçlar geldikten sonra yapılır (aşağıda).
   const [
-    { data: bookProgress },
     { data: homeworkBatches },
     { data: pendingApprovalItems },
     { data: parentLinks },
@@ -121,12 +126,15 @@ export default async function StudentDetailPage({
     { data: openWorkRows },
     { data: overrideRows },
     r5Books,
+    studentScopes,
+    workspaceScopes,
   ] = await Promise.all([
-    supabase
-      .from('student_book_progress_view')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId),
+    // student_book_progress_view SORGUSU BURADAN KALKTI (R7 §4.4):
+    // yalnız 'active' atamaları döndürdüğü için envanteri eksik
+    // gösteriyordu. Kitaplar paneli de, atanabilir kitap elemesi de artık
+    // r5Books'tan (loadBookMap, dört durum) besleniyor; görünümün kendisi
+    // dashboard ve veli ekranları için olduğu gibi duruyor.
+    //
     // Durum bildirimi sorguları BURADAN KALKTI: panel Haftalık Akış'a
     // taşındı ve veriyi orası çekiyor. Bırakılsalardı her Genel Bakış
     // açılışında hiç okunmayan iki sorgu çalışırdı.
@@ -263,6 +271,10 @@ export default async function StudentDetailPage({
       studentId,
       statuses: ['active', 'pending', 'paused', 'completed'],
     }),
+    // Ders/kapsam listesi Akademik Kapsam'dan gelir, kitaplardan DEĞİL
+    // (R7 §7). Kaynağı olmayan alan da görünmek zorunda.
+    loadStudentScopes(supabase, { workspaceId, studentId }),
+    loadWorkspaceScopes(supabase, { workspaceId }),
   ])
 
   const academicNotes: AcademicNote[] = ((academicNoteRows ?? []) as unknown as {
@@ -511,12 +523,54 @@ export default async function StudentDetailPage({
     resources: resourceSummary,
   })
 
+  // ============================================================
+  // Kaynak envanteri (R7 §4.4)
+  //
+  // AKTİF/BEKLİYOR AYRIMI GÖRÜNÜRLÜKTEN BAĞIMSIZDIR: bekleyen kaynak
+  // envanterden kaybolmaz, ilgili ders/kapsam altında "Bekliyor"
+  // etiketiyle görünür. Durum değişimi yalnız PLAN durumunu değiştirir,
+  // bu listedeki görünürlüğü değil.
+  //
+  // Öğrenciden kaynak kaldırılırsa ilişki 'archived' olur ve envanterden
+  // çıkar (removeBookAssignmentAction); geçmiş kayıtlar korunur.
+  //
+  // İlerleme yüzdesi hedef kapsamından okunur (resolvePlanScope): hedef
+  // yalnız birkaç bölümse "kitabın tamamına göre %12" demek yanıltıcı
+  // olurdu. Ayrıntı yine Kaynak Planı'nın ve kitap detayının işi.
+  const inventoryGroups = groupByScope(
+    (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map(b => {
+      const group = bookPlanGroup(b.status)
+      return {
+        scopeId: b.scopeId,
+        assignmentId: b.assignmentId,
+        bookId: b.bookId,
+        title: b.title,
+        publisher: b.publisher,
+        levelExam: b.levelExam ?? b.examType,
+        curriculumProgram: b.curriculumProgram,
+        percentage: resolvePlanScope(b).percentage,
+        statusLabel: bookPlanStatusLabel(b.status),
+        badge: (group === 'active'
+          ? 'success'
+          : group === 'pending'
+          ? 'warning'
+          : 'neutral') as 'success' | 'warning' | 'neutral',
+      }
+    }),
+    studentScopes
+  )
+
   // Atanabilir kitap listesi Kaynak Planı ekranıyla ORTAK yükleyiciden gelir;
   // iki ekran aynı listeyi göstermek zorunda (lib/assignable-books.ts).
+  // ATANMIŞ KİTAP LİSTESİ r5Books'TAN OKUNUR, bookProgress'ten DEĞİL:
+  // o görünüm yalnız 'active' atamaları döner ve R7'den beri yeni kaynak
+  // 'pending' açılıyor. bookProgress kullanılsaydı bekleyen bir kaynak
+  // "atanabilir" görünür, ikinci atama denemesi de (student_id, book_id,
+  // term) tekillik kısıtına takılırdı.
   const availableBooks = await loadAssignableBooks(supabase, {
     workspaceId,
     termId: activeTerm?.id ?? null,
-    assignedBookIds: (bookProgress ?? []).map(p => p.book_id),
+    assignedBookIds: (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map(b => b.bookId),
   })
 
   const hasAccount = !!student.profile_id
@@ -811,16 +865,42 @@ export default async function StudentDetailPage({
           hangi sekmede olduğun paylaşılamıyor, yer imlenemiyor, geri
           tuşuyla gezilemiyordu. Sekmeler çalışma masasının şeridine
           taşındı (student-tabs.tsx), seçim ?sekme= ile URL'de. */}
+      {/* ============================================================
+          KİTAPLAR = ÖĞRENCİ KAYNAK ENVANTERİ (R7 §4)
+
+          Ekran "Bu öğrencinin hangi kaynakları var?" sorusunu yanıtlar.
+          Plan YÖNETMEZ: tempo, rol, hedef tarih, hedef kapsam ve haftalık
+          çalışma sinyali Kaynak Planı'na aittir (§4.3).
+
+          İKİ DÜZELTME:
+
+          1) ENVANTER ARTIK EKSİK DEĞİL (§4.4). Panel
+             student_book_progress_view'dan besleniyordu ve o görünüm
+             `WHERE sba.status = 'active'` süzüyor; bu yüzden Bekliyor
+             durumundaki kaynaklar ekrandan KAYBOLUYORDU. Aynı öğrencinin
+             Kaynak Planı'nda 7 bekleyen kaynak dururken Kitaplar 4 kaynak
+             gösteriyordu. Artık veri r5Books'tan (loadBookMap, dört durum)
+             geliyor — görünüm değiştirilmedi, çünkü dashboard ve veli
+             ekranları için 'active' süzgeci doğru.
+
+          2) DERS/KAPSAM GRUPLARI (§4.1). Liste kitaplardan türemiyor;
+             öğrencinin akademik kapsamından okunuyor. Kaynağı olmayan alan
+             da "0 kaynak · Kaynak atanmadı" olarak görünüyor.
+          ============================================================ */}
       {tab?.slug === 'kitaplar' && (
           <Section
-            title="Atanmış kitaplar"
+            title="Kaynak envanteri"
             action={
               activeTerm && availableBooks.length > 0 ? (
-                <AssignBookDialog studentId={studentId} books={availableBooks} />
+                <AssignBookDialog
+                  studentId={studentId}
+                  books={availableBooks}
+                  scopes={workspaceScopes}
+                />
               ) : undefined
             }
           >
-            {!bookProgress?.length ? (
+            {inventoryGroups.length === 0 ? (
               <div className="rounded-lg border bg-card">
                 <EmptyState
                   icon={BookOpen}
@@ -835,25 +915,65 @@ export default async function StudentDetailPage({
                 />
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {bookProgress.map((p) => (
-                  <BookCard
-                    key={p.student_book_assignment_id}
-                    book={{
-                      id: p.book_id,
-                      title: p.book_title,
-                      subject: p.subject,
-                      exam_type: p.exam_type,
-                      tracking_mode: p.tracking_mode,
-                    }}
-                    progress={{
-                      completed: p.completed_tests,
-                      total: p.total_tests,
-                      percentage: Number(p.completion_percentage),
-                      targetDate: p.target_end_date,
-                    }}
-                    href={`/teacher/students/${studentId}/books/${p.book_id}`}
-                  />
+              <div className="space-y-4">
+                {inventoryGroups.map(group => (
+                  <section key={group.key} className="rounded-lg border bg-card">
+                    <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold">{group.label}</h3>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {group.items.length === 0
+                            ? '0 kaynak · Kaynak atanmadı'
+                            : `${group.items.length} kaynak`}
+                        </p>
+                      </div>
+                      {activeTerm &&
+                        availableBooks.length > 0 &&
+                        group.key !== UNASSIGNED_SCOPE_KEY && (
+                          <AssignBookDialog
+                            studentId={studentId}
+                            books={availableBooks}
+                            scopes={workspaceScopes}
+                            defaultScopeId={group.key}
+                          />
+                        )}
+                    </header>
+
+                    {group.items.length === 0 ? (
+                      <p className="flex items-center gap-2 px-4 py-3 text-xs text-warning-foreground">
+                        <CircleAlert className="size-3.5 shrink-0" aria-hidden />
+                        Bu alan öğrenci kapsamına dâhil ancak henüz kaynak atanmadı.
+                      </p>
+                    ) : (
+                      <ul className="divide-y">
+                        {group.items.map(item => (
+                          <li key={item.assignmentId}>
+                            <Link
+                              href={`/teacher/students/${studentId}/books/${item.bookId}?from=kitaplar`}
+                              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-4 py-3 transition-colors hover:bg-muted/40"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{item.title}</p>
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                  {[item.publisher, item.levelExam, item.curriculumProgram]
+                                    .filter(v => v && v !== 'Belirtilmedi')
+                                    .join(' · ') || '—'}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-3">
+                                {/* Yüksek seviyeli ilerleme oranı (§4.3):
+                                    plan detayı değil, tek bir yüzde. */}
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                  %{item.percentage}
+                                </span>
+                                <Badge variant={item.badge}>{item.statusLabel}</Badge>
+                              </div>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
                 ))}
               </div>
             )}

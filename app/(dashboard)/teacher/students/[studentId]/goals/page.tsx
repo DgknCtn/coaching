@@ -1,98 +1,117 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { BookOpen, CircleDashed, Gauge, Layers, Target } from 'lucide-react'
+import { AlertTriangle, BookOpen, CheckCircle2, Gauge, LayoutGrid, Minus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap, type BookMapBook } from '@/lib/book-map'
 import { resolvePlanScope, type PlanScope } from '@/lib/plan-scope'
 import { calculatePlanTempo } from '@/lib/plan-pace'
 import {
-  BOOK_PLAN_GROUP_LABEL,
   bookPlanGroup,
   bookPlanStatusLabel,
   bookRoleLabel,
-  targetTypeLabel,
-  type BookPlanGroup,
 } from '@/lib/resource-plan'
-import { formatTempo, formatUnitCount, unitLabel } from '@/lib/unit-labels'
+import { resolvePlanDeviation, type PlanDeviation } from '@/lib/resource-status'
+import {
+  emptyResourceWeekSignal,
+  loadResourceWeekSignals,
+  type ResourceWeekSignal,
+} from '@/lib/weekly-resource-signal'
+import {
+  groupByScope,
+  loadStudentScopes,
+  loadWorkspaceScopes,
+  UNASSIGNED_SCOPE_KEY,
+} from '@/lib/student-scopes'
+import { formatTempo, unitLabel } from '@/lib/unit-labels'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
-import { Section } from '@/components/shared/section'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { LinkTabs } from '@/components/shared/link-tabs'
 import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
 import { loadAssignableBooks } from '@/lib/assignable-books'
 import { AssignBookDialog } from '../assign-book-dialog'
 
-// Öğrenci Kaynak Planı (R5.1).
+// Öğrenci Kaynak Planı (R5.1 + R7 Kaynak Mimarisi).
 //
-// Cevapladığı soru: "Bu kaynak bu öğrenci için neden kullanılıyor, ne
-// kadarının tamamlanmasını planladık ve hedef tarihe göre neredeyiz?"
+// Cevapladığı soru: "Bu kaynakları NASIL ve NE ZAMAN kullanıyoruz?"
+// Envanter sorusu ("hangi kaynaklar var?") Kitaplar ekranına aittir; iki
+// ekran aynı bilgiyi TEKRAR ETMEZ (§4.3 görev ayrımı).
 //
-// Bu ekran eski "Hedef" ekranının yerine geçer. Eski sürüm
-// student_book_progress_view'dan besleniyordu ve KAPSAM-DUYARLI DEĞİLDİ:
-// hedef yalnız birkaç bölüm olsa bile kitabın tamamı üzerinden yüzde
-// gösteriyordu. Artık veri loadBookMap + resolvePlanScope'tan gelir.
+// R7'DE DEĞİŞEN — ekran artık kart listesi değil, DERS BAZLI KOMPAKT
+// KONTROL EKRANI:
 //
-// İKİ AYRI YÜZDE (§3.2) — karıştırılmamalı:
-//   Plan %  = hedef kapsamında onaylanan / hedef kapsam toplamı  (ANA gösterge)
-//   Kitap % = kitapta onaylanan / kitabın takip edilebilir toplamı (fiziksel bilgi)
-// 420 testlik kitapta 276 hedef ve 276 onay -> Plan %100, Kitap %66.
+//   önce: her kaynak büyük bir kart, iki uzun progress bar, alt alta
+//         istiflenmiş. 10-30 kaynakta öğretmen dersler arası durumu ve
+//         haftalık teması tarayarak buluyordu.
+//   şimdi: ders/kapsam blokları + satır başına sekiz alan. Tempo, plan
+//         durumu ve "bu hafta çalışma verildi" sinyali AYNI SATIRDA.
+//
+// ÜST ÖZET HAFTALIK KARAR EKSENİNDE (§5.1): kapsam toplamları yerine
+// "kaç kaynak aktif, kaçından bu hafta çalışma verildi, hangi alan boş,
+// haftalık tempo ne". "Kitap kapsamı" kartı kaldırıldı — fiziksel kapsam
+// kitap detayında yaşamaya devam ediyor.
 
 export const dynamic = 'force-dynamic'
 
-const GROUP_ORDER: BookPlanGroup[] = ['active', 'pending', 'completed']
+/** §5.2: "Sadece aktifler" filtresi bekleyenleri gizler, "Tümü" gösterir. */
+const VIEW_KEYS = ['all', 'active', 'unassigned'] as const
+type ViewKey = (typeof VIEW_KEYS)[number]
 
-/** Kaynak durumunun rozet karşılığı — grup kovasıyla aynı indirgeme. */
-const GROUP_BADGE: Record<BookPlanGroup, 'success' | 'warning' | 'neutral'> = {
-  active: 'success',
-  pending: 'warning',
-  completed: 'neutral',
-}
-
-// Ekranın iki yüzdesi ve tempo kuralı, altta tek paragraf yerine madde
-// madde. Metinler R5.1 §3.2/§3.4'ün davranışını anlatır.
 const EXPLAINERS: ExplainerCard[] = [
   {
-    title: 'İki yüzde neden farklı?',
+    title: 'Plan durumu nasıl üretilir?',
     description:
-      "420 testlik kitapta 276 test hedeflendi ve 276'sı onaylandıysa Plan %100, Kitap %66'dır.",
+      'Etiket ham ilerleme yüzdesinden değil, hedefe yetişmek için bugün gereken temponun planlanan tempoya oranından çıkar.',
     items: [
-      { text: 'Plan %: hedef kapsamında onaylanan / hedef kapsam toplamı. Ana göstergedir.', tone: 'positive' },
-      { text: 'Kitap %: kitapta onaylanan / kitabın takip edilebilir toplamı. Fiziksel bilgidir.' },
-      { text: 'Plan %100 tamamlanmış olsa bile kitap kapsamı daha düşük olabilir; bu bir hata değildir.' },
+      { text: 'Planlanan tempo kaynak hedefinden; gerekli tempo kalan kapsam ve kalan süreden hesaplanır.' },
+      { text: 'Hedef kapsam tüm kitap değilse hesap yalnız seçili kapsam üzerinden yapılır.' },
+      { text: 'Bekleyen ve başlangıç tarihi gelmemiş kaynaklarda plan durumu üretilmez.', tone: 'negative' },
     ],
   },
   {
-    title: 'Neler plana girmez?',
+    title: 'Bu hafta çalışma verildi mi?',
     items: [
-      { text: 'Onay bekleyen çalışma plan hesabına girmez; ayrı gösterilir.', tone: 'negative' },
+      { text: 'Yeşil tik, o kaynaktan bu hafta çalışma verildiğini gösterir.', tone: 'positive' },
+      { text: '0 çalışma "eksik" ya da "tamamlanmadı" demek değildir; öğretmen bilinçli olarak daha az verebilir.' },
+      { text: 'Açık ödev ayrı gösterilir. Geçmiş haftadan kalan iş bu haftanın hesabından düşülmez.' },
+    ],
+  },
+  {
+    title: 'Neler tempoya girmez?',
+    items: [
+      { text: 'Bekleyen ve başlangıç tarihi gelmemiş kaynaklar haftalık genel tempoya katılmaz.', tone: 'negative' },
+      { text: 'Onay bekleyen çalışma plan hesabına girmez.', tone: 'negative' },
       { text: 'Video kaynakları plan temposuna dahil edilmez.', tone: 'negative' },
-      { text: 'Bekleyen ve hedefi tamamlanan kaynaklar üst özet toplamlarına katılmaz.', tone: 'negative' },
-    ],
-  },
-  {
-    title: 'Tempo ve hedefler',
-    items: [
-      { text: 'Gerekli tempo her zaman Kaynak Hedefinden hesaplanır; Ara Hedef onu değiştirmez.' },
-      { text: 'Haftalık tempo yalnız tek tür birimde gösterilir: 3 test/hafta ile 40 sayfa/hafta toplanamaz.' },
-      { text: 'Hedef yoksa kapsam kitabın tamamıdır ve iki yüzde birbirine eşitlenir.' },
-      { text: 'Kaynağın rolü öğrenci-kitap ilişkisinin özelliğidir; değiştirmek ilerleme verisine dokunmaz.' },
+      { text: 'Ara Hedef, Kaynak Hedefinin kapsamını veya tarihini değiştirmez.' },
     ],
   },
 ]
+
+/** Bir kaynağın ekranda gereken tüm türetilmiş değerleri. */
+interface ResourceRowData {
+  book: BookMapBook
+  scopeId: string | null
+  scope: PlanScope
+  plannedPacePerWeek: number | null
+  requiredPacePerWeek: number | null
+  deviation: PlanDeviation
+  signal: ResourceWeekSignal
+  /** Aktif VE başlangıcı gelmiş: haftalık genel tempoya yalnız bunlar girer. */
+  countsTowardTempo: boolean
+}
 
 export default async function StudentResourcePlanPage({
   params,
   searchParams,
 }: {
   params: Promise<{ studentId: string }>
-  /** Durum filtresi URL'de tutulur: filtreli görünüm paylaşılabilir olsun. */
-  searchParams: Promise<{ group?: string }>
+  /** Görünüm filtresi URL'de tutulur: filtreli ekran paylaşılabilir olsun. */
+  searchParams: Promise<{ view?: string }>
 }) {
   const { studentId } = await params
-  const { group: groupFilter } = await searchParams
+  const { view } = await searchParams
   const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -106,161 +125,178 @@ export default async function StudentResourcePlanPage({
 
   // Bekliyor ve Hedef Tamamlandı grupları da görünmeli; loadBookMap'in
   // varsayılanı yalnız 'active'dir.
-  const books = await loadBookMap(supabase, {
-    workspaceId,
-    studentId,
-    statuses: ['active', 'pending', 'paused', 'completed'],
-  })
+  const [books, scopes, workspaceScopes, signals] = await Promise.all([
+    loadBookMap(supabase, {
+      workspaceId,
+      studentId,
+      statuses: ['active', 'pending', 'paused', 'completed'],
+    }),
+    loadStudentScopes(supabase, { workspaceId, studentId }),
+    loadWorkspaceScopes(supabase, { workspaceId }),
+    loadResourceWeekSignals(supabase, { workspaceId, studentId }),
+  ])
 
   // Kaynak eklemek bu ekranın birincil eylemidir: kapsam ve tempo burada
-  // okunuyor, eksik kaynak da burada fark ediliyor. Öğrenci genel bakışına
-  // dönmek zorunda kalmamalı.
+  // okunuyor, eksik kaynak da burada fark ediliyor.
   const availableBooks = await loadAssignableBooks(supabase, {
     workspaceId,
     termId: activeTerm?.id ?? null,
     assignedBookIds: books.map(b => b.bookId),
   })
 
-  const grouped = new Map<BookPlanGroup, BookMapBook[]>()
-  for (const book of books) {
+  const today = new Date()
+
+  const rows: ResourceRowData[] = books.map(book => {
+    const scope = resolvePlanScope(book)
+    const tempo = calculatePlanTempo({
+      startDate: scope.startDate,
+      targetEndDate: scope.targetEndDate,
+      totalUnits: scope.totalUnits,
+      completedUnits: scope.completedUnits,
+      trackingMode: book.trackingMode,
+    })
+
     const group = bookPlanGroup(book.status)
-    grouped.set(group, [...(grouped.get(group) ?? []), book])
-  }
+    const started = !scope.startDate || new Date(scope.startDate) <= today
+
+    return {
+      book,
+      scopeId: book.scopeId,
+      scope,
+      plannedPacePerWeek: tempo.initialPacePerWeek,
+      requiredPacePerWeek: tempo.requiredPacePerWeek,
+      deviation: resolvePlanDeviation({
+        status: book.status,
+        plannedPacePerWeek: tempo.initialPacePerWeek,
+        requiredPacePerWeek: tempo.requiredPacePerWeek,
+        remainingUnits: tempo.remainingUnits,
+        isTargetReached: tempo.isTargetReached,
+        startDate: scope.startDate,
+        today,
+      }),
+      signal: signals.get(book.assignmentId) ?? emptyResourceWeekSignal(),
+      countsTowardTempo: group === 'active' && started,
+    }
+  })
+
+  const groups = groupByScope(rows, scopes)
+  const activeRows = rows.filter(r => bookPlanGroup(r.book.status) === 'active')
 
   // ============================================================
-  // Üst özet şeridi
+  // Üst özet (§5.1)
   //
-  // Ekran bugüne kadar yalnız kaynak kartlarını listeliyordu; "bu öğrencide
-  // toplam ne kadar plan var, ne kadarı bitti?" sorusu ancak kartlar tek tek
-  // okunarak yanıtlanabiliyordu.
+  // Dört kart, dört soru: kaç kaynak çalışır durumda, kaçına bu hafta
+  // dokunuldu, hangi alan boş kaldı, haftalık yük ne kadar.
   //
-  // Toplamlar AKTİF kaynaklar üzerinden alınır: bekleyen bir kaynağın
-  // kapsamı henüz çalışılmıyor, tamamlananınki ise bitmiş. İkisini toplama
-  // katmak "kalan" sayısını yanıltıcı yapardı.
+  // HAFTALIK GENEL TEMPO yalnız AKTİF ve BAŞLANGICI GELMİŞ kaynaklardan
+  // toplanır. Bekleyen bir kaynağın temposunu toplama katmak, öğretmene
+  // henüz vermediği bir yükü vermiş gibi gösterirdi.
   //
-  // Birimler kaynaklar arasında karışabilir (test + sayfa); bu yüzden toplam
-  // satırında nötr "çalışma" denir — tek tür varsa onun adı kullanılır
-  // (lib/unit-labels.ts ile aynı ilke).
+  // Birim karışabilir (test + sayfa); bu yüzden tek tür yoksa nötr
+  // "çalışma" denir (lib/unit-labels.ts ile aynı ilke). Eski sürüm bu
+  // durumda tempoyu HİÇ göstermiyordu ("—"); oysa öğretmenin ihtiyacı
+  // olan sayı toplam haftalık yüktür, birimin adı değil.
   // ============================================================
-  const activeBooks = books.filter(b => bookPlanGroup(b.status) === 'active')
-  const activeScopes = activeBooks.map(b => ({ book: b, scope: resolvePlanScope(b) }))
+  //
+  // TOPLAM PLANLANAN TEMPODAN ALINIR, gerekli tempodan değil (§5.1:
+  // "yalnız Aktif ve başlangıç tarihi gelmiş kaynakların PLANINDAN
+  // oluşur"). Gerekli tempo sapmaya göre şişer; üst kartta onu göstermek
+  // haftalık yükü olduğundan büyük gösterirdi. Sapma zaten satır bazında
+  // plan durumu rozetiyle okunuyor.
+  const tempoRows = rows.filter(r => r.countsTowardTempo)
+  const weeklyTempo = tempoRows.reduce((sum, r) => sum + (r.plannedPacePerWeek ?? 0), 0)
+  const tempoModes = new Set(tempoRows.map(r => r.book.trackingMode))
+  const tempoUnit = tempoModes.size === 1 ? unitLabel([...tempoModes][0]) : 'çalışma'
 
-  const totals = activeScopes.reduce(
-    (acc, { scope }) => ({
-      planned: acc.planned + scope.totalUnits,
-      completed: acc.completed + scope.completedUnits,
-      bookTotal: acc.bookTotal + scope.bookTotalUnits,
-    }),
-    { planned: 0, completed: 0, bookTotal: 0 }
-  )
-  const remainingUnits = Math.max(0, totals.planned - totals.completed)
-  const planPercentage =
-    totals.planned === 0 ? 0 : Math.round((totals.completed / totals.planned) * 100)
+  const touchedThisWeek = activeRows.filter(r => r.signal.assignedThisWeek > 0).length
+  const emptyScopes = groups.filter(g => g.key !== UNASSIGNED_SCOPE_KEY && g.items.length === 0)
 
-  // Geçersiz bir ?group= değeri filtreyi sessizce kapatır: kullanıcı yanlış
-  // bir bağlantıyla boş ekran görmemeli.
-  const activeGroup = GROUP_ORDER.includes(groupFilter as BookPlanGroup)
-    ? (groupFilter as BookPlanGroup)
-    : null
+  const activeView: ViewKey = VIEW_KEYS.includes(view as ViewKey) ? (view as ViewKey) : 'all'
 
-  const groupTabs = [
+  const base = `/teacher/students/${studentId}/goals`
+  const viewTabs = [
+    { key: 'all', label: 'Tümü', href: base, count: books.length },
+    { key: 'active', label: 'Sadece aktifler', href: `${base}?view=active`, count: activeRows.length },
     {
-      key: 'all',
-      label: 'Tümü',
-      href: `/teacher/students/${studentId}/goals`,
-      count: books.length,
+      key: 'unassigned',
+      label: 'Kaynak atanmayanlar',
+      href: `${base}?view=unassigned`,
+      count: emptyScopes.length,
     },
-    ...GROUP_ORDER.map(group => ({
-      key: group,
-      label: BOOK_PLAN_GROUP_LABEL[group],
-      href: `/teacher/students/${studentId}/goals?group=${group}`,
-      count: (grouped.get(group) ?? []).length,
-    })),
-  ].filter(tab => tab.key === 'all' || tab.count > 0)
+  ]
 
-  const modes = new Set(activeBooks.map(b => b.trackingMode))
-  const summaryUnit = modes.size === 1 ? unitLabel([...modes][0]) : 'çalışma'
+  const assignDialog = (scopeId?: string | null, label?: string) =>
+    availableBooks.length > 0 ? (
+      <AssignBookDialog
+        studentId={studentId}
+        books={availableBooks}
+        scopes={workspaceScopes}
+        defaultScopeId={scopeId ?? null}
+        triggerLabel={label}
+      />
+    ) : undefined
 
-  // Haftalık tempo yalnız tek tür birimde anlamlı: 3 test/hafta ile 40
-  // sayfa/hafta toplanamaz. Karışıksa gösterilmez.
-  const weeklyTempo =
-    modes.size === 1
-      ? activeScopes.reduce((sum, { book, scope }) => {
-          const tempo = calculatePlanTempo({
-            startDate: scope.startDate,
-            targetEndDate: scope.targetEndDate,
-            totalUnits: scope.totalUnits,
-            completedUnits: scope.completedUnits,
-            trackingMode: book.trackingMode,
-          })
-          return sum + (tempo.requiredPacePerWeek ?? 0)
-        }, 0)
-      : null
+  // "Kaynak atanmayanlar" görünümünde yalnız boş alanlar kalır; "Sadece
+  // aktifler"de bekleyenler gizlenir ama alan başlıkları durur — öğretmen
+  // hangi alanda hiç aktif kaynak kalmadığını da görmeli.
+  const visibleGroups = groups
+    .map(g =>
+      activeView === 'active'
+        ? { ...g, items: g.items.filter(r => bookPlanGroup(r.book.status) === 'active') }
+        : g
+    )
+    .filter(g => (activeView === 'unassigned' ? g.items.length === 0 : true))
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
         // BAŞLIKTA ÖĞRENCİ ADI YOK (067): ad, sınıf ve sınav rozetleri
-        // artık çalışma masasının üst şeridinde — sekmelerle birlikte
-        // gezinme boyunca yerinde duruyor. Burada tekrarlamak, aynı bilgiyi
-        // ekranda iki kez göstermek olurdu. Geri düğmesi de gereksiz:
-        // "Genel Bakış" bir sekme.
+        // çalışma masasının üst şeridinde duruyor.
         title="Kaynak Planı"
-        subtitle="Her kaynağın rolü, hedef kapsamı ve hedef tarihe göre durumu"
-        action={
-          availableBooks.length > 0 ? (
-            <AssignBookDialog studentId={studentId} books={availableBooks} />
-          ) : undefined
-        }
+        subtitle="Her kaynağın rolü, temposu ve hedef tarihe göre durumu"
+        action={assignDialog(null, 'Kaynak Ekle')}
       />
 
-      {activeBooks.length > 0 && (
+      {books.length > 0 && (
         <MetricTiles
-          className="xl:grid-cols-5"
+          className="xl:grid-cols-4"
           metrics={[
             {
-              label: 'Planlanan kapsam',
-              value: `${totals.planned.toLocaleString('tr-TR')} ${summaryUnit}`,
-              icon: Target,
-              hint: `${activeBooks.length} aktif kaynak`,
+              label: 'Aktif Kaynak',
+              value: activeRows.length,
+              icon: BookOpen,
+              hint: `Toplam ${books.length} kaynaktan`,
             },
             {
-              label: 'Tamamlanan',
-              value: totals.completed.toLocaleString('tr-TR'),
+              label: 'Bu Hafta Çalışma Verilen Kaynak',
+              value: touchedThisWeek,
               tone: 'success',
-              progress: planPercentage,
-              hint: 'Plana göre',
+              icon: CheckCircle2,
+              hint: `${activeRows.length} aktif kaynaktan`,
             },
             {
-              label: 'Kalan',
-              value: remainingUnits.toLocaleString('tr-TR'),
-              tone: 'warning',
-              icon: CircleDashed,
+              label: 'Kaynak Atanmayan Alan',
+              value: emptyScopes.length,
+              tone: emptyScopes.length > 0 ? 'warning' : 'default',
+              icon: AlertTriangle,
+              hint: `Toplam ${scopes.length} alan içinde`,
+              href: emptyScopes.length > 0 ? `${base}?view=unassigned` : undefined,
             },
             {
-              label: 'Kitap kapsamı',
-              value: totals.bookTotal.toLocaleString('tr-TR'),
-              icon: Layers,
-              hint: 'Aktif kaynakların fiziksel toplamı',
-            },
-            {
-              label: 'Haftalık tempo',
-              value:
-                weeklyTempo === null
-                  ? '—'
-                  : formatTempo(Math.round(weeklyTempo * 10) / 10, [...modes][0]),
+              label: 'Haftalık Genel Tempo',
+              value: `${roundTempo(weeklyTempo).toLocaleString('tr-TR')} ${tempoUnit}`,
               icon: Gauge,
-              hint: weeklyTempo === null ? 'Karışık birim' : 'Hedeflere göre gerekli',
+              // Günlük ortalama haftalık tempodan türetilir; öğretmen için
+              // planlama referansıdır, bir kota değildir (§5.1).
+              hint: `Günlük ort. ${roundTempo(weeklyTempo / 7).toLocaleString('tr-TR')} ${tempoUnit}`,
             },
           ]}
         />
       )}
 
-      {books.length > 1 && (
-        <LinkTabs tabs={groupTabs} activeKey={activeGroup ?? 'all'} />
-      )}
+      {books.length > 0 && <LinkTabs tabs={viewTabs} activeKey={activeView} />}
 
-      {books.length === 0 ? (
+      {books.length === 0 && scopes.length === 0 ? (
         <div className="rounded-lg border bg-card">
           <EmptyState
             icon={BookOpen}
@@ -269,19 +305,21 @@ export default async function StudentResourcePlanPage({
           />
         </div>
       ) : (
-        GROUP_ORDER.filter(g => !activeGroup || g === activeGroup).map(group => {
-          const groupBooks = grouped.get(group) ?? []
-          if (groupBooks.length === 0) return null
-          return (
-            <Section key={group} title={BOOK_PLAN_GROUP_LABEL[group]}>
-              <div className="space-y-3">
-                {groupBooks.map(book => (
-                  <ResourceCard key={book.assignmentId} studentId={studentId} book={book} />
-                ))}
-              </div>
-            </Section>
-          )
-        })
+        <div className="space-y-5">
+          {visibleGroups.map(group => (
+            <ScopeBlock
+              key={group.key}
+              studentId={studentId}
+              label={group.label}
+              rows={group.items}
+              assignAction={
+                group.key === UNASSIGNED_SCOPE_KEY
+                  ? undefined
+                  : assignDialog(group.key, 'Kaynak Ekle')
+              }
+            />
+          ))}
+        </div>
       )}
 
       <ExplainerCards cards={EXPLAINERS} />
@@ -289,120 +327,189 @@ export default async function StudentResourcePlanPage({
   )
 }
 
-function ResourceCard({ studentId, book }: { studentId: string; book: BookMapBook }) {
-  const scope: PlanScope = resolvePlanScope(book)
+/** Tempo göstergeleri bir ondalık basamakla gösterilir (plan-pace.ts ile aynı). */
+function roundTempo(value: number): number {
+  return Math.round(value * 10) / 10
+}
 
-  const tempo = calculatePlanTempo({
-    startDate: scope.startDate,
-    targetEndDate: scope.targetEndDate,
-    totalUnits: scope.totalUnits,
-    completedUnits: scope.completedUnits,
-    trackingMode: book.trackingMode,
-  })
+// ============================================================
+// Ders/kapsam bloğu (§5.2)
+// ============================================================
+function ScopeBlock({
+  studentId,
+  label,
+  rows,
+  assignAction,
+}: {
+  studentId: string
+  label: string
+  rows: ResourceRowData[]
+  assignAction?: React.ReactNode
+}) {
+  const activeCount = rows.filter(r => bookPlanGroup(r.book.status) === 'active').length
+  const touched = rows.filter(
+    r => bookPlanGroup(r.book.status) === 'active' && r.signal.assignedThisWeek > 0
+  ).length
+  const totalThisWeek = rows.reduce((n, r) => n + r.signal.assignedThisWeek, 0)
 
-  // Onay bekleyen AYRI gösterilir ve plana girmez (§3.4, KP-02).
-  const pendingApproval = book.sections.reduce(
-    (n, s) => n + s.tests.filter(t => t.state === 'pending_approval').length,
-    0
+  return (
+    <section className="rounded-lg border bg-card">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <LayoutGrid className="size-4 text-muted-foreground" aria-hidden />
+            {label}
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {rows.length === 0 ? (
+              'Bu alan öğrenci kapsamına dâhil ancak henüz kaynak atanmadı.'
+            ) : (
+              <>
+                {activeCount} aktif kaynak
+                {activeCount > 0 && (
+                  <>
+                    {' · '}
+                    {touched}/{activeCount} kaynaktan bu hafta çalışma verildi
+                  </>
+                )}
+                {totalThisWeek > 0 && <> · {totalThisWeek} çalışma</>}
+              </>
+            )}
+          </p>
+        </div>
+        {assignAction}
+      </header>
+
+      {rows.length === 0 ? (
+        <p className="flex items-center gap-2 px-4 py-3 text-xs text-warning-foreground">
+          <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+          Kaynak atanmadı
+        </p>
+      ) : (
+        <div className="divide-y">
+          {/* Sütun başlıkları yalnız geniş ekranda: dar ekranda her satır
+              kendi etiketlerini taşır, iki kez yazmak yer israfı olurdu. */}
+          <div className="hidden gap-3 px-4 py-2 text-[11px] text-muted-foreground lg:grid lg:grid-cols-[minmax(0,2.2fr)_repeat(6,minmax(0,1fr))_minmax(0,1fr)]">
+            <span>Kaynak</span>
+            <span>Rol</span>
+            <span>Planlanan tempo</span>
+            <span>Gerekli tempo</span>
+            <span>Durum</span>
+            <span>Bu hafta verilen</span>
+            <span>Açık ödev</span>
+            <span>İlerleme</span>
+          </div>
+          {rows.map(row => (
+            <ResourceRow key={row.book.assignmentId} studentId={studentId} row={row} />
+          ))}
+        </div>
+      )}
+    </section>
   )
+}
 
+// ============================================================
+// Kaynak satırı (§5.3)
+//
+// Sekiz alan TEK SATIRDA: öğretmen tempo sapmasını ve haftalık temması
+// metin aramadan görebilmeli. Eski kart sürümündeki iki uzun progress bar
+// kaldırıldı; ilerleme tek "348 / 520" sayısı ve ince bir çizgi.
+// ============================================================
+function ResourceRow({ studentId, row }: { studentId: string; row: ResourceRowData }) {
+  const { book, scope, deviation, signal } = row
   const role = bookRoleLabel(book.role)
-  const remaining = Math.max(0, scope.totalUnits - scope.completedUnits)
+  const group = bookPlanGroup(book.status)
 
   return (
     <Link
-      href={`/teacher/students/${studentId}/books/${book.bookId}`}
-      className="block rounded-lg border bg-card p-4 transition-colors hover:border-foreground/20"
+      href={`/teacher/students/${studentId}/books/${book.bookId}?from=kaynak-plani`}
+      className="grid gap-x-3 gap-y-2 px-4 py-3 text-xs transition-colors hover:bg-muted/40 lg:grid-cols-[minmax(0,2.2fr)_repeat(6,minmax(0,1fr))_minmax(0,1fr)] lg:items-center"
     >
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{book.title}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            {/* Durum artık düz metin değil rozet: kart listesinde hangi
-                kaynağın aktif olduğu tek bakışta okunmalı. */}
-            <Badge variant={GROUP_BADGE[bookPlanGroup(book.status)]}>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{book.title}</p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          {group !== 'active' && (
+            <Badge variant={group === 'pending' ? 'warning' : 'neutral'}>
               {bookPlanStatusLabel(book.status)}
             </Badge>
-            {role && <span>{role}</span>}
-            <span aria-hidden>·</span>
-            <span>{targetTypeLabel(scope.scopeType)}</span>
-          </p>
-        </div>
-      </div>
-
-      {/* İki yüzde YAN YANA gösterilir (§3.2). Tek bar gösterip kitap
-          kapsamını dipnota atmak, "plan bitti = kitap bitti" yanılgısını
-          besliyordu: 276/276 hedef Plan %100'dür ama kitap %66'dır. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between text-xs">
-            <span className="font-medium">Plan</span>
-            <span className="tabular-nums">
-              %{scope.percentage}
-              <span className="ml-1.5 text-muted-foreground">
-                {scope.completedUnits}/{scope.totalUnits}
-              </span>
-            </span>
-          </div>
-          <ProgressBar value={scope.percentage} label={`${book.title} plan ilerlemesi`} />
-        </div>
-
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between text-xs">
-            <span className="text-muted-foreground">Kitap kapsamı</span>
-            <span className="tabular-nums text-muted-foreground">
-              %{scope.bookPercentage}
-              <span className="ml-1.5">
-                {scope.bookCompletedUnits}/{scope.bookTotalUnits}
-              </span>
-            </span>
-          </div>
-          <ProgressBar
-            value={scope.bookPercentage}
-            label={`${book.title} kitap kapsamı ilerlemesi`}
-          />
-        </div>
-      </div>
-
-      {/* "Plan kapsamı" satırı kaldırıldı: aynı x/y artık Plan barının
-          başlığında duruyordu. */}
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
-        <div>
-          <dt className="text-muted-foreground">Seçili kapsam</dt>
-          <dd className="mt-0.5">{scope.label}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Planda kalan</dt>
-          <dd className="mt-0.5 tabular-nums">
-            {formatUnitCount(remaining, book.trackingMode)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Hedef tarih</dt>
-          <dd className="mt-0.5 tabular-nums">
-            {scope.targetEndDate
-              ? new Date(scope.targetEndDate).toLocaleDateString('tr-TR')
-              : '—'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Gerekli tempo</dt>
-          <dd className="mt-0.5 tabular-nums">
-            {tempo.isTargetReached
-              ? `${formatUnitCount(tempo.remainingUnits, book.trackingMode)} kaldı`
-              : formatTempo(tempo.requiredPacePerWeek, book.trackingMode)}
-          </dd>
-        </div>
-      </dl>
-
-      {/* Kapsam etiketi yukarıdaki "Seçili kapsam" hücresine taşındı; burada
-          yalnız plana GİRMEYEN çalışma kalır (§3.4). */}
-      {pendingApproval > 0 && (
-        <p className="mt-3 border-t pt-2 text-[11px] text-info-foreground">
-          {formatUnitCount(pendingApproval, book.trackingMode)} onay bekliyor — plan
-          hesabına girmez
+          )}
+          {book.publisher && <span className="truncate">{book.publisher}</span>}
         </p>
-      )}
+      </div>
+
+      <Field label="Rol">
+        {role ? <Badge variant="secondary">{role}</Badge> : <Muted />}
+      </Field>
+
+      <Field label="Planlanan tempo">
+        <span className="tabular-nums">
+          {formatTempo(row.plannedPacePerWeek, book.trackingMode)}
+        </span>
+      </Field>
+
+      <Field label="Gerekli tempo">
+        <span className="tabular-nums">
+          {formatTempo(row.requiredPacePerWeek, book.trackingMode)}
+        </span>
+      </Field>
+
+      <Field label="Durum">
+        {deviation.key === 'not_evaluated' ? (
+          <Muted />
+        ) : (
+          <Badge variant={deviation.tone}>{deviation.label}</Badge>
+        )}
+      </Field>
+
+      {/* §6.3: 0 çalışma NÖTRDÜR. Uyarı rengi veya eksiklik ikonu
+          kullanılmaz; yalnız gri bir tire. */}
+      <Field label="Bu hafta verilen">
+        {signal.assignedThisWeek > 0 ? (
+          <span className="flex items-center gap-1 text-success-foreground">
+            <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+            <span className="tabular-nums">{signal.assignedThisWeek} çalışma</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Minus className="size-3.5 shrink-0" aria-hidden />
+            <span className="tabular-nums">0 çalışma</span>
+          </span>
+        )}
+      </Field>
+
+      <Field label="Açık ödev">
+        <span className="tabular-nums">{signal.openItems} çalışma</span>
+      </Field>
+
+      <Field label="İlerleme">
+        <span className="tabular-nums">
+          {scope.completedUnits.toLocaleString('tr-TR')} /{' '}
+          {scope.totalUnits.toLocaleString('tr-TR')}
+        </span>
+        <ProgressBar
+          className="mt-1"
+          value={scope.percentage}
+          label={`${book.title} plan ilerlemesi`}
+        />
+      </Field>
     </Link>
+  )
+}
+
+/** Dar ekranda etiketi görünür, geniş ekranda sütun başlığına devreder. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <span className="mr-1.5 text-[11px] text-muted-foreground lg:hidden">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+function Muted() {
+  return (
+    <span className="text-muted-foreground" aria-label="Değer yok">
+      —
+    </span>
   )
 }

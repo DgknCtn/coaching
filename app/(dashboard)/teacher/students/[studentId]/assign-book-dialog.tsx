@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,8 +19,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { CURRICULUM_PROGRAM_OPTIONS } from '@/lib/book-taxonomy'
+import type { StudentScope } from '@/lib/student-scopes'
 
-// Kitap Ata (R4 + R6-15).
+// Kitap Ata (R4 + R6-15 + R7 Kaynak Mimarisi §4.2).
 //
 // Tek dropdown 10-15 kitapta çalışıyordu; onlarca/yüzlerce kaynakta isimler
 // karışıyor ve aynı adlı baskılar ayırt edilemiyordu. R6-15 arama + filtre
@@ -28,11 +30,21 @@ import { CURRICULUM_PROGRAM_OPTIONS } from '@/lib/book-taxonomy'
 // KRİTİK KURAL: Filtre YALNIZ LİSTEYİ DARALTIR, atamayı kısıtlamaz.
 // 10. sınıf öğrencisine 9. sınıf kaynağı atanabilmelidir (kabul #81) —
 // eksik konuyu kapatmak gerçek ve sık bir senaryodur.
+//
+// R7 — PENCERE YALNIZ İLİŞKİYİ KURAR (§4.2):
+//
+//   SORULAN:    Ders/Kapsam + Kitap.
+//   SORULMAYAN: Başlangıç ve Hedef Bitiş tarihi.
+//
+// Tarihler buradan KALDIRILDI çünkü atama anında hedef kapsam henüz
+// seçilmemiştir; kapsamı bilmeden tarih vermek, tempoyu baştan yanlış bir
+// paydaya bağlar. Plan detayları Kaynak Planı'na aittir ve atama sonrası
+// "Kaynak planını tamamla" bağlantısıyla oraya yönlendirilir. Kolonlar ve
+// mevcut veriler yerinde durur; yalnız bu pencere onları sormaz.
 
 const schema = z.object({
   bookId: z.string().min(1, 'Kitap seçin'),
-  startDate: z.string().optional(),
-  targetEndDate: z.string().optional(),
+  scopeId: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -49,6 +61,15 @@ export interface AssignableBook {
 interface Props {
   studentId: string
   books: AssignableBook[]
+  /** Çalışma alanının ders/kapsam listesi (lib/student-scopes.ts). */
+  scopes: StudentScope[]
+  /**
+   * Ders bloğundan açıldıysa o alan (§4.2). Seçim yine değiştirilebilir:
+   * yanlış bloktan açmak, pencereyi kapatıp yeniden açmayı gerektirmesin.
+   */
+  defaultScopeId?: string | null
+  /** Blok içindeki "+ Kaynak Ekle" satırları için kompakt tetikleyici. */
+  triggerLabel?: string
 }
 
 function uniqueSorted(values: (string | null | undefined)[]): string[] {
@@ -66,10 +87,18 @@ function bookOptionLabel(book: AssignableBook): string {
   return parts.join(' · ')
 }
 
-export function AssignBookDialog({ studentId, books }: Props) {
+export function AssignBookDialog({
+  studentId,
+  books,
+  scopes,
+  defaultScopeId,
+  triggerLabel = 'Kitap Ata',
+}: Props) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
+  /** Atama sonrası CTA (§4.2): pencere kapanmaz, bir sonraki adımı söyler. */
+  const [assigned, setAssigned] = useState(false)
 
   const [search, setSearch] = useState('')
   const [subject, setSubject] = useState('')
@@ -81,7 +110,10 @@ export function AssignBookDialog({ studentId, books }: Props) {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) })
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { scopeId: defaultScopeId ?? '' },
+  })
 
   // Seçenek listeleri gerçekten atanabilir kitaplardan türetilir; hiç
   // karşılığı olmayan bir filtre değeri gösterilmez.
@@ -108,31 +140,37 @@ export function AssignBookDialog({ studentId, books }: Props) {
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
-      const result = await assignBookAction(
-        studentId,
-        data.bookId,
-        data.startDate,
-        data.targetEndDate
-      )
+      const result = await assignBookAction(studentId, data.bookId, data.scopeId || null)
       if (result?.error) {
         setServerError(result.error)
       } else {
-        reset()
+        reset({ scopeId: defaultScopeId ?? '' })
         setSearch('')
         setSubject('')
         setLevel('')
         setProgram('')
-        setOpen(false)
+        setAssigned(true)
       }
     })
   }
 
+  const closeDialog = () => {
+    setAssigned(false)
+    setOpen(false)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        setOpen(next)
+        if (!next) setAssigned(false)
+      }}
+    >
       <DialogTrigger
         render={
           <Button size="xs" variant="outline">
-            <Plus className="size-3" /> Kitap Ata
+            <Plus className="size-3" /> {triggerLabel}
           </Button>
         }
       />
@@ -140,7 +178,56 @@ export function AssignBookDialog({ studentId, books }: Props) {
         <DialogHeader>
           <DialogTitle>Kitap Ata</DialogTitle>
         </DialogHeader>
+        {assigned ? (
+          <div className="mt-2 space-y-4">
+            <p className="text-sm">
+              Kaynak atandı ve <strong className="font-medium">Bekliyor</strong>{' '}
+              durumunda açıldı.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Rolünü, hedef kapsamını ve tarihlerini belirleyene kadar haftalık
+              tempoya girmez.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setAssigned(false)}>
+                Başka kaynak ata
+              </Button>
+              <Button
+                render={
+                  <Link href={`/teacher/students/${studentId}/goals`} onClick={closeDialog}>
+                    Kaynak planını tamamla
+                  </Link>
+                }
+              />
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="mt-2 space-y-4">
+          {/* SIRA ÖNEMLİ (§4.2): genel butondan girildiğinde ÖNCE
+              Ders/Kapsam, SONRA kitap seçilir. Ders bloğundan açıldığında
+              alan zaten doludur ve öğretmen doğrudan kitaba geçer. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="scopeId">Ders / Kapsam</Label>
+            <NativeSelect id="scopeId" disabled={scopes.length === 0} {...register('scopeId')}>
+              {scopes.length === 0 ? (
+                <option value="">Tanımlı ders/kapsam yok</option>
+              ) : (
+                <>
+                  <option value="">Alan seçilmedi</option>
+                  {scopes.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </>
+              )}
+            </NativeSelect>
+            <p className="text-[11px] text-muted-foreground">
+              Kaynak bu alanın bloğunda listelenir. Boş bırakılırsa
+              &quot;Alan atanmamış&quot; altında görünür ve sonradan düzeltilebilir.
+            </p>
+          </div>
+
           <div className="space-y-2 rounded-lg border p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -244,21 +331,19 @@ export function AssignBookDialog({ studentId, books }: Props) {
             {errors.bookId && <p className="text-xs text-destructive">{errors.bookId.message}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="startDate">Başlangıç</Label>
-              <Input id="startDate" type="date" {...register('startDate')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="targetEndDate">Hedef Bitiş</Label>
-              <Input id="targetEndDate" type="date" {...register('targetEndDate')} />
-            </div>
-          </div>
+          {/* Başlangıç / Hedef Bitiş alanları BURADAN KALDIRILDI (§4.2).
+              Tarih, hedef kapsam seçilmeden anlamlı bir tempo üretmez;
+              ikisi birlikte Kaynak Planı'nda belirlenir. */}
+          <p className="text-[11px] text-muted-foreground">
+            Kaynak <strong className="font-medium">Bekliyor</strong> durumunda
+            açılır ve haftalık tempoya girmez. Rol, hedef kapsam ve tarihler
+            Kaynak Planı&apos;nda belirlenir.
+          </p>
 
           {serverError && <p className="text-xs text-destructive">{serverError}</p>}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button type="button" variant="ghost" onClick={closeDialog}>
               İptal
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -267,6 +352,7 @@ export function AssignBookDialog({ studentId, books }: Props) {
             </Button>
           </div>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   )

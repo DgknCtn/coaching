@@ -221,6 +221,54 @@ export async function importBookBackupAction(fileText: string) {
   }
 }
 
+/**
+ * HAVUZ TEMİZLİĞİ (R7 §7.3).
+ *
+ * Havuzda iki farklı "kirli kayıt" var ve ikisi AYNI FİİLLE temizlenemez:
+ *
+ *   hiç atanmamış yanlış kayıt -> SİL (bu fonksiyon). Yanlış girilmiş bir
+ *                                 kaynağı sonsuza dek arşivde taşımak
+ *                                 havuzu kirli tutar.
+ *   atanmış/kullanılmış kaynak -> ARŞİVLE (archiveBookAction). Geçmiş
+ *                                 kayıtlar bozulmamalı.
+ *
+ * Ataması olup olmadığı kontrolü RPC'nin içindedir; arayüz yalnız doğru
+ * düğmeyi gösterir, kararı vermez.
+ */
+export async function deleteUnassignedBookAction(bookId: string) {
+  const parsed = uuidSchema.safeParse(bookId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('delete_unassigned_book', {
+    p_workspace_id: workspaceId,
+    p_book_id: parsed.data,
+  })
+
+  if (error) {
+    // RPC atanmış kaynakta bilinçli olarak hata veriyor; kullanıcıya
+    // doğru alternatifi söylemek "bir şeyler ters gitti"den yararlı.
+    if (error.message.includes('Book is assigned')) {
+      return {
+        error: 'Bu kaynak öğrencilere atanmış. Silmek yerine arşivleyin; geçmiş kayıtlar korunur.',
+      }
+    }
+    return { error: dbErrorToTr(error.message) }
+  }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'book.delete',
+    entityType: 'book',
+    entityId: parsed.data,
+  })
+
+  revalidatePath('/teacher/books')
+  redirect('/teacher/books')
+}
+
 export async function archiveBookAction(bookId: string) {
   const parsed = uuidSchema.safeParse(bookId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }

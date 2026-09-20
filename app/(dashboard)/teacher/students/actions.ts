@@ -152,10 +152,9 @@ export async function updateStudentAction(
 export async function assignBookAction(
   studentId: string,
   bookId: string,
-  startDate: string | undefined,
-  targetEndDate: string | undefined
+  scopeId: string | null
 ) {
-  const parsed = assignBookSchema.safeParse({ studentId, bookId, startDate, targetEndDate })
+  const parsed = assignBookSchema.safeParse({ studentId, bookId, scopeId })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { workspaceId, activeTerm } = await getTeacherContext()
@@ -168,8 +167,10 @@ export async function assignBookAction(
     p_student_id: studentId,
     p_book_id: bookId,
     p_academic_term_id: activeTerm.id,
-    p_start_date: startDate || null,
-    p_target_end_date: targetEndDate || null,
+    // Tarihler Kaynak Planı'nda belirlenir (R7 §4.2); atama anında boştur.
+    p_start_date: null,
+    p_target_end_date: null,
+    p_scope_id: parsed.data.scopeId ?? null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
