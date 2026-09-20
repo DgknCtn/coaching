@@ -192,13 +192,12 @@ export function AssignBookDialog({
               <Button type="button" variant="ghost" onClick={() => setAssigned(false)}>
                 Başka kaynak ata
               </Button>
-              <Button
-                render={
-                  <Link href={`/teacher/students/${studentId}/goals`} onClick={closeDialog}>
-                    Kaynak planını tamamla
-                  </Link>
-                }
-              />
+              {/* Etiket Button'ın children'ı; render elemanı boş kalır.
+                  Link'in içine metin konursa Base UI öğeyi birleştiremiyor
+                  ve "native <button> bekleniyordu" uyarısı üretiyor. */}
+              <Button render={<Link href={`/teacher/students/${studentId}/goals`} onClick={closeDialog} />}>
+                Kaynak planını tamamla
+              </Button>
             </div>
           </div>
         ) : (

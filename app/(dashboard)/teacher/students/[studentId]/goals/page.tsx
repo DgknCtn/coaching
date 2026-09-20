@@ -312,6 +312,12 @@ export default async function StudentResourcePlanPage({
               studentId={studentId}
               label={group.label}
               rows={group.items}
+              // Blok filtre yüzünden mi boş, gerçekten kaynaksız mı?
+              // İkisine "Kaynak atanmadı" demek yalan olurdu: bekleyen
+              // kaynağı olan bir alan, "Sadece aktifler"de boş görünür.
+              hiddenByFilter={
+                (groups.find(g => g.key === group.key)?.items.length ?? 0) - group.items.length
+              }
               assignAction={
                 group.key === UNASSIGNED_SCOPE_KEY
                   ? undefined
@@ -339,11 +345,14 @@ function ScopeBlock({
   studentId,
   label,
   rows,
+  hiddenByFilter,
   assignAction,
 }: {
   studentId: string
   label: string
   rows: ResourceRowData[]
+  /** Aktif filtresinin gizlediği kaynak sayısı. */
+  hiddenByFilter: number
   assignAction?: React.ReactNode
 }) {
   const activeCount = rows.filter(r => bookPlanGroup(r.book.status) === 'active').length
@@ -362,7 +371,11 @@ function ScopeBlock({
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {rows.length === 0 ? (
-              'Bu alan öğrenci kapsamına dâhil ancak henüz kaynak atanmadı.'
+              hiddenByFilter > 0 ? (
+                `${hiddenByFilter} kaynak var ancak hiçbiri aktif değil.`
+              ) : (
+                'Bu alan öğrenci kapsamına dâhil ancak henüz kaynak atanmadı.'
+              )
             ) : (
               <>
                 {activeCount} aktif kaynak
@@ -383,7 +396,7 @@ function ScopeBlock({
       {rows.length === 0 ? (
         <p className="flex items-center gap-2 px-4 py-3 text-xs text-warning-foreground">
           <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
-          Kaynak atanmadı
+          {hiddenByFilter > 0 ? 'Bu görünümde aktif kaynak yok' : 'Kaynak atanmadı'}
         </p>
       ) : (
         <div className="divide-y">
