@@ -63,6 +63,32 @@ export interface StatusThresholds {
   checkInCriticalHours: number
   /** "Müdahale": bu kadar risk sinyali BİRLİKTE görüldüyse. */
   combinedSignalCount: number
+  /**
+   * "Geride": bu kadar gündür GERÇEK çalışma hareketi yoksa (R8 §16).
+   *
+   * Teslim yok ama not ya da plan var: öğrenci karanlıkta değil,
+   * öğretmen bağlamı biliyor. Tek başına "geride" sinyali.
+   */
+  silentWorkDays: number
+  /**
+   * "Müdahale": bu kadar gündür hiçbir hareket yoksa (R8 §16, §18).
+   *
+   * Teslim YOK, planlama YOK, akademik not YOK. Belgedeki Tarık örneği.
+   * Bu, "çok geride" demek değil: öğrencinin durumu hakkında YETERLİ
+   * GÖRÜNÜRLÜK YOK ve öğretmenin temas etmesi gerekiyor.
+   */
+  totalSilenceDays: number
+  /**
+   * Planlama ya da akademik notun "hâlâ geçerli" sayıldığı süre (gün).
+   *
+   * Altı ay önce yazılmış bir not, öğrencinin bugün karanlıkta
+   * olmadığını göstermez. Bu eşik 103'te SQL'e gömülüydü ve orada iki
+   * sorun çıkardı: hem ayarlanamazdı hem de aynı pencere teslim
+   * zamanına da uygulandığı için en sessiz öğrenciyi listeden
+   * düşürüyordu (106). Artık ham zamanlar view'dan geliyor, karar
+   * burada veriliyor.
+   */
+  signalOfLifeDays: number
 }
 
 export const STATUS_THRESHOLDS: StatusThresholds = {
@@ -73,6 +99,9 @@ export const STATUS_THRESHOLDS: StatusThresholds = {
   contactImminentHours: 24,
   checkInCriticalHours: 48,
   combinedSignalCount: 2,
+  silentWorkDays: 3,
+  totalSilenceDays: 3,
+  signalOfLifeDays: 30,
 }
 
 const HOUR_MS = 3_600_000
@@ -98,6 +127,24 @@ export interface StatusInput {
   checkInOverdueHours: number
   /** Bu temasın teslim kesim saati geçti mi? */
   submissionCutoffPassed: boolean
+  /**
+   * Son GERÇEK çalışma hareketinden (teslim) bu yana geçen gün.
+   *
+   * NULL = bu pencerede hiç teslim yok. "0 gün" ile karıştırılmamalı:
+   * biri "bugün çalıştı", diğeri "hiç çalışmadı".
+   *
+   * R8 §16: sistemin ana sinyali budur. Plan yapmış olmak bunu
+   * gizlememelidir.
+   */
+  daysSinceRealWork?: number | null
+  /**
+   * Öğrenci bu süre içinde planlama ya da akademik not üretti mi?
+   *
+   * Belgedeki ayrımın kodda karşılığı: teslim yapmayan ama not yazan
+   * öğrenci (Buse) ile hiçbir iz bırakmayan öğrenci (Tarık) aynı
+   * kefeye konmaz. İlki geride olabilir; ikincisi görünürlük sorunudur.
+   */
+  hasRecentSignalOfLife?: boolean
 }
 
 export interface StatusResult {
@@ -145,6 +192,8 @@ export function computeStudentStatus(
     overdueWorkCount,
     checkInOverdueHours,
     submissionCutoffPassed,
+    daysSinceRealWork = null,
+    hasRecentSignalOfLife = false,
   } = input
 
   // Tempo ölçülemiyorsa fark SIFIR sayılır — yokluk, gerilik değildir.
@@ -167,6 +216,24 @@ export function computeStudentStatus(
   if (contactWithin(thresholds.contactImminentHours) && gap >= thresholds.behindGapPoints) {
     critical.push('Temasa 24 saatten az kaldı ve belirgin geride')
   }
+  // ============================================================
+  // TAM SESSİZLİK (R8 §16, §18)
+  //
+  // Teslim yok, planlama yok, akademik not yok. Belgedeki Tarık örneği.
+  //
+  // Bu koşulun "çok geride" ile ilgisi YOK ve bilerek tempodan bağımsız:
+  // *"Müdahale Gerekli yalnız 'çok geride' demek değildir. Aynı zamanda
+  // öğrencinin durumu hakkında yeterli görünürlük yok ve öğretmenin
+  // temas etmesi gerekiyor."* Yüzdesi iyi görünen bir öğrenci de
+  // günlerdir ortada yoksa temas konusudur.
+  // ============================================================
+  if (
+    daysSinceRealWork !== null &&
+    daysSinceRealWork >= thresholds.totalSilenceDays &&
+    !hasRecentSignalOfLife
+  ) {
+    critical.push(`${daysSinceRealWork} gündür hiçbir hareket yok`)
+  }
 
   // --- "Geride" sayılacak risk sinyalleri ---
   // Bunların HER BİRİ tek başına "Geride" demek; İKİSİ birlikte
@@ -183,6 +250,22 @@ export function computeStudentStatus(
     submittedPercent < thresholds.contactSoonMinPercent
   ) {
     risk.push('Temas yaklaştı, ilerleme yetersiz')
+  }
+  // ÇALIŞMA HAREKETİ YOK AMA İZ VAR (R8 §16 · Buse örneği).
+  //
+  // Öğrenci teslim yapmamış ama not yazmış ya da planını kurmuş:
+  // öğretmen bağlamı biliyor. Sistem bunu otomatik BAŞARI saymaz —
+  // risk sinyalidir — ama öğrencinin karanlıkta olmadığını da bilir,
+  // o yüzden müdahale değil.
+  //
+  // PLANLAMA BU SİNYALİ SİLMEZ, YALNIZ YUMUŞATIR: kural yine son
+  // GERÇEK çalışma hareketine bakıyor (§16).
+  if (
+    daysSinceRealWork !== null &&
+    daysSinceRealWork >= thresholds.silentWorkDays &&
+    hasRecentSignalOfLife
+  ) {
+    risk.push(`${daysSinceRealWork} gündür çalışma teslimi yok`)
   }
 
   if (critical.length > 0) {

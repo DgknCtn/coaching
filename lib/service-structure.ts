@@ -30,6 +30,33 @@ export const WEEKDAY_LABEL: Record<Weekday, string> = {
 }
 
 /**
+ * Gün kısaltmaları — TEK KAYNAK.
+ *
+ * NEDEN AYRI SÖZLÜK, `WEEKDAY_LABEL.slice(0, 3)` DEĞİL
+ *
+ * İlk üç harf Türkçede günleri AYIRT ETMİYOR:
+ *
+ *   Cuma      -> "Cum"        Cumartesi -> "Cum"
+ *   Pazar     -> "Paz"        Pazartesi -> "Paz"
+ *
+ * Haftalık Akış'ın günlük dağılım şeridi bunu yapıyordu ve yedi günün
+ * dördü iki ayrı çifte indirgeniyordu: öğretmen "Cum 26.09" satırına
+ * bakıp Cuma sanıyordu. Sayılar doğruydu, etiket yalan söylüyordu —
+ * fark edilmesi en zor hata türü.
+ *
+ * Kısaltmalar bu yüzden elle yazılı ve kesiliyor değil.
+ */
+export const WEEKDAY_SHORT_LABEL: Record<Weekday, string> = {
+  1: 'Pzt',
+  2: 'Sal',
+  3: 'Çar',
+  4: 'Per',
+  5: 'Cum',
+  6: 'Cmt',
+  7: 'Paz',
+}
+
+/**
  * Hizmetin bu modül için gereken kısmı.
  *
  * Tablonun tamamı değil: finans bağı, not ve kim oluşturdu gibi alanlar

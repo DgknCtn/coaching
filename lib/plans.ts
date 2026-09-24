@@ -47,11 +47,18 @@ export function workspaceStatusLabel(status: string): string {
 /**
  * Ücretsiz deneme süresi.
  *
- * 058'de 14 günden 7 güne indirildi. Bu sayı SQL tarafında da yazılı
- * (`create_teacher_workspace` içinde `INTERVAL '7 days'`); ikisi
- * birlikte değiştirilmeli.
+ * 058'de 14 günden 7 güne, R8'de 7 günden 3 güne indirildi.
+ *
+ * BU SAYI İKİ YERDE YAZILI ve ikisi BİRLİKTE değişmeli: burası ve
+ * `create_teacher_workspace` içindeki `INTERVAL '3 days'` (güncel tanım
+ * 102_trial_three_days.sql). Sabiti tek başına düşürmek, vitrinde 3 gün
+ * yazarken veritabanında 7 gün açmak demektir.
+ *
+ * SÜRESİ DEVAM EDEN DENEMELERE DOKUNULMADI (R8): süreyi geriye dönük
+ * kısaltmak, kullanıcıya verilmiş bir günü geri almaktır. 14→7 inişinde
+ * de aynı karar verilmişti.
  */
-export const TRIAL_DAYS = 7
+export const TRIAL_DAYS = 3
 
 /**
  * Deneme çağrısının metni — TEK KAYNAK.

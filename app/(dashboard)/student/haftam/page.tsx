@@ -9,8 +9,9 @@ import {
   dueLabel,
   isLateAdded,
 } from '@/lib/weekly-flow'
-import { compareHomeworkItems } from '@/lib/homework-status'
-import { HaftamClient, type HaftamView, type HaftamWork } from './haftam-client'
+import { compareHomeworkItems, localDateString } from '@/lib/homework-status'
+import { groupIntoCards, sortCardsForDay, type HaftamWork } from '@/lib/haftam'
+import { HaftamClient, type HaftamView } from './haftam-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,7 +86,7 @@ export default async function HaftamPage() {
   const { data: items } = await supabase
     .from('homework_items')
     .select(
-      `id, status, submitted_at, rejected_at, planned_for_date,
+      `id, status, submitted_at, rejected_at, planned_for_date, teacher_note,
        homework_batches!inner(id, title, due_date, created_at, weekly_flow_id, status),
        books(id, title, tracking_mode),
        book_sections(id, title, order_index),
@@ -95,6 +96,46 @@ export default async function HaftamPage() {
     .eq('homework_batches.weekly_flow_id', flow.id)
     .eq('homework_batches.status', 'active')
     .neq('status', 'cancelled')
+
+  // ÖĞRENCİNİN KENDİ YAZDIKLARI (R8 · 101).
+  //
+  // Üçü de haftanın penceresiyle sınırlı okunuyor: Haftam geçmiş
+  // haftaların defteri değil, AKTİF haftanın ekranı.
+  //
+  // KİŞİSEL AJANDA BU SORGUDAN ÖTEYE GİTMEZ: aşağıdaki hiçbir sayaç,
+  // tempo hesabı ya da öğretmene giden alan onu okumaz (§14, §21).
+  const windowStart = localDateString(startsAt)
+  const windowEnd = localDateString(dueAt)
+
+  const [{ data: dayNotes }, { data: personalItems }, { data: itemNotes }] = await Promise.all([
+    supabase
+      .from('student_day_notes')
+      .select('note_date, note_text')
+      .eq('student_id', student.id)
+      .gte('note_date', windowStart)
+      .lte('note_date', windowEnd),
+    supabase
+      .from('student_personal_items')
+      .select('id, item_date, title, done, order_index')
+      .eq('student_id', student.id)
+      .gte('item_date', windowStart)
+      .lte('item_date', windowEnd)
+      .order('order_index'),
+    supabase
+      .from('homework_item_notes')
+      .select('homework_item_id, note_text')
+      .eq('student_id', student.id),
+  ])
+
+  const dayNoteByDate = new Map<string, string>()
+  for (const n of dayNotes ?? []) {
+    dayNoteByDate.set(n.note_date as string, n.note_text as string)
+  }
+
+  const noteByItemId = new Map<string, string>()
+  for (const n of itemNotes ?? []) {
+    noteByItemId.set(n.homework_item_id as string, n.note_text as string)
+  }
 
   // Supabase gömülü ilişkileri dizi olarak tipleyebiliyor; tek satırlık
   // ilişkiler BİR KEZ normalize ediliyor (öğretmen ekranının deseni).
@@ -127,6 +168,11 @@ export default async function HaftamPage() {
       submittedAt: (r.submitted_at as string | null) ?? null,
       rejectedAt: (r.rejected_at as string | null) ?? null,
       plannedForDate: (r.planned_for_date as string | null) ?? null,
+      // İADE DİLİ ÖĞRENCİYE "RED" OLARAK GÖSTERİLMEZ (§11): öğretmenin
+      // notu görünür, bürokratik durum adı görünmez.
+      teacherNote: (r.teacher_note as string | null) ?? null,
+      bookId: book?.id ?? null,
+      sectionId: section?.id ?? null,
       publishedAt: batch ? new Date(batch.created_at) : null,
       bookTitle: book?.title ?? 'Kaynaksız',
       sectionTitle: section?.title ?? '',
@@ -190,6 +236,10 @@ export default async function HaftamPage() {
       // Hafta ortasında eklenen iş: öğrencinin mevcut dağılımı bunu
       // içermiyor ve sistem kendiliğinden dağıtmıyor (kabul #6).
       lateAdded: isLateAdded({ publishedAt: r.publishedAt, firstPublishedAt }),
+      bookId: r.bookId,
+      sectionId: r.sectionId,
+      note: noteByItemId.get(r.id) ?? null,
+      teacherNote: r.teacherNote,
     }))
 
   const view: HaftamView = {
@@ -213,21 +263,45 @@ export default async function HaftamPage() {
           band: pace.band,
         }
       : null,
+    // ============================================================
+    // GÜN SÜTUNLARI (§2, §4)
+    //
+    // Gün dizisi yine `dailyDelivery`'den geliyor — ikinci bir gün
+    // penceresi hesabı yazılmadı. Her güne o günün kartları, gün notu ve
+    // kişisel maddeleri bindiriliyor; sütun içindeki sıra §4'te
+    // kilitlenmiş: MatMüh Çalışmaları -> Gün Notu -> Kişisel Alan.
+    // ============================================================
     days: daily.days.map(d => ({
       date: d.date,
       weekday: d.weekday,
       delivered: d.delivered,
       planned: plannedByDay.get(d.date) ?? 0,
+      cards: sortCardsForDay(groupIntoCards(works.filter(w => w.plannedForDate === d.date))),
+      dayNote: dayNoteByDate.get(d.date) ?? null,
+      personalItems: (personalItems ?? [])
+        .filter(p => (p.item_date as string) === d.date)
+        .map(p => ({
+          id: p.id as string,
+          title: p.title as string,
+          done: p.done as boolean,
+        })),
     })),
+    // PLANLANMAMIŞLAR (§6): öğretmenin verdiği ama öğrencinin henüz bir
+    // güne koymadığı resmi çalışmalar. Haftanın en altında, tam
+    // genişlikte durur.
+    unplanned: groupIntoCards(works.filter(w => w.plannedForDate === null)),
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    // YEDİ SÜTUN DAR KAPTA OKUNMAZ: bu ekran haftanın tamamını tek
+    // bakışta göstermek için var (§5), o yüzden diğer öğrenci
+    // ekranlarının max-w-4xl kabını kullanmıyor.
+    <div className="mx-auto max-w-[110rem] space-y-6 p-4 md:p-6">
       <PageHeader
         title="Haftam"
-        subtitle="Bu haftanın yükü, resmi son teslimi ve kendi günlük planın."
+        subtitle="Bu haftanın yükü, kendi planın ve resmi son teslimin."
       />
-      <HaftamClient view={view} works={works} />
+      <HaftamClient view={view} />
     </div>
   )
 }

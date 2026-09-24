@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseBookOutline,
+  parsePageOutline,
   MAX_TESTS_PER_SUBSECTION,
   MAX_IMPORT_ROWS,
+  MAX_PAGES_PER_SECTION,
 } from '@/lib/book-import'
 
 describe('parseBookOutline', () => {
@@ -111,5 +113,80 @@ Mantık 5-8`)
     const out = parseBookOutline('\n\n   \n')
     expect(out.chapters).toHaveLength(0)
     expect(out.totalTests).toBe(0)
+  })
+})
+
+
+describe('parsePageOutline (sayfa takipli kitap, R8)', () => {
+  it('her satırı bir bölüm + sayfa aralığı sayar', () => {
+    const out = parsePageOutline(`
+Üçgenler 1-56
+Çokgenler 57-98
+`)
+    expect(out.sections).toEqual([
+      { title: 'Üçgenler', pageStart: 1, pageEnd: 56, line: 2 },
+      { title: 'Çokgenler', pageStart: 57, pageEnd: 98, line: 3 },
+    ])
+    expect(out.totalPages).toBe(98)
+  })
+
+  it('"sf." yazımını başlığa bulaştırmaz', () => {
+    // İçindekiler sayfalarının klasik yazımı; sözcük başlıkta kalsaydı
+    // her bölüm adı "... sf." diye kaydedilirdi.
+    const out = parsePageOutline('Çember sf. 99-140')
+    expect(out.sections[0]).toMatchObject({ title: 'Çember', pageStart: 99, pageEnd: 140 })
+  })
+
+  it('başlıktaki gerçek "Sayfa" sözcüğünü SİLMEZ', () => {
+    // İlk yazımda kısaltma listesi "sayfa" ve tek harflik "s"yi de
+    // kapsıyordu; "Tek Sayfa 99" satırının başlığı "Tek"e düşüyordu.
+    // Gerçek bir sözcüğü sessizce silmek, fazla kalmış bir sözcükten
+    // daha kötü: kaybolanın ne olduğu görünmez.
+    const out = parsePageOutline('Tek Sayfa 99')
+    expect(out.sections[0]).toMatchObject({ title: 'Tek Sayfa', pageStart: 99, pageEnd: 99 })
+  })
+
+  it('noktalı "s." kısaltmasını atar', () => {
+    const out = parsePageOutline('Üçgenler s. 12-20')
+    expect(out.sections[0].title).toBe('Üçgenler')
+  })
+
+  it('aralıksız satırı bölüm başlığı DEĞİL hata sayar', () => {
+    // Test modunda bu satır bir bölüm başlığıdır. Sayfa modunda bölüm
+    // sayfa aralığı olmadan açılamaz; sessizce atlanırsa öğretmen
+    // eksik aktarımı fark etmez.
+    const out = parsePageOutline(['Geometri', 'Üçgenler 1-56'].join('\n'))
+    expect(out.sections).toHaveLength(1)
+    expect(out.issues).toHaveLength(1)
+    expect(out.issues[0]).toMatchObject({ line: 1, text: 'Geometri' })
+    expect(out.totalPages).toBe(56)
+  })
+
+  it('tek sayfalık bölümü kabul eder', () => {
+    const out = parsePageOutline('Ek 12')
+    expect(out.sections[0]).toMatchObject({ pageStart: 12, pageEnd: 12 })
+    expect(out.totalPages).toBe(1)
+  })
+
+  it(`bölüm başına ${MAX_PAGES_PER_SECTION} sayfa sınırını aşan satırı reddeder`, () => {
+    // create_page_section (022) ile AYNI sınır: iki giriş yolu, tek kural.
+    const out = parsePageOutline(`Hepsi 1-${MAX_PAGES_PER_SECTION + 1}`)
+    expect(out.sections).toHaveLength(0)
+    expect(out.issues).toHaveLength(1)
+    expect(out.totalPages).toBe(0)
+  })
+
+  it('geçersiz aralığı atlar, işi durdurmaz', () => {
+    const out = parsePageOutline(['Ters 50-20', 'Düzgün 1-10'].join('\n'))
+    expect(out.sections).toHaveLength(1)
+    expect(out.sections[0].title).toBe('Düzgün')
+    expect(out.issues).toHaveLength(1)
+  })
+
+  it(`${MAX_IMPORT_ROWS} satırdan sonrasını atlar`, () => {
+    const many = Array.from({ length: MAX_IMPORT_ROWS + 5 }, (_, i) => `B${i + 1} ${i + 1}`).join('\n')
+    const out = parsePageOutline(many)
+    expect(out.sections).toHaveLength(MAX_IMPORT_ROWS)
+    expect(out.issues.length).toBeGreaterThan(0)
   })
 })

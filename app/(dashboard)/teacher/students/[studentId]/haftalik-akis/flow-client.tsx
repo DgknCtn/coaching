@@ -10,7 +10,7 @@ import {
   type DailyDelivery,
   type PaceBand,
 } from '@/lib/weekly-flow'
-import { formatSessionLong, WEEKDAY_LABEL, type Weekday } from '@/lib/service-structure'
+import { formatSessionLong, WEEKDAY_SHORT_LABEL, type Weekday } from '@/lib/service-structure'
 import { LinkTabs, type LinkTab } from '@/components/shared/link-tabs'
 import { Legend } from '@/components/shared/legend'
 import { ProgressRing } from '@/components/shared/progress-ring'
@@ -676,7 +676,7 @@ function DailyPanel({ daily, compact }: { daily: DailyDelivery; compact?: boolea
                   aria-hidden
                 />
                 <span className="text-xs text-muted-foreground">
-                  {WEEKDAY_LABEL[d.weekday as Weekday].slice(0, 3)}
+                  {WEEKDAY_SHORT_LABEL[d.weekday as Weekday]}
                 </span>
                 <span className="text-[10px] tabular-nums text-muted-foreground">
                   {d.date.slice(8)}.{d.date.slice(5, 7)}

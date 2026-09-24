@@ -9,7 +9,7 @@ import { trialDaysLeft } from '@/lib/plans'
 // ============================================================
 // NEDEN SERT ENGEL YOK
 //
-// 7 günlük deneme ücretsiz ve kart istemiyor. Ama süre gerçekten doluyor
+// Deneme ücretsiz ve kart istemiyor (süresi: lib/plans.ts TRIAL_DAYS). Ama süre gerçekten doluyor
 // (058) ve dolduğunda çalışma alanı kapanıyor. Habersiz kapanmak,
 // kullanıcının ürünü değil bizi suçlaması demek — otomatik tahsilat
 // olmadığı için hatırlatmanın tek yolu bu şerit.

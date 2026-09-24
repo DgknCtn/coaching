@@ -316,9 +316,14 @@ export function BookEditForm({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">Bölümler</CardTitle>
-          {/* Sayfa takipli kitapta bölümler test değil sayfa aralığı taşır;
-              içindekiler aktarımı orada anlamsız olurdu. */}
-          {trackingMode !== 'page' && <BookOutlineImport bookId={bookId} />}
+          {/* R8: SAYFA TAKİPLİ KİTAPLARA DA AÇIK.
+              Burada eskiden `trackingMode !== 'page'` koşulu vardı ve
+              gerekçesi "sayfa takipli kitapta bölümler test değil sayfa
+              aralığı taşır" idi. Ama yapıştırılan metin iki durumda da
+              aynı biçimde ("başlık + aralık"); değişen yalnız aralığın
+              anlamı. O koşul yüzünden sayfa kitabının 60 bölümü tek tek
+              elle giriliyordu. Bileşen kipi kendisi seçiyor. */}
+          <BookOutlineImport bookId={bookId} trackingMode={trackingMode} />
         </CardHeader>
         <CardContent className="space-y-3">
           {sections.map((section) => (

@@ -173,3 +173,28 @@ export function buildShareText({
 
   return lines.join('\n')
 }
+
+// ============================================================
+// WHATSAPP YOKLAMASI (R8 §19)
+//
+// Uzun süredir hareketsiz bir öğrenciye temas edilirken veli paneline
+// güvenilmez; öğrenci + veli + öğretmenin bulunduğu WhatsApp grubu
+// pratik takip kanalıdır.
+//
+// SİSTEM MESAJ GÖNDERMEZ. Burada üretilen yalnız METİN; öğretmen
+// kopyalayıp kendi gönderir. Otomatik gönderim, öğretmenin adına
+// kurmadığı bir cümleyi veliye iletmek olurdu — ve ilk sürümde
+// gerekmiyor (§19).
+//
+// METNİN TONU BİR SUÇLAMA DEĞİL SORU: öğrencinin hareketsizliğinin
+// sebebi hastalık da olabilir, sistemin göremediği bir çalışma da.
+// "Neden çalışmıyorsun" diye soran bir mesaj, temas kanalını kapatır.
+// ============================================================
+export function buildFollowUpMessage(studentName: string): string {
+  const name = studentName.trim().split(' ')[0] || studentName.trim()
+  return (
+    `Merhaba ${name}, son birkaç gündür sistemde yeni bir çalışma hareketi göremedim. ` +
+    `Bu hafta planında bir aksama mı oldu, her şey yolunda mı? ` +
+    `Buradan kısaca bilgi verirsen planı ona göre düzenleyelim.`
+  )
+}

@@ -356,3 +356,104 @@ describe('noticeSignal — Bildirim / Not sütunu (§5)', () => {
     expect(r.label).toBe('Not var')
   })
 })
+
+// ============================================================
+// HAREKET SİNYALİ — R8 §16 / §18
+//
+// Belge üç öğrenciyi adıyla örnekliyor ve üçü de farklı sonuç vermeli.
+// Bu üçlü, motorun "plan yapmak çalışmak değildir" kuralını koruduğunu
+// kanıtlayan en kısa yol.
+// ============================================================
+describe('sessizlik ve takip mantığı (R8 §16)', () => {
+  it('Sude: not yazmıyor ama düzenli teslim yapıyor -> sorun yok', () => {
+    // Not yazmamak bir eksiklik DEĞİLDİR (§13). Teslim akıyorsa
+    // öğrenci sessiz olabilir.
+    const r = computeStudentStatus(
+      base({ daysSinceRealWork: 0, hasRecentSignalOfLife: false })
+    )
+    expect(r.status).toBe('yolunda')
+  })
+
+  it('Buse: teslim yok ama not yazmış -> Geride, müdahale değil', () => {
+    // "Yarın sınavım var, ona hazırlanıyorum." Sistem bunu otomatik
+    // başarı saymaz ama öğrencinin karanlıkta olmadığını bilir.
+    const r = computeStudentStatus(
+      base({
+        daysSinceRealWork: T.silentWorkDays,
+        hasRecentSignalOfLife: true,
+      })
+    )
+    expect(r.status).toBe('geride')
+    expect(r.signals.join(' ')).toContain('çalışma teslimi yok')
+  })
+
+  it('Tarık: teslim yok, plan yok, not yok -> Müdahale Gerekli', () => {
+    const r = computeStudentStatus(
+      base({
+        daysSinceRealWork: 4,
+        hasRecentSignalOfLife: false,
+      })
+    )
+    expect(r.status).toBe('mudahale')
+    expect(r.signals.join(' ')).toContain('hiçbir hareket yok')
+  })
+
+  it('PLAN YAPMIŞ OLMAK ÇALIŞMAMAYI GİZLEMEZ (§16)', () => {
+    // Belgenin "daha önemli ikinci durumu": Tarık pazartesi bütün
+    // haftayı planladı ama dört gündür hiçbir çalışma tamamlamadı.
+    // Planlama `hasRecentSignalOfLife` değerini true yapar; bu onu
+    // müdahaleden çıkarır ama GERİDE olmaktan çıkarmaz.
+    const r = computeStudentStatus(
+      base({ daysSinceRealWork: 4, hasRecentSignalOfLife: true })
+    )
+    expect(r.status).not.toBe('yolunda')
+    expect(r.signals.join(' ')).toContain('4 gündür çalışma teslimi yok')
+  })
+
+  it('hiç teslim kaydı olmayan öğrenci (null) sessiz sayılmaz', () => {
+    // NULL "hiç çalışmadı" değil "bu pencerede veri yok" demek; yeni
+    // öğrenciyi ilk gün müdahale listesine düşürmek yanlış olurdu.
+    const r = computeStudentStatus(
+      base({ daysSinceRealWork: null, hasRecentSignalOfLife: false })
+    )
+    expect(r.status).toBe('yolunda')
+  })
+
+  it('eşiğin altındaki sessizlik sinyal üretmez', () => {
+    const r = computeStudentStatus(
+      base({
+        daysSinceRealWork: T.totalSilenceDays - 1,
+        hasRecentSignalOfLife: false,
+      })
+    )
+    expect(r.status).toBe('yolunda')
+  })
+})
+
+describe('sessizlik eşiği uzun süreyi ELEMEZ (R8 · 106 regresyonu)', () => {
+  it('32 gündür teslim yapmayan öğrenci müdahale listesine girer', () => {
+    // GERÇEK BİR KUSURUN TESTİ: 103'te sinyal view'ı son 30 günle
+    // sınırlıydı. Son teslimi 32 gün önce olan öğrencinin zamanı
+    // pencerenin dışında kalıyor, NULL dönüyor ve "veri yok" sayılıyordu.
+    //
+    // Sonuç tam tersine dönüyordu: öğrenci ne kadar uzun süredir
+    // sessizse listede görünme ihtimali o kadar AZALIYORDU. Bu satır,
+    // eşiği en açık aşan öğrencinin elenmediğini kilitliyor.
+    const r = computeStudentStatus(
+      base({ daysSinceRealWork: 32, hasRecentSignalOfLife: false })
+    )
+    expect(r.status).toBe('mudahale')
+    expect(r.signals.join(' ')).toContain('32 gündür hiçbir hareket yok')
+  })
+
+  it('uzun sessizlik + eski bir not: yine de müdahale', () => {
+    // Hayat belirtisi YAKIN olmalı; eşiği aşan eski bir not
+    // "karanlıkta değil" demek değildir (hasRecentSignalOfLife bu
+    // kararı çağıran tarafta veriyor, eşik STATUS_THRESHOLDS'ta).
+    expect(T.signalOfLifeDays).toBeGreaterThan(0)
+    const r = computeStudentStatus(
+      base({ daysSinceRealWork: 45, hasRecentSignalOfLife: false })
+    )
+    expect(r.status).toBe('mudahale')
+  })
+})

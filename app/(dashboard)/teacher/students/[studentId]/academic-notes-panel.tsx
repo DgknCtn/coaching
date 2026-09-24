@@ -26,6 +26,25 @@ import {
 // Sistem ödevi ve tamamlanmayı zaten biliyor; o veriler buraya elle
 // yazdırılmaz. Buranın işi yalnız otomatikleştirilemeyen insan bağlamı.
 
+// ============================================================
+// ÖĞRENCİNİN KENDİ CÜMLELERİ DE HAFIZANIN PARÇASI (R8 §13)
+//
+// Haftam'da yazılan gün notları bu listeye KARIŞMADAN katılıyor:
+// *"haftalık görüşmede otomatik görünür, Öğrenci Hafızası'na eklenir."*
+// Öğretmenin görüşmeye başlarken sorduğu soru zaten "geçen hafta ne
+// oldu" ve o haftanın en iyi anlatıcısı çoğu zaman öğrencinin kendi
+// cümlesi ("Perşembe sınavım var, bugün ona hazırlanıyorum").
+//
+// İKİSİ AYNI KUTUYA KONMUYOR:
+//   - Öğretmenin notu düzenlenebilir, sabitlenebilir, silinebilir.
+//   - Öğrencinin notu SALT OKUNUR. Öğretmenin öğrenci ağzından yazılmış
+//     bir cümleyi değiştirebilmesi, notun bağlam değerini yok ederdi;
+//     silebilmesi de öğrencinin bıraktığı izi ortadan kaldırırdı.
+//
+// Ayrım görsel olarak da duruyor: öğretmen "bunu ben mi yazmıştım?"
+// diye sormak zorunda kalmamalı.
+// ============================================================
+
 export interface AcademicNote {
   id: string
   note_text: string
@@ -34,12 +53,27 @@ export interface AcademicNote {
   author_name: string | null
 }
 
+/** Öğrencinin Haftam'da yazdığı gün notu (101). */
+export interface StudentDayNote {
+  id: string
+  note_date: string
+  note_text: string
+}
+
+type PanelEntry =
+  | { kind: 'teacher'; id: string; date: string; pinned: boolean; note: AcademicNote }
+  | { kind: 'student'; id: string; date: string; pinned: false; note: StudentDayNote }
+
 export function AcademicNotesPanel({
   studentId,
   notes,
+  dayNotes = [],
+  studentName,
 }: {
   studentId: string
   notes: AcademicNote[]
+  dayNotes?: StudentDayNote[]
+  studentName?: string | null
 }) {
   const router = useRouter()
   const [text, setText] = useState('')
@@ -83,9 +117,32 @@ export function AcademicNotesPanel({
   }
 
   // Önemli/Sabit notlar üstte; gerisi tarih sırasında (yeniden eskiye).
-  const ordered = [...notes].sort((a, b) => {
+  //
+  // Gün notları da aynı çizgiye giriyor — hafıza kronolojik olmak
+  // zorunda (031'in kuruluş gerekçesi). "Sabit" yalnız öğretmenin
+  // notunda var; öğrencinin günlük cümlesi kalıcı bir uyarı değil.
+  const ordered: PanelEntry[] = [
+    ...notes.map(
+      (note): PanelEntry => ({
+        kind: 'teacher',
+        id: note.id,
+        date: note.created_at,
+        pinned: note.pinned,
+        note,
+      })
+    ),
+    ...dayNotes.map(
+      (note): PanelEntry => ({
+        kind: 'student',
+        id: note.id,
+        date: note.note_date,
+        pinned: false,
+        note,
+      })
+    ),
+  ].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-    return b.created_at.localeCompare(a.created_at)
+    return Date.parse(b.date) - Date.parse(a.date)
   })
 
   return (
@@ -114,7 +171,9 @@ export function AcademicNotesPanel({
           </Button>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Bu notlar yalnız eğitmenlere görünür; öğrenci ve veli panelinde yer almaz.
+          Buraya yazdıklarınız yalnız eğitmenlere görünür; öğrenci ve veli panelinde
+          yer almaz. Aşağıdaki listede öğrencinin kendi yazdığı gün notları da
+          görünür — onlar öğrenciye açıktır, veliye değil.
         </p>
       </div>
 
@@ -123,47 +182,73 @@ export function AcademicNotesPanel({
           <EmptyState
             icon={StickyNote}
             title="Henüz akademik not yok"
-            description="Derse başlarken hatırlamak istediğiniz her şeyi buraya yazabilirsiniz. Not tutmak zorunlu değildir."
+            description="Derse başlarken hatırlamak istediğiniz her şeyi buraya yazabilirsiniz. Öğrencinin Haftam'da yazdığı gün notları da burada görünür. Not tutmak zorunlu değildir."
           />
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-          {ordered.map(note => (
-            <li key={note.id} className={cn('p-4', note.pinned && 'bg-warning-subtle/40')}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 whitespace-pre-wrap text-sm">{note.note_text}</p>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => togglePin(note)}
-                    disabled={isPending}
-                    title={note.pinned ? 'Sabitlemeyi kaldır' : 'Önemli / Sabit yap'}
-                  >
-                    {note.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => remove(note)}
-                    disabled={isPending}
-                    title="Notu sil"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+          {ordered.map(entry =>
+            entry.kind === 'student' ? (
+              // ÖĞRENCİNİN CÜMLESİ — SALT OKUNUR.
+              // Sabitleme ve silme düğmeleri bilerek YOK: bu metin
+              // öğretmenin değil öğrencinin.
+              <li key={`day-${entry.id}`} className="bg-info-subtle/30 p-4">
+                <p className="min-w-0 whitespace-pre-wrap text-sm">{entry.note.note_text}</p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {new Date(entry.note.note_date).toLocaleDateString('tr-TR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                  {' · '}
+                  {studentName ? `${studentName} yazdı` : 'Öğrenci yazdı'}
+                  {' · Gün notu'}
+                </p>
+              </li>
+            ) : (
+              <li
+                key={entry.id}
+                className={cn('p-4', entry.note.pinned && 'bg-warning-subtle/40')}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 whitespace-pre-wrap text-sm">{entry.note.note_text}</p>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => togglePin(entry.note)}
+                      disabled={isPending}
+                      title={entry.note.pinned ? 'Sabitlemeyi kaldır' : 'Önemli / Sabit yap'}
+                    >
+                      {entry.note.pinned ? (
+                        <PinOff className="size-3.5" />
+                      ) : (
+                        <Pin className="size-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => remove(entry.note)}
+                      disabled={isPending}
+                      title="Notu sil"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {new Date(note.created_at).toLocaleDateString('tr-TR', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-                {note.author_name && ` · ${note.author_name}`}
-                {note.pinned && ' · Önemli'}
-              </p>
-            </li>
-          ))}
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {new Date(entry.note.created_at).toLocaleDateString('tr-TR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                  {entry.note.author_name && ` · ${entry.note.author_name}`}
+                  {entry.note.pinned && ' · Önemli'}
+                </p>
+              </li>
+            )
+          )}
         </ul>
       )}
     </div>

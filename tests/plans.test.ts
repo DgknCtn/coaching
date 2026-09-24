@@ -29,11 +29,12 @@ const usage = (over: Partial<WorkspaceUsage> = {}): WorkspaceUsage => ({
 })
 
 describe('TRIAL_DAYS', () => {
-  it('deneme süresi 7 gün', () => {
-    // 058'de 14'ten 7'ye indirildi. Bu sayı SQL tarafında da yazılı
-    // (create_teacher_workspace, INTERVAL '7 days'); ikisi birlikte
-    // değişmeli.
-    expect(TRIAL_DAYS).toBe(7)
+  it('deneme süresi 3 gün', () => {
+    // 058'de 14'ten 7'ye, R8'de 7'den 3'e indirildi. Bu sayı SQL
+    // tarafında da yazılı (create_teacher_workspace, INTERVAL '3 days');
+    // ikisi birlikte değişmeli. Bu test, sabitin sessizce kaymasını
+    // değil, İKİ YERİN AYRIŞMASINI pahalı kılmak için burada.
+    expect(TRIAL_DAYS).toBe(3)
   })
 })
 

@@ -1,7 +1,11 @@
 import Link from 'next/link'
 import { compareHomeworkItems, isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
-import { AcademicNotesPanel, type AcademicNote } from './academic-notes-panel'
+import {
+  AcademicNotesPanel,
+  type AcademicNote,
+  type StudentDayNote,
+} from './academic-notes-panel'
 import { notFound, redirect } from 'next/navigation'
 import {
   Plus,
@@ -121,6 +125,7 @@ export default async function StudentDetailPage({
     { data: weekOperation },
     { data: lastSubmittedRows },
     { data: academicNoteRows },
+    { data: dayNoteRows },
     { data: flowRows },
     { data: contactRows },
     { data: openWorkRows },
@@ -242,6 +247,19 @@ export default async function StudentDetailPage({
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(100),
+    // ÖĞRENCİNİN GÜN NOTLARI (R8 §13 · 101).
+    //
+    // Hafıza kronolojik olmak zorunda ve o haftanın en iyi anlatıcısı
+    // çoğu zaman öğrencinin kendi cümlesi. Öğretmen bu satırları OKUR,
+    // yazamaz ve silemez — 101'de öğretmen için yalnız SELECT politikası
+    // var; arayüzdeki salt okunurluk o kararın görünür yüzü.
+    supabase
+      .from('student_day_notes')
+      .select('id, note_date, note_text')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .order('note_date', { ascending: false })
+      .limit(100),
     // R5.5: üç özet kartın verisi. Hepsi opsiyoneldir — R5 verisi olmayan
     // öğrencide boş döner ve kartlar nötr boş durum gösterir (OG-07).
     supabase
@@ -298,6 +316,16 @@ export default async function StudentDetailPage({
   // Sorgu METNİ hâlâ çekiyor çünkü AYNI dizi `?sekme=not` panelini de
   // besliyor. Server component yalnız RENDER ETTİĞİNİ istemciye
   // gönderir: panel açık değilken metin tarayıcıya hiç inmez.
+  const studentDayNotes: StudentDayNote[] = ((dayNoteRows ?? []) as unknown as {
+    id: string
+    note_date: string
+    note_text: string
+  }[]).map(row => ({
+    id: row.id,
+    note_date: row.note_date,
+    note_text: row.note_text,
+  }))
+
   const lastAcademicNote = academicNotes[0] ?? null
   const pinnedNoteCount = academicNotes.filter(n => n.pinned).length
 
@@ -498,6 +526,10 @@ export default async function StudentDetailPage({
       created_at: n.created_at,
       author_name: n.author_name,
     })),
+    // Gün notu İZE DE DÜŞER ama yine metin olarak değil, OLAY olarak:
+    // bu blok bir olay kaydı (R7/02 §4). Metni Öğrenci Hafızası
+    // panelinde okunuyor.
+    dayNotes: studentDayNotes.map(n => ({ id: n.id, note_date: n.note_date })),
     // AKTİF YÜKTEN ÇIKARILMIŞ ÖDEV İZDE GÖRÜNMEZ (R7-06.01). Sorgu
     // artık arşivlenenleri de çekiyor (geçmiş listesi için), ama "Son
     // Akademik İz" öğrencinin GÜNCEL akışını anlatıyor: öğretmenin
@@ -1189,9 +1221,14 @@ export default async function StudentDetailPage({
       {tab?.slug === 'not' && (
           <Section
             title="Akademik Not / Öğrenci Hafızası"
-            description="Derse başlarken hatırlamak istedikleriniz. Yalnız eğitmenlere görünür; öğrenci ve veli panelinde yer almaz."
+            description="Derse başlarken hatırlamak istedikleriniz ve öğrencinin Haftam'da yazdığı gün notları. Sizin yazdıklarınız yalnız eğitmenlere görünür; hiçbiri veli panelinde yer almaz."
           >
-            <AcademicNotesPanel studentId={studentId} notes={academicNotes} />
+            <AcademicNotesPanel
+              studentId={studentId}
+              notes={academicNotes}
+              dayNotes={studentDayNotes}
+              studentName={student.full_name}
+            />
           </Section>
       )}
     </div>

@@ -67,6 +67,8 @@ const LOCKED_VIEWS = [
   // 085 — öğrenci × ay tahakkuk/tahsilat. Bir ailenin ödeme yapıp
   // yapmadığı, akademik veriden farklı bir mahremiyet sınıfı (066).
   'student_month_finance_view',
+  // 103 — öğrenci hareket sinyali: kimin kaç gündür çalışmadığı.
+  'student_activity_signal_view',
 ] as const
 
 /**
@@ -108,6 +110,16 @@ const LOCKED_TABLES = [
   // 086 — velinin ödeme bildirimi. Tutar taşımıyor ama kimin hangi ay
   // ödeme yaptığını söylediğini taşıyor; aile mahremiyeti.
   'parent_payment_notices',
+  // 101 (Haftam V2) — ÖĞRENCİNİN KENDİ YAZDIKLARI.
+  //
+  // `student_personal_items` bu listenin en hassas satırı: öğrencinin
+  // kişisel ajandası öğretmene ve veliye bile kapalı (§14), anon'a
+  // sızması ise reşit olmayan bir öğrencinin günlük rutinini açığa
+  // çıkarmak olurdu. Gün notu ve çalışma notu da serbest metin:
+  // "hastayım", "sınav kaygım var" gibi cümleler taşıyabilir.
+  'student_day_notes',
+  'homework_item_notes',
+  'student_personal_items',
 ] as const
 
 async function anonSelect(view: string) {
@@ -287,7 +299,7 @@ describe('kiracı izolasyonu · kurulum', () => {
     // Sayı KİLİTLİ, "en az" değil: liste kazara kısalırsa test bunu
     // söylemeli. Yeni bir view eklendiğinde bu sayı da elle artar —
     // eklemeyi unutmanın maliyeti, hiç bakılmayan bir view'dır.
-    expect(LOCKED_VIEWS).toHaveLength(15)
+    expect(LOCKED_VIEWS).toHaveLength(16)
     expect(LOCKED_TABLES.length).toBeGreaterThanOrEqual(8)
   })
 })

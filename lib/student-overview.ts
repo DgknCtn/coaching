@@ -419,7 +419,7 @@ export function summarizeProtectionPool(
 // yoktur; yalnız ne olduğu ve ne zaman olduğu yazar.
 // ============================================================
 
-export type TrailKind = 'note' | 'homework'
+export type TrailKind = 'note' | 'homework' | 'day_note'
 
 export interface TrailEntry {
   id: string
@@ -440,6 +440,19 @@ export interface TrailInput {
    * koruma `noticeSignal` (lib/student-status.ts) için de geçerli.
    */
   notes: { id: string; pinned: boolean; created_at: string; author_name?: string | null }[]
+  /**
+   * Öğrencinin kendi yazdığı gün notları (R8 §13 · 101).
+   *
+   * `note_text` BURADA DA YOK ve aynı sebeple: bu blok bir olay kaydı.
+   * Notun metni Öğrenci Hafızası panelinde okunuyor; iz yalnız "ne zaman
+   * bir şey oldu" diyor.
+   *
+   * Öğretmenin notundan AYRI bir tür olarak duruyor çünkü ikisi farklı
+   * şeyler: biri öğretmenin öğrenci hakkında tuttuğu hafıza, diğeri
+   * öğrencinin kendi günü hakkındaki cümlesi. Tek türde toplansalardı
+   * öğretmen "bunu ben mi yazdım?" diye sormak zorunda kalırdı.
+   */
+  dayNotes?: { id: string; note_date: string }[]
   homework: {
     id: string
     title: string | null
@@ -474,6 +487,13 @@ export function buildAcademicTrail(input: TrailInput, limit = 6): TrailEntry[] {
       date: note.created_at,
       text: note.pinned ? 'Önemli akademik not eklendi' : 'Akademik not eklendi',
       detail: note.author_name ?? null,
+    })),
+    ...(input.dayNotes ?? []).map(note => ({
+      id: `day-note-${note.id}`,
+      kind: 'day_note' as const,
+      date: note.note_date,
+      text: 'Öğrenci gün notu yazdı',
+      detail: null,
     })),
     ...input.homework.map(batch => ({
       id: `hw-${batch.id}`,

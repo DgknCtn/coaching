@@ -791,3 +791,71 @@ Sonuç: on kişilik bir grup dersini "Yapıldı" işaretlemek için öğretmenin
 **Grup oluşturma arayüze geldi.** Grup şimdiye kadar yalnız seçilebiliyordu; grup hizmeti tanımlamak isteyen öğretmen boş bir açılır listeye bakıyor ve devam edemiyordu. Form ayrı bir ekrana taşınmadı — ihtiyaç tam hizmet tanımlarken doğuyor.
 
 **Geriye dönük bağ:** 083 öncesinde üretilmiş satırlarda `group_session_id` NULL kalmıştı ve fan-out onları göremezdi; oturum üretimi artık o satırları da bağlıyor.
+
+---
+
+## R8 — Deneme süresi 3 gün (099)
+
+**Deneme 7 günden 3 güne indi.** Ürün kararı. Süre iki yerde yazılı: `lib/plans.ts`'teki `TRIAL_DAYS` (vitrin, CTA, geri sayım, engelleme mesajı oradan okur) ve `create_teacher_workspace` içindeki `INTERVAL` (yeni alanın `trial_ends_at` değerini fiilen yazan yer). İkisi birlikte değişti; `tests/plans.test.ts` ayrışmayı pahalı kılıyor. Yalnız sabiti düşürmek, kullanıcıya 3 gün derken veritabanında 7 gün açmak olurdu.
+
+**Süresi devam eden denemelere dokunulmadı.** 14→7 inişindeki kararın aynısı: süreyi geriye dönük kısaltmak, verilmiş bir günü geri almak ve bir kısım kullanıcının erişimini uyarısız kesmektir. Yeni kural yalnız bundan sonra açılan alanlara işler.
+
+**Deneme şeridinin eşiği 3'ten 1'e indi.** `quota-notice` uyarısı "son 3 gün" diye kurulmuştu ve 7 günlük denemede doğru çalışıyordu; deneme 3 güne inince aynı eşik ilk günden tetiklenir hale geldi. Uyarının işi aciliyet bildirmek — her gün bağıran uyarı aciliyet bilgisi taşımaz.
+
+**"14 gün koşulsuz iade" dokunulmadı:** o, denemeden ayrı bir yasal taahhüt ve ödeme yapıldıktan sonra işler.
+
+---
+
+## R8 — Sayfa takipli kitapta toplu içe aktarma (100)
+
+**"İçindekilerden aktar" sayfa takipli kitaplara açıldı.** 055'ten beri var olan ekran tek bir arayüz koşuluyla (`trackingMode !== 'page'`) gizleniyordu; gerekçe "sayfa takipli kitapta bölümler test değil sayfa aralığı taşır, aktarım orada anlamsız olurdu" idi. **O gerekçe yanlıştı:** öğretmenin yapıştırdığı metin iki durumda da aynı biçimde — başlık + sondaki sayı aralığı. Değişen tek şey aralığın ne anlama geldiği. Sonuç: 055'in çözdüğü sorun (60 bölümü tek tek elle girmek) sayfa kitaplarında olduğu gibi duruyordu.
+
+**Ayrı ayrıştırıcı, ayrı RPC — çünkü üretilen kayıt farklı.** Test modunda iki katmanlı ağaç açılır (bölüm → alt bölüm → testler). Sayfa modunda yapı düz: her satır bir `book_sections` satırıdır ve altına her fiziksel sayfa için bir birim açılır (022'nin kararı). Dönüş şekilleri farklı olduğu için `parsePageOutline` ayrı bir fonksiyon; tek fonksiyonda birleştirmek her çağıranı dönüşü daraltmaya zorlardı.
+
+**Sayfa modunda aralıksız satır hata sayılır.** Test modunda o satır bir bölüm başlığıdır; sayfa modunda bölüm sayfa aralığı olmadan açılamaz ve kaç sayfa üretileceği bilinemez. Sessizce atlansaydı öğretmen eksik aktarımı çok sonra fark ederdi.
+
+**Sunucu tarafındaki boşluk da kapandı.** `import_book_outline` kitabın takip türünü hiç denetlemiyordu; kısıt yalnız arayüzdeydi. Yeni `import_page_sections` mod `page` değilse reddediyor, böylece yanlış eylem çağrılsa bile sayfa kitabına test tarzı alt bölüm yazılamaz. Doğrulamalar `create_page_section` (022) ile birebir: ikinci bir giriş yolu, ikinci bir kural kümesi demek olmamalı.
+
+---
+
+## R8 — Haftam V2 (101, 102, 103, 104)
+
+Öğrencinin haftalık ana çalışma ekranı tek kolonlu bir listeden yedi gün sütunlu bir ızgaraya geçti. Omurga zaten duruyordu (`weekly_flows`, 097'nin `planned_for_date`, mevcut teslim/onay akışı); eklenen şey öğrencinin haftasını tek ekranda YAŞAYABİLMESİ.
+
+**Kart bağımsız bir kayıt değil (§7).** Sayfa takipli kitapta her fiziksel sayfa, test takiplide her test zaten ayrı bir `book_tests` satırı (022, 047). Yani "kart yalnızca tekil çalışmaların görsel gruplamasıdır" cümlesi şemada hâlihazırda doğruydu. Bunun sonucu: **kart bölmek yeni kayıt üretmez, eskisini silmez, çift sayım oluşturmaz** — yalnız ilgili kalemlerin `planned_for_date` değeri değişir. Gruplama `lib/haftam.ts` içinde, okuma anında türetiliyor; veritabanında kart tablosu yok ve olmamalı. Aralık matematiği `lib/page-ranges.ts`'ten geliyor ("Test 1, 5-7" gibi parçalı kalanlar dahil), ikinci bir aralık mantığı yazılmadı.
+
+**`academic_notes` kullanılmadı, üç yeni tablo açıldı (101).** 031 akademik notları öğretmenin kendi öğrenci hafızası olarak kurmuş ve öğrenci/veli için RLS politikası bilerek yazmamıştı. Öğrenciye o tabloya yazma hakkı vermek, korunan bir gizlilik kararını sessizce iptal etmek olurdu. Gün notu ve çalışma notunda öğretmen OKUR, yazamaz (§13: "öğrenci + öğretmen arasında kalır"); veli için politika yok.
+
+**Kişisel ajandanın gizliliği uygulamaya değil şemaya gömüldü.** `student_personal_items` için öğretmen ve veli politikası HİÇ YAZILMADI — 031'in yöntemi. Yanlışlıkla join eden bir sorgu bile öğretmen oturumunda boş döner. Bu tablo hiçbir view'a, rapora ya da performans hesabına bağlı değil (§14, §21). Ayrıca `is_student_self` tek başına yetmediği için (öğrenci kendi id'siyle başka bir çalışma alanına satır yazabilirdi) `student_workspace_matches` eklendi: çalışma alanı istemciden gelen değil öğrenciden türetilen bir değer.
+
+**Sürükle-bırak eklendi ama menü kaldı.** R7'de sürükleme bilinçli olarak reddedilmişti: dar ekranda dokunma/kaydırma çakışıyor ve klavyeyle erişilemiyor. O gerekçe hâlâ geçerli; değişen şey V2'nin sürüklemeyi tarif etmesi. Çözüm ikisini birden tutmak: menü birincil ve erişilebilir yol, sürükleme yalnız kolaylık katmanı. İkisi de aynı sunucu eylemini çağırıyor, o yüzden davranış ayrışamaz. Sürükleme tek başına bırakılsaydı klavye kullanan öğrenci çalışmasını hiçbir güne koyamazdı. Kütüphane eklenmedi.
+
+**Öğrenciye operasyon dili gösterilmiyor (§8).** "Onaya gönderildi / onay bekliyor" yok; öğrenci açısından cümle tek: tikledim = işimi bitirdim. Tek istisna öğretmen iadesi (§11), çünkü orada öğrencinin yapması gereken yeni bir iş var — ama "red" diye değil "tekrar bak" diye. Geri al tikin hemen yanında (§10) ve **öğretmenin onayladığı işi geri aldırmıyor** (097 kuralı korundu).
+
+**Toplu işlemler tek RPC (102).** 200 kalemi 200 ayrı çağrıyla teslim etmek, 140'ıncıda ağ koparsa kartın yarısını teslim edilmiş bırakırdı. Yetki listedeki HER kalem için ayrı denetleniyor; biri bile yabancıysa işlemin tamamı reddediliyor — "yetkisizleri atla" davranışı öğrenciye sessizce eksik sonuç döndürürdü.
+
+**Planlama hareketi çalışma hareketi değildir (103, §15-§16).** Öğretmen tarafında en keskin kural bu. `last_real_work_at`, `last_planning_at` ve `last_academic_note_at` AYRI tutuluyor; sistemin ana sinyali teslimdir. *Pazartesi bütün haftayı planlamak, dört gün çalışmamayı gizlememelidir.* Durum motoruna iki eşik eklendi: teslim yok ama not/plan var → Geride (öğretmen bağlamı biliyor); hiçbir iz yok → Müdahale Gerekli. Belgedeki Sude / Buse / Tarık örnekleri birebir teste çevrildi.
+
+**"Müdahale Gerekli" yalnız "çok geride" demek değil (§18).** Yeni sessizlik koşulu bilerek tempodan bağımsız: yüzdesi iyi görünen ama günlerdir ortada olmayan öğrenci de temas konusudur. Ölçüt görünürlük.
+
+**Öğretmene iki akış, ek operasyon yok (§17).** Öğrenci Güncellemeleri ve Takip Gerekenler, öğrenci Haftam'da kendi işini yaparken kendiliğinden doluyor; öğretmen için ayrı rapor doldurma adımı yok (§20). "Görüldü" işareti (104) bir görev değil liste temizleme aracı; bildirim sistemi kurulmadı (§21: her hareket bildirim değil). Notun metnini öğretmenin değiştirememesi için işaret RLS UPDATE ile değil tek sütuna yazan bir RPC ile veriliyor.
+
+**WhatsApp yoklaması metin üretir, mesaj göndermez (§19).** Metnin tonu suçlama değil soru: hareketsizliğin sebebi hastalık da olabilir, sistemin göremediği bir çalışma da. "Neden çalışmıyorsun" diyen bir mesaj temas kanalını kapatırdı.
+
+---
+
+## R8 — Yerel doğrulamada çıkan düzeltmeler (105, 106) ve gün notunun hafızaya girmesi
+
+**"Gördüm" notun yazılma anını bozuyordu (105).** Öğretmen bir gün notunu görüldü işaretleyince akıştaki saat 11:32'den 13:50'ye kaydı: `handle_updated_at` her UPDATE'te çalışıyor ve "gördüm" de bir UPDATE'ti. Yani öğretmenin OKUMA anı, öğrencinin YAZMA anının üzerine yazılıyordu. §17A'daki saatin tek işi öğrencinin o cümleyi ne zaman kurduğunu söylemek. Yan etkisi daha ağırdı: akış `updated_at DESC` sıralandığı için görülen not listenin başına zıplıyordu — okunmuşu yukarı taşıyan bir okunmamışlar listesi. Trigger koşullu hale geldi; `updated_at` yalnız notun metni değişince ilerliyor. Ayrı bir `written_at` sütunu eklenmedi: sorun sütunun eksikliği değil, trigger'ın fazla geniş olmasıydı.
+
+**Sessizlik sinyali en sessiz öğrenciyi eliyordu (106).** Öğrencinin kartı "32 gündür yeni teslim yok" derken Takip Gerekenler listesi boştu. 103'teki `INTERVAL '30 days'` penceresi yüzünden son teslim pencerenin dışında kalıp `NULL` dönüyor, `NULL` da "bu öğrenci hakkında veri yok" olarak yorumlanıyordu (yeni öğrenciyi ilk gün müdahale listesine düşürmemek için konmuş bilinçli bir kural). Sonuç tersine dönüyordu: öğrenci ne kadar uzun süredir sessizse listede görünme ihtimali o kadar azalıyordu — sinyalin varlık sebebi olan Tarık, sinyalin göremediği kişi oluyordu.
+
+**Asıl kusur 30 sayısının SQL'de olmasıydı.** 080'den beri geçerli kural: *"eşikler SQL'e gömülmedi ki ayarlanabilir kalsınlar."* View artık eşik uygulamıyor, yalnız ham zamanları döndürüyor; "yeterince yakın mı" kararı diğer eşiklerin yanında (`signalOfLifeDays`). `NULL`'ın anlamı da daraldı ve bu istenen şey: artık yalnız "hiç teslim yok" demek.
+
+**Gün adları öğretmen ekranında yanlıştı.** `WEEKDAY_LABEL[...].slice(0, 3)` Türkçede ayırt etmiyor: Cumartesi→"Cum" (Cuma ile aynı), Pazartesi→"Paz" (Pazar ile aynı). Haftalık Akış'ın günlük dağılım şeridinde yedi günün dördü iki çifte iniyordu; sayılar doğruydu, etiket yalan söylüyordu. `WEEKDAY_SHORT_LABEL` tek kaynak oldu.
+
+**Toast'taki "Geri al" sessizce hiçbir şey yapmıyordu.** Tik sonrası sunucu yeniden doğrulaması kartı yeniden oluşturuyor, toast ekranda kalıyordu; geri çağrı sökülmüş bileşenin `startTransition`'ına bağlı olduğu için çalışmıyordu — düğme basılıyor, toast kapanıyor, teslim geri alınmıyordu. Yanlış tikini düzelttiğini sanan öğrenci için en kötü sonuç. Geri alma artık geçişten bağımsız bir fonksiyonda.
+
+**Gün notu Öğrenci Hafızası'na girdi (§13).** Hafıza paneli artık öğretmenin notlarıyla öğrencinin gün notlarını tek kronolojik çizgide gösteriyor — *"haftalık görüşmede otomatik görünür, Öğrenci Hafızası'na eklenir."* İkisi aynı kutuya konmadı: öğretmenin notu düzenlenebilir/sabitlenebilir/silinebilir, öğrencinin notu SALT OKUNUR. Öğretmenin öğrenci ağzından yazılmış bir cümleyi değiştirebilmesi notun bağlam değerini yok ederdi, silebilmesi de öğrencinin bıraktığı izi ortadan kaldırırdı. Koruma şemada da var: 101 öğretmene yalnız SELECT veriyor.
+
+**Son Akademik İz'e ise OLAY olarak giriyor, metin olarak değil.** O blok bir olay kaydı (R7/02 §4) ve `buildAcademicTrail` not metnini parametre olarak bile almıyor — gün notu için de almıyor. Metin hafıza panelinde okunuyor; iz yalnız "ne zaman bir şey oldu" diyor.

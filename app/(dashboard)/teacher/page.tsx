@@ -5,6 +5,7 @@ import {
   computeStudentStatus,
   expectedProgressPercent,
   noticeSignal,
+  STATUS_THRESHOLDS,
 } from '@/lib/student-status'
 import { APP_TIME_ZONE, localDateString, todayDateString } from '@/lib/homework-status'
 import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-structure'
@@ -16,6 +17,8 @@ import { QuotaNotice } from '@/components/shared/quota-notice'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { Section } from '@/components/shared/section'
 import { StudentsTable, type DashboardRow } from './students-table'
+import { StudentUpdates, type StudentUpdate } from './student-updates'
+import { FollowUpList, type FollowUpStudent } from './follow-up-list'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +41,13 @@ type StudentRow = {
   next_contact_kind: 'ders' | 'kocluk' | null
   next_contact_participation: 'birebir' | 'grup' | null
   submission_cutoff_at: string | null
+  // 097 · akış kapsamlı
+  weekly_planned_units: number | null
+  // 103 · HAREKET SİNYALLERİ (R8 §15-§16)
+  last_real_work_at: string | null
+  last_planning_at: string | null
+  last_academic_note_at: string | null
+  days_since_real_work: number | null
 }
 
 const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', {
@@ -45,6 +55,21 @@ const shortDateFormatter = new Intl.DateTimeFormat('tr-TR', {
   day: 'numeric',
   month: 'short',
 })
+
+/**
+ * "Salı 20:14" / "18 Eyl 20:14" — güncelleme akışının zaman etiketi.
+ *
+ * Biçim BURADA üretiliyor, istemcide değil: saat dilimi APP_TIME_ZONE
+ * üzerinden çözülmeli (sunucu UTC çalışıyor) ve öğretmenin makinesinin
+ * dilimi notun yazıldığı saati kaydırmamalı.
+ */
+function formatNoteMoment(at: Date, now: Date): string {
+  const clock = formatSessionClock(at)
+  const withinWeek = now.getTime() - at.getTime() < 7 * 86_400_000
+  return withinWeek
+    ? `${formatSessionWeekdayLong(at)} ${clock}`
+    : `${shortDateFormatter.format(at)} ${clock}`
+}
 
 /**
  * "Cuma 18:00" / "Bugün 20:00" / "24 Eyl 09:00" (§6).
@@ -118,7 +143,7 @@ export default async function TeacherDashboard() {
     ])
   const hasLicense = !!licenseRow
 
-  const [{ data: students }, { data: upcomingSessions }] = await Promise.all([
+  const [{ data: students }, { data: upcomingSessions }, { data: dayNotes }] = await Promise.all([
     supabase
       .from('teacher_student_operation_view')
       .select('*')
@@ -134,6 +159,16 @@ export default async function TeacherDashboard() {
       .in('status', ['planlandi', 'ertelendi'])
       .gte('planned_at', new Date(Date.now() - 2 * 86_400_000).toISOString())
       .lte('planned_at', new Date(Date.now() + 2 * 86_400_000).toISOString()),
+    // ÖĞRENCİ GÜNCELLEMELERİ (R8 §17A) — öğrencilerin yazdığı gün
+    // notları. Pencere son 14 gün: akış bir arşiv değil, öğretmenin
+    // şu anki bağlamı.
+    supabase
+      .from('student_day_notes')
+      .select('id, student_id, note_date, note_text, updated_at, seen_at')
+      .eq('workspace_id', workspaceId)
+      .gte('note_date', localDateString(new Date(Date.now() - 14 * 86_400_000)))
+      .order('updated_at', { ascending: false })
+      .limit(30),
   ])
 
   const now = new Date()
@@ -175,6 +210,23 @@ export default async function TeacherDashboard() {
           )
         : 0,
       submissionCutoffPassed: cutoff !== null && cutoff.getTime() < now.getTime(),
+      // R8 §16 — ANA SİNYAL SON GERÇEK ÇALIŞMA HAREKETİ.
+      //
+      // `hasRecentSignalOfLife` planlamayı ve akademik notu BİRLİKTE
+      // topluyor: ikisi de "öğrenci karanlıkta değil" demek. Ama
+      // hiçbiri teslimin yerine geçmiyor — plan yapmış olmak
+      // çalışmamayı gizlemez (§16).
+      daysSinceRealWork: s.days_since_real_work ?? null,
+      // "Karanlıkta değil" için hareketin YAKIN olması gerekir: altı ay
+      // önce yazılmış bir not bugünü açıklamaz. Eşik diğerleriyle aynı
+      // yerde (lib/student-status.ts); 103'te SQL'e gömülüydü ve orada
+      // en sessiz öğrenciyi listeden düşürüyordu (106).
+      hasRecentSignalOfLife: [s.last_planning_at, s.last_academic_note_at].some(
+        (at) =>
+          at !== null &&
+          now.getTime() - new Date(at).getTime() <
+            STATUS_THRESHOLDS.signalOfLifeDays * 86_400_000
+      ),
     })
     return { ...s, computed: status }
   })
@@ -247,6 +299,62 @@ export default async function TeacherDashboard() {
       status: s.computed.status,
     }
   })
+
+  // ============================================================
+  // ÖĞRENCİ GÜNCELLEMELERİ (§17A)
+  //
+  // Görülmemişler önce; aynı grup içinde en yeni üstte. Öğretmenin
+  // okumadığı bir not listenin dibinde kalmamalı.
+  // ============================================================
+  const nameById = new Map(rows.map((s) => [s.student_id, s.student_full_name]))
+
+  const updates: StudentUpdate[] = (dayNotes ?? [])
+    // Silinmiş/pasif öğrencinin notu akışta görünmez: tıklanınca açılacak
+    // bir öğrenci yok.
+    .filter((n) => nameById.has(n.student_id as string))
+    .sort((a, b) => {
+      const sa = a.seen_at === null ? 0 : 1
+      const sb = b.seen_at === null ? 0 : 1
+      if (sa !== sb) return sa - sb
+      return String(b.updated_at).localeCompare(String(a.updated_at))
+    })
+    .map((n) => ({
+      id: n.id as string,
+      studentId: n.student_id as string,
+      studentName: nameById.get(n.student_id as string) ?? 'İsimsiz öğrenci',
+      when: formatNoteMoment(new Date(n.updated_at as string), now),
+      text: n.note_text as string,
+      seen: n.seen_at !== null,
+    }))
+
+  // ============================================================
+  // TAKİP GEREKENLER (§17B)
+  //
+  // Ölçüt tempo DEĞİL, hareket: uzun süredir gerçek akademik hareket
+  // göstermeyen öğrenciler. §18'in ayrımı gereği yüzdesi iyi görünen
+  // ama ortada olmayan öğrenci de buraya düşer.
+  // ============================================================
+  const followUps: FollowUpStudent[] = rows
+    .filter((s) => {
+      const days = s.days_since_real_work
+      return days !== null && days >= STATUS_THRESHOLDS.silentWorkDays
+    })
+    .sort((a, b) => (b.days_since_real_work ?? 0) - (a.days_since_real_work ?? 0))
+    .map((s) => ({
+      id: s.student_id,
+      name: s.student_full_name ?? 'İsimsiz öğrenci',
+      silenceLabel: `${s.days_since_real_work} gündür çalışma hareketi yok`,
+      // Öğretmenin temas etmeden önce bilmesi gereken üç şey (§17B).
+      facts: [
+        s.last_real_work_at
+          ? `Son teslim: ${shortDateFormatter.format(new Date(s.last_real_work_at))}`
+          : 'Son teslim: yok',
+        Number(s.weekly_planned_units ?? 0) > 0 ? 'Haftalık plan: var' : 'Haftalık plan: yapılmadı',
+        s.last_academic_note_at
+          ? `Son akademik not: ${shortDateFormatter.format(new Date(s.last_academic_note_at))}`
+          : 'Son akademik not: yok',
+      ],
+    }))
 
   return (
     <div className="max-w-6xl space-y-8 p-6 md:p-8">
@@ -353,6 +461,31 @@ export default async function TeacherDashboard() {
       >
         <StudentsTable rows={tableRows} />
       </Section>
+
+      {/* ============================================================
+          HAFTAM'IN ÖĞRETMENE ÜRETTİĞİ İKİ AKIŞ (R8 §17)
+
+          İkisi de EK OPERASYON YARATMADAN doluyor: öğrenci Haftam'da
+          kendi işini yaparken bu veriler kendiliğinden oluşuyor.
+          Öğretmen için ayrı bir rapor doldurma adımı YOK (§20).
+          ============================================================ */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Section
+          title="Öğrenci Güncellemeleri"
+          description="Öğrencilerin kendi yazdığı gün notları."
+          variant="card"
+        >
+          <StudentUpdates updates={updates} />
+        </Section>
+
+        <Section
+          title="Takip Gerekenler"
+          description="Uzun süredir gerçek akademik hareket göstermeyen öğrenciler."
+          variant="card"
+        >
+          <FollowUpList students={followUps} />
+        </Section>
+      </div>
     </div>
   )
 }

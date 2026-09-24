@@ -23,9 +23,13 @@ export function QuotaNotice({
 }) {
   const quota = evaluateQuota(usage)
   const daysLeft = trialDaysLeft(usage.trialEndsAt)
-  // Deneme uyarısı son üç günde çıkar: 14 gün boyunca sayaç göstermek
-  // ürünü denemeyi bir geri sayıma çevirir.
-  const showTrial = usage.plan === 'trial' && daysLeft !== null && daysLeft <= 3
+  // Deneme uyarısı SON GÜNDE çıkar.
+  //
+  // Eşik 3'tü ve deneme 7 günken doğru çalışıyordu. R8'de deneme 3 güne
+  // inince aynı eşik İLK GÜNDEN tetiklenir hale geldi — kullanıcı ürünü
+  // daha açar açmaz bir geri sayım görürdü. Uyarının işi aciliyeti
+  // bildirmek; her gün bağırırsa aciliyet bilgisi taşımaz.
+  const showTrial = usage.plan === 'trial' && daysLeft !== null && daysLeft <= 1
   const showQuota = quota.isNearLimit
 
   if (!showTrial && !showQuota) return null

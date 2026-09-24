@@ -629,6 +629,45 @@ export async function importBookOutlineAction(
 }
 
 /**
+ * Aynı iş, SAYFA TAKİPLİ kitap için (R8).
+ *
+ * NEDEN AYRI EYLEM: sayfa kitabında yapı düz — bölüm ağacı yok, her satır
+ * bir `book_sections` satırı ve altına her fiziksel sayfa için bir birim
+ * açılıyor (022). Üretilen kayıt farklı olduğu için RPC de farklı
+ * (`import_page_sections`, 100).
+ *
+ * Doğrulama yine sunucuda TEKRARLANIR: RPC kitabın `tracking_mode`'unu
+ * kendisi denetler, böylece yanlış eylem çağrılsa bile test kitabına
+ * sayfa satırı (ya da tersi) yazılamaz.
+ */
+export async function importPageSectionsAction(
+  bookId: string,
+  sections: { title: string; pageStart: number; pageEnd: number }[]
+) {
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  if (sections.length === 0) return { error: 'İçe aktarılacak bölüm yok.' }
+
+  const { data, error } = await supabase.rpc('import_page_sections', {
+    p_book_id: bookId,
+    p_sections: sections.map(section => ({
+      title: section.title,
+      page_start: section.pageStart,
+      page_end: section.pageEnd,
+    })),
+  })
+
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await trackFeature(supabase, workspaceId, 'book.outline_import')
+
+  revalidatePath(`/teacher/books/${bookId}/edit`)
+  revalidatePath(`/teacher/books/${bookId}`)
+  return { success: true, result: data as { sections: number; pages: number } }
+}
+
+/**
  * Sayfa bölümüne BİLGİ AMAÇLI test aralığı (R7-03 Revize).
  *
  * ============================================================

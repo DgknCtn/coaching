@@ -17,7 +17,7 @@ import { TRIAL_DAYS } from '@/lib/plans'
 //
 // Adım tamamen silinmedi çünkü hâlâ bir işe yarıyor: kullanıcı ürünün
 // ne kadara mal olacağını ilk dakikada görüyor ve hazırsa hemen
-// alabiliyor. Ama ZORUNLU DEĞİL — 7 günlük ücretsiz deneme dururken
+// alabiliyor. Ama ZORUNLU DEĞİL — ücretsiz deneme dururken
 // satın almaya zorlamak, ürünü hiç görmemiş kullanıcıyı kapıda
 // kaybetmek olurdu.
 // ============================================================
@@ -43,7 +43,7 @@ export function LicenseStep() {
         <LicenseConfigurator onPurchase={purchaseLicenseAction} />
       </div>
 
-      {/* İKİNCİL AMA GÖRÜNÜR. 7 günlük ücretsiz deneme dururken satın
+      {/* İKİNCİL AMA GÖRÜNÜR. Ücretsiz deneme dururken satın
           almaya zorlamak, ürünü hiç görmemiş kullanıcıyı kaybetmek. */}
       <p className="mt-6 text-center text-sm">
         <Link

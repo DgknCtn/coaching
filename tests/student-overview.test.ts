@@ -553,3 +553,47 @@ describe('buildAcademicTrail · not metni ekrana çıkmaz', () => {
     expect(trail[0].id).toBe('note-yeni')
   })
 })
+
+// ============================================================
+// GÜN NOTU İZE OLAY OLARAK GİRER (R8 §13)
+//
+// §13 gün notunun "Öğrenci Hafızası'na eklenir" demesi, onu Son
+// Akademik İz'in kuralından muaf tutmaz: bu blok bir OLAY kaydıdır.
+// Notun metni Öğrenci Hafızası panelinde okunuyor; iz yalnız "ne zaman
+// bir şey oldu" diyor.
+// ============================================================
+describe('buildAcademicTrail · gün notu (R8 §13)', () => {
+  const OGRENCI_CUMLESI = 'Bugün okul sınavım vardı, matematik geriye kaldı'
+
+  it('gün notu girdisi de METİN ALANI TAŞIMIYOR (imza koruması)', () => {
+    const trail = buildAcademicTrail({
+      notes: [],
+      dayNotes: [{ id: 'd1', note_date: '2026-09-24' }],
+      homework: [],
+    })
+    expect(trail).toHaveLength(1)
+    expect(trail[0].kind).toBe('day_note')
+    expect(JSON.stringify(trail)).not.toContain(OGRENCI_CUMLESI)
+  })
+
+  it('öğretmenin notundan AYRI bir tür olarak durur', () => {
+    // İkisi tek türde toplansaydı öğretmen "bunu ben mi yazdım?" diye
+    // sormak zorunda kalırdı.
+    const trail = buildAcademicTrail({
+      notes: [{ id: 'n1', pinned: false, created_at: '2026-09-23T10:00:00Z' }],
+      dayNotes: [{ id: 'd1', note_date: '2026-09-24' }],
+      homework: [],
+    })
+    expect(trail.map(t => t.kind)).toEqual(['day_note', 'note'])
+    expect(trail[0].text).toBe('Öğrenci gün notu yazdı')
+  })
+
+  it('gün notu olmayan çağrıları bozmaz', () => {
+    // Alan opsiyonel: mevcut çağıranlar değişmeden çalışmalı.
+    const trail = buildAcademicTrail({
+      notes: [{ id: 'n1', pinned: false, created_at: '2026-09-10T10:00:00Z' }],
+      homework: [],
+    })
+    expect(trail).toHaveLength(1)
+  })
+})
