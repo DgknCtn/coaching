@@ -262,3 +262,49 @@ Dış denetim bunu göremedi: fonksiyon var, yetkileri doğru, tablo yerinde. Ya
 İki aydır sessizce ölü olan koruma çalışır hâle geldi. Kaba kuvvet savunması artık gerçekten var.
 
 *Not: uygulama logundaki `"Hız sınırı sayacı çalışmadı"` satırının kesildiği bu oturumda gösterilemedi — bu dev sunucusunda giriş denemesi yapılmadı, sayaç sıfır. Kanıt doğrudan RPC çağrılarında ve kesin.*
+
+---
+
+## Faz 4 — istek verimliliği: ölçüm planı yalanladı
+
+Plan iki değişiklik öngörüyordu ve ilkini "en büyük kazanç" diye nitelemişti. **Ölçüm ikisini de zayıf çıkardı.** Plandaki kural gereği (*"tahmine göre optimizasyon yapılmaz"*) sonuçlar aynen kaydediliyor.
+
+Ölçüm üretim derlemesinde yapıldı — **dev sunucusunda prefetch çalışmaz**, orada ölçmek yanıltırdı.
+
+### 1. Kenar çubuğu prefetch'i: %7 kazanç (uygulandı)
+
+Tek `/teacher` ziyareti, aynı hesap, aynı veri:
+
+| Senaryo | Tarama |
+|---|---|
+| Prefetch açık | 1004 |
+| Prefetch kapalı | **936** |
+
+Beklenti çok daha büyük bir düşüştü. Sebep: Next.js `force-dynamic` sayfalarda **kısmi** prefetch yapıyor, tam render değil — yani "her prefetch bir tam sayfa render'ı" varsayımım yanlıştı.
+
+%7 yine de gerçek ve maliyeti tek bir prop, o yüzden tutuldu.
+
+### 2. `select('*')` → kolon listesi: YAPILMADI
+
+`teacher_student_operation_view` **28 kolon** döndürüyor; `teacher/page.tsx` **31 alan referansı** kullanıyor. Yani en geniş `select('*')` çağrısında neredeyse hiçbir kolon israf edilmiyor. Kolon listesi yazmak ölçülebilir kazanç getirmez, yalnız view her değiştiğinde güncellenecek bir kopya daha yaratırdı.
+
+### Asıl darboğaz başka yerde
+
+Tek `/teacher` ziyaretinin tablo bazlı dağılımı:
+
+| Tablo | Tarama | Tür |
+|---|---|---|
+| `workspaces` | 196 | yetki |
+| `profiles` | 179 | yetki |
+| `workspace_licenses` | 172 | yetki (107'nin kapısı) |
+| `workspace_members` | 149 | yetki |
+| `homework_items` | 99 | veri |
+| `students` | **7** | veri |
+
+**Taramanın ~%86'sı yetki ve kiracı çözümlemesi.** Asıl iş verisi (`students`) 7 tarama alırken yetki tabloları 696 alıyor.
+
+Sebep bileşik: `getTeacherContext` 6 round-trip yapıyor, sayfa 7 sorgu daha ekliyor (öğrenci detayı ~19), ve **her sorgu kendi RLS değerlendirmesini** yapıyor — 092'nin InitPlan kazancı sorgu başına bir kez geçerli, sayfa başına değil.
+
+Yani gerçek kaldıraç **sayfa başına sorgu sayısı**; prefetch ve payload değil. Bu, ölçülmeden yapılacak bir iş değil ve `force-dynamic` kaldırmak da çözüm değil (kiracıya özel, RLS'e bağlı sayfalarda yanlış önbellekleme = başka kiracının verisi).
+
+**Sonraki adım için doğru soru:** `getTeacherContext`'in 6 turu ve panelin 7 sorgusu kaça indirilebilir? Bu, ayrı bir ölçüm turu hak ediyor.

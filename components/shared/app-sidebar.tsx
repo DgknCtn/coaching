@@ -213,6 +213,24 @@ export function AppSidebar({
         <Link
           key={item.href}
           href={item.href}
+          // PREFETCH KAPALI — ölçülerek eklendi (R8 · APP-01).
+          //
+          // Next.js görünür her linki önceden çeker. Bu ekranların
+          // TAMAMI `force-dynamic`, yani bir prefetch "önbellekten
+          // getir" değil, sunucuda TAM BİR SAYFA RENDER'I demek: o
+          // sayfanın 7-18 Supabase sorgusu, kullanıcı linke hiç
+          // tıklamasa bile çalışıyor.
+          //
+          // Kenar çubuğu her ekranda açık ve içinde ~15 link var; yani
+          // her gezinme, gidilmeyen sayfaların yükünü de üretiyordu.
+          // Dış denetimin "3-4 test kullanıcısıyla 24 saatte 8.102
+          // istek" bulgusunun ana kalemlerinden biri buydu.
+          //
+          // KULLANICI KAYBI YOK: tıklanan sayfa yine normal şekilde
+          // yükleniyor. Kapanan tek şey "görünür olduğu için önceden
+          // çek" davranışı — ki kullanıcıların çoğu o linklerin
+          // çoğuna hiç tıklamıyor.
+          prefetch={false}
           aria-current={active ? 'page' : undefined}
           aria-label={compact ? item.label : undefined}
           title={compact ? item.label : undefined}
