@@ -146,29 +146,56 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
     ).toBe('42501')
   })
 
-  it('kendi kiracısına ekleyebilir (POZİTİF KONTROL — sonra siler)', async () => {
-    // Bir önceki testin anlamı buna bağlı: ekleme HER ZAMAN başarısız
-    // oluyorsa (ör. zorunlu kolon eksik), negatif iddia boştur.
-    const ad = `IZOLASYON-POZITIF-${Date.now()}`
-    const r = await a.write<{ id: string }[]>('POST', 'students', {
-      workspace_id: a.workspaceId,
-      full_name: ad,
+  it('yabancı ekleme reddi YETKİ hatası, başka bir hata değil', async () => {
+    // BU TESTİN POZİTİF KONTROLÜ, HATA KODUNUN KENDİSİ.
+    //
+    // İlk yazımda buraya "kendi kiracısına ekleyebilir" diye bir pozitif
+    // kontrol konmuştu: kayıt eklenip sonra silinecekti. SİLİNMEDİ.
+    // `students` tablosunda DELETE politikası YOK (ürün öğrenciyi
+    // silmez, arşivler) ve PostgREST bunu hata olarak bildirmiyor —
+    // 200 dönüyor, 0 satır siliyor. Test geçti, canlı veritabanında
+    // her koşuda bir kayıt birikti.
+    //
+    // Tam olarak bu dosyanın yukarıda uyardığı tuzak: "sessiz no-op
+    // istemciden başarı gibi görünür." Kontrolü yazma testlerine
+    // koymuştum, kendi temizlik adımıma koymamıştım.
+    //
+    // Pozitif kontrole zaten gerek yok: yukarıdaki test hata kodunun
+    // `42501` (yetki reddi) olmasını şart koşuyor. Ekleme başka bir
+    // sebeple başarısız olsaydı — zorunlu kolon eksik, tablo yanlış —
+    // kod `23502` ya da `42703` olurdu ve test kırılırdı. Yani iddia
+    // kendi anlamını kendisi garanti ediyor, çöp bırakmadan.
+    const r = await a.write('POST', 'students', {
+      workspace_id: b.workspaceId,
+      full_name: `SIZINTI-KOD-${Date.now()}`,
     })
 
-    expect(r.code, `A kendi kiracısına ekleyemedi: ${r.code}`).toBeNull()
-    const id = r.body?.[0]?.id
-    expect(id, 'Eklenen kaydın id\'si dönmedi.').toBeTruthy()
-
-    // Test kendi çöpünü toplar: canlı veritabanında kalıcı kayıt
-    // bırakmıyoruz.
-    if (id) {
-      const silme = await a.write('DELETE', `students?id=eq.${id}`)
-      expect(silme.code, 'Test kaydı silinemedi; canlıda çöp kaldı.').toBeNull()
-    }
+    expect(r.code, 'Ekleme reddedilmedi.').not.toBeNull()
+    expect(
+      r.code,
+      `Ekleme ${r.code} ile düştü — bu yetki reddi değil. Negatif iddia, ` +
+        'yanlış sebeple geçiyor olabilir.'
+    ).toBe('42501')
   })
 
   it('yabancı öğrenciyi SİLEMEZ ve satır yerinde kalır', async () => {
-    await a.write('DELETE', `students?id=eq.${b.studentId}`)
+    // DÖNÜŞ KODUNA GÜVENİLMİYOR.
+    //
+    // `students` tablosunda DELETE politikası yok; PostgREST böyle bir
+    // silmede 200 + BOŞ DİZİ döndürüyor, hata değil. Yani "hata gelmedi"
+    // ile "satır silindi" burada aynı şeye benziyor ve kod kontrolü
+    // sessiz no-op'u yakalamıyor (bu tuzak canlıda 5 kayıt biriktirdi).
+    //
+    // Tek güvenilir kanıt sahibinin satırı yeniden okuması.
+    const silme = await a.write<unknown[]>('DELETE', `students?id=eq.${b.studentId}`)
+
+    // `return=representation` sayesinde kaç satırın silindiği görünür.
+    if (!silme.code) {
+      expect(
+        silme.body,
+        "A'nın silme isteği satır döndürdü — yabancı kayda dokunabildi."
+      ).toHaveLength(0)
+    }
 
     const kontrol = await b.select<unknown[]>(`students?select=id&id=eq.${b.studentId}`)
     expect(kontrol.body, "A, B'nin öğrencisini silebildi.").toHaveLength(1)

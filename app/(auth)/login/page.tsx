@@ -106,7 +106,23 @@ export default function LoginPage() {
           noValidate: doğrulama zod ile yapılıyor; tarayıcının kendi
           balonu Türkçe hata metinlerinin önüne geçip iki farklı dilde
           iki farklı mesaj gösterirdi. */}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      {/* method="post": ŞİFRE URL'YE YAZILMASIN.
+          Bu form gönderimi JavaScript ile yakalanıyor, ama JS henüz
+          hazır değilken (hydration tamamlanmadan) Enter'a basılırsa
+          tarayıcı KENDİ varsayılanını uygular — ve `method`
+          belirtilmemiş bir form GET ile gönderilir. Sonuç canlıda
+          görüldü:
+
+            /login?email=dogu%40test.com&password=test123123
+
+          Şifre adres çubuğuna, tarayıcı geçmişine, sunucu erişim
+          loglarına ve Referer başlığıyla üçüncü taraflara sızar.
+
+          `method="post"` bu yolu kapatıyor: aynı kazada gövde POST ile
+          gider, şifre URL'de görünmez. Asıl gönderim yine
+          `handleSubmit` üzerinden yapılıyor; bu satır yalnız JS'in
+          hazır olmadığı aralık için bir ağ. */}
+      <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
         <fieldset disabled={isPending} className="space-y-4 disabled:opacity-70">
           <div className="space-y-2">
             <Label htmlFor="email">E-posta</Label>

@@ -109,14 +109,46 @@ export const getTeacherContext = cache(async function getTeacherContext() {
   // tekrar tekrar dener.
   if (!workspaceId) redirect(await blockedRedirectTarget(supabase))
 
-  const [
-    { data: workspace },
-    { data: activeTerm },
-    { data: allWorkspaces },
-    { data: usageRows, error: usageError },
-  ] =
+  // ============================================================
+  // TEK `workspaces` SORGUSU — İKİSİ BİRLEŞTİRİLDİ (R8 · APP-01)
+  //
+  // Burada iki ayrı sorgu vardı: biri aktif alanı (`id = workspaceId`),
+  // diğeri seçici listesini (`id IN (üyelikler)`) çekiyordu. İkincisi
+  // BİRİNCİSİNİ ZATEN KAPSIYOR — aktif alan, tanımı gereği üyeliklerden
+  // biri (`resolveActiveWorkspace` onu o listeden seçiyor).
+  //
+  // ÖLÇÜLDÜ — KAZANÇ PERFORMANS DEĞİL, SADELİK.
+  //
+  // Bu değişiklik bir performans iyileştirmesi olarak yapıldı ve ölçüm
+  // bunu DESTEKLEMEDİ. Tek /teacher yüklemesi, öncesi → sonrası:
+  //
+  //   workspaces          196 → 194
+  //   profiles            179 → 177
+  //   workspace_licenses  172 → 171
+  //   workspace_members   149 → 148
+  //
+  // Toplam ~6 tarama; %1'in altında. Sorgular zaten `Promise.all` içinde
+  // paralel olduğu için gecikme kazancı da yok.
+  //
+  // Değişiklik yine de tutuldu, ama gerekçesi başka: SİLİNEN SORGU
+  // MÜKERRERDİ — aynı tabloyu aynı istekte iki kez sormanın sebebi yoktu.
+  //
+  // ASIL DARBOĞAZI DA BU ÖLÇÜM GÖSTERDİ: sayfanın taramasının ~%86'sı
+  // yetki/kiracı çözümlemesi (`students` yalnız 7 tarama alıyor).
+  // Kaldıraç sayfa başına SORGU SAYISI — bir sorguyu silmek değil,
+  // yedisini üçe indirmek. O ayrı bir ölçüm turu istiyor.
+  //
+  // Davranış korunuyor: aktif alan listeden seçiliyor ve bulunamazsa
+  // aşağıdaki `if (!workspace)` dalı aynı şekilde çalışıyor.
+  // ============================================================
+  const [{ data: allWorkspaces }, { data: activeTerm }, { data: usageRows, error: usageError }] =
     await Promise.all([
-      supabase.from('workspaces').select('id, name').eq('id', workspaceId).single(),
+      // Seçici için: yalnız BİR workspace varsa arayüzde hiç gösterilmez.
+      supabase
+        .from('workspaces')
+        .select('id, name, is_library')
+        .in('id', [...new Set(memberships.map(m => m.workspaceId))])
+        .order('name'),
       supabase
         .from('academic_terms')
         .select('id, name, status')
@@ -125,16 +157,17 @@ export const getTeacherContext = cache(async function getTeacherContext() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      // Seçici için: yalnız BİR workspace varsa arayüzde hiç gösterilmez.
-      supabase
-        .from('workspaces')
-        .select('id, name, is_library')
-        .in('id', [...new Set(memberships.map(m => m.workspaceId))])
-        .order('name'),
       // Kota ve deneme durumu (052). Kolon yerine RPC: student_limit'i
       // okumak için workspaces'a ek bir politika açmak gerekmesin.
       supabase.rpc('get_workspace_usage', { p_workspace_id: workspaceId }),
     ])
+
+  // Aktif alan, seçici listesinin içinden. RLS onu süzdüyse (askı,
+  // deneme dolumu) burada da bulunamaz ve aşağıdaki dal devreye girer —
+  // ayrı sorgudaki `.single()` ile aynı sonuç.
+  const workspace =
+    ((allWorkspaces ?? []) as { id: string; name: string }[]).find(w => w.id === workspaceId) ??
+    null
 
   // Workspace okunamıyorsa askı ya da deneme dolumu ihtimali var.
   if (!workspace) redirect(await blockedRedirectTarget(supabase))

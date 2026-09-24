@@ -47,7 +47,7 @@ export function InviteForm({ token, defaultEmail }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="fullName" className="text-sm font-medium">Ad Soyad</Label>
         <Input id="fullName" placeholder="Ahmet Yılmaz" className="h-11" aria-invalid={!!errors.fullName} {...register('fullName')} />

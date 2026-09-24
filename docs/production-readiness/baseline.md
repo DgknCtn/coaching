@@ -339,3 +339,64 @@ Yani gerçek kaldıraç **sayfa başına sorgu sayısı**; prefetch ve payload d
 ### Neden pozitif kontroller kritik
 
 RLS okumada hata vermez, satırı sessizce süzer. "Yabancı veri gelmedi" iddiası; veritabanı boşsa, kimlik bilgisi yanlışsa ya da sorgu hatalıysa da doğrudur. Bu yüzden her negatifin yanında aynı sorgunun kendi kiracıda **dolu** döndüğünü gösteren bir kontrol var. Yazmada ise sessiz no-op istemciden başarı gibi görünür; tek güvenilir kanıt diğer kiracının satırı yeniden okuyup değişmemiş bulmasıdır.
+
+---
+
+## Kimlik formları GET ile gönderiliyordu (üretim derlemesinde görüldü)
+
+Ölçüm için giriş yapılırken adres çubuğunda şu göründü:
+
+```
+/login?email=dogu%40test.com&password=test123123
+```
+
+**Şifre URL'de.** Oradan tarayıcı geçmişine, sunucu erişim loglarına ve Referer başlığıyla üçüncü taraflara sızar.
+
+**Sebep:** form gönderimi JavaScript ile yakalanıyor ama `<form>` etiketinde `method` yoktu. JS hazır değilken (hydration tamamlanmadan) gönderim yapılırsa tarayıcı kendi varsayılanını uygular ve `method` yoksa varsayılan **GET**'tir. Aynı sebeple giriş de yapılamıyordu: form hiç işlenmiyor, sayfa yeniden yükleniyordu.
+
+Bu "yalnız yavaş bağlantıda olur" bir durum değil — ilk yüklemede, sekme arka plandayken ya da JS bir uzantı yüzünden geciktiğinde de oluşur.
+
+**Düzeltme:** beş kimlik formuna `method="post"` (giriş, kayıt, şifre güncelleme, davet kabulü, şifremi unuttum). Aynı kazada alanlar istek gövdesinde gider. `tests/auth-form-method.test.ts` bekçisi eklendi ve mutasyonla sınandı.
+
+Dış denetimin göremeyeceği bir kusur: rapor veritabanı ve platform katmanına bakıyordu, istemci tarafındaki form davranışına değil.
+
+### Sürecin kendisinden çıkan ders
+
+Düzeltme yapıldı ama **kullanıcıya ulaşmadı**: eski üretim sunucusu durdurulmadan yenisi başlatıldı, `EADDRINUSE` ile düştü ve sağlık kontrolü *eski* sunucudan 200 aldığı için "hazır" sanıldı. Doğrulama, derlemenin içinde `method="post"` olduğunu görmekle yapılmıştı — yetersiz. Doğru kontrol, **sunucunun gerçekte ne gönderdiğine** bakmaktı:
+
+```
+curl -s http://localhost:3100/login | grep -oE "<form[^>]*>"
+```
+
+---
+
+## Sorgu birleştirme ölçüldü — kazanç yok denecek kadar az
+
+`getTeacherContext` aynı `workspaces` tablosunu tek istekte iki kez sorguluyordu (biri aktif alan, biri seçici listesi; ikincisi birincisini zaten kapsıyor). Birleştirildi ve ölçüldü:
+
+| Tablo | Öncesi | Sonrası |
+|---|---|---|
+| `workspaces` | 196 | 194 |
+| `profiles` | 179 | 177 |
+| `workspace_licenses` | 172 | 171 |
+| `workspace_members` | 149 | 148 |
+
+**~6 tarama, %1'in altında.** Sorgular zaten `Promise.all` içinde paralel olduğu için gecikme kazancı da yok.
+
+Değişiklik tutuldu ama gerekçesi değişti: **performans değil, mükerrerliğin giderilmesi**. Aynı tabloyu aynı istekte iki kez sormanın sebebi yoktu.
+
+**Asıl darboğazı bu ölçüm de doğruluyor:** kaldıraç bir sorguyu silmek değil, sayfanın yedi sorgusunu üçe indirmek. Her sorgu kendi RLS değerlendirmesini yapıyor ve 092'nin InitPlan kazancı sorgu başına geçerli, sayfa başına değil. Ayrı bir ölçüm turu istiyor.
+
+---
+
+## Çapraz kiracı testi canlıda 5 kayıt bırakmıştı
+
+Testin "kendi kiracısına ekleyebilir (pozitif kontrol — sonra siler)" adımı kaydı **silmiyordu**. `students` tablosunda DELETE politikası yok (ürün öğrenciyi silmez, arşivler) ve PostgREST bunu hata olarak bildirmiyor: **200 dönüyor, 0 satır siliyor**. `code` null olduğu için test geçiyordu.
+
+Tam olarak testin kendi başlığında uyardığı tuzak — *"sessiz no-op istemciden başarı gibi görünür"* — kontrol yazma testlerine konmuş, temizlik adımına konmamıştı. Beş koşu, beş kayıt.
+
+**Yapılanlar:**
+- Kalan 5 kayıt arşivlendi (kalıcı silme yalnız Supabase panelinden mümkün).
+- Kayıt oluşturan pozitif kontrol **kaldırıldı**. Gerek de yoktu: negatif iddia hata kodunun `42501` (yetki reddi) olmasını şart koşuyor — ekleme başka bir sebeple düşseydi (`23502` zorunlu kolon, `42703` kolon yok) test kırılırdı. Yani iddia kendi anlamını çöp bırakmadan garanti ediyor.
+- Silme testi de `code` yerine dönen satır sayısına bakacak şekilde sıkılaştırıldı.
+- Doğrulandı: yeni koşu hiç kayıt oluşturmuyor.
