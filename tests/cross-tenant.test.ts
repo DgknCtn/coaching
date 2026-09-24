@@ -20,25 +20,24 @@ import { canRunTenantTests, signInBothTenants, type Tenant } from './helpers/ten
 // KONTROLÜ VAR
 //
 // RLS okumada HATA VERMEZ, satırı sessizce süzer. Yani "yabancı veri
-// gelmedi" iddiası, veritabanı boşsa, kimlik bilgileri yanlışsa ya da
-// sorgu hatalıysa da doğrudur. Böyle bir test hiçbir şey ölçmeden
-// yeşil yanar — güvenlik testlerinin en sinsi başarısızlık biçimi.
+// gelmedi" iddiası; veritabanı boşsa, kimlik bilgisi yanlışsa ya da
+// sorgu hatalıysa da doğrudur. Böyle bir test hiçbir şey ölçmeden yeşil
+// yanar — güvenlik testlerinin en sinsi başarısızlık biçimi.
 //
 // Bu yüzden her negatif iddianın yanında, AYNI sorgunun kendi kiracıda
 // DOLU döndüğünü gösteren bir pozitif kontrol var. İkisi birlikte
 // anlamlı: "bu sorgu veri getirebiliyor, ama yabancı kiracıda
 // getirmiyor."
 //
-// YAZMA DENEMELERİNDE İSE SESSİZ NO-OP EN TEHLİKELİ SINIF: istemciden
-// başarı gibi görünür. Tek güvenilir kanıt, DİĞER kiracının satırı
-// yeniden okuyup değişmemiş bulmasıdır.
+// YAZMADA SESSİZ NO-OP EN TEHLİKELİ SINIF: istemciden başarı gibi
+// görünür. Tek güvenilir kanıt, DİĞER kiracının satırı yeniden okuyup
+// değişmemiş bulmasıdır.
 //
 // ============================================================
-// KOŞMA KOŞULU
+// SIRALI ÇALIŞIR
 //
-// Kimlik bilgileri + ALLOW_LIVE_RLS_TESTS=1. İkisi de yoksa atlanır;
-// ama kimlik bilgisi VARKEN giriş başarısız olursa dosya sessizce
-// atlamaz, patlar (helpers/tenant.ts).
+// `test.concurrent` YOK: iki istemci sabit hesapları paylaşıyor ve
+// aşağıdaki testler birbirinin verisine dokunuyor.
 // ============================================================
 
 describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () => {
@@ -57,29 +56,23 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
 
   it('kendi öğrencisini görebiliyor (POZİTİF KONTROL)', async () => {
     // Bu iddia olmadan aşağıdaki negatifler hiçbir şey kanıtlamaz.
-    const { data, error } = await a.client
-      .from('students')
-      .select('id, full_name')
-      .eq('id', a.studentId)
+    const r = await a.select<unknown[]>(`students?select=id,full_name&id=eq.${a.studentId}`)
 
-    expect(error).toBeNull()
+    expect(r.code).toBeNull()
     expect(
-      data,
+      r.body,
       'A kendi öğrencisini göremiyor — testin pozitif kontrolü çalışmıyor, ' +
         'negatif iddialar da anlamsız.'
     ).toHaveLength(1)
   })
 
-  it("yabancı kiracının öğrencisini id ile isteyince BOŞ döner", async () => {
-    const { data, error } = await a.client
-      .from('students')
-      .select('id, full_name')
-      .eq('id', b.studentId)
+  it('yabancı kiracının öğrencisini id ile isteyince BOŞ döner', async () => {
+    const r = await a.select<unknown[]>(`students?select=id,full_name&id=eq.${b.studentId}`)
 
     // RLS hata vermez, süzer: hata beklenmiyor, satır beklenmiyor.
-    expect(error).toBeNull()
+    expect(r.code).toBeNull()
     expect(
-      data,
+      r.body,
       `A, B'nin öğrencisini (${b.studentName}) okuyabildi — kiracı izolasyonu kırık.`
     ).toHaveLength(0)
   })
@@ -88,29 +81,25 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
     // Bir öncekinden farklı yol: id yerine kiracı kimliğiyle sorgulamak.
     // Politika `workspace_id IN (SELECT my_workspace_ids(...))` üzerinden
     // çalıştığı için bu, kapının doğrudan sınanması.
-    const { data, error } = await a.client
-      .from('students')
-      .select('id')
-      .eq('workspace_id', b.workspaceId)
+    const r = await a.select<unknown[]>(
+      `students?select=id&workspace_id=eq.${b.workspaceId}`
+    )
 
-    expect(error).toBeNull()
-    expect(data, "A, B'nin çalışma alanındaki öğrencileri listeleyebildi.").toHaveLength(0)
+    expect(r.code).toBeNull()
+    expect(r.body, "A, B'nin çalışma alanındaki öğrencileri listeleyebildi.").toHaveLength(0)
   })
 
   it('süzgeçsiz listede yalnız kendi kiracısı görünür', async () => {
     // En gerçekçi senaryo: uygulama zaten böyle sorguluyor. Buradaki
     // sızıntı, yukarıdaki iki testin kaçırabileceği bir politika
     // boşluğunu yakalar.
-    const { data, error } = await a.client.from('students').select('workspace_id').limit(200)
-
-    expect(error).toBeNull()
-    const yabanci = (data ?? []).filter(
-      r => (r as { workspace_id: string }).workspace_id !== a.workspaceId
+    const r = await a.select<{ workspace_id: string }[]>(
+      'students?select=workspace_id&limit=200'
     )
-    expect(
-      yabanci,
-      `A'nın listesinde ${yabanci.length} yabancı satır var.`
-    ).toHaveLength(0)
+
+    expect(r.code).toBeNull()
+    const yabanci = (r.body ?? []).filter(x => x.workspace_id !== a.workspaceId)
+    expect(yabanci, `A'nın listesinde ${yabanci.length} yabancı satır var.`).toHaveLength(0)
   })
 
   // ============================================================
@@ -120,76 +109,69 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
   it('yabancı öğrenciyi GÜNCELLEYEMEZ ve satır değişmez', async () => {
     const yeniAd = `SIZINTI-TESTI-${Date.now()}`
 
-    const { error } = await a.client
-      .from('students')
-      .update({ full_name: yeniAd })
-      .eq('id', b.studentId)
+    const r = await a.write<unknown[]>('PATCH', `students?id=eq.${b.studentId}`, {
+      full_name: yeniAd,
+    })
 
     // Hata gelebilir de gelmeyebilir de: RLS eşleşen satır bulamazsa
-    // güncelleme sessizce 0 satıra dokunur. O yüzden asıl kanıt aşağıda.
-    if (error) {
-      expect(['42501', 'PGRST116']).toContain(error.code)
+    // güncelleme sessizce 0 satıra dokunur. `return=representation`
+    // sayesinde kaç satırın döndüğünü görebiliyoruz.
+    if (!r.code) {
+      expect(
+        r.body,
+        "A'nın güncellemesi satır döndürdü — yabancı kayda yazabildi."
+      ).toHaveLength(0)
     }
 
     // TEK GÜVENİLİR KANIT: sahibi satırı yeniden okuyor.
-    const { data: kontrol } = await b.client
-      .from('students')
-      .select('full_name')
-      .eq('id', b.studentId)
-      .single()
-
+    const kontrol = await b.select<{ full_name: string }[]>(
+      `students?select=full_name&id=eq.${b.studentId}`
+    )
     expect(
-      (kontrol as { full_name: string } | null)?.full_name,
+      kontrol.body?.[0]?.full_name,
       "A, B'nin öğrenci adını değiştirebildi — yazma izolasyonu kırık."
     ).toBe(b.studentName)
   })
 
   it('yabancı kiracıya kayıt EKLEYEMEZ', async () => {
-    const { error } = await a.client.from('students').insert({
+    const r = await a.write('POST', 'students', {
       workspace_id: b.workspaceId,
       full_name: `SIZINTI-INSERT-${Date.now()}`,
     })
 
     // INSERT'te RLS süzmez, WITH CHECK reddeder: burada hata BEKLENİR.
     expect(
-      error,
+      r.code,
       "A, B'nin çalışma alanına öğrenci ekleyebildi — WITH CHECK koruması yok."
-    ).not.toBeNull()
-    expect(error?.code).toBe('42501')
+    ).toBe('42501')
   })
 
   it('kendi kiracısına ekleyebilir (POZİTİF KONTROL — sonra siler)', async () => {
     // Bir önceki testin anlamı buna bağlı: ekleme HER ZAMAN başarısız
-    // oluyorsa (ör. kolon eksik, tablo yanlış), negatif iddia boştur.
+    // oluyorsa (ör. zorunlu kolon eksik), negatif iddia boştur.
     const ad = `IZOLASYON-POZITIF-${Date.now()}`
-    const { data, error } = await a.client
-      .from('students')
-      .insert({ workspace_id: a.workspaceId, full_name: ad })
-      .select('id')
-      .single()
+    const r = await a.write<{ id: string }[]>('POST', 'students', {
+      workspace_id: a.workspaceId,
+      full_name: ad,
+    })
 
-    expect(error, `A kendi kiracısına ekleyemedi: ${error?.message}`).toBeNull()
-
-    const id = (data as { id: string } | null)?.id
-    expect(id).toBeTruthy()
+    expect(r.code, `A kendi kiracısına ekleyemedi: ${r.code}`).toBeNull()
+    const id = r.body?.[0]?.id
+    expect(id, 'Eklenen kaydın id\'si dönmedi.').toBeTruthy()
 
     // Test kendi çöpünü toplar: canlı veritabanında kalıcı kayıt
     // bırakmıyoruz.
     if (id) {
-      const { error: silmeHatasi } = await a.client.from('students').delete().eq('id', id)
-      expect(silmeHatasi, 'Test kaydı silinemedi; canlıda çöp kaldı.').toBeNull()
+      const silme = await a.write('DELETE', `students?id=eq.${id}`)
+      expect(silme.code, 'Test kaydı silinemedi; canlıda çöp kaldı.').toBeNull()
     }
   })
 
   it('yabancı öğrenciyi SİLEMEZ ve satır yerinde kalır', async () => {
-    await a.client.from('students').delete().eq('id', b.studentId)
+    await a.write('DELETE', `students?id=eq.${b.studentId}`)
 
-    const { data } = await b.client
-      .from('students')
-      .select('id')
-      .eq('id', b.studentId)
-
-    expect(data, "A, B'nin öğrencisini silebildi.").toHaveLength(1)
+    const kontrol = await b.select<unknown[]>(`students?select=id&id=eq.${b.studentId}`)
+    expect(kontrol.body, "A, B'nin öğrencisini silebildi.").toHaveLength(1)
   })
 
   // ============================================================
@@ -197,16 +179,16 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
   // ============================================================
 
   it('yabancı öğrenci üzerinde RPC çağıramaz', async () => {
-    // Tablo politikaları doğru olsa bile SECURITY DEFINER bir RPC
-    // kendi kontrolünü yapmıyorsa kiracı sınırı oradan delinir.
-    const { error } = await a.client.rpc('add_academic_note', {
+    // Tablo politikaları doğru olsa bile SECURITY DEFINER bir RPC kendi
+    // kontrolünü yapmıyorsa kiracı sınırı oradan delinir.
+    const r = await a.rpc('add_academic_note', {
       p_student_id: b.studentId,
       p_note_text: `SIZINTI-RPC-${Date.now()}`,
       p_pinned: false,
     })
 
     expect(
-      error,
+      r.code,
       "A, B'nin öğrencisine akademik not yazabildi — RPC gövdesinde kiracı kontrolü yok."
     ).not.toBeNull()
   })
@@ -214,18 +196,18 @@ describe.skipIf(!canRunTenantTests)('çapraz kiracı · gerçek oturumlar', () =
   // ============================================================
   // ÖĞRENCİNİN KİŞİSEL ALANI (R8 §14)
   //
-  // Bu tablo öğretmene BİLE kapalı. Kendi kiracısında bile
-  // okunamamalı — diğer testlerden farklı olarak burada "yabancı"
-  // olmak gerekmiyor.
+  // Bu tablo öğretmene BİLE kapalı: 101'de öğretmen/veli için politika
+  // hiç yazılmadı. Diğer testlerden farklı olarak burada "yabancı"
+  // olmak gerekmiyor — kendi kiracısında bile boş dönmeli.
   // ============================================================
 
   it('öğretmen kendi kiracısındaki kişisel ajandayı bile göremez', async () => {
-    const { data, error } = await a.client.from('student_personal_items').select('id').limit(5)
+    const r = await a.select<unknown[]>('student_personal_items?select=id&limit=5')
 
     // Politika hiç yazılmadığı için: ya yetki hatası ya boş sonuç.
-    if (!error) {
+    if (!r.code) {
       expect(
-        data,
+        r.body,
         'Öğretmen oturumu kişisel ajanda satırı okudu — §14 gizliliği kırık.'
       ).toHaveLength(0)
     }

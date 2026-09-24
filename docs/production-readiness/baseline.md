@@ -308,3 +308,34 @@ Sebep bileşik: `getTeacherContext` 6 round-trip yapıyor, sayfa 7 sorgu daha ek
 Yani gerçek kaldıraç **sayfa başına sorgu sayısı**; prefetch ve payload değil. Bu, ölçülmeden yapılacak bir iş değil ve `force-dynamic` kaldırmak da çözüm değil (kiracıya özel, RLS'e bağlı sayfalarda yanlış önbellekleme = başka kiracının verisi).
 
 **Sonraki adım için doğru soru:** `getTeacherContext`'in 6 turu ve panelin 7 sorgusu kaça indirilebilir? Bu, ayrı bir ölçüm turu hak ediyor.
+
+---
+
+## Faz 3 — çapraz kiracı izolasyonu doğrulandı (SEC-04 kapandı)
+
+İki ayrı çalışma alanındaki gerçek öğretmen hesaplarıyla, gerçek JWT'ler üzerinden: **10/10 geçti.**
+
+| Deneme | Sonuç |
+|---|---|
+| Kendi öğrencisini okuma (pozitif kontrol) | 1 satır |
+| Yabancı öğrenciyi id ile okuma | boş |
+| Yabancı `workspace_id` ile süzme | boş |
+| Süzgeçsiz listede yabancı satır | yok |
+| Yabancı öğrenciyi güncelleme | satır değişmedi (sahibi doğruladı) |
+| Yabancı kiracıya ekleme | **42501** |
+| Kendi kiracısına ekleme (pozitif kontrol) | başarılı, sonra silindi |
+| Yabancı öğrenciyi silme | satır yerinde |
+| Yabancı öğrenci üzerinde RPC | reddedildi |
+| Kişisel ajanda (§14) — kendi kiracısında bile | boş |
+
+**Servis anahtarı kullanılmadı.** Testler anon anahtarla gerçek giriş yapıp JWT alıyor; `vitest.config.ts`'in kararı korundu. **Hiçbir hesap oluşturulmadı** — yardımcıda `signUp` yolu yok, çünkü servis anahtarı olmadan açılan hesap silinemez.
+
+### İki teknik not
+
+**`supabase-js` kullanılamadı.** Kütüphane her `createClient` çağrısında Realtime istemcisi başlatıyor ve bu Node 22+ native WebSocket istiyor; ortamda Node 20 var. Testin Realtime ile işi yok, bu yüzden `tenant-isolation.test.ts`'in deseni sürdürüldü: doğrudan `fetch` ile PostgREST. Node sürümünden bağımsız, bağımlılık eklemiyor ve ürünün gerçekten kullandığı HTTP yolunu ölçüyor.
+
+**Test mutasyonla sınandı.** "Yabancı öğrenciyi id ile isteyince boş döner" iddiasında yabancı id yerine kendi id'si konuldu; test kırmızıya düştü. Yani iddia gerçekten satır sayısına bakıyor, kendiliğinden yeşil yanmıyor.
+
+### Neden pozitif kontroller kritik
+
+RLS okumada hata vermez, satırı sessizce süzer. "Yabancı veri gelmedi" iddiası; veritabanı boşsa, kimlik bilgisi yanlışsa ya da sorgu hatalıysa da doğrudur. Bu yüzden her negatifin yanında aynı sorgunun kendi kiracıda **dolu** döndüğünü gösteren bir kontrol var. Yazmada ise sessiz no-op istemciden başarı gibi görünür; tek güvenilir kanıt diğer kiracının satırı yeniden okuyup değişmemiş bulmasıdır.

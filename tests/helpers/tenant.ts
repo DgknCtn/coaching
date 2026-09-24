@@ -1,31 +1,41 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-
 // ROL BAZLI İZOLASYON TESTİ İÇİN KİRACI YARDIMCISI (R8 · SEC-04)
 //
 // ============================================================
-// NEDEN SERVİS ANAHTARI YOK
+// NEDEN supabase-js DEĞİL, DOĞRUDAN fetch
+//
+// İlk yazımda `@supabase/supabase-js` kullanıldı ve Node 20'de daha
+// istemci kurulurken patladı: kütüphane her `createClient` çağrısında
+// bir Realtime istemcisi başlatıyor, o da native WebSocket istiyor
+// (Node 22+). Testin Realtime ile hiçbir işi yok.
+//
+// `tenant-isolation.test.ts` zaten doğrudan `fetch` ile PostgREST'e
+// gidiyor ve bu dosya o deseni sürdürüyor. Üç kazancı var:
+//   - Node sürümünden bağımsız çalışır,
+//   - test bağımlılığı eklemez,
+//   - ürünün gerçekten kullandığı HTTP yolunu ölçer; araya kütüphane
+//     davranışı girmez.
+//
+// ============================================================
+// SERVİS ANAHTARI YOK
 //
 // `vitest.config.ts` servis anahtarını testlere bilerek vermiyor:
 // "RLS'i atlayan bir anahtara erişmek, tam da ölçmeye çalıştıkları şeyi
-// anlamsız kılardı." Bu dosya o kararı bozmuyor — anon anahtarla GERÇEK
-// giriş yapıp gerçek JWT alıyor. Yani testler ürünün kullandığı yolun
-// tam olarak aynısından geçiyor.
+// anlamsız kılardı." Burada anon anahtarla GERÇEK giriş yapılıp gerçek
+// JWT alınıyor.
 //
 // ============================================================
-// HİÇBİR KAYIT OLUŞTURULMAZ
+// HİÇBİR HESAP OLUŞTURULMAZ
 //
-// Yardımcı yalnız GİRİŞ yapar. `signUp` yolu bilinçli olarak yok:
-// servis anahtarı olmadan oluşturulan hesap SİLİNEMEZ, yani her koşu
-// canlı veritabanına kalıcı çöp bırakırdı. Hesapları insan açar, test
-// yalnız kullanır.
+// `signUp` yolu bilinçli olarak yok: servis anahtarı olmadan
+// oluşturulan hesap SİLİNEMEZ, yani her koşu canlıya kalıcı çöp
+// bırakırdı. Hesapları insan açar, test yalnız kullanır.
 //
 // ============================================================
 // KİRACININ KİMLİĞİ KEŞFEDİLİR, SABİT YAZILMAZ
 //
-// `workspace_id` ve örnek kayıt id'leri testte sabit değil; her koşuda
-// oturumun kendi verisinden okunuyor. Sabit id yazmak, veritabanı
-// tazelendiğinde testi sessizce kör ederdi (aradığı satır yok → boş
-// sonuç → "izolasyon çalışıyor" gibi görünür).
+// Sabit id yazmak, veritabanı tazelendiğinde testi sessizce kör
+// ederdi: aradığı satır yok → boş sonuç → "izolasyon çalışıyor" gibi
+// görünür.
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -33,7 +43,7 @@ const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 /**
  * Testler ancak HEM kimlik bilgileri HEM de açık izin varken çalışır.
  *
- * İki ayrı koşul, çünkü ikisi farklı şeyi soruyor: "bağlanabilir miyim"
+ * İki ayrı koşul, çünkü farklı şeyler soruyorlar: "bağlanabilir miyim"
  * ve "bu veritabanına giriş yapmam İSTENİYOR mu". `.env.local`'inde
  * üretim anahtarı olan bir geliştirici, bayrağı açmadıkça üretime karşı
  * giriş denemez.
@@ -50,26 +60,90 @@ export const canRunTenantTests =
   !!process.env.TEST_TENANT_B_EMAIL &&
   !!process.env.TEST_TENANT_B_PASSWORD
 
+export interface Sonuc<T = unknown> {
+  status: number
+  body: T
+  /** PostgREST hata kodu (42501, PGRST116, …) — hata yoksa null. */
+  code: string | null
+}
+
 export interface Tenant {
-  /** Bu kiracının oturumuyla konuşan istemci. */
-  client: SupabaseClient
+  etiket: string
   email: string
+  token: string
   workspaceId: string
   /** Kiracıya ait örnek bir öğrenci — çapraz erişim denemelerinin hedefi. */
   studentId: string
   studentName: string
+
+  /** `GET /rest/v1/<yol>` — oturumun JWT'siyle. */
+  select<T = unknown>(yol: string): Promise<Sonuc<T>>
+  /** `POST|PATCH|DELETE /rest/v1/<yol>` */
+  write<T = unknown>(
+    yontem: 'POST' | 'PATCH' | 'DELETE',
+    yol: string,
+    govde?: unknown
+  ): Promise<Sonuc<T>>
+  /** `POST /rest/v1/rpc/<ad>` */
+  rpc<T = unknown>(ad: string, govde: unknown): Promise<Sonuc<T>>
 }
 
-function anonClient(): SupabaseClient {
-  return createClient(URL as string, ANON as string, {
-    auth: {
-      // İKİ KİMLİK ORTAK DEPOYU PAYLAŞAMAZ: persistSession açık kalsaydı
-      // A ve B aynı storage'a yazar, ikincisi birincisini ezerdi ve test
-      // farkında olmadan tek kullanıcıyla iki taraflı bir şey ölçerdi.
-      persistSession: false,
-      autoRefreshToken: false,
+async function oku(response: Response): Promise<{ body: unknown; code: string | null }> {
+  let body: unknown = null
+  try {
+    const text = await response.text()
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = null
+  }
+  const code =
+    body && typeof body === 'object' && 'code' in body
+      ? ((body as { code?: string }).code ?? null)
+      : null
+  return { body, code }
+}
+
+function istemci(token: string) {
+  const ortak = {
+    apikey: ANON as string,
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  }
+
+  return {
+    async select<T>(yol: string): Promise<Sonuc<T>> {
+      const r = await fetch(`${URL}/rest/v1/${yol}`, { headers: ortak })
+      const { body, code } = await oku(r)
+      return { status: r.status, body: body as T, code }
     },
-  })
+
+    async write<T>(
+      yontem: 'POST' | 'PATCH' | 'DELETE',
+      yol: string,
+      govde?: unknown
+    ): Promise<Sonuc<T>> {
+      const r = await fetch(`${URL}/rest/v1/${yol}`, {
+        method: yontem,
+        // `return=representation`: etkilenen satırlar geri döner, böylece
+        // "kaç satır değişti" sorusu cevaplanabilir. Sessiz no-op ile
+        // gerçek başarıyı ayırmanın tek yolu bu.
+        headers: { ...ortak, Prefer: 'return=representation' },
+        body: govde === undefined ? undefined : JSON.stringify(govde),
+      })
+      const { body, code } = await oku(r)
+      return { status: r.status, body: body as T, code }
+    },
+
+    async rpc<T>(ad: string, govde: unknown): Promise<Sonuc<T>> {
+      const r = await fetch(`${URL}/rest/v1/rpc/${ad}`, {
+        method: 'POST',
+        headers: ortak,
+        body: JSON.stringify(govde),
+      })
+      const { body, code } = await oku(r)
+      return { status: r.status, body: body as T, code }
+    },
+  }
 }
 
 /**
@@ -84,15 +158,27 @@ export async function signInTenant(
   password: string,
   etiket: string
 ): Promise<Tenant> {
-  const client = anonClient()
+  const girisYaniti = await fetch(`${URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: ANON as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
 
-  const { error: signInError } = await client.auth.signInWithPassword({ email, password })
-  if (signInError) {
+  const { body: girisGovde } = await oku(girisYaniti)
+  const token = (girisGovde as { access_token?: string } | null)?.access_token
+
+  if (!girisYaniti.ok || !token) {
+    const mesaj =
+      (girisGovde as { error_description?: string; msg?: string } | null)?.error_description ??
+      (girisGovde as { msg?: string } | null)?.msg ??
+      `HTTP ${girisYaniti.status}`
     throw new Error(
-      `${etiket} kiracısına giriş yapılamadı (${email}): ${signInError.message}. ` +
+      `${etiket} kiracısına giriş yapılamadı (${email}): ${mesaj}. ` +
         'Hesap mevcut mu ve şifre .env.local ile eşleşiyor mu?'
     )
   }
+
+  const c = istemci(token)
 
   // ERİŞİM DURUMU ÖNCE KONTROL EDİLİR.
   //
@@ -100,11 +186,14 @@ export async function signInTenant(
   // (099). Süresi dolmuş bir fixture'da TÜM olumlu kontroller boşalır ve
   // dosya "izolasyon bozuk" diye kırmızıya düşer — oysa sorun testin
   // kendi hesabındadır. Bu yüzden ayrı ve açık bir hata veriliyor.
-  const { data: accessRows } = await client.rpc('get_workspace_access_state')
-  const blocked = (accessRows ?? []) as { blocked_reason: string | null }[]
-  if (blocked.length > 0 && blocked.every(r => r.blocked_reason)) {
+  const erisim = await c.rpc<{ blocked_reason: string | null }[]>(
+    'get_workspace_access_state',
+    {}
+  )
+  const satirlar = Array.isArray(erisim.body) ? erisim.body : []
+  if (satirlar.length > 0 && satirlar.every(r => r.blocked_reason)) {
     throw new Error(
-      `${etiket} kiracısının erişimi engellenmiş (${blocked[0].blocked_reason}). ` +
+      `${etiket} kiracısının erişimi engellenmiş (${satirlar[0].blocked_reason}). ` +
         'Test hesabının denemesi dolmuş olabilir; bu bir izolasyon hatası DEĞİLDİR.'
     )
   }
@@ -112,29 +201,29 @@ export async function signInTenant(
   // Kiracının kendi verisi. Bu sorgu BOŞ DÖNERSE test anlamsızlaşır:
   // "yabancı veri görünmüyor" iddiası, hiçbir veri görünmediğinde
   // kendiliğinden doğru olur.
-  const { data: students, error: studentError } = await client
-    .from('students')
-    .select('id, full_name, workspace_id')
-    .limit(1)
+  const ogrenciler = await c.select<{ id: string; full_name: string; workspace_id: string }[]>(
+    'students?select=id,full_name,workspace_id&limit=1'
+  )
 
-  if (studentError) {
-    throw new Error(`${etiket}: öğrenci okunamadı — ${studentError.message}`)
+  if (ogrenciler.code) {
+    throw new Error(`${etiket}: öğrenci okunamadı — ${ogrenciler.code}`)
   }
-  if (!students || students.length === 0) {
+  const liste = Array.isArray(ogrenciler.body) ? ogrenciler.body : []
+  if (liste.length === 0) {
     throw new Error(
       `${etiket} kiracısında hiç öğrenci yok. Çapraz erişim testi, her iki ` +
         'kiracının da EN AZ BİR öğrencisi olmadan anlamlı sonuç üretemez.'
     )
   }
 
-  const student = students[0] as { id: string; full_name: string; workspace_id: string }
-
   return {
-    client,
+    etiket,
     email,
-    workspaceId: student.workspace_id,
-    studentId: student.id,
-    studentName: student.full_name,
+    token,
+    workspaceId: liste[0].workspace_id,
+    studentId: liste[0].id,
+    studentName: liste[0].full_name,
+    ...c,
   }
 }
 
