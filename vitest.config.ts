@@ -41,6 +41,22 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL ?? '',
       NEXT_PUBLIC_SUPABASE_ANON_KEY: env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+
+      // ROL BAZLI İZOLASYON TESTİ (R8 · SEC-04).
+      //
+      // İki AYRI çalışma alanındaki iki gerçek öğretmen hesabı. Testler
+      // bunlarla ANON ANAHTAR üzerinden giriş yapıp gerçek JWT alır —
+      // servis anahtarı yine devrede değil, yukarıdaki karar bozulmuyor.
+      //
+      // ALLOW_LIVE_RLS_TESTS ayrı bir anahtar olarak duruyor: .env.local'inde
+      // ÜRETİM anahtarı olan bir geliştirici bu testleri kazara üretime karşı
+      // çalıştırmasın. Kimlik bilgileri tanımlı olsa bile bu bayrak yoksa
+      // testler atlanır.
+      TEST_TENANT_A_EMAIL: env.TEST_TENANT_A_EMAIL ?? '',
+      TEST_TENANT_A_PASSWORD: env.TEST_TENANT_A_PASSWORD ?? '',
+      TEST_TENANT_B_EMAIL: env.TEST_TENANT_B_EMAIL ?? '',
+      TEST_TENANT_B_PASSWORD: env.TEST_TENANT_B_PASSWORD ?? '',
+      ALLOW_LIVE_RLS_TESTS: env.ALLOW_LIVE_RLS_TESTS ?? '',
     },
   },
   resolve: {
