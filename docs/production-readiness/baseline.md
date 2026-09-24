@@ -140,3 +140,64 @@ Tek kalan koruma `lib/workspace.ts:40` → `/erisim` yönlendirmesi; yani arayü
 - **Doğrulandı ve büyüdü:** SEC-02 (97 → 155).
 - **Ertelendi:** PERF-01/02 — istatistik sıfırlanana kadar veri karar veremez.
 - **Yeni P0:** lisans kapısı; denetimde yok, canlıda aktif.
+
+---
+
+## Faz 1 sonrası doğrulama (107 + 108 uygulandı)
+
+### Kapı yerinde
+
+| Fonksiyon | `workspace_access_ok` |
+|---|---|
+| `my_workspace_ids` | var |
+| `has_workspace_role` | var |
+| `my_member_workspace_ids` | **yok** — kasıtlı (ticari tablolar) |
+
+Politika dağılımı: **75** kapılı, **2** kapısız ikiz (yalnız `billing_orders` + `workspace_licenses`), **3** `is_workspace_member`, `has_workspace_role` kalıntısı **0**. Üç farklı yetki cevabı tek cevaba indi.
+
+### 107 bir kusuru görünür kıldı (108 ile kapandı)
+
+107 uygulandıktan sonra `/api/health` **503** dönmeye başladı. Sebep sağlık kontrolü değildi; anon anahtarla yapılan en basit sorgu patlıyordu:
+
+```
+GET /rest/v1/students?select=id&limit=1
+{"code":"42501","message":"permission denied for function my_workspace_ids"}
+```
+
+**Kusur 107'nin değil, 092'nin.** `091:82` fonksiyondan `PUBLIC`'in `EXECUTE` hakkını aldı (anon PUBLIC üyesidir); fonksiyon o gün tek tabloda deneniyordu, etkisi görünmedi. 092 deseni 75 politikaya yayınca anon oturumundaki her sorgu, değerlendiremediği bir politika ifadesine çarpar oldu.
+
+Bu, **§3'teki teşhisi düzeltiyor**: anon yalnız korunan tablolarda değil, **korunmayan** tablolarda da (`students`, `books`, `homework_items`) 42501 alıyordu. Denetimin raporladığı 62 Postgres hatasının önemli bir kısmı buradan geliyor; uptime monitörü her çağrıda bir tane üretiyordu.
+
+Ayrım önemli: *"yetkisiz erişim reddedildi"* değil, *"yetkili erişim değerlendirilemedi"*. RLS'in işi satırı süzmek; süzemediğinde sorgu patlar.
+
+108 sonrası: anon `students` sorgusu `[]` döndürüyor, `/api/health` **200**.
+
+### Maliyet ölçüldü — kapı performansı bozmadı
+
+Tek `/teacher/students` yüklemesi, 107+108 sonrası:
+
+| Tablo | Tarama (bu sayfa için) |
+|---|---|
+| `workspace_licenses` — kapının doğrudan maliyeti | **63** |
+| `workspace_members` | 55 |
+| `workspaces` | 64 |
+| `profiles` | 68 |
+
+Karşılaştırma noktası 092'nin kendi başlığındaki ölçüm (aynı sayfa, tek yükleme): `profiles` 13.462 → 7.891, `workspace_members` 13.373 → 7.802.
+
+Bugün aynı sayfa **onlarca** tarama üretiyor, binlerce değil. Yani:
+- 092'nin kazancı korunuyor (kapı, InitPlan kaldırmasını bozmadı),
+- kapının maliyeti 2 satırlık indeksli bir tabloda sayfa başına ~63 arama.
+
+`EXPLAIN` ile `loops=1` doğrulaması yapılamadı: salt okunur denetim kullanıcısı `my_workspace_ids`'i çalıştıramıyor (107'nin `REVOKE`'u doğru çalışıyor demektir). Yerine 092'nin kendi yöntemi kullanıldı — sayfa başına gerçek tarama farkı, ki daha doğrudan bir ölçüdür.
+
+### Faz 2 için çıkan kritik kısıt
+
+Bu bulgu olmasaydı, Faz 2'nin toplu `REVOKE`'u RLS yardımcılarını da kapsar ve uygulamanın **oturumsuz her sorgusu** 42501'e dönerdi — giriş, davet ve sağlık kontrolü dahil.
+
+İzin listesi bu yüzden iki kategoriden oluşacak:
+
+1. **Oturumsuz akışların çağırdıkları:** `check_rate_limit`, `get_invitation_by_token`, `log_auth_event`
+2. **RLS politikalarının çağırdıkları:** `my_workspace_ids`, `my_member_workspace_ids`, `has_workspace_role`, `is_workspace_member`, `current_profile_id`, `is_student_self`, `is_parent_of_student`, `workspace_access_ok`
+
+`tests/tenant-isolation.test.ts` artık bunu davranışsal olarak koruyor: anon korunmayan bir tabloya dokunduğunda hata değil **boş sonuç** almalı.
