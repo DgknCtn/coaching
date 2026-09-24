@@ -248,3 +248,17 @@ Aynı kusur `log_auth_event`'te de vardı ve `093:52` onu düzeltti; `check_rate
 Dış denetim bunu göremedi: fonksiyon var, yetkileri doğru, tablo yerinde. Yalnız çalışmıyor.
 
 **Düzeltme:** migration 110, `ALTER FUNCTION` ile gövdeye dokunmadan `extensions`'ı search_path'in sonuna ekliyor (`public` önce kaldığı için gölgeleme riski yok). `tests/rate-limit-sql-parity.test.ts` bekçisi eklendi.
+
+---
+
+## 110 doğrulandı — hız sınırı canlandı
+
+| Kontrol | Sonuç |
+|---|---|
+| `check_rate_limit` search_path | `public, pg_temp, extensions` (artık `log_auth_event` ile aynı) |
+| Sayaç çalışıyor mu | 9 → 8 → 7 → … → 0 |
+| Kilit kapanıyor mu | **11. denemede `allowed: false`** |
+
+İki aydır sessizce ölü olan koruma çalışır hâle geldi. Kaba kuvvet savunması artık gerçekten var.
+
+*Not: uygulama logundaki `"Hız sınırı sayacı çalışmadı"` satırının kesildiği bu oturumda gösterilemedi — bu dev sunucusunda giriş denemesi yapılmadı, sayaç sıfır. Kanıt doğrudan RPC çağrılarında ve kesin.*
