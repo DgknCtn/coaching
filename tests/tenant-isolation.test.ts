@@ -317,3 +317,90 @@ describe('kiracı izolasyonu · kurulum', () => {
 // Bu senaryo iki gerçek hesap ve tohum veri gerektirdiği için birim test
 // paketine alınmadı; Faz 2'de e2e boru hattı kurulunca oraya taşınmalı.
 // ============================================================
+
+// ============================================================
+// ANON'UN SORGUSU HATA DEĞİL BOŞ SONUÇ DÖNDÜRMELİ (108)
+//
+// NEDEN BU TEST VAR
+//
+// Yukarıdaki testler "anon veri GÖREMEMELİ" diyor. Bu blok bunun
+// gözden kaçan diğer yarısını kilitliyor: anon, korunmayan bir tabloya
+// dokunduğunda HATA DA ALMAMALI.
+//
+// 24 Eylül 2026'da canlıda şu vardı:
+//
+//   GET /rest/v1/students?select=id&limit=1
+//   {"code":"42501","message":"permission denied for function my_workspace_ids"}
+//
+// Sebep: 091 `my_workspace_ids`'ten PUBLIC'in EXECUTE hakkını aldı
+// (anon PUBLIC üyesidir), 092 ise o fonksiyonu 75 RLS politikasına
+// yaydı. Anon oturumundaki her sorgu, değerlendiremediği bir politika
+// ifadesine çarpar oldu.
+//
+// FARK ÖNEMLİ: "yetkisiz erişim reddedildi" değil, "yetkili erişim
+// DEĞERLENDİRİLEMEDİ". RLS'in işi satırı süzmektir; süzemediğinde
+// sorgu patlar ve boş sonuç yerine hata döner. Sağlık kontrolü
+// (/api/health) bu yüzden aylarca "degraded" dönüyordu ve dış denetimin
+// raporladığı 42501'lerin bir kısmı buradan geliyordu.
+//
+// Koruma fonksiyonun ÇAĞRILABİLİRLİĞİNDE değil GÖVDESİNDE:
+// `current_profile_id()` oturumsuz çağrıda NULL'dır, yani anon
+// fonksiyonu çağırabilir ama her zaman boş küme alır.
+//
+// Bu test aynı zamanda FAZ 2'NİN BEKÇİSİ: anon'un çağırabildiği ~155
+// fonksiyonu toplu kapatırken RLS yardımcıları kapsama girerse,
+// uygulamanın oturumsuz her sorgusu 42501'e döner ve bu blok kırılır.
+// ============================================================
+
+/** Anon'a AÇIK olması gereken tablolar: RLS satırları süzer, hata vermez. */
+const ANON_OKUNABILIR = ['students', 'books', 'workspaces', 'homework_items'] as const
+
+/**
+ * `select=*` ile sorgular — `anonSelect` DEĞİL.
+ *
+ * Ortak yardımcı `select=workspace_id` istiyor ve `workspaces` tablosunda
+ * öyle bir sütun yok (orada `id`). O yolla sorulsaydı test 42703 ("column
+ * does not exist") alır ve bunu bir sonuç sanardı: yetkiyi değil yazım
+ * hatasını ölçerdi — dosyanın yukarıda uyardığı tuzağın aynısı.
+ */
+async function anonSelectAll(table: string) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=*&limit=1`
+  const response = await fetch(url, {
+    headers: {
+      apikey: ANON_KEY as string,
+      Authorization: `Bearer ${ANON_KEY}`,
+    },
+  })
+
+  let body: unknown = null
+  try {
+    body = await response.json()
+  } catch {
+    body = null
+  }
+
+  return { status: response.status, body }
+}
+
+describe.skipIf(!hasLiveCredentials)('anon · politika değerlendirilebiliyor', () => {
+  it.each(ANON_OKUNABILIR)('%s anon anahtarla HATA vermez', async table => {
+    const { status, body } = await anonSelectAll(table)
+
+    const code = (body as { code?: string } | null)?.code ?? ''
+
+    expect(
+      code,
+      `${table}: anon sorgusu ${code} ile patladı — RLS politikasındaki ` +
+        'yardımcı fonksiyon anon tarafından çağrılamıyor demektir ' +
+        '(108). Beklenen: boş sonuç, hata değil.'
+    ).not.toBe('42501')
+
+    // Boş sonuç ŞART: hata almamak yetmez, veri de sızmamalı.
+    expect(status, `${table}: beklenmedik durum kodu ${status}`).toBe(200)
+    expect(Array.isArray(body)).toBe(true)
+    expect(
+      body,
+      `${table} anon anahtarla satır döndürdü — kiracı verisi açıkta.`
+    ).toHaveLength(0)
+  })
+})
