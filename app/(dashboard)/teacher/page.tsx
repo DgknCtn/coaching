@@ -110,15 +110,8 @@ export default async function TeacherDashboard() {
   // çalışıyordu: dashboard açılışı dört ayrı gidiş-dönüş bekliyordu.
   // Yalnız öğrenci listesi RPC'ye bağımlı (aşağıya bakınız); geri kalanın
   // sırayla beklemesi için hiçbir sebep yoktu.
-  const [{ data: licenseRow }, { count: bookCount }, { count: homeworkCount }] =
+  const [{ count: bookCount }, { count: homeworkCount }] =
     await Promise.all([
-      // Lisansı olmayanlara deneme şeridi gösterilecek.
-      supabase
-        .from('workspace_licenses')
-        .select('id')
-        .eq('workspace_id', workspaceId)
-        .eq('status', 'active')
-        .maybeSingle(),
       // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
       // gövdesi taşınmaz.
       supabase
@@ -141,7 +134,23 @@ export default async function TeacherDashboard() {
       // (student/page.tsx'te aynı kalıp kullanılıyor.)
       supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
     ])
-  const hasLicense = !!licenseRow
+  // LİSANS DURUMU BAĞLAMDAN GELİYOR, AYRI SORGUDAN DEĞİL.
+  //
+  // Burada `workspace_licenses` tablosuna ayrı bir sorgu vardı; oysa
+  // `getTeacherContext` zaten `get_workspace_usage` RPC'sini çağırıyor
+  // ve dönüşünde `license_status` var (058). Aynı bilgi aynı istekte
+  // iki kez soruluyordu.
+  //
+  // KAZANÇ ÖLÇÜLDÜ VE BULUNAMADI — BU YÜZDEN GEREKÇE PERFORMANS DEĞİL.
+  //
+  // Sorgu silindikten sonra aynı sayfa ölçüldü ve tarama sayıları
+  // DÜŞMEDİ, hatta oynadı (profiles 177->193, workspaces 194->204).
+  // Yani sayfa yüklemeleri arasındaki doğal dalgalanma, tek bir sorgunun
+  // etkisinden büyük. Bu yöntem bu mertebedeki farkları ayırt edemiyor.
+  //
+  // Değişiklik yine de doğru: aynı bilgi aynı istekte iki kez
+  // soruluyordu. Ama bir performans iyileştirmesi olarak sunulamaz.
+  const hasLicense = usage?.licenseStatus === 'active'
 
   const [{ data: students }, { data: upcomingSessions }, { data: dayNotes }] = await Promise.all([
     supabase

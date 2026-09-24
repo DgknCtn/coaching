@@ -400,3 +400,78 @@ Tam olarak testin kendi başlığında uyardığı tuzak — *"sessiz no-op iste
 - Kayıt oluşturan pozitif kontrol **kaldırıldı**. Gerek de yoktu: negatif iddia hata kodunun `42501` (yetki reddi) olmasını şart koşuyor — ekleme başka bir sebeple düşseydi (`23502` zorunlu kolon, `42703` kolon yok) test kırılırdı. Yani iddia kendi anlamını çöp bırakmadan garanti ediyor.
 - Silme testi de `code` yerine dönen satır sayısına bakacak şekilde sıkılaştırıldı.
 - Doğrulandı: yeni koşu hiç kayıt oluşturmuyor.
+
+---
+
+## Faz 4 kapanışı — sorgu silmek bu sayfada kaldıraç değil
+
+`getTeacherContext`'teki mükerrer `workspaces` sorgusundan sonra ikinci bir mükerrerlik daha bulundu: panel `workspace_licenses` tablosunu ayrı sorguyla soruyordu, oysa `get_workspace_usage` dönüşünde `license_status` zaten var (058). O sorgu da kaldırıldı.
+
+**Ölçüm sonucu, ilkiyle aynı yöne işaret etmedi — tam tersine gürültünün içinde kayboldu:**
+
+| Tablo | Birleştirme sonrası | Lisans sorgusu da silindikten sonra |
+|---|---|---|
+| `profiles` | 177 | 193 |
+| `workspaces` | 194 | 204 |
+| `workspace_licenses` | 171 | 178 |
+| `workspace_members` | 148 | 159 |
+
+Sorgu **silindiği hâlde sayılar arttı**. Sayfa yüklemeleri arasındaki doğal dalgalanma (±20 tarama), tek bir sorgunun etkisinden büyük.
+
+**Dürüst sonuç: bu ölçüm yöntemi bu mertebedeki farkları ayırt edemiyor.** İki değişiklik de tutuldu ama gerekçeleri performans değil, **mükerrerliğin giderilmesi** — aynı bilgiyi aynı istekte iki kez sormanın sebebi yoktu. Koddaki yorumlar da bu ölçümle güncellendi; orada "büyük kazanç" ima eden bir metin bırakmak sonraki okuyucuyu yanıltırdı.
+
+**APP-01 bu noktada kapatılıyor.** Sayfa başına sorgu sayısını düşürmek mantıklı bir yön olmaya devam ediyor, ama tek tek sorgu silerek ölçülebilir kazanç elde edilemiyor. Anlamlı bir fark için ya sorgu sayısı katlarca azalmalı (7 → 3 gibi) ya da ölçüm daha hassas bir yöntemle (aynı senaryonun çok sayıda tekrarı, ortalama) yapılmalı. İkisi de ayrı bir tur.
+
+---
+
+## PERF-01 — 70 FK adayından 4'ü (migration 111)
+
+Karar kodda ve canlı istatistiklerde doğrulanarak verildi.
+
+**Elenen 66 adayın gerekçesi:**
+
+- **~40 tanesi "kim yaptı" kolonu** (`approved_by_profile_id`, `created_by_profile_id`, `author_profile_id`…). Kod aramasında bu kolonlar üzerinden **tek bir filtre bile yok**. Kayıt tutuyorlar, sorgulanmıyorlar.
+- **Sıfır ve çok küçük tablolar** (`group_sessions` 0, `topic_contacts` 0, `homework_item_notes` 1, `student_personal_items` 7…). Denetimin kendi notu: *"Sequential scans on very small tables can be optimal."*
+- **Zaten bileşik indeksin başında olanlar** — sorgu `indkey[0]` ile yapıldı, çünkü PostgreSQL bileşik indeksi ancak baştan kullanabilir.
+
+**Eklenen 4'ün gerekçesi:**
+
+| İndeks | Gerekçe |
+|---|---|
+| `homework_items(book_id)`, `(section_id)` | 1.429 satır, 1,6 M indeks taraması. PostgREST gömülü ilişkileri bu FK'lerden çözüyor (`haftam/page.tsx:91-92`, `student/page.tsx:43`) — her Haftam ve Ödevlerim yüklemesi bu yoldan geçiyor |
+| `student_curriculum_items(workspace_id)` | 379 satır ama **1.310 sıralı tarama** — listedeki en yüksek oran. `workspace_id` burada sıradan bir FK değil, **RLS'in süzdüğü kolon**: indeks yoksa RLS'in kendisi sıralı tarama demek |
+| `curriculum_template_items(workspace_id)` | 952 satır — indekssizler içinde en büyüğü, yine RLS kolonu |
+
+**Bu son söz değil.** Karar 62 günlük bayat istatistiklerle verildi. `docs/production-readiness/perf-02-yeniden-olcum.sql`, sıfırlama sonrası hem bu dördünün gerçekten kullanıldığını hem de yeni aday olup olmadığını yeniden ölçüyor.
+
+---
+
+## Kapanış — denetim listesi vs. gerçekte bulunanlar
+
+### Denetimin P0'ları
+
+| Bulgu | Sonuç |
+|---|---|
+| SEC-01 (42501) | **Teşhis yanlıştı.** Kaynak eksik GRANT değil; anon'un RLS yardımcısını çağıramamasıydı (108). Önerilen `GRANT` yazılsaydı gerçek bir gerileme olurdu |
+| SEC-02 (SECURITY DEFINER) | **Gerçek ve denetimden kötüydü** (97 değil 155). Kapatıldı: anon yüzeyi **155 → 14** |
+| SEC-03 (RLS'siz tablolar) | **Yanlış alarm.** Canlıda RLS'i kapalı tek bir public tablo yok |
+| SEC-04 (çapraz kiracı) | **Kapandı.** İki gerçek hesapla 10/10 |
+| PERF-02 | **Bayat veri.** Sıfırlama betiği hazır |
+| PERF-01 | 70 adaydan 4'ü gerekçelendirildi (111) |
+| APP-01 | Ölçüldü; prefetch %7, sorgu silme gürültünün altında |
+| OBS-01 / OPS-01 / OPS-02 | `operations.md` |
+| LOAD-01 | Hazır, staging bekliyor |
+
+### Denetimin göremediği beş kusur
+
+Beşi de bu turda bulundu, beşi de bir testle kapatıldı:
+
+1. **Lisans/deneme kapısı RLS'ten düşmüştü** (092'den beri). Süresi dolmuş kiracı öğrenci, ödev ve finans verisini görebiliyordu; yalnız arayüz engelliyordu. → `107`, `workspace-access-parity.test.ts`
+2. **Anon hiçbir sorgu yapamıyordu** (092'den beri). `my_workspace_ids` anon'a kapalıydı, 75 politika onu çağırıyordu; korunmayan tablolarda bile 42501 dönüyordu. Sağlık kontrolü aylarca "degraded"di. → `108`, `tenant-isolation.test.ts`
+3. **Hız sınırı iki aydır çalışmıyordu** (068'den beri). `digest` `extensions` şemasında, `search_path` ise `public, pg_temp`. Fail-open tasarım yüzünden sessizdi: giriş, kayıt ve şifre sıfırlamada kaba kuvvet koruması **yoktu**. → `110`, `rate-limit-sql-parity.test.ts`
+4. **Şifre URL'ye yazılıyordu.** Kimlik formlarında `method` yoktu; JS hazır olmadan gönderim yapılırsa tarayıcı GET yapıyor ve şifre adres çubuğuna, geçmişe ve Referer başlığına düşüyordu. → `auth-form-method.test.ts`
+5. **`098`'de üç fonksiyon `search_path` sağlamlaştırmasını kaybetmişti** (024'ün kurduğu korumayı geri alan tek regresyon). → `109`
+
+Ortak noktaları şu: **hiçbiri ekranı bozmuyordu.** Üçü aylarca sürdü. Denetim de göremezdi — kaynağa bakmıyordu ve bunu kendi sınırında yazıyordu.
+
+Bu yüzden her kusur bir testle kapatıldı ve testlerin gerçekten koruduğu, kusuru kasten geri koyup kırmızıya düştükleri görülerek doğrulandı.
