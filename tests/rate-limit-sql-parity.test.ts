@@ -97,3 +97,81 @@ describe('check_rate_limit · sertleştirme korunuyor', () => {
     expect(sql).toMatch(/digest\(\s*v_salt/)
   })
 })
+
+// ============================================================
+// pgcrypto ŞEMA ERİŞİMİ — SESSİZ ARIZANIN BEKÇİSİ (110)
+//
+// NEDEN BU TEST VAR
+//
+// Hız sınırı iki ay boyunca FİİLEN ÇALIŞMADI ve kimse fark etmedi.
+// `check_rate_limit` gövdesinde `digest()` çağırıyor; `digest`
+// `extensions` şemasında, oysa fonksiyonun search_path'i yalnız
+// `public, pg_temp` idi. Her çağrı 42883 ("function digest does not
+// exist") ile düşüyordu.
+//
+// NEDEN SESSİZ: lib/rate-limit.ts bilinçli olarak FAIL-OPEN —
+// "sayaç bozulursa istek engellenmez, loglanır" (050'nin kararı, ve
+// doğru bir karar). Sonuç: giriş, kayıt, şifre sıfırlama ve davet
+// kabulünde kaba kuvvet koruması yoktu, ürün bunu yalnız bir log
+// satırıyla söylüyordu.
+//
+// Aynı kusur `log_auth_event`'te de vardı; 093 onu düzeltti ama
+// `check_rate_limit` o turda gözden kaçtı. Bu test, üçüncü kez
+// kaçmasını engelliyor.
+//
+// Dış denetim bunu göremedi: fonksiyon var, yetkileri doğru, tablo
+// yerinde. Yalnız çalışmıyor.
+// ============================================================
+
+describe('pgcrypto kullanan fonksiyonlar extensions şemasını görür', () => {
+  // Gövdesinde pgcrypto çağrısı geçen fonksiyonların TANIMLANDIĞI
+  // dosyalar. Yeni bir tanım eklenirse buraya da eklenmeli.
+  const PGCRYPTO_KULLANAN = [
+    { dosya: '068_audit_hardening.sql', fonksiyon: 'check_rate_limit' },
+    { dosya: '093_auth_events_workspace_and_presence.sql', fonksiyon: 'log_auth_event' },
+  ] as const
+
+  it('110, check_rate_limit için search_path düzeltmesini içerir', () => {
+    // Düzeltme ALTER FUNCTION ile yapıldı (gövdeye dokunulmadan), bu
+    // yüzden 068'in kendi metni değişmedi ve orada aranamaz.
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/migrations/110_rate_limit_search_path.sql'),
+      'utf8'
+    )
+
+    expect(sql).toContain('ALTER FUNCTION public.check_rate_limit')
+    expect(
+      sql.replace(/\s+/g, ' '),
+      '110, search_path sonuna extensions eklemiyor.'
+    ).toContain('SET search_path = public, pg_temp, extensions')
+  })
+
+  it.each(PGCRYPTO_KULLANAN)(
+    '$fonksiyon gövdesi gerçekten pgcrypto çağırıyor',
+    ({ dosya, fonksiyon }) => {
+      // İddianın dayanağı doğrulanıyor: fonksiyon pgcrypto kullanmıyorsa
+      // yukarıdaki düzeltme gereksiz demektir ve test yanlış şeyi korur.
+      const sql = readFileSync(join(process.cwd(), 'supabase/migrations', dosya), 'utf8')
+      const code = sql
+        .split(/\r?\n/)
+        .filter(line => !line.trimStart().startsWith('--'))
+        .join('\n')
+
+      expect(code, `${dosya} içinde ${fonksiyon} tanımı yok`).toContain(fonksiyon)
+      expect(code, `${fonksiyon} pgcrypto çağırmıyor görünüyor`).toMatch(/\bdigest\s*\(/)
+    }
+  )
+
+  it('search_path sıralaması public ile başlar', () => {
+    // `extensions` SONA ekleniyor: public önce geldiği için extensions
+    // şemasındaki bir nesne public'tekini gölgeleyemez. 024'ün gölgeleme
+    // kaygısı bu sırayla korunuyor.
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/migrations/110_rate_limit_search_path.sql'),
+      'utf8'
+    )
+    const match = sql.match(/SET search_path = ([^;]+);/)
+    expect(match).not.toBeNull()
+    expect(match![1].trim().startsWith('public')).toBe(true)
+  })
+})

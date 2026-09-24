@@ -201,3 +201,50 @@ Bu bulgu olmasaydı, Faz 2'nin toplu `REVOKE`'u RLS yardımcılarını da kapsar
 2. **RLS politikalarının çağırdıkları:** `my_workspace_ids`, `my_member_workspace_ids`, `has_workspace_role`, `is_workspace_member`, `current_profile_id`, `is_student_self`, `is_parent_of_student`, `workspace_access_ok`
 
 `tests/tenant-isolation.test.ts` artık bunu davranışsal olarak koruyor: anon korunmayan bir tabloya dokunduğunda hata değil **boş sonuç** almalı.
+
+---
+
+## Faz 2 sonrası doğrulama (109 uygulandı)
+
+### Anon yüzeyi 155 → 14
+
+| Kategori | Adet |
+|---|---|
+| RLS politikalarından çağrılanlar | 11 |
+| Oturumsuz akışlar (`check_rate_limit`, `get_invitation_by_token`, `log_auth_event`) | 3 |
+| **Toplam anon'a açık** | **14** |
+| `authenticated`'a açık | 166 |
+
+Fazlalık yok; kalan 14'ün tamamı iki meşru kategoriden.
+
+Davranış kontrolleri:
+- Anon `admin_overview` çağrısı → **42501 reddedildi**
+- Anon `students` okuması → `[]` (hata değil)
+- `get_invitation_by_token` anon'dan → çalışıyor; `/invite/<token>` sayfası doğru render ediyor
+- `/api/health` → **200**
+- Öğretmen paneli, öğrenci detayı → çalışıyor
+
+### 109 bir kusuru daha görünür kıldı: hız sınırı iki aydır çalışmıyor
+
+Anon ile `check_rate_limit` çağrıldığında yetki hatası değil şu döndü:
+
+```
+{"code":"42883","message":"function digest(text, unknown) does not exist"}
+```
+
+`42883 = undefined_function`. Fonksiyon çağrılabiliyor ama gövdesi çalışamıyor: `digest` `extensions` şemasında, `check_rate_limit`'in `search_path`'i ise yalnız `public, pg_temp` (`068:192`).
+
+**109'un getirdiği bir şey değil.** Canlıdan okunan kanıt:
+
+| Fonksiyon | search_path |
+|---|---|
+| `log_auth_event` | `public, pg_temp, extensions` |
+| `check_rate_limit` | `public, pg_temp` — **eksik** |
+
+Aynı kusur `log_auth_event`'te de vardı ve `093:52` onu düzeltti; `check_rate_limit` o turda gözden kaçtı. İkinci kanıt uygulama logunda: bu oturumun en başında, 109'dan saatler önce, her giriş denemesinde `"Hız sınırı sayacı çalışmadı; istek geçirildi"` yazılıyordu.
+
+**Neden sessiz kaldı.** `lib/rate-limit.ts` bilinçli olarak fail-open: *"sayaç bozulursa istek engellenmez, loglanır — kimsenin giriş yapamaması hız sınırının olmamasından kötü bir arızadır."* O karar doğru, ama sonucu şu: giriş, kayıt, şifre sıfırlama ve davet kabulünde **kaba kuvvet koruması fiilen yoktu** — 050'nin var olma sebebinin tamamı.
+
+Dış denetim bunu göremedi: fonksiyon var, yetkileri doğru, tablo yerinde. Yalnız çalışmıyor.
+
+**Düzeltme:** migration 110, `ALTER FUNCTION` ile gövdeye dokunmadan `extensions`'ı search_path'in sonuna ekliyor (`public` önce kaldığı için gölgeleme riski yok). `tests/rate-limit-sql-parity.test.ts` bekçisi eklendi.
