@@ -452,7 +452,7 @@ Karar kodda ve canlı istatistiklerde doğrulanarak verildi.
 
 | Bulgu | Sonuç |
 |---|---|
-| SEC-01 (42501) | **Teşhis yanlıştı.** Kaynak eksik GRANT değil; anon'un RLS yardımcısını çağıramamasıydı (108). Önerilen `GRANT` yazılsaydı gerçek bir gerileme olurdu |
+| SEC-01 (42501) | **Teşhis yanlıştı ve kapandı.** Kaynak eksik GRANT değil; anon'un RLS yardımcısını çağıramamasıydı (108). Önerilen `GRANT` yazılsaydı gerçek bir gerileme olurdu. Bekçi: `tests/anon-endpoint-probe.test.ts` (38 tablo + 11 yardımcı) |
 | SEC-02 (SECURITY DEFINER) | **Gerçek ve denetimden kötüydü** (97 değil 155). Kapatıldı: anon yüzeyi **155 → 14** |
 | SEC-03 (RLS'siz tablolar) | **Yanlış alarm.** Canlıda RLS'i kapalı tek bir public tablo yok |
 | SEC-04 (çapraz kiracı) | **Kapandı.** İki gerçek hesapla 10/10 |
@@ -460,7 +460,7 @@ Karar kodda ve canlı istatistiklerde doğrulanarak verildi.
 | PERF-01 | 70 adaydan 4'ü gerekçelendirildi (111) |
 | APP-01 | Ölçüldü; prefetch %7, sorgu silme gürültünün altında |
 | OBS-01 / OPS-01 / OPS-02 | `operations.md` |
-| LOAD-01 | Hazır, staging bekliyor |
+| LOAD-01 | Koşumcu yazıldı (`scripts/load/`, `npm run load`); staging bekliyor |
 
 ### Denetimin göremediği beş kusur
 
@@ -475,3 +475,57 @@ Beşi de bu turda bulundu, beşi de bir testle kapatıldı:
 Ortak noktaları şu: **hiçbiri ekranı bozmuyordu.** Üçü aylarca sürdü. Denetim de göremezdi — kaynağa bakmıyordu ve bunu kendi sınırında yazıyordu.
 
 Bu yüzden her kusur bir testle kapatıldı ve testlerin gerçekten koruduğu, kusuru kasten geri koyup kırmızıya düştükleri görülerek doğrulandı.
+
+---
+
+## SEC-01 kapandı — 42501 yüzeyi dört tablodan kırk dokuz noktaya çıkarıldı
+
+**Tarih:** 26 Eylül 2026.
+
+Faz 0'ın tek açık kalemi buydu ve açık kalma sebebi teşhis değil **kapsam**dı. 108'in düzeltmesi doğruydu ama doğrulaması o gün **elle ve dört tabloyla** yapılmıştı (`tenant-isolation.test.ts` · "anon · politika değerlendirilebiliyor"). Yani şu soru cevapsızdı: *anon'un dokunabildiği geri kalan yüzeyde 42501 kalmış mı?*
+
+Canlıdan ölçüldü: anon'un `SELECT` hakkı olan **38 tablo** ve RLS politikalarının çağırdığı **11 yardımcı fonksiyon** var. `tests/anon-endpoint-probe.test.ts` bunların hepsini artı üç oturumsuz akış fonksiyonunu (`check_rate_limit`, `get_invitation_by_token`, `log_auth_event`) dolaşıyor. **Sonuç: 56 iddia, 42501 sıfır.**
+
+### Bu dosya `tenant-isolation.test.ts`'in tersi değil, eksik yarısı
+
+42501 iki farklı şeyin adı olabilir ve bu ayrım denetimin yanlış teşhisinin de kaynağıydı:
+
+| Anlam | Örnek | Hangi test ölçer |
+|---|---|---|
+| Yetkisiz erişim **reddedildi** | anon `billing_orders` okumaya çalışıyor | `tenant-isolation` — 42501 **başarı** |
+| Yetkili erişim **değerlendirilemedi** | anon `students` okuyor, politika yardımcısı çağrılamıyor | `anon-endpoint-probe` — 42501 **kusur** |
+
+İkisi birlikte şunu söylüyor: kapalı olması gereken kapalı, **açık olması gereken de çalışıyor.** Denetim yalnız ikinci sütunun sonucunu görmüş ve birinci sütunun çözümünü (`GRANT`) önermişti.
+
+### Olumsuz kontrol: testin dişi olduğunun kanıtı
+
+Dosyadaki iddiaların tamamı "42501 gelmedi" biçiminde ve böyle bir iddia, prob hiç istek atmıyorsa da doğrudur — `cross-tenant.test.ts`'in başlığındaki tuzak. Bu yüzden içine bir **olumsuz kontrol** kondu: anon'a kapalı olan `workspace_access_ok` çağrılıyor ve 42501 **beklenmesi** gerekiyor. Canlıdan ölçülen cevap:
+
+```
+POST /rest/v1/rpc/workspace_access_ok   (anon)
+{"code":"42501","message":"permission denied for function workspace_access_ok"}
+```
+
+Yani kusur geri konduğunda imzanın ne olduğu testin içinde yazılı. O blok kırmızıya düşerse diğer 55 iddia da ölçüm yapmıyor demektir.
+
+### Üç prob'un kurgusu: canlıya yazmadan ölçmek
+
+Yetki denetimi fonksiyon **gövdesinden önce** yapılır. Bu, "çağırabiliyorum" kanıtını gövdeyi tamamlamadan almayı mümkün kılıyor:
+
+| Prob | Kurgu | Canlıya etkisi |
+|---|---|---|
+| `check_rate_limit` (geçersiz eylem) | `CASE` bloğu `RAISE EXCEPTION`'a düşer (P0001) | sayaç artmaz |
+| `log_auth_event` (geçersiz olay tipi) | `event_type` CHECK'i tutmaz | satır yazılmaz (servis anahtarıyla doğrulandı: `event_type LIKE 'probe%'` → 0) |
+| `get_invitation_by_token` (olmayan özet) | salt okunur | yok |
+
+Tek istisna bilinçli: `check_rate_limit` **gerçek** eylemle de çağrılıyor ve `rate_limit_counters`'a prob'a özel kovada (`probe:sec-01`) bir satır yazıyor. Gerekçesi 110'un kusuru — fonksiyon çağrılabiliyor, yetkiler doğru, tablo yerinde, **yalnız gövdesi `digest`'i bulamıyor** (42883) ve fail-open tasarım yüzünden hız sınırı iki ay sessizce kapalı kalıyor. Yalnız yetkiyi yoklayan bir prob o kusuru göremez; gövdenin **sonucunu** okumak gerekiyor. Satır gerçek kullanıcının IP/e-posta kovasına dokunmuyor ve fonksiyonun fırsatçı temizliği bir gün içinde siliyor.
+
+### Bu turda görülen iki şey
+
+**1. `log_auth_event` da fail-open.** Gövdesi `EXCEPTION WHEN OTHERS THEN RAISE WARNING` ile bitiyor (093:111), yani CHECK ihlali dahil her hata yutuluyor ve çağrı başarılı görünüyor. Karar bilinçli ve doğru (denetim kaydı yazılamadı diye giriş engellenmemeli), ama sonucu şu: **bu fonksiyonun içindeki bir arıza dışarıya hiç sinyal vermez** — tam olarak hız sınırının iki ay sessiz kalma biçimi. Uygulama tarafında `reportError` dikişi var (`lib/rate-limit.ts`), burada yok. Bugün bir kusur değil; ama denetim kaydı tutulmadığı hâlde her şeyin yeşil göründüğü bir senaryo mümkün.
+
+**2. Salt okunur rol RLS tablolarını okuyamıyor.** `iz_readonly` ile `auth_events` sorgulandığında dönen cevap `permission denied for function my_workspace_ids` oldu. Beklenen: o rol `anon`/`authenticated` değil, dolayısıyla 108'in `GRANT`'leri onu kapsamıyor. Üretim davranışını etkilemiyor ama **ölçüm aracının sınırı**: tablo içeriği bu bağlantıyla okunamaz. `pg_stat_*` görünümleri RLS'e tabi olmadığı için PERF-02 ölçümü bundan etkilenmiyor.
+
+### Geçmiş tarafı: log
+
+Test bugünü ve yarını kapatıyor; **geçmişi** kapatan şey log. `docs/production-readiness/sec-01-log-sorgusu.md`, Supabase Logs Explorer için üç sorgu taşıyor (uç bazında 401 eğilimi, `sql_state_code` kırılımı, mesaj metni) ve 108'in uygulandığı 24 Eylül'e göre önce/sonra kırıyor. Log saklama penceresi o tarihten kısaysa belge bunu da söylüyor: **"log yok" ile "hata yok" aynı şey değildir.**

@@ -60,7 +60,11 @@ Uygulama tarafında yapısal hata kaydı zaten var: `lib/observability.ts` JSON 
 
 **Sahiplik:** her alarmın bir insanı olmalı. Bu satır doldurulmadan alarm kurulmuş sayılmaz:
 
-> Birincil: `______` · Yedek: `______` · Kanal: `______`
+> **Birincil:** Doğukan Çetin · **Yedek:** yok · **Kanal:** e-posta (`eem.dogukancetin@gmail.com`)
+
+**"Yedek: yok" bilerek böyle yazılıyor.** Tek kişilik nöbetin riski gizlenmiyor: birincil kişi ulaşılamazsa alarm kimseye gitmez. Bu, bir eksik değil bir **kabul edilmiş risk** — ikinci bir kişi eklendiği gün bu satır güncellenir. Boş bırakmak ya da "ekip" yazmak, aynı riski görünmez kılardı.
+
+Kanalın e-posta olmasının sonucu da yazılmalı: **e-posta gece bakılmaz.** Yani bugünkü müdahale süresi "sabah" mertebesindedir; saatler içinde müdahale gereken bir olay için anlık bildirim (telefon/push) kurulmalıdır. Bu ölçek için şimdilik kabul edilebilir, çünkü sistem 33 MB ve aktif kullanıcı sayısı tek haneli.
 
 ### Kuralın kendisi
 
@@ -88,12 +92,16 @@ Yükseltme kararı tek bir ölçüye değil, **üç sorunun cevabına** bağlı:
 
 Supabase'in plan bazlı otomatik yedeği kullanılır. Doldurulacak:
 
-| Soru | Cevap |
-|---|---|
-| Yedek sıklığı | `______` |
-| Saklama süresi | `______` |
-| Point-in-time recovery var mı | `______` |
-| Geri yükleme sorumlusu | `______` |
+| Soru | Cevap | Kaynak |
+|---|---|---|
+| Yedek sıklığı | **panelden okunacak** | Dashboard → Database → Backups |
+| Saklama süresi | **panelden okunacak** | aynı ekran |
+| Point-in-time recovery var mı | **panelden okunacak** (Pro altı planlarda genelde yok) | aynı ekran |
+| Geri yükleme sorumlusu | **Doğukan Çetin** (tek kişi) | — |
+
+**Üç alan neden tahminle doldurulmuyor:** yedek sıklığı ve saklama süresi plana bağlı ve plan değiştikçe değişir. "Günlük, 7 gün" yazıp geçmek, olay anında yanlış bir RPO beklentisiyle karar vermek olurdu — bu belgenin en baştaki kuralı buna aykırı: *bir eşik ancak ne ölçüleceği, ne yapılacağı ve kimin bakacağı belliyse işe yarar.* Panelde okunan değer buraya **birebir** yazılır.
+
+**PITR yoksa sonucu açıkça şudur:** kurtarma noktası son otomatik yedeğin anıdır, yani en kötü durumda **bir günlük veri kaybı** kabul edilmiş olur. Kabul edilemiyorsa çözüm plan yükseltmektir; bu, `operations.md`'nin "önce verimlilik" kuralının geçerli OLMADIĞI tek kalem — veri kaybı toleransı kod optimizasyonuyla düşmez.
 
 ### Geri yükleme tatbikatı — yılda en az bir kez
 
@@ -107,9 +115,14 @@ Supabase'in plan bazlı otomatik yedeği kullanılır. Doldurulacak:
 **RLS ve yetkiler ayrıca doğrulanmalı.** Bu turda görüldü: bir yetki kusuru (`my_workspace_ids`'in anon'a kapalı olması) hiçbir ekranı bozmadan aylarca sürebiliyor. Geri yüklenmiş bir veritabanı "veri yerinde" diye onaylanıp yetkileri bozuk kalabilir. Tatbikattan sonra şu iki test geri yüklenen projeye karşı koşulmalı:
 
 ```
-tests/tenant-isolation.test.ts     (anon erişimi + politika değerlendirilebilirliği)
-tests/cross-tenant.test.ts         (rol bazlı çapraz kiracı)
+tests/tenant-isolation.test.ts       (anon erişimi + politika değerlendirilebilirliği)
+tests/cross-tenant.test.ts           (rol bazlı çapraz kiracı)
+tests/anon-endpoint-probe.test.ts    (38 tablo + 11 RLS yardımcısı: 42501 var mı)
 ```
+
+Üçüncüsü tatbikatın **en hızlı** kontrolü: geri yüklenen projede fonksiyon yetkileri eksikse (yedek `GRANT`'leri taşımazsa) anon yüzeyinin tamamı 42501'e döner ve bu dosya saniyeler içinde kırmızıya düşer.
+
+**İlk tatbikat tarihi:** 2026 Aralık ayının ilk haftası (öneri). Yıllık tekrar; tarih geçtiğinde bu satır yeni tarihle güncellenir. **Tarihi olmayan tatbikat yapılmamış tatbikattır** — bu yüzden boş bırakılmıyor, önerilen tarih yazılıyor.
 
 ### Olay müdahalesi
 
@@ -126,7 +139,7 @@ tests/cross-tenant.test.ts         (rol bazlı çapraz kiracı)
 
 ---
 
-## 5. Yük testi (LOAD-01) — hazır, çalıştırılmadı
+## 5. Yük testi (LOAD-01) — koşumcu yazıldı, çalıştırılmadı
 
 Denetimin §9'u kademeli bir yük testi istiyor ve **P0'lar kapandıktan sonra** koşulmasını şart koşuyor. P0'lar kapandı; test **bilinçli olarak çalıştırılmadı**.
 
@@ -154,14 +167,43 @@ Denetimin §9'u kademeli bir yük testi istiyor ve **P0'lar kapandıktan sonra**
 
 **Kabul:** yetki gerilemesi yok (`cross-tenant` ve `tenant-isolation` testleri yük altında da geçmeli) ve kararlaştırılan gecikme/hata hedefleri tutuyor.
 
+### Koşumcu — `scripts/load/`, `npm run load`
+
+Yukarıdaki tablo artık bir tarif değil, **çalıştırılabilir kod**:
+
+| Dosya | İşi |
+|---|---|
+| `scripts/load/run.mjs` | Kademeler, rampa, düşünme süresi, üretim kilidi |
+| `scripts/load/senaryolar.mjs` | Giriş + iş karışımı (12 adım; her adımın yanında kaynak dosya yazılı) |
+| `scripts/load/olcum.mjs` | p50/p95/p99 ve **sınıflara ayrılmış** hata sayaçları |
+
+Üç tasarım kararı ve gerekçeleri:
+
+**1. Harici yük aracı yok (k6/artillery değil).** Koşumcu `fetch` kullanıyor, çünkü ürünün gerçekten kullandığı HTTP yolu bu ve araya kütüphane davranışı girmiyor — `tests/helpers/tenant.ts`'nin aynı gerekçesi. Ayrıca bağımlılık eklemeden, `node scripts/load/run.mjs` ile staging'de derleme adımı olmadan koşuyor.
+
+**2. Üretim kilidi iki katmanlı.** `ALLOW_LOAD_TEST=1` yoksa **ve** hedef `.env.local`'deki üretim URL'siyle aynıysa koşum **başlamadan** çıkıyor. Tek katman yetmezdi: bayrağı bir kez açan geliştirici hedefi değiştirmeyi unutursa üretime 250 eşzamanlı istek gider. `.env.local` okunamıyorsa da reddediyor — doğrulanamayan hedefe yük bindirilmez.
+
+**3. Hata sınıfları raporda ayrı.** `42501` (yetki), `5xx` (güvenilirlik), `429` (hız sınırı), cevapsızlık (kapasite) ayrı sayılıyor ve 42501 görülürse çıkış kodu hata veriyor. §2'nin kuralı ölçümün içine gömülü: *hata oranı bir kapasite göstergesi değildir.* Toplayıcının bu ayrımı gerçekten yaptığı `tests/load-olcum.test.ts` ile doğrulanıyor (ağ gerektirmez, her koşuda çalışır).
+
+**Hâlâ koşulmadı ve bu bilinçli.** Eksik olan tek şey 1. önkoşul: staging projesi. Koşumcu hazır olduğu için o proje açıldığı gün ölçüm, yazılım işi değil yalnız komut işi:
+
+```
+ALLOW_LOAD_TEST=1 LOAD_SUPABASE_URL=https://<staging>.supabase.co \
+LOAD_SUPABASE_ANON_KEY=... LOAD_USERS='ogretmen@x.com:sifre' \
+LOAD_STAGE=taban npm run load
+```
+
+**Koşumcunun ölçemediği şey:** Vercel tarafı yalnız `/api/health` üzerinden yoklanıyor (`LOAD_APP_URL` verilirse). Sayfa render'ı (SSR) oturum çerezi gerektirdiği için karışımda yok; yani rapor **Supabase tarafını** ölçer, Vercel Active CPU eğilimi panodan okunur. Bunu yazmak gerekiyor, çünkü "yük testi geçti" cümlesi aksi hâlde ölçülmeyen bir kaynağı da kapsıyormuş gibi görünür.
+
 ---
 
 ## 6. Kapanmamış kalemler
 
 | Kalem | Durum | Engel |
 |---|---|---|
-| PERF-02 | Bekliyor | `pg_stat_reset()` + temsilî pencere gerekiyor; salt okunur bağlantı bunu yapamaz |
+| PERF-02 | **Sırada** | `pg_stat_reset()` panelden çalıştırılacak, ardından 3 günlük pencere; salt okunur bağlantı sıfırlama yapamaz |
 | PERF-01 | Kısmen | 4 indeks gerekçelendirildi (111); kalan 66 aday sıfırlama sonrası yeniden değerlendirilecek |
-| LOAD-01 | Hazır | Staging projesi gerekiyor |
-| OPS-02 | Kısmen | Yedek politikası ve tatbikat tarihi doldurulacak |
-| Alarm sahipliği | Açık | İsim ve kanal atanacak |
+| LOAD-01 | **Koşumcu hazır** | Yalnız staging projesi eksik (§5) |
+| OPS-02 | Kısmen | Yedek sıklığı / saklama / PITR panelden okunup §4'e yazılacak |
+| Alarm sahipliği | **Kapandı** | Birincil, yedek (yok) ve kanal §2'de yazılı |
+| SEC-01 | **Kapandı** | Teşhis 108 ile düzeltildi; kalıcı bekçi `tests/anon-endpoint-probe.test.ts`, geçmiş kanıtı `sec-01-log-sorgusu.md` |
