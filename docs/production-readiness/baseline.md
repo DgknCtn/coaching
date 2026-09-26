@@ -529,3 +529,65 @@ Tek istisna bilinçli: `check_rate_limit` **gerçek** eylemle de çağrılıyor 
 ### Geçmiş tarafı: log
 
 Test bugünü ve yarını kapatıyor; **geçmişi** kapatan şey log. `docs/production-readiness/sec-01-log-sorgusu.md`, Supabase Logs Explorer için üç sorgu taşıyor (uç bazında 401 eğilimi, `sql_state_code` kırılımı, mesaj metni) ve 108'in uygulandığı 24 Eylül'e göre önce/sonra kırıyor. Log saklama penceresi o tarihten kısaysa belge bunu da söylüyor: **"log yok" ile "hata yok" aynı şey değildir.**
+
+---
+
+## Panel çökmesi kapatıldı — 112 ve 113 (27 Eylül 2026)
+
+Bu bölüm bir denetim bulgusunun değil, **yük testinin** ürettiği kusurun kaydı. Dış denetim de PRD de bu yolu "gereksiz bekleme ihtimali" diye işaretlemişti; ölçüm "kesinti" dedi.
+
+### Kusur
+
+40 eşzamanlı kullanıcıda API'nin **%70'i** 5xx döndü ve hata kodu beklenen zaman aşımı değildi:
+
+```
+25P02: current transaction is aborted, commands ignored until end of transaction block
+```
+
+Zincir: panel sorgusu `authenticated` rolünün `statement_timeout`'unu (8 sn) aşıyor → işlem abort oluyor → pooler o bağlantıyı bir sonraki isteğe veriyor → 25P02 → hata **panelle sınırlı kalmıyor, tüm uçlara yayılıyor.** Kanıt: ilk hata panelde değil kitap ilerleyiş adımında göründü ve 5xx oranı on adımda ~%70'te eşitlendi.
+
+**Ders kapasiteden genel:** tek bir yavaş sorgu, yük altında API'nin tamamını düşürebiliyor.
+
+### İki adımda çözüldü, çünkü ilk adım yetmedi
+
+**112 — fan-out ve `COUNT(DISTINCT)` kaldırıldı.** Eski tanım her aktif atama için o kitabın tüm testlerini satır olarak açıyor, sonra `count(DISTINCT)` ile teke indiriyordu. İki gözlem: `total_tests` atamaya değil **kitaba** bağlı (aynı kitabı 10 öğrenci kullanıyorsa sayım 10 kez yapılıyordu), `completed_tests` ise küçük bir tabloda. İkisi ayrı toplanıp anahtar üzerinden birleştirildi.
+
+**Yetmedi — ve nedenini ölçüm söyledi.** 112 sonrası tablo tersine döndü:
+
+| Kiracı | Aktif atama | RLS'in gösterdiği test | `book_progress` |
+|---|---|---|---|
+| A | **3** | 20.076 | **770 ms** |
+| B | 79 | 28.228 | 160 ms |
+
+3 atamalı kiracı, 79 atamalıdan beş kat yavaş — yani maliyet kiracının kendi verisinden gelmiyor. Doğrudan ölçüldü:
+
+```
+A · tüm book_tests sayımı (RLS taraması)   675 ms
+A · student_book_progress_view             770 ms   <-- tarama kadar
+A · tek kitabın testleri (indeks yolu)      75 ms   <-- ağ tabanı
+```
+
+112'nin `WHERE book_id IN (...)` filtresi A'da taramanın **altına inmiyor**: 3 kitabın 75 satırı için 20.076 satır okunup RLS'ten geçiriliyor. Sebep `tests_select` politikasının kütüphane dalı — A'nın gördüğü satırların çoğu oradan geliyor, o dal seçici değil ve satır başına pahalı. B'nin satırları ağırlıkla kendi çalışma alanından, planlayıcı daha iyi bir yol seçiyor.
+
+**Bu, çözümün neden değiştiğini açıklıyor:** davranış veri dağılımına bağlıydı. Bugün bir kiracıda çalışıp yarın başkasında çöken bir düzeltme, düzeltme değildir.
+
+**113 — erişim indekse zorlandı.** `JOIN LATERAL` ile alt sorgu atamayla korele: `bt.book_id = sba.book_id` sabit bir indeks koşulu, yani `idx_tests_book_id` üzerinden yalnız o kitabın satırları okunuyor. Planlayıcının filtreyi indirmesini *ummak* yerine sorgu zaten indirmiş oluyor. Korele alt sorgu burada N+1 değil: alternatif 20-28 bin satırı okuyup atmaktı.
+
+### Sonuç (tek kullanıcı, 8-12 tekrar medyanı)
+
+| Ölçüm | Başlangıç | 112 sonrası | **113 sonrası** | Toplam kazanç |
+|---|---|---|---|---|
+| A · `student_book_progress_view` | — | 770 ms | **127 ms** | **−84%** |
+| A · `teacher_student_overview_view` | — | 896 ms | **252 ms** | **−72%** |
+| B · `student_book_progress_view` | 331 ms | 160 ms | **99 ms** | **−70%** |
+| B · `teacher_student_overview_view` | 529 ms | 409 ms | **208 ms** | **−61%** |
+
+### Davranış değişmedi — ve bu kanıtlandı
+
+Her iki migration yeni tanımı önce geçici bir view olarak kurup mevcut tanımla **iki yönlü `EXCEPT ALL`** ile karşılaştırıyor; tek satır fark varsa `EXCEPTION` atıp duruyor ve geçiş yapılmıyor. Tek yön yeterli değildi: yeni tanım fazladan satır üretiyorsa tek yönlü karşılaştırma bunu görmez. Boş sonuç üzerinde "fark yok" demek de hiçbir şey kanıtlamayacağı için satır sayısının sıfır olmadığı ayrıca iddia ediliyor. Karşılaştırma `postgres` rolüyle koştuğu için (`rolbypassrls = true`) **tüm kiracıların** satırları üzerinde yapılıyor.
+
+Korunan üç ince davranış: kitabında hiç test satırı olmayan atama görünmüyor (004'ten gelen INNER JOIN semantiği), tamamlamanın testi atamanın kitabına ait olmak zorunda, ve `security_invoker=on` yerinde — kaybı 049'un kapattığı P0 açığını geri getirirdi, o yüzden ayrıca denetleniyor.
+
+### Kapanmayan komşu kalem
+
+`book_tests` **tam taraması** hâlâ pahalı: A'da 589 ms, B'de 366 ms. Panel artık o yola girmiyor ama gerçekten çok satır okuyan ekranlar (kitap haritası) bundan etkilenmeye devam ediyor. Kaynak, `tests_select` politikasının satır başına maliyeti. PRD'nin B13 kaleminde ayrı iş olarak duruyor.
