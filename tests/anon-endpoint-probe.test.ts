@@ -358,11 +358,20 @@ describe.skipIf(!hasLiveCredentials)('SEC-01 · oturumsuz akışlar', () => {
     // ay boyunca SESSİZCE çalışmadı. Yalnız yetkiyi yoklayan bir test o
     // kusuru göremez; gövdenin SONUCUNU okumak gerekir.
     //
-    // Kova prob'a özel: gerçek kullanıcının IP/e-posta kovasına
-    // dokunmaz, onun deneme bütçesini tüketmez.
+    // KOVA HER KOŞUDA FARKLI. İki sebepten:
+    //
+    //   1. Gerçek kullanıcının IP/e-posta kovasına dokunmaz.
+    //   2. Kendi kendini kırmaz. Sabit kova kullanılsaydı `login`
+    //      sınırı (15 dakikada 10 deneme) yüzünden testi 15 dakika
+    //      içinde 10 kez koşan geliştirici ya da üst üste tetiklenen
+    //      CI, `allowed: false` alıp kırmızıya düşerdi — ölçtüğü şeyle
+    //      ilgisi olmayan bir sebeple.
+    //
+    // Maliyeti koşu başına bir satır; fonksiyonun fırsatçı temizliği
+    // bir günden eski pencereleri siliyor (050).
     const { status, body, code } = await anonRpc('check_rate_limit', {
       p_action: 'login',
-      p_subject: 'probe:sec-01',
+      p_subject: `probe:sec-01:${crypto.randomUUID()}`,
     })
 
     expect(code, `check_rate_limit çalışmadı: ${code}`).toBeNull()
