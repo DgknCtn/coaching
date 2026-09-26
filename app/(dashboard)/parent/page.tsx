@@ -15,6 +15,9 @@ import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
 import { monthPaymentLabel, type MonthPaymentState } from '@/lib/finance'
+import { allOk, listResult, singleResult } from '@/lib/data-result'
+import { parentStatusBanner } from '@/lib/parent-status'
+import { SectionUnavailable } from '@/components/shared/section-unavailable'
 import { PaymentNoticeButton } from './payment-notice-button'
 
 export const dynamic = 'force-dynamic'
@@ -113,16 +116,25 @@ export default async function ParentPage({
     activeLinks.map(async (link) => {
       const studentId = link.students.id
 
+      // YANITLAR BÜTÜN OLARAK ALINIYOR, `{ data }` DİYE AYRIŞTIRILMIYOR
+      // (PRD · B01).
+      //
+      // Eskiden her sorgunun yalnız `data`sı alınıyor, `error` hiç
+      // okunmuyordu. Hata sessizce null'a, null da `?? []` ile boş
+      // diziye dönüşüyordu. Ölçülen sonucu: ödev sorgusu düştüğünde
+      // gecikme sayısı 0 çıkıyor ve veliye "Her şey yolunda"
+      // gösteriliyordu. Aşağıda her yanıt `listResult`/`singleResult`
+      // ile hata ve başarı olarak ayrılıyor.
       const [
-        { data: bookProgress },
-        { data: batches },
-        { data: allBatches },
-        { data: weeklySummary },
-        { data: teacherRow },
-        { data: monthSessions },
-        { data: monthCounters },
-        { data: openNotice },
-        { data: paymentState },
+        bookProgressRes,
+        batchesRes,
+        allBatchesRes,
+        weeklyRes,
+        teacherRes,
+        sessionsRes,
+        countersRes,
+        noticeRes,
+        paymentRes,
       ] = await Promise.all([
         supabase
           .from('student_book_progress_view')
@@ -215,41 +227,70 @@ export default async function ParentPage({
         }),
       ])
 
+      const bookProgress = listResult(bookProgressRes, 'parent.book_progress')
+      const batches = listResult(batchesRes, 'parent.recent_batches')
+      const allBatches = listResult(allBatchesRes, 'parent.batch_states')
+      const weekly = singleResult(weeklyRes, 'parent.weekly_summary')
+      const teacher = singleResult(teacherRes, 'parent.teacher_name')
+      const sessions = listResult(sessionsRes, 'parent.month_sessions')
+      const counters = listResult(countersRes, 'parent.month_counters')
+      const notice = singleResult(noticeRes, 'parent.payment_notice')
+      const payment = singleResult(paymentRes, 'parent.payment_state')
+
       // Özet, SINIRSIZ listeden türer (yukarıdaki yorum). Gruplar
       // deriveBatchState ile tek bir duruma indirgeniyor; "onay
       // bekleyen" iş öğrencinin gecikmesi sayılmıyor.
-      const summaryStates = (allBatches ?? []).map(b =>
-        deriveBatchState({
-          dueDate: b.due_date as string | null,
-          items: (b.homework_items ?? []) as { status: string; rejected_at: string | null }[],
-        })
-      )
+      //
+      // SORGU DÜŞTÜYSE ÖZET YOK — SIFIR DEĞİL. `null`, "gecikme sayısı
+      // bilinmiyor" demek; 0 ise "gecikme yok" demek. İkisini aynı
+      // değerle taşımak, bu dosyanın yanlış olumlu özet üretmesinin
+      // sebebiydi.
+      const batchSummary = allBatches.ok
+        ? (() => {
+            const states = allBatches.data.map(b =>
+              deriveBatchState({
+                dueDate: b.due_date as string | null,
+                items: (b.homework_items ?? []) as { status: string; rejected_at: string | null }[],
+              })
+            )
+            return {
+              overdue: states.filter(st => st === 'overdue').length,
+              open: states.filter(isOpenBatch).length,
+              total: states.length,
+            }
+          })()
+        : null
 
-      const plannedCount = (monthCounters ?? []).reduce(
-        (sum, c) => sum + Number(c.planlanan ?? 0),
-        0
-      )
-      const doneCount = (monthCounters ?? []).reduce(
-        (sum, c) => sum + Number(c.yapilan ?? 0),
-        0
-      )
+      // Ay sayaçları: iki sorgunun İKİSİ de gelmeli. Yalnız biri gelirse
+      // "2 / 5 hizmet yapıldı" cümlesi eksik veriyle kurulmuş olurdu.
+      const monthCounts =
+        counters.ok && sessions.ok
+          ? {
+              planned: counters.data.reduce((sum, c) => sum + Number(c.planlanan ?? 0), 0),
+              done: counters.data.reduce((sum, c) => sum + Number(c.yapilan ?? 0), 0),
+            }
+          : null
 
       return {
         student: link.students,
-        monthSessions: monthSessions ?? [],
-        plannedCount,
-        doneCount,
-        hasOpenNotice: Boolean(openNotice),
-        paymentState: (paymentState as string | null) ?? null,
-        bookProgress: bookProgress ?? [],
-        batches: batches ?? [],
-        overdueCount: summaryStates.filter(st => st === 'overdue').length,
-        openCount: summaryStates.filter(isOpenBatch).length,
-        totalBatchCount: summaryStates.length,
-        weekly: weeklySummary,
-        teacherName:
-          one((teacherRow as { profiles: Nested<{ full_name: string }> } | null)?.profiles ?? null)
-            ?.full_name ?? null,
+        bookProgress,
+        batches,
+        weekly,
+        sessions,
+        batchSummary,
+        monthCounts,
+        // Ödeme rozeti ve bildirim düğmesi için. Bu iki sorgu düşerse
+        // rozet görünmez — "ödenmedi" ya da "ödendi" gibi YANLIŞ bir
+        // hüküm üretilmez, yalnız bilgi eksik kalır. Hata raporlanıyor.
+        hasOpenNotice: notice.ok && Boolean(notice.data),
+        paymentState: payment.ok ? ((payment.data as string | null) ?? null) : null,
+        // İsim yalnız uyarı metnini kişiselleştiriyor; gelmezse metin
+        // genel hâline düşer, anlamı değişmez.
+        teacherName: teacher.ok
+          ? (one(
+              (teacher.data as { profiles: Nested<{ full_name: string }> } | null)?.profiles ?? null
+            )?.full_name ?? null)
+          : null,
       }
     })
   )
@@ -292,26 +333,41 @@ export default async function ParentPage({
           student,
           bookProgress,
           batches,
-          overdueCount,
-          openCount,
-          totalBatchCount,
           weekly,
+          sessions,
+          batchSummary,
+          monthCounts,
           teacherName,
-          monthSessions,
-          plannedCount,
-          doneCount,
           hasOpenNotice,
           paymentState,
         }) => {
         // Veli dili "Ödendi", öğretmen dili "Tahsil edildi" (§8).
         const paymentLabel = monthPaymentLabel(paymentState as MonthPaymentState, 'parent')
 
+        // "Tekrar dene" aynı öğrencinin sayfasına döner; sekme seçimi
+        // kaybolmaz (PRD · B08: "çocuk seçimi korunur").
+        const retryHref = `/parent?student=${student.id}`
+
         // Genel (dönem geneli) ilerleme — atanmış tüm kitaplar üzerinden.
-        const overallTotal = bookProgress.reduce((s, p) => s + Number(p.total_tests ?? 0), 0)
-        const overallCompleted = bookProgress.reduce((s, p) => s + Number(p.completed_tests ?? 0), 0)
+        const books = bookProgress.ok ? bookProgress.data : []
+        const overallTotal = books.reduce((s, p) => s + Number(p.total_tests ?? 0), 0)
+        const overallCompleted = books.reduce((s, p) => s + Number(p.completed_tests ?? 0), 0)
         const overallPct = overallTotal > 0 ? Math.round((overallCompleted / overallTotal) * 100) : 0
-        const hasActivity = bookProgress.length > 0 || totalBatchCount > 0
-        const onTrack = hasActivity && overdueCount === 0
+
+        // Üst bandın kararı saf fonksiyonda (`lib/parent-status.ts`):
+        // eskiden burada gömülüydü ve test edilemiyordu — yanlış olumlu
+        // özet kusuru da tam o iki satırdaydı.
+        const banner = parentStatusBanner(
+          batchSummary,
+          bookProgress.ok ? bookProgress.data.length : null
+        )
+
+        // Dönem geneli metriklerinin HEPSİ kitap verisinden geliyor, o
+        // yüzden görünürlüğü de ona bağlı — banner'a değil. Banner'dan
+        // türetilseydi ödev sorgusu düştüğünde, kitap verisi elde olduğu
+        // hâlde bu bölüm de kaybolurdu.
+        const showTermSummary =
+          bookProgress.ok && (books.length > 0 || (batchSummary?.total ?? 0) > 0)
 
         return (
           <div key={student.id} className="space-y-6 border-t pt-8 first:border-t-0 first:pt-0">
@@ -321,10 +377,20 @@ export default async function ParentPage({
               {student.grade_level && <Badge variant="neutral">{student.grade_level}</Badge>}
             </div>
 
-            {overdueCount > 0 && (
+            {/* Ödev durumu alınamadıysa NE uyarı NE olumlu özet: ikisi
+                de bilinmeyen bir sayıya dayanırdı. */}
+            {banner.kind === 'unknown' && (
+              <SectionUnavailable
+                title="Ödev durumu şu an alınamadı"
+                description="Gecikmiş çalışma olup olmadığı şu an gösterilemiyor. Bu, gecikme olmadığı anlamına gelmez."
+                retryHref={retryHref}
+              />
+            )}
+
+            {banner.kind === 'overdue' && (
               <AlertBanner
                 tone="warning"
-                title={`${overdueCount} gecikmiş ödev grubu`}
+                title={`${banner.count} gecikmiş ödev grubu`}
                 description={
                   teacherName
                     ? `Teslim tarihi geçmiş çalışmalar var. ${teacherName} ile iletişime geçebilirsiniz.`
@@ -333,35 +399,46 @@ export default async function ParentPage({
               />
             )}
 
-            {onTrack && (
+            {/* DAR VE DOĞRU İFADE (PRD · B08).
+                Eski başlık "Her şey yolunda" idi. Ekranın gerçekten
+                bildiği şey daha dar: gecikmiş çalışma görünmüyor.
+                Öğrenmenin, konunun ya da genel gidişatın iyi olduğunu
+                bu veri söylemiyor — başlık da söylememeli. */}
+            {banner.kind === 'noOverdue' && (
               <AlertBanner
                 tone="success"
-                title="Her şey yolunda"
+                title="Gecikmiş çalışma görünmüyor"
                 description={
                   // Bekleyen iş varken "hiç iş yok" demiyoruz: gecikme
                   // yokluğu ile boşluk farklı şeyler.
-                  openCount > 0
-                    ? `Gecikmiş ödev yok. ${openCount} çalışma zamanında devam ediyor.`
-                    : 'Gecikmiş ödev yok, güzel gidiyor.'
+                  banner.open > 0
+                    ? `${banner.open} çalışma zamanında devam ediyor.`
+                    : 'Bekleyen çalışma yok.'
                 }
               />
             )}
 
-            {weekly && (
+            {!weekly.ok && (
+              <Section title="Bu hafta">
+                <SectionUnavailable retryHref={retryHref} />
+              </Section>
+            )}
+
+            {weekly.ok && weekly.data && (
               <Section title="Bu hafta">
                 <MetricRow
                   className="md:grid-cols-5"
                   metrics={[
-                    { label: counterLabel('assigned', 'parent'), value: weekly.assigned_tests ?? 0 },
-                    { label: counterLabel('completed', 'parent'), value: weekly.completed_tests ?? 0 },
-                    { label: counterLabel('pending', 'parent'), value: weekly.pending_tests ?? 0 },
+                    { label: counterLabel('assigned', 'parent'), value: weekly.data.assigned_tests ?? 0 },
+                    { label: counterLabel('completed', 'parent'), value: weekly.data.completed_tests ?? 0 },
+                    { label: counterLabel('pending', 'parent'), value: weekly.data.pending_tests ?? 0 },
                     {
                       label: counterLabel('pendingApproval', 'parent'),
-                      value: weekly.pending_approval_tests ?? 0,
+                      value: weekly.data.pending_approval_tests ?? 0,
                     },
                     {
                       label: counterLabel('overdue', 'parent'),
-                      value: weekly.overdue_tests ?? 0,
+                      value: weekly.data.overdue_tests ?? 0,
                       hint: OVERDUE_HINT,
                     },
                   ]}
@@ -378,11 +455,21 @@ export default async function ParentPage({
 
                 ÖDEME DURUMU VAR, TUTAR YOK: finans tabloları veliye
                 kapalı (066). Ekran yalnız "Ödendi / Kısmi / Bekliyor"
-                diyor; rakamı öğretmen söyler. */}
-            {plannedCount > 0 && (
+                diyor; rakamı öğretmen söyler.
+
+                SORGU DÜŞTÜYSE BÖLÜM GİZLENMİYOR: eskiden `plannedCount`
+                0'a düşüyor ve bölüm hiç çizilmiyordu — veli "bu ay ders
+                yok" diye okurdu. */}
+            {monthCounts === null && (
+              <Section title={`${currentMonthLabel()} dersleri`}>
+                <SectionUnavailable retryHref={retryHref} />
+              </Section>
+            )}
+
+            {monthCounts !== null && sessions.ok && monthCounts.planned > 0 && (
               <Section
                 title={`${currentMonthLabel()} dersleri`}
-                description={`${doneCount} / ${plannedCount} hizmet yapıldı.`}
+                description={`${monthCounts.done} / ${monthCounts.planned} hizmet yapıldı.`}
                 variant="card"
               >
                 {paymentLabel && (
@@ -400,7 +487,7 @@ export default async function ParentPage({
                 )}
 
                 <ul className="divide-y text-sm">
-                  {monthSessions.map((session) => {
+                  {sessions.data.map((session) => {
                     const planned = session.planned_at as string
                     const actual = session.actual_at as string | null
                     // "19 Eyl 10:00 → 20 Eyl 11:00" (§7-A no.3): ilk
@@ -449,7 +536,17 @@ export default async function ParentPage({
               </Section>
             )}
 
-            {hasActivity && (
+            {/* KİTAP VERİSİ GELMEDİYSE üç bölümün (dönem geneli, tempo,
+                kitap kartları) yerine tek bir açık bildirim. Üçü de aynı
+                sorgudan besleniyor; üç ayrı "yüklenemedi" kutusu aynı
+                arızayı üç kez söylemek olurdu. */}
+            {!bookProgress.ok && (
+              <Section title="Kitap ilerlemesi">
+                <SectionUnavailable retryHref={retryHref} />
+              </Section>
+            )}
+
+            {showTermSummary && (
               <Section title="Dönem geneli">
                 <MetricRow
                   metrics={[
@@ -459,20 +556,20 @@ export default async function ParentPage({
                       value: overallCompleted,
                       subValue: `/${overallTotal}`,
                     },
-                    { label: 'Aktif kitap', value: bookProgress.length },
+                    { label: 'Aktif kitap', value: books.length },
                   ]}
                   className="md:grid-cols-3"
                 />
               </Section>
             )}
 
-            {bookProgress.length > 0 && (
+            {books.length > 0 && (
               <Section
                 title="Plan ve tempo"
                 description="Her kaynakta hedefe göre nerede olunduğu."
               >
                 <div className="space-y-3">
-                  {bookProgress.map((p) => (
+                  {books.map((p) => (
                     <ParentTempoRow
                       key={p.student_book_assignment_id}
                       bookTitle={p.book_title}
@@ -487,10 +584,10 @@ export default async function ParentPage({
               </Section>
             )}
 
-            {bookProgress.length > 0 && (
+            {books.length > 0 && (
               <Section title="Kitap ilerlemesi">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {bookProgress.map((p) => (
+                  {books.map((p) => (
                     <BookCard
                       key={p.student_book_assignment_id}
                       href={`/parent/students/${student.id}/books/${p.book_id}`}
@@ -512,10 +609,16 @@ export default async function ParentPage({
               </Section>
             )}
 
-            {batches.length > 0 && (
+            {!batches.ok && (
+              <Section title="Son ödevler">
+                <SectionUnavailable retryHref={retryHref} />
+              </Section>
+            )}
+
+            {batches.ok && batches.data.length > 0 && (
               <Section title="Son ödevler" variant="card">
                 <ul className="divide-y">
-                  {batches.slice(0, 5).map((batch) => {
+                  {batches.data.slice(0, 5).map((batch) => {
                     const items = batch.homework_items as unknown as {
                       id: string
                       status: string
@@ -566,7 +669,16 @@ export default async function ParentPage({
               </Section>
             )}
 
-            {bookProgress.length === 0 && batches.length === 0 && !weekly && (
+            {/* "HENÜZ VERİ YOK" YALNIZ ÜÇ SORGU DA BAŞARILIYSA.
+                Eskiden bu mesaj hata durumunda da çıkıyordu ve açıklaması
+                "Öğretmen henüz kitap veya ödev atamamış" idi: bir arıza,
+                öğretmeni yanlışlıkla suçlayan bir cümleye dönüşüyordu. */}
+            {allOk(bookProgress, batches, weekly) &&
+              books.length === 0 &&
+              batches.ok &&
+              batches.data.length === 0 &&
+              weekly.ok &&
+              !weekly.data && (
               <Section variant="card">
                 <EmptyState
                   icon={BookOpen}
