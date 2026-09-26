@@ -72,20 +72,37 @@ jobs:
 
       - name: PostgreSQL 17 istemcisini kur
         # `ubuntu-latest` PG 16 istemcisiyle geliyor; sunucu 17.6.
-        # pg_dump'ın ana sürümü sunucudan küçük olamaz — bu adım
-        # olmadan iş her gece sürüm uyuşmazlığıyla patlardı.
-        # Betikte ayrıca bir sürüm denetimi var; bu kurulum sessizce
-        # eski sürüm bıraksa oradan yakalanır.
+        # pg_dump'ın ana sürümü sunucudan küçük olamaz.
+        #
+        # KURMAK YETMEDİ — ÖLÇÜLDÜ (27 Eylül 2026, ilk koşu):
+        # paket kuruldu ama `pg_dump --version` yine 16 dedi ve betiğin
+        # sürüm denetimi işi durdurdu. Sebep: koşucu imajında
+        # /usr/bin/pg_dump doğrudan 16'nın binary'sine bağlı; PGDG
+        # paketi 17'yi /usr/lib/postgresql/17/bin altına koyuyor ve o
+        # dizin PATH'te değil. Kurulum "başarılı" görünürken kullanılan
+        # istemci hâlâ eskisiydi.
+        #
+        # Bu yüzden iki şey yapılıyor: dizin PATH'in BAŞINA ekleniyor ve
+        # sürümün gerçekten 17 olduğu BURADA doğrulanıyor. Betikteki
+        # denetim son savunma hattı olarak yerinde kalıyor.
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
             https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
-          pg_dump --version
+
+          # Sonraki adımlar bu PATH'i miras alır.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+          SURUM="$(/usr/lib/postgresql/17/bin/pg_dump --version | grep -oE '[0-9]+' | head -1)"
+          echo "pg_dump: $(/usr/lib/postgresql/17/bin/pg_dump --version)"
+          [ "${SURUM}" -ge 17 ] || {
+            echo "PG 17 istemcisi kurulamadı (bulunan: ${SURUM})" >&2
+            exit 1
+          }
 
       - name: Denetimlerin çalıştığını doğrula
         # Yedeği almadan ÖNCE koşuyor: al.sh'ın altı denetimi kasten
