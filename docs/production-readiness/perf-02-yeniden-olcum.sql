@@ -1,9 +1,13 @@
 -- ============================================================
--- PERF-02 — İSTATİSTİKLERİ SIFIRLA VE YENİDEN ÖLÇ
+-- PERF-02 — TAZE PENCEREDE YENİDEN ÖLÇ (İKİ ANLIK GÖRÜNTÜNÜN FARKI)
 --
 -- Bu dosya bir migration DEĞİLDİR ve migration dizininde durmaz:
--- şemayı değiştirmiyor, yalnız sayaçları sıfırlıyor. Supabase SQL
--- düzenleyicisinden ELLE çalıştırılır.
+-- şemaya, veriye, sayaçlara DOKUNMAZ — yalnız okur. Salt okunur
+-- bağlantıdan da, Supabase SQL düzenleyicisinden de çalıştırılabilir.
+--
+-- ÖNEMLİ: ilk hâli `pg_stat_reset()` kullanıyordu; Supabase'de o
+-- fonksiyon `postgres` rolüne kapalı (ADIM 1'in başlığında kanıtı var).
+-- Yöntem bu yüzden sıfırlamadan farka çevrildi.
 --
 -- ============================================================
 -- NEDEN GEREKİYOR
@@ -25,34 +29,88 @@
 -- ============================================================
 -- SIRA ÖNEMLİ
 --
---   1. ADIM 1'i çalıştır (sıfırlama)
+--   1. ADIM 1'i çalıştır (anlık görüntü — sıfırlama DEĞİL)
 --   2. TEMSİLÎ BİR KULLANIM PENCERESİ geçir — birkaç gün gerçek
 --      kullanım. Sıfırlamadan hemen sonra ölçmek hiçbir şey söylemez.
---   3. ADIM 2 ve 3'ü çalıştır, çıktıyı baseline.md'ye ekle.
+--   3. ADIM 2, 3 ve 4'ü çalıştır; FARKI baseline.md'ye ekle.
 -- ============================================================
 
 
 -- ============================================================
--- ADIM 1 — SIFIRLA
+-- ADIM 1 — PENCEREYİ BAŞLAT (SIFIRLAMA DEĞİL: ANLIK GÖRÜNTÜ)
 --
--- Yalnız sayaçları sıfırlar; veriye, şemaya, plana dokunmaz.
--- Geri alınamaz: sıfırlanan geçmiş geri gelmez. Zaten amaç bu —
--- 62 günlük karışık pencereden kurtulmak.
+-- ============================================================
+-- SIFIRLAMA BU PROJEDE MÜMKÜN DEĞİL — 26 EYLÜL 2026'DA ÖLÇÜLDÜ
+--
+-- Bu dosyanın ilk hâli `SELECT pg_stat_reset()` diyordu. Panelde
+-- koşuldu ve şu geldi:
+--
+--   ERROR: 42501: permission denied for function pg_stat_reset
+--
+-- Sebebi canlıdan okundu:
+--
+--   rolname          rolsuper   pg_stat_reset yetkisi
+--   postgres         hayır      hayır        <-- panelin rolü
+--   supabase_admin   EVET       evet         <-- postgres bu rolün ÜYESİ DEĞİL
+--
+-- Yani sıfırlama Supabase'in yönettiği bir rolün tekelinde; ne panelden
+-- ne salt okunur bağlantıdan yapılabilir. Peşine düşmek boşa emek.
+--
+-- ============================================================
+-- YERİNE: İKİ ANLIK GÖRÜNTÜNÜN FARKI
+--
+-- Bayat pencerenin sorunu sayıların BİRİKMİŞ olması. Aynı sayacı iki
+-- kez okuyup çıkarmak, tam olarak aradaki pencereyi verir:
+--
+--   26 Eylül sayacı  →  [3 gün gerçek kullanım]  →  29 Eylül sayacı
+--   fark = YALNIZ o üç günde olan tarama
+--
+-- Bu yöntem sıfırlamadan ÜSTÜN: 64 günlük geçmiş silinmiyor, yani
+-- ölçüm yanlış kurulursa tekrar edilebilir. Sıfırlama geri alınamazdı.
+--
+-- ============================================================
+-- ÖLÇÜMÜ KİRLETEN ŞEY: KENDİ TEST KOŞUMLARIMIZ
+--
+-- `tests/anon-endpoint-probe.test.ts`, `tenant-isolation` ve
+-- `cross-tenant` canlıya karşı koşuyor ve her sorgu RLS politikasını
+-- değerlendiriyor — yani `profiles`, `workspaces`, `workspace_members`
+-- sayaçlarını artırıyor. Ölçülen: 24 → 26 Eylül arasında `workspaces`
+-- sıralı taraması 203.068'den 408.571'e çıktı; bir kısmı bu koşumlar.
+--
+-- KURAL: pencere boyunca canlıya karşı test koşulmaz. Koşulduysa
+-- kayda geçer ve o tablonun farkı şüpheli sayılır.
 -- ============================================================
 
-SELECT pg_stat_reset();
-
--- Sıfırlandığını doğrula: pencere sıfıra yakın olmalı.
-SELECT stats_reset, now() - stats_reset AS pencere
+-- 1a. Pencerenin başlangıç anı — kayda geçir.
+SELECT now() AS pencere_baslangici, stats_reset, now() - stats_reset AS birikmis_pencere
 FROM pg_stat_database
 WHERE datname = current_database();
 
+-- 1b. BAŞLANGIÇ ANLIK GÖRÜNTÜSÜ. Çıktı olduğu gibi
+-- `docs/production-readiness/perf-02-anlik-01.md`'ye yazılır; ADIM 2
+-- üç gün sonra aynı sorguyu koşup FARKI alır.
+SELECT
+  relname                        AS tablo,
+  n_live_tup                     AS satir,
+  seq_scan                       AS sirali_tarama,
+  COALESCE(idx_scan, 0)          AS indeks_taramasi,
+  n_tup_ins                      AS eklenen,
+  n_tup_upd                      AS guncellenen,
+  n_tup_del                      AS silinen
+FROM pg_stat_user_tables
+WHERE schemaname = 'public'
+ORDER BY relname;
+
 
 -- ============================================================
--- ADIM 2 — TABLO TARAMALARI (temsilî pencereden SONRA)
+-- ADIM 2 — TABLO TARAMALARI (3 GÜN SONRA)
 --
--- Beklenen: 092 sonrası profiles / workspace_members sayıları,
--- denetimdeki milyonluk mertebeden çok daha düşük olmalı.
+-- ADIM 1b ile AYNI sorgu koşulur ve fark alınır. Aşağıdaki sıralama
+-- birikmiş sayıya göre olduğu için yanıltıcıdır: kararı FARK verir,
+-- bu tablonun kendisi değil.
+--
+-- Beklenen: 092 sonrası profiles / workspace_members farkları,
+-- denetimdeki milyonluk mertebenin çok altında olmalı.
 -- ============================================================
 
 SELECT

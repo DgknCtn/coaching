@@ -201,8 +201,8 @@ LOAD_STAGE=taban npm run load
 
 | Kalem | Durum | Engel |
 |---|---|---|
-| PERF-02 | **Sırada** | `pg_stat_reset()` panelden çalıştırılacak, ardından 3 günlük pencere; salt okunur bağlantı sıfırlama yapamaz |
-| PERF-01 | Kısmen | 4 indeks gerekçelendirildi (111); kalan 66 aday sıfırlama sonrası yeniden değerlendirilecek |
+| PERF-02 | **Pencere başladı** | Sıfırlama Supabase'de mümkün değil (`postgres` rolüne kapalı); yöntem iki anlık görüntünün farkına çevrildi. Başlangıç: `perf-02-anlik-01.md`. 3 gün boyunca canlıya karşı test koşulmaz |
+| PERF-01 | **Açık** | `111` canlıda YOKTU (26 Eylül'de ölçüldü); panelde uygulanması bekleniyor. Kalan 66 aday fark ölçümünden sonra değerlendirilecek |
 | LOAD-01 | **Koşumcu hazır** | Yalnız staging projesi eksik (§5) |
 | OPS-02 | Kısmen | Yedek sıklığı / saklama / PITR panelden okunup §4'e yazılacak |
 | Alarm sahipliği | **Kapandı** | Birincil, yedek (yok) ve kanal §2'de yazılı |
