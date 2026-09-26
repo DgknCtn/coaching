@@ -127,6 +127,24 @@ jobs:
           DOSYA="yedek-cikti/yedek-${GUN}.dump.gpg"
           [ -f "${DOSYA}" ] || { echo "Şifreli yedek bulunamadı: ${DOSYA}" >&2; exit 1; }
 
+          # BOŞ DEPO SORUNU — ÖLÇÜLDÜ (27 Eylül 2026, ikinci koşu):
+          #
+          #   HTTP 422: Validation Failed — Repository is empty.
+          #
+          # Release bir commit'e tutunmak zorunda; hiç commit'i olmayan
+          # depoda oluşturulamıyor. Yedek o koşuda başarıyla alınmıştı,
+          # yalnız yüklenemedi.
+          #
+          # Çözüm insana bırakılmıyor ("README ekleyin" demek yerine iş
+          # kendini onarıyor): depo boşsa README oluşturulur. Böylece
+          # yedek deposu ileride sıfırdan açıldığında da çalışır —
+          # kurulum adımı unutulacak bir adım olmaz.
+          if ! gh api "repos/${YEDEK_REPO}/commits" --jq '.[0].sha' > /dev/null 2>&1; then
+            echo "Depo boş; ilk commit oluşturuluyor."
+            ICERIK="$(base64 -w0 scripts/yedek/depo-okubeni.md)"
+            gh api --method PUT "repos/${YEDEK_REPO}/contents/README.md" -f message='Yedek deposu başlatıldı' -f content="${ICERIK}" > /dev/null
+          fi
+
           # Aynı gün ikinci koşu (elle tetikleme) etiketi eziyor:
           # tarihe bir kopya yeter, iki farklı "bugünün yedeği" olması
           # hangisinin geçerli olduğunu belirsizleştirir.
