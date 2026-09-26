@@ -88,20 +88,35 @@ Yükseltme kararı tek bir ölçüye değil, **üç sorunun cevabına** bağlı:
 
 ## 4. Yedekleme ve kurtarma (OPS-02)
 
-### Karar
+### Karar — ve Free planın anlamı
 
-Supabase'in plan bazlı otomatik yedeği kullanılır. Doldurulacak:
+**Proje Free planda ve Free planda otomatik yedek YOK.** Bu, doldurulacak bir alan değil, yazılması gereken bir sonuç:
 
 | Soru | Cevap | Kaynak |
 |---|---|---|
-| Yedek sıklığı | **panelden okunacak** | Dashboard → Database → Backups |
-| Saklama süresi | **panelden okunacak** | aynı ekran |
-| Point-in-time recovery var mı | **panelden okunacak** (Pro altı planlarda genelde yok) | aynı ekran |
-| Geri yükleme sorumlusu | **Doğukan Çetin** (tek kişi) | — |
+| Yedek sıklığı | **yok** | Free plan |
+| Saklama süresi | **yok** | Free plan |
+| Point-in-time recovery | **yok** (Pro ve üstünde ek özellik) | Free plan |
+| Geri yükleme sorumlusu | Doğukan Çetin | — |
 
-**Üç alan neden tahminle doldurulmuyor:** yedek sıklığı ve saklama süresi plana bağlı ve plan değiştikçe değişir. "Günlük, 7 gün" yazıp geçmek, olay anında yanlış bir RPO beklentisiyle karar vermek olurdu — bu belgenin en baştaki kuralı buna aykırı: *bir eşik ancak ne ölçüleceği, ne yapılacağı ve kimin bakacağı belliyse işe yarar.* Panelde okunan değer buraya **birebir** yazılır.
+### Bunun düz karşılığı
 
-**PITR yoksa sonucu açıkça şudur:** kurtarma noktası son otomatik yedeğin anıdır, yani en kötü durumda **bir günlük veri kaybı** kabul edilmiş olur. Kabul edilemiyorsa çözüm plan yükseltmektir; bu, `operations.md`'nin "önce verimlilik" kuralının geçerli OLMADIĞI tek kalem — veri kaybı toleransı kod optimizasyonuyla düşmez.
+Veritabanı bugün kaybedilse (silinmiş tablo, bozulmuş migration, hesap sorunu, proje askıya alınması) **geri dönülecek bir nokta yok.** Kurtarma süresi (RTO) ve veri kaybı toleransı (RPO) tanımsız değil — **sonsuz**. Tatbikat bölümünün sorduğu soru ("kaç saatte ve ne kadar veri kaybıyla geri döneriz") bugün şu cevabı alıyor: *dönemeyiz.*
+
+Bu, denetimin listesinde olmayan ve denetimin de göremeyeceği bir risk — çünkü şema, yetkiler ve performans yerinde; eksik olan **plan özelliği**.
+
+**Kapasite kuralının geçerli OLMADIĞI tek kalem budur.** §3 "önce verimlilik, sonra plan" diyor; veri kaybı toleransı kod optimizasyonuyla düşmez. Burada seçenek ikidir ve ikisi de para ya da emek ister:
+
+| Seçenek | Ne verir | Maliyeti |
+|---|---|---|
+| **Pro plana geçmek** | Günlük otomatik yedek + PITR (ek özellik) | aylık ücret |
+| **Kendi dökümünü almak** | `pg_dump` ile şema + veri, dışarıda saklanır | kurulum ve saklama emeği; tatbikat yine zorunlu |
+
+İkinci seçenek `iz_readonly` ile YAPILAMAZ: o rol RLS'i atlamıyor (ölçüldü: `rolbypassrls = false`), yani alınan döküm sessizce **eksik** olur — yedeklerin en kötü türü. Döküm ancak `postgres` rolüyle (veritabanı şifresi) alınabilir; `postgres` RLS'i atlıyor (`rolbypassrls = true`).
+
+**Free planın ikinci sonucu:** proje 7 gün hareketsiz kalırsa askıya alınır. Yedeksiz bir sistemde bu, veriye erişimin kendi elinizde olmaması demek.
+
+**Karar verilene kadar bu satır böyle kalır.** "Yedek politikası: Supabase otomatik" yazıp geçmek, olay anında var olmayan bir yedeğe güvenmek olurdu — bu belgenin en baştaki kuralının tam ihlali.
 
 ### Geri yükleme tatbikatı — yılda en az bir kez
 
@@ -123,6 +138,8 @@ tests/anon-endpoint-probe.test.ts    (38 tablo + 11 RLS yardımcısı: 42501 var
 Üçüncüsü tatbikatın **en hızlı** kontrolü: geri yüklenen projede fonksiyon yetkileri eksikse (yedek `GRANT`'leri taşımazsa) anon yüzeyinin tamamı 42501'e döner ve bu dosya saniyeler içinde kırmızıya düşer.
 
 **İlk tatbikat tarihi:** 2026 Aralık ayının ilk haftası (öneri). Yıllık tekrar; tarih geçtiğinde bu satır yeni tarihle güncellenir. **Tarihi olmayan tatbikat yapılmamış tatbikattır** — bu yüzden boş bırakılmıyor, önerilen tarih yazılıyor.
+
+**Ama bugün tatbikat YAPILAMAZ.** Free planda yedek olmadığı için geri yüklenecek bir şey yok (§4). Yukarıdaki prosedür, yedek düzeni kurulduğu gün uygulanmak üzere duruyor; sırası şudur: **önce yedek kararı, sonra tatbikat.** Prosedürü şimdi yazmanın sebebi, kararın ardından unutulmaması.
 
 ### Olay müdahalesi
 
@@ -204,6 +221,6 @@ LOAD_STAGE=taban npm run load
 | PERF-02 | **Pencere başladı** | Sıfırlama Supabase'de mümkün değil (`postgres` rolüne kapalı); yöntem iki anlık görüntünün farkına çevrildi. Başlangıç: `perf-02-anlik-01.md`. 3 gün boyunca canlıya karşı test koşulmaz |
 | PERF-01 | **Açık** | `111` canlıda YOKTU (26 Eylül'de ölçüldü); panelde uygulanması bekleniyor. Kalan 66 aday fark ölçümünden sonra değerlendirilecek |
 | LOAD-01 | **Koşumcu hazır** | Yalnız staging projesi eksik (§5) |
-| OPS-02 | Kısmen | Yedek sıklığı / saklama / PITR panelden okunup §4'e yazılacak |
+| OPS-02 | **Açık — gerçek risk** | Free planda otomatik yedek YOK: RTO/RPO sonsuz. Karar gerekiyor: Pro plan ya da kendi `pg_dump` düzeni (§4) |
 | Alarm sahipliği | **Kapandı** | Birincil, yedek (yok) ve kanal §2'de yazılı |
 | SEC-01 | **Kapandı** | Teşhis 108 ile düzeltildi; kalıcı bekçi `tests/anon-endpoint-probe.test.ts`, geçmiş kanıtı `sec-01-log-sorgusu.md` |

@@ -29,6 +29,37 @@ Yerine iki anlık görüntünün farkı alınıyor. Bu, sıfırlamadan üstün: 
 
 **2. `111` bu anlık görüntüde henüz yoktu.** Aşağıdaki sayılar dört FK indeksi **oluşturulmadan önceki** hâl. İndeksler pencereden önce eklendiği için fark, indeksli durumu ölçecek; bu tablo da "öncesi" referansı olarak duruyor.
 
+## Resmî pencere başlangıcı — 26 Eylül 2026, 20:35 UTC (111 sonrası)
+
+`111` panelde uygulandı ve canlıdan teyit edildi; dört indeks yerinde, toplam **96 kB**:
+
+| İndeks | Tablo | Kullanım | Boyut |
+|---|---|---|---|
+| `idx_curriculum_template_items_workspace` | curriculum_template_items | 0 | 16 kB |
+| `idx_homework_items_book` | homework_items | 0 | 32 kB |
+| `idx_homework_items_section` | homework_items | 0 | 32 kB |
+| `idx_student_curriculum_items_workspace` | student_curriculum_items | 0 | 16 kB |
+
+`idx_scan = 0` beklenen ve **ölçümün asıl sorusu bu**: üç gün sonra bu dördü sıfırda kalırsa 111'in iddiası (bu sorgu yolları sıcak) yanlıştı ve indeksler düşürülmeli — kullanılmayan indeks yalnız yazma maliyetidir.
+
+Pencere başlangıcındaki karşılaştırma değerleri (20:35 UTC):
+
+| Tablo | Satır | Sıralı tarama | İndeks taraması |
+|---|---|---|---|
+| workspaces | 7 | 408.638 | 20.479.358 |
+| profiles | 21 | 140.523 | 24.682.646 |
+| workspace_members | 28 | 10 | 22.603.503 |
+| workspace_licenses | 2 | 26 | 18.304.768 |
+| students | 26 | 9.873 | 1.907.462 |
+| homework_items | 1.429 | 1.713 | 1.636.771 |
+| test_completions | 1.154 | 1.517 | 2.015.131 |
+| book_tests | 37.302 | 45 | 618.611 |
+| books | 183 | 10.762 | 158.142 |
+| student_curriculum_items | 379 | 1.326 | 105.447 |
+| curriculum_template_items | 952 | 112 | 19.404 |
+
+**Ölçüm tarihi: 29 Eylül 2026.** Aynı sorgular koşulur, fark alınır.
+
 ## 111 canlıda yoktu — ayrı bir bulgu
 
 `baseline.md` migration `111`'i uygulanmış sayıyordu. 26 Eylül'de ölçüldü: dört indeksin **hiçbiri** canlıda yok (`public` şemasında 196 indeks var, bu dördü değil). `107`–`110` uygulanmış; yalnız `111` atlanmış.
