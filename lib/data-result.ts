@@ -99,6 +99,21 @@ export function singleResult<T>(response: SupabaseResponse<T>, source: string): 
 }
 
 /**
+ * Sayım sorgusu (`select('id', { count: 'exact', head: true })`).
+ *
+ * Eskiden `(count ?? 0) > 0` okunuyordu: sorgu düştüğünde sayı 0 olur ve
+ * öğretmene kurulum kartında "henüz kitap eklemediniz" denirdi —
+ * eklemiş olsa bile. Yanlış yönlendiren bir yardım, yardım değildir.
+ */
+export function countResult(
+  response: { count: number | null; error: { message: string; code?: string } | null },
+  source: string
+): QueryResult<number> {
+  if (response.error) return fail<number>(response.error, source)
+  return { ok: true, data: response.count ?? 0 }
+}
+
+/**
  * Türetilen bir yargı birden fazla sorguya dayanıyorsa, HEPSİ başarılı
  * olmadan verilmez.
  *

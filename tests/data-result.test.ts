@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 // ÇAĞRILDIĞI da doğrulanabilsin.
 vi.mock('@/lib/observability', () => ({ reportError: vi.fn() }))
 
-import { allOk, listResult, singleResult } from '@/lib/data-result'
+import { allOk, countResult, listResult, singleResult } from '@/lib/data-result'
 import { reportError } from '@/lib/observability'
 
 // VERİ SONUCU SÖZLEŞMESİ (PRD · B01)
@@ -65,6 +65,25 @@ describe('singleResult', () => {
   it('hata, null veriyle KARIŞMAZ', () => {
     const sonuc = singleResult({ data: null, error: hata }, 'test.tekil')
     expect(sonuc.ok).toBe(false)
+  })
+})
+
+describe('countResult', () => {
+  it('hata, sıfır sayıya DÖNÜŞMEZ', () => {
+    // KUSURUN TEKRARI: öğretmen dashboard'u `(bookCount ?? 0) > 0`
+    // okuyordu. Sayım düşünce kurulum kartı, kitap eklemiş bir
+    // öğretmene "kitap ekleyin" diyordu.
+    const sonuc = countResult({ count: null, error: hata }, 'test.sayim')
+    expect(sonuc.ok).toBe(false)
+    expect('data' in sonuc).toBe(false)
+  })
+
+  it('gerçek sıfır başarılı bir sonuçtur', () => {
+    expect(countResult({ count: 0, error: null }, 'test.sayim')).toEqual({ ok: true, data: 0 })
+  })
+
+  it('sayıyı taşır', () => {
+    expect(countResult({ count: 12, error: null }, 'test.sayim')).toEqual({ ok: true, data: 12 })
   })
 })
 
