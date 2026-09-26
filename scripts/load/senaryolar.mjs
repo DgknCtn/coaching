@@ -69,6 +69,19 @@ export function yazmaSayisi() {
   return yazilan
 }
 
+/**
+ * HER ADIMDAN İLK HATA GÖVDESİ BİR KEZ BASILIR.
+ *
+ * Taban koşusunda 1.128 panel isteğinden 2'si 5xx döndü ve raporda
+ * yalnız sayı görünüyordu — "iki tanesi patladı, sebebi bilinmiyor".
+ * Sayı bir kusuru işaret eder, gövdesi onu teşhis eder: zaman aşımı mı,
+ * bağlantı doygunluğu mu, yoksa sorgunun kendisi mi.
+ *
+ * Yalnız İLK örnek basılıyor: 250 eşzamanlıda aynı hatayı binlerce kez
+ * yazmak, çıktıyı okunamaz kılar ve ölçümü yavaşlatır.
+ */
+const gorulenHatalar = new Set()
+
 /** Ortak: bir isteği ölç ve sınıflandır. */
 async function istek(toplayici, ad, url, secenekler = {}) {
   const baslangic = performance.now()
@@ -84,12 +97,17 @@ async function istek(toplayici, ad, url, secenekler = {}) {
     const code =
       govde && typeof govde === 'object' && 'code' in govde ? (govde.code ?? null) : null
 
-    toplayici.kaydet({
-      ad,
-      sureMs: Math.round(performance.now() - baslangic),
-      status: yanit.status,
-      code,
-    })
+    const sureMs = Math.round(performance.now() - baslangic)
+    toplayici.kaydet({ ad, sureMs, status: yanit.status, code })
+
+    if ((yanit.status >= 400 || code) && !gorulenHatalar.has(ad)) {
+      gorulenHatalar.add(ad)
+      console.log(
+        `\n[ilk hata · ${ad}] HTTP ${yanit.status} (${sureMs}ms) ` +
+          `kod=${code ?? '-'} gövde=${metin.slice(0, 300)}\n`
+      )
+    }
+
     return { status: yanit.status, govde, code }
   } catch (hata) {
     // status=0 → "sunucu cevap vermedi". 5xx'ten AYRI tutuluyor: biri
@@ -100,6 +118,12 @@ async function istek(toplayici, ad, url, secenekler = {}) {
       status: 0,
       code: null,
     })
+    if (!gorulenHatalar.has(ad)) {
+      gorulenHatalar.add(ad)
+      console.log(`
+[ilk hata · ${ad}] cevap yok: ${String(hata).slice(0, 200)}
+`)
+    }
     return { status: 0, govde: null, code: null, hata: String(hata) }
   }
 }

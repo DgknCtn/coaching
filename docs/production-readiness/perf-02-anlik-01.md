@@ -60,6 +60,24 @@ Pencere başlangıcındaki karşılaştırma değerleri (20:35 UTC):
 
 **Ölçüm tarihi: 29 Eylül 2026.** Aynı sorgular koşulur, fark alınır.
 
+### PENCERE KİRLENDİ — 27 Eylül 2026, LOAD-01 koşumu
+
+Pencere başladıktan **yarım saat sonra** yük testi koşuldu ve bu, farkın okunuşunu doğrudan etkiliyor. Gizlemek yerine yazıyoruz; ölçümün ne kadarının gerçek kullanım olduğu ancak bu bilinerek söylenebilir.
+
+| Koşum | Eşzamanlı | Süre | Toplam istek |
+|---|---|---|---|
+| duman testi | 10 | 1,5 dk | ~1.600 |
+| taban | 10 | 10 dk | 9.078 |
+| normal | 40 | 15 dk | 37.622 |
+
+**Toplam ~48.000 istek** ve her biri 10 adımlık bir tur içinde RLS politikalarını değerlendirdi. Yani `profiles`, `workspaces`, `workspace_members`, `workspace_licenses` sayaçlarındaki artışın **büyük kısmı bu koşumlardan** gelecek; `students`, `homework_items`, `test_completions`, `book_tests` ve `weekly_flows` da senaryonun doğrudan okuduğu tablolar.
+
+**Sonuç olarak 29 Eylül farkı şu soruyu YANITLAMAZ:** "gerçek kullanımda üç günde ne oluyor?" Yanıtladığı soru şu: "yük testi + gerçek kullanım birlikte ne üretti?"
+
+**Karar:** FK indeks triyajı (ADIM 4) yine yapılabilir — orada aranan şey *hangi kolonların tarandığı*, ve yük testi gerçek sorgu yollarını kullandığı için bu sinyal bozulmuyor, güçleniyor. Ama **tarama sayılarının mutlak değeri** kapasite planlaması için kullanılmayacak; onun için yük testinden arınmış ikinci bir pencere gerekir.
+
+Alternatifi yoktu: yedek beklemek de pencereyi uzatmak da aynı üç günü tüketiyordu ve yük testi yedekten sonra koşulmak üzere sıraya konmuştu.
+
 ## 111 canlıda yoktu — ayrı bir bulgu
 
 `baseline.md` migration `111`'i uygulanmış sayıyordu. 26 Eylül'de ölçüldü: dört indeksin **hiçbiri** canlıda yok (`public` şemasında 196 indeks var, bu dördü değil). `107`–`110` uygulanmış; yalnız `111` atlanmış.

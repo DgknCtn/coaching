@@ -200,15 +200,61 @@ Yukarıdaki tablo artık bir tarif değil, **çalıştırılabilir kod**:
 
 **3. Hata sınıfları raporda ayrı.** `42501` (yetki), `5xx` (güvenilirlik), `429` (hız sınırı), cevapsızlık (kapasite) ayrı sayılıyor ve 42501 görülürse çıkış kodu hata veriyor. §2'nin kuralı ölçümün içine gömülü: *hata oranı bir kapasite göstergesi değildir.* Toplayıcının bu ayrımı gerçekten yaptığı `tests/load-olcum.test.ts` ile doğrulanıyor (ağ gerektirmez, her koşuda çalışır).
 
-**Hâlâ koşulmadı ve bu bilinçli.** Eksik olan tek şey 1. önkoşul: staging projesi. Koşumcu hazır olduğu için o proje açıldığı gün ölçüm, yazılım işi değil yalnız komut işi:
+### KOŞULDU — 27 Eylül 2026 · sonuç: yetki sağlam, kapasite değil
+
+Kullanıcı bu projenin test sitesi olduğunu belirtti ve koşum burada yapıldı (`LOAD_ALLOW_PRODUCTION_TARGET=1` ile açık onay). İki kademe koşuldu:
+
+| Kademe | İstek | **42501** | 5xx | p50 | p95 | p99 |
+|---|---|---|---|---|---|---|
+| taban · 10 eşzamanlı · 10 dk | 9.078 | **0** | 2 | 110 ms | 2.835 ms | 4.610 ms |
+| normal · 40 eşzamanlı · 15 dk | 37.622 | **0** | **26.539 (%70)** | 78 ms | 4.346 ms | 8.778 ms |
+
+**Kabul kapısının asıl şartı geçti: yetki gerilemesi yok.** Her iki kademede 42501 sıfır, ve koşumdan sonra `tenant-isolation` + `cross-tenant` + `anon-endpoint-probe` 112/112 yeşil. Yük altında RLS çalışmaya devam ediyor.
+
+**Kapasite geçmedi ve sebebi tek bir view.**
+
+### Doyma noktası 40 eşzamanlının altında — zincir ölçüldü
+
+`teacher_student_overview_view` altı alt view'ı birleştiriyor; içlerinden `student_book_progress_view`, **37.302 satırlık `book_tests`** üzerinde her panel açılışında `COUNT(DISTINCT)` yapıyor. Taban kademesinde bile p50 **2.372 ms**, p99 **7.853 ms** — `authenticated` rolünün `statement_timeout`'u olan **8 saniyeye bir saniye kala**.
+
+40 eşzamanlıda zincir şöyle koptu:
+
+1. Panel sorgusu 8 saniyeyi aşıyor → iptal ediliyor.
+2. İçinde bulunduğu işlem (transaction) **abort** durumuna düşüyor.
+3. Pooler o bağlantıyı bir sonraki isteğe veriyor ve gelen cevap şu oluyor:
+   `25P02: current transaction is aborted, commands ignored until end of transaction block`
+4. Hata **panelle sınırlı kalmıyor, tüm uçlara yayılıyor.**
+
+Kanıt: ilk hata panelde değil `10_kitap_ilerleyis` adımında göründü ve 5xx oranı on adımın hepsinde ~%70'te eşitlendi. Panelin kendi p99'u 13.744 ms'ye çıktı.
+
+**Ders, kapasiteden daha genel:** tek bir yavaş sorgu, yük altında API'nin tamamını düşürebiliyor. Bu bir plan yükseltme kalemi DEĞİL — `operations.md` §3'ün kuralı burada birebir geçerli: iş verimli değilse büyük makine pahalı bir erteleme olur. Doğru sıra önce view'ın maliyetini düşürmek.
+
+**p50'nin 78 ms olması yanıltıcıdır** ve raporun okunuşunda bu tuzağa dikkat edilmeli: başarısız istekler hızlı reddediliyor, yani medyan "sistem hızlı" demiyor, "hatalar hızlı geliyor" diyor. Karar p95/p99 ve hata sınıflarıyla verilir.
+
+### Koşulmayan kademeler
+
+`buyume` (100) ve `stres` (250) **bilinçli olarak koşulmadı.** Doyma noktası 40'ın altında bulunduktan sonra 250 eşzamanlı istek yeni bilgi üretmez; yalnız daha uzun bir kesinti üretir. Bu kademeler, panel maliyeti düşürüldükten sonra anlamlı olacak.
+
+### Koşumun bıraktığı iz temizlendi
+
+Senaryo 105 prob akademik notu yazdı (iki kademe + duman testi). Hepsi `note_text LIKE 'LOAD-01 prob notu%'` filtresiyle silindi ve kalmadığı doğrulandı — önceki turda çapraz kiracı testinin canlıda 5 kayıt bırakmasının tekrarı olmadı.
+
+### Ölçülmeyen
+
+Vercel tarafı bu koşumda ölçülmedi (`LOAD_APP_URL` verilmedi; `.env.local`'deki değer localhost). Yani rapor **Supabase tarafını** anlatıyor; Active CPU eğilimi panodan okunmalı. Sayfa render'ı (SSR) oturum çerezi gerektirdiği için karışımda yok.
+
+---
+
+### Yeniden koşum
+
+`LOAD_WRITES=0` yazmaları kapatır, `LOAD_DAKIKA=1` süreyi kısaltır (duman testi). Ayrı bir staging projesi açıldığında `LOAD_ALLOW_PRODUCTION_TARGET` düşer ve `buyume`/`stres` kademeleri gerçek kiracıyı etkilemeden koşulabilir — panel maliyeti düşürüldükten sonra sıradaki iş budur.
 
 ```
-ALLOW_LOAD_TEST=1 LOAD_SUPABASE_URL=https://<staging>.supabase.co \
-LOAD_SUPABASE_ANON_KEY=... LOAD_USERS='ogretmen@x.com:sifre' \
+ALLOW_LOAD_TEST=1 LOAD_ALLOW_PRODUCTION_TARGET=1 \
+LOAD_SUPABASE_URL=... LOAD_SUPABASE_ANON_KEY=... \
+LOAD_USERS='ogretmen@x.com:sifre,ogretmen2@x.com:sifre' \
 LOAD_STAGE=taban npm run load
 ```
-
-**Koşumcunun ölçemediği şey:** Vercel tarafı yalnız `/api/health` üzerinden yoklanıyor (`LOAD_APP_URL` verilirse). Sayfa render'ı (SSR) oturum çerezi gerektirdiği için karışımda yok; yani rapor **Supabase tarafını** ölçer, Vercel Active CPU eğilimi panodan okunur. Bunu yazmak gerekiyor, çünkü "yük testi geçti" cümlesi aksi hâlde ölçülmeyen bir kaynağı da kapsıyormuş gibi görünür.
 
 ---
 
@@ -217,8 +263,9 @@ LOAD_STAGE=taban npm run load
 | Kalem | Durum | Engel |
 |---|---|---|
 | PERF-02 | **Pencere başladı** | Sıfırlama Supabase'de mümkün değil (`postgres` rolüne kapalı); yöntem iki anlık görüntünün farkına çevrildi. Başlangıç: `perf-02-anlik-01.md`. 3 gün boyunca canlıya karşı test koşulmaz |
-| PERF-01 | **Açık** | `111` canlıda YOKTU (26 Eylül'de ölçüldü); panelde uygulanması bekleniyor. Kalan 66 aday fark ölçümünden sonra değerlendirilecek |
-| LOAD-01 | **Koşumcu hazır** | Yalnız staging projesi eksik (§5) |
+| PERF-01 | **Kısmen** | `111` canlıda yoktu, 27 Eylül'de uygulandı (4 indeks, 96 kB, `idx_scan=0`). Kalan 66 aday fark ölçümünden sonra |
+| LOAD-01 | **Koşuldu** | taban + normal koşuldu, 42501=0. `buyume`/`stres` panel maliyeti düşürülene kadar yeni bilgi üretmez (§5) |
 | OPS-02 | **Kapandı (tatbikat hariç)** | Gece yedeği kuruldu: 03:00 TRT, 30 gün, şifreli, private depoda. RPO 24 saat. İlk tatbikat Aralık ilk haftası |
 | Alarm sahipliği | **Kapandı** | Birincil, yedek (yok) ve kanal §2'de yazılı |
+| **Panel sorgu maliyeti** | **YENİ — açık** | Yük testinin bulgusu: `teacher_student_overview_view` 8 sn zaman aşımını aşıp `25P02` ile TÜM API'yi düşürüyor (§5). PRD'nin B13 kalemiyle aynı yer, ondan ciddi |
 | SEC-01 | **Kapandı** | Teşhis 108 ile düzeltildi; kalıcı bekçi `tests/anon-endpoint-probe.test.ts`, geçmiş kanıtı `sec-01-log-sorgusu.md` |
