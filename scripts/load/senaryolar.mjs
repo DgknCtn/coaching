@@ -27,15 +27,47 @@
 // yanlış yola gider; `signInTenant` değişirse buraya da bakılmalı.
 //
 // ============================================================
-// YAZMALAR: EVET, AMA GERİ ALINABİLİR OLANLAR
+// YAZMALAR: EVET, AMA YALNIZ EKLEME — VE SAYILI
 //
 // Salt okunur bir yük testi yanıltır: yazma yolu RLS'in `WITH CHECK`
-// tarafını, tetikleyicileri ve kilitlenmeyi ölçen tek yoldur. Buradaki
-// tek yazma `student_day_notes` upsert'i — kendi kiracısına, kendi
-// öğrencisine, prob'a özel metinle. Staging projesinde koşulduğu için
-// gerçek veriye dokunmaz; koşumcunun üretim kilidi de bunu garanti eder
-// (`run.mjs`).
+// tarafını, SECURITY DEFINER gövdesini ve kilitlenmeyi ölçen tek yol.
+//
+// İLK İKİ HEDEF ÖLÇÜLDÜ VE ELENDİ (27 Eylül 2026):
+//
+//   1. `student_day_notes` upsert — İKİ AYRI SEBEPTEN yanlıştı:
+//      kolon adı `note` değil `note_text` (duman testinde 117/117 istek
+//      4xx döndü), ve daha önemlisi o tabloda öğretmenin yazma hakkı
+//      YOK: politikalar `day_notes_all_student` (öğrenci) +
+//      `day_notes_select_teacher` (yalnız okuma). Yani senaryo, ürünün
+//      izin vermediği bir şeyi ölçmeye çalışıyordu.
+//
+//   2. `upsert_weekly_plan_draft` — gerçek yazma yolu ve cazipti, ama
+//      tablodaki tek kısıt `UNIQUE(workspace_id, student_id,
+//      teacher_profile_id)`: tarih anahtarın parçası DEĞİL. Yani upsert,
+//      öğretmenin o öğrenci için duran GERÇEK taslağını ezerdi. Yük
+//      testi veri silmez.
+//
+// SEÇİLEN: `add_academic_note` RPC'si. Saf EKLEME — hiçbir satırı
+// değiştirmiyor ya da silmiyor, SECURITY DEFINER gövdesinden ve RLS
+// yazma kontrolünden geçiyor, metni işaretli olduğu için koşumdan sonra
+// tek sorguyla temizlenebiliyor.
+//
+// SAYILI: turların yalnız ~%10'unda yazılıyor ve koşum başına EN FAZLA
+// `YAZMA_TAVANI` kayıt. İki gerekçe: gerçek öğretmen de okuduğundan çok
+// daha az yazıyor (canlı sayaçlar: `academic_notes` 13 ekleme, 2.483
+// indeks taraması), ve temizlenecek satır sayısı öngörülebilir kalmalı.
 // ============================================================
+
+/** Koşum başına yazma tavanı — aşılırsa yazma adımı atlanır. */
+const YAZMA_TAVANI = 50
+let yazilan = 0
+
+/** Koşum sonunda temizlik sorgusu için kullanılan işaret. */
+export const YAZMA_ISARETI = 'LOAD-01 prob notu'
+
+export function yazmaSayisi() {
+  return yazilan
+}
 
 /** Ortak: bir isteği ölç ve sınıflandır. */
 async function istek(toplayici, ad, url, secenekler = {}) {
@@ -203,23 +235,19 @@ export async function tur(ayar, oturum, toplayici) {
     h
   )
 
-  // 11 · YAZMA — gün notu upsert'i.
+  // 11 · YAZMA — akademik not EKLEME (RPC).
   //
-  // Neden bu yazma: küçük, kendi kiracısına ait, tekrarlanabilir ve
-  // `WITH CHECK` tarafını gerçekten çalıştırıyor. `Prefer: resolution`
-  // ile aynı gün tekrar koşulduğunda satır çoğalmaz.
-  if (ayar.yazmaAcik) {
-    await istek(toplayici, '11_yazma_gun_notu', `${ayar.url}/rest/v1/student_day_notes`, {
+  // Tavan ve olasılık yukarıda gerekçeli. `buGun()` metne yazılıyor:
+  // temizlik sorgusu hangi koşumdan kaldığını görebilsin.
+  if (ayar.yazmaAcik && yazilan < YAZMA_TAVANI && Math.random() < 0.1) {
+    yazilan++
+    await istek(toplayici, '11_yazma_akademik_not', `${ayar.url}/rest/v1/rpc/add_academic_note`, {
       method: 'POST',
-      headers: {
-        ...oturum.basliklar,
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
+      headers: oturum.basliklar,
       body: JSON.stringify({
-        student_id: ogrenci.id,
-        workspace_id: oturum.workspaceId,
-        note_date: buGun(),
-        note: 'LOAD-01 prob notu',
+        p_student_id: ogrenci.id,
+        p_note_text: `${YAZMA_ISARETI} ${buGun()}`,
+        p_pinned: false,
       }),
     })
   }

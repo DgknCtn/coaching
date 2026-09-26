@@ -142,6 +142,20 @@ function ayarOku() {
     cik(`bilinmeyen kademe "${kademeAdi}". Seçenekler: ${Object.keys(KADEMELER).join(', ')}`)
   }
 
+  // SÜRE AŞMASI — YALNIZ DUMAN TESTİ İÇİN.
+  //
+  // Senaryodaki bir yol adı yanlışsa (view yeniden adlandırılmış, filtre
+  // kolonu değişmiş) bunu 10 dakika bekleyip öğrenmek gereksiz. 1
+  // dakikalık bir koşu betiği doğrular; gerçek ölçüm kademenin kendi
+  // süresiyle yapılır.
+  //
+  // Rapora süre yazıldığı için kısa koşu gizlenemez: çıktıda hangi süre
+  // kullanıldığı görünür.
+  const dakikaAsma = Number.parseFloat(process.env.LOAD_DAKIKA ?? '')
+  const sureliKademe = Number.isFinite(dakikaAsma) && dakikaAsma > 0
+    ? { ...kademe, dakika: dakikaAsma, amac: `${kademe.amac} (süre aşıldı: ${dakikaAsma} dk)` }
+    : kademe
+
   const kullanicilar = (process.env.LOAD_USERS ?? '')
     .split(',')
     .map(s => s.trim())
@@ -165,16 +179,14 @@ function ayarOku() {
     anonKey,
     appUrl: appUrl || null,
     kademeAdi,
-    kademe,
+    kademe: sureliKademe,
     kullanicilar,
     yazmaAcik: process.env.LOAD_WRITES !== '0',
   }
 }
 
 /** Tek bir sanal kullanıcı: süre bitene kadar tur döndürür. */
-async function sanalKullanici(ayar, kullanici, toplayici, bitisZamani) {
-  const oturum = await girisYap(ayar, kullanici, toplayici)
-
+async function sanalKullanici(ayar, oturum, toplayici, bitisZamani) {
   while (Date.now() < bitisZamani) {
     await tur(ayar, oturum, toplayici)
 
@@ -197,6 +209,29 @@ async function main() {
   console.log(`hedef: ${ayar.url}${ayar.appUrl ? ` + ${ayar.appUrl}` : ' (Vercel ölçülmüyor)'}`)
 
   const toplayici = toplayiciOlustur()
+
+  // GİRİŞ HESAP BAŞINA BİR KEZ — SANAL KULLANICI BAŞINA DEĞİL.
+  //
+  // İlk tasarımda her sanal kullanıcı kendi girişini yapıyordu. 40
+  // eşzamanlıda bu, ~90 saniye içinde 40 giriş isteği demek ve
+  // Supabase Auth'un kendi hız sınırına (varsayılan: /token ucu için
+  // 5 dakikada 30 istek) çarpar. Sonuç ölçüm değil, 429 yığını olurdu:
+  // yani ürünün kapasitesini değil, kimlik doğrulama kotasını ölçerdik.
+  //
+  // Gerçek kullanıcı da her tıklamada yeniden giriş yapmaz; oturum
+  // token'ı ile gezer. Token paylaşmak bu davranışı daha iyi taklit
+  // ediyor ve ölçüyü veri yoluna odaklıyor.
+  console.log(`\n${ayar.kullanicilar.length} hesapla giriş yapılıyor...`)
+  const oturumlar = []
+  for (const kullanici of ayar.kullanicilar) {
+    oturumlar.push(await girisYap(ayar, kullanici, toplayici))
+  }
+  console.log(
+    oturumlar
+      .map(o => `  ${o.etiket}: ${o.ogrenciler.length} öğrenci görünüyor`)
+      .join('\n')
+  )
+
   const bitis = Date.now() + kademe.dakika * 60_000
 
   // RAMPA: hepsini aynı anda başlatmak yapay bir "cold start" zirvesi
@@ -207,10 +242,10 @@ async function main() {
 
   const isler = []
   for (let i = 0; i < kademe.esZamanli; i++) {
-    const kullanici = ayar.kullanicilar[i % ayar.kullanicilar.length]
+    const oturum = oturumlar[i % oturumlar.length]
     isler.push(
       new Promise(c => setTimeout(c, i * gecikme)).then(() =>
-        sanalKullanici(ayar, kullanici, toplayici, bitis)
+        sanalKullanici(ayar, oturum, toplayici, bitis)
       )
     )
   }
