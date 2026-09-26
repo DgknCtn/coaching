@@ -1,0 +1,155 @@
+name: Gece yedeği
+
+# ============================================================
+# NEDEN BU İŞ VAR
+#
+# Proje Supabase Free planda ve Free planda OTOMATİK YEDEK YOK.
+# Veritabanı kaybedilse geri dönülecek nokta yoktu: RTO ve RPO sonsuz
+# (docs/production-readiness/operations.md §4).
+#
+# ============================================================
+# BAŞARISIZLIK = ALARM
+#
+# `operations.md` §2'nin kuralı: "Sahipsiz alarm, kapatılan alarmdır."
+# Burada alarm kendiliğinden sahipli: GitHub, başarısız zamanlanmış
+# koşuyu depo sahibine e-postayla bildirir. Yani yedek alınamadığı gece
+# birincil sorumlu haber alır — ayrı bir izleme kurmaya gerek yok.
+#
+# Bu yüzden betikteki hiçbir denetim `|| true` ile yumuşatılmıyor:
+# sessizce geçen bir yedek işi, olmayan yedek işinden kötüdür.
+#
+# ============================================================
+# YEDEK NEREYE GİDİYOR — VE NEDEN BU DEPOYA DEĞİL
+#
+# `DgknCtn/coaching` PUBLIC. Public depoda Actions çıktılarını (artifact)
+# HERKES indirebilir. Yedeğin içeriği reşit olmayan öğrencilerin kişisel
+# verisi, veli ödeme kaydı ve finans verisi — artifact olarak bırakmak
+# onu açık internete koymak olurdu.
+#
+# Bu yüzden şifreli döküm AYRI bir PRIVATE depoya, GitHub Release
+# varlığı olarak yükleniyor.
+#
+# NEDEN RELEASE, NEDEN COMMIT DEĞİL: her gün ~5 MB'lık yeni bir dosyayı
+# commit etmek git geçmişini yılda ~1,8 GB şişirir ve dosyayı sonradan
+# silmek geçmişi KÜÇÜLTMEZ. Release varlıkları geçmişe girmez.
+#
+# ============================================================
+# SIR YÖNETİMİ
+#
+# Sırlar bu public depoda duruyor ve bu güvenli: GitHub, fork'lardan
+# gelen PR koşularına sır VERMEZ. `pull_request` tetiği de bilinçli
+# olarak yok.
+#
+# Ama Actions LOGLARI public. Bu yüzden betikte `set -x` kullanılmıyor
+# ve hiçbir adım bağlantı dizesini ya da parolayı ekrana yazmıyor.
+# ============================================================
+
+on:
+  schedule:
+    # 00:00 UTC = 03:00 Türkiye. Kullanımın en düşük olduğu saat.
+    - cron: '0 0 * * *'
+  # İlk koşuyu elle başlatmak ve tatbikat öncesi taze yedek almak için.
+  workflow_dispatch:
+
+# Bu iş depoya hiçbir şey yazmıyor; yazma yetkisi PAT üzerinden ve
+# YALNIZ yedek deposuna veriliyor.
+permissions:
+  contents: read
+
+concurrency:
+  # İki yedek koşusunun aynı gün aynı etikete yazmaya çalışması
+  # anlamsız; yeni koşu eskisini beklemez, eskisi iptal EDİLMEZ (yarım
+  # kalan bir yedek, hiç alınmamış yedekten kötü görünürdü).
+  group: yedek
+  cancel-in-progress: false
+
+jobs:
+  yedek:
+    name: Döküm al, şifrele, yükle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PostgreSQL 17 istemcisini kur
+        # `ubuntu-latest` PG 16 istemcisiyle geliyor; sunucu 17.6.
+        # pg_dump'ın ana sürümü sunucudan küçük olamaz — bu adım
+        # olmadan iş her gece sürüm uyuşmazlığıyla patlardı.
+        # Betikte ayrıca bir sürüm denetimi var; bu kurulum sessizce
+        # eski sürüm bıraksa oradan yakalanır.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Denetimlerin çalıştığını doğrula
+        # Yedeği almadan ÖNCE koşuyor: al.sh'ın altı denetimi kasten
+        # bozulmuş girdilerle sınanıyor. Denetimleri kırılmış bir
+        # betikle alınan yedek, doğrulanmamış yedektir.
+        run: bash scripts/yedek/denetim-testi.sh
+
+      - name: Yedeği al ve şifrele
+        env:
+          YEDEK_DB_URL: ${{ secrets.YEDEK_DB_URL }}
+          YEDEK_GPG_PAROLA: ${{ secrets.YEDEK_GPG_PAROLA }}
+          YEDEK_CIKTI_DIZINI: yedek-cikti
+        run: bash scripts/yedek/al.sh
+
+      - name: Private depoya yükle
+        env:
+          GH_TOKEN: ${{ secrets.YEDEK_TOKEN }}
+          YEDEK_REPO: ${{ secrets.YEDEK_REPO }}
+        run: |
+          set -euo pipefail
+          GUN="$(date -u +%Y-%m-%d)"
+          DOSYA="yedek-cikti/yedek-${GUN}.dump.gpg"
+          [ -f "${DOSYA}" ] || { echo "Şifreli yedek bulunamadı: ${DOSYA}" >&2; exit 1; }
+
+          # Aynı gün ikinci koşu (elle tetikleme) etiketi eziyor:
+          # tarihe bir kopya yeter, iki farklı "bugünün yedeği" olması
+          # hangisinin geçerli olduğunu belirsizleştirir.
+          if gh release view "yedek-${GUN}" --repo "${YEDEK_REPO}" > /dev/null 2>&1; then
+            gh release delete "yedek-${GUN}" --repo "${YEDEK_REPO}" --yes --cleanup-tag
+          fi
+
+          gh release create "yedek-${GUN}" "${DOSYA}" \
+            --repo "${YEDEK_REPO}" \
+            --title "Yedek ${GUN}" \
+            --notes "Şifreli PostgreSQL dökümü (public + auth + storage). Geri yükleme: docs/production-readiness/yedek-geri-yukleme.md"
+
+      - name: 30 günden eski yedekleri sil
+        env:
+          GH_TOKEN: ${{ secrets.YEDEK_TOKEN }}
+          YEDEK_REPO: ${{ secrets.YEDEK_REPO }}
+        run: |
+          set -euo pipefail
+          # Saklama süresi TEK YERDE tanımlı. Değiştirilecekse burada.
+          SAKLAMA_GUN=30
+          SINIR="$(date -u -d "-${SAKLAMA_GUN} days" +%s)"
+
+          # `--limit 200`: 30 günlük saklamada 30 release olması bekleniyor;
+          # 200 geniş bir emniyet payı. Sayfalama gerekecek kadar birikmesi
+          # zaten temizliğin çalışmadığı anlamına gelir.
+          gh release list --repo "${YEDEK_REPO}" --limit 200 \
+            --json tagName,createdAt \
+            --jq '.[] | [.tagName, .createdAt] | @tsv' \
+          | while IFS=$'\t' read -r etiket tarih; do
+              case "${etiket}" in yedek-*) ;; *) continue ;; esac
+              olusma="$(date -u -d "${tarih}" +%s)"
+              if [ "${olusma}" -lt "${SINIR}" ]; then
+                echo "Siliniyor: ${etiket}"
+                gh release delete "${etiket}" --repo "${YEDEK_REPO}" --yes --cleanup-tag
+              fi
+            done
+
+      - name: Özet
+        # Koşu günlüğünde hangi yedeğin alındığı görünsün; sır yok.
+        run: |
+          echo "### Gece yedeği alındı" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh yedek-cikti/*.gpg | awk '{print "- `" $9 "` — " $5}' >> "$GITHUB_STEP_SUMMARY"

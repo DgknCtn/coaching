@@ -100,10 +100,37 @@ function ayarOku() {
     )
   }
   if (url === uretim) {
-    cik(
-      `hedef ÜRETİM projesi (${url}). Yük testi ayrı bir staging ` +
-        'projesine koşulur: üretime yapay yük bindirmek hem ölçümü ' +
-        'kirletir hem gerçek kiracıyı etkiler (operations.md §5).'
+    // ÜÇÜNCÜ KATMAN: AÇIK VE AYRI ONAY.
+    //
+    // Kilit kaldırılmadı, çünkü bu projenin "test sitesi" olması bir
+    // KARAR, kodun bildiği bir gerçek değil. Kilidi silmek, bir dahaki
+    // sefere kimsenin düşünmemesi demek olurdu; ayrı bir bayrak
+    // istemek, her koşuda yeniden düşünmeyi zorunlu kılıyor.
+    //
+    // Bayrağın adı uzun ve rahatsız edici — bilinçli. `LOAD_FORCE=1`
+    // gibi bir ad, kopyalanıp unutulmaya davetiye olurdu.
+    if (process.env.LOAD_ALLOW_PRODUCTION_TARGET !== '1') {
+      cik(
+        `hedef ÜRETİM projesi (${url}). Yük testi normalde ayrı bir ` +
+          'staging projesine koşulur: üretime yapay yük bindirmek hem ' +
+          'ölçümü kirletir hem gerçek kiracıyı etkiler (operations.md §5).\n' +
+          '\nBu proje bilerek hedefleniyorsa LOAD_ALLOW_PRODUCTION_TARGET=1 ' +
+          'eklenmeli. Eklemeden önce iki soru:\n' +
+          '  1. Bu veritabanının GÜNCEL bir yedeği var mı?\n' +
+          '  2. Yazma açıksa (LOAD_WRITES=0 değilse) canlıya prob kaydı ' +
+          'düşeceğini ve sonra silinmesi gerektiğini biliyor musun?'
+      )
+    }
+
+    console.log(
+      '\nDİKKAT: hedef ÜRETİM projesi ve LOAD_ALLOW_PRODUCTION_TARGET=1 ile ' +
+        'açıkça onaylandı.\n' +
+        'Kabul edilen: gerçek veriye yük biniyor, ölçüm gerçek kullanımla ' +
+        'karışıyor' +
+        (process.env.LOAD_WRITES === '0'
+          ? ' (yazma KAPALI).'
+          : ', ve canlıya prob kaydı yazılacak — koşumdan sonra silinmeli.') +
+        '\n'
     )
   }
   if (appUrl && uretim && appUrl.includes(new URL(uretim).hostname.split('.')[0])) {

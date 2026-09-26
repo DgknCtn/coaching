@@ -88,35 +88,33 @@ Yükseltme kararı tek bir ölçüye değil, **üç sorunun cevabına** bağlı:
 
 ## 4. Yedekleme ve kurtarma (OPS-02)
 
-### Karar — ve Free planın anlamı
+### Karar — Free planda yedek yoktu, kendi düzenimiz kuruldu
 
-**Proje Free planda ve Free planda otomatik yedek YOK.** Bu, doldurulacak bir alan değil, yazılması gereken bir sonuç:
+**Supabase Free planda otomatik yedek yok.** 26 Eylül'de belgeye şu yazılmıştı: veritabanı kaybedilse geri dönülecek nokta yok, RTO ve RPO **sonsuz**. Karar plan yükseltmek değil, kendi yedek düzenini kurmak oldu.
 
-| Soru | Cevap | Kaynak |
-|---|---|---|
-| Yedek sıklığı | **yok** | Free plan |
-| Saklama süresi | **yok** | Free plan |
-| Point-in-time recovery | **yok** (Pro ve üstünde ek özellik) | Free plan |
-| Geri yükleme sorumlusu | Doğukan Çetin | — |
+| Soru | Cevap |
+|---|---|
+| Yedek sıklığı | **Her gece 03:00 (TRT)** — `.github/workflows/yedek.yml`, cron `0 0 * * *` UTC |
+| Saklama süresi | **30 gün** (31 gün önceki bir kayıp geri alınamaz) |
+| Point-in-time recovery | **Yok.** Gün içi bir noktaya dönmek mümkün değil; PITR Pro planın ek özelliği |
+| En kötü durumda veri kaybı (RPO) | **24 saat** — son gece yedeğinden bu yana olan her şey |
+| Nerede duruyor | `DgknCtn/coaching-yedek` (**private**) deposunun Releases bölümü, AES-256 şifreli |
+| Geri yükleme sorumlusu | Doğukan Çetin (tek kişi) |
+| Runbook | `docs/production-readiness/yedek-geri-yukleme.md` |
 
-### Bunun düz karşılığı
+### Tasarımın üç kritik kararı
 
-Veritabanı bugün kaybedilse (silinmiş tablo, bozulmuş migration, hesap sorunu, proje askıya alınması) **geri dönülecek bir nokta yok.** Kurtarma süresi (RTO) ve veri kaybı toleransı (RPO) tanımsız değil — **sonsuz**. Tatbikat bölümünün sorduğu soru ("kaç saatte ve ne kadar veri kaybıyla geri döneriz") bugün şu cevabı alıyor: *dönemeyiz.*
+**1. Yedek kod deposunda DURMUYOR.** `DgknCtn/coaching` public ve public depoda Actions çıktılarını (artifact) herkes indirebilir. Yedeği oraya bırakmak, reşit olmayan öğrencilerin kişisel verisini, veli ödeme kayıtlarını ve finans verisini açık internete koymak olurdu. Ayrı private depo + şifreleme, bu yüzden tercih değil zorunluluk.
 
-Bu, denetimin listesinde olmayan ve denetimin de göremeyeceği bir risk — çünkü şema, yetkiler ve performans yerinde; eksik olan **plan özelliği**.
+**2. Yedek sessizce başarısız olamaz.** `scripts/yedek/al.sh` altı denetimden geçiyor: sürüm, boyut (1 MB altı → hata), `public` veri girdisi sayısı (50 altı → hata), `auth.users` varlığı, şifreleme ve **geri açılabilirlik**. Sonuncusu en kritik: şifreli dosya tekrar çözülüp `pg_restore` ile okunuyor. Bu olmasa sistem 30 gün boyunca açılamayan dosyalar üretip her sabah yeşil görünebilirdi.
 
-**Kapasite kuralının geçerli OLMADIĞI tek kalem budur.** §3 "önce verimlilik, sonra plan" diyor; veri kaybı toleransı kod optimizasyonuyla düşmez. Burada seçenek ikidir ve ikisi de para ya da emek ister:
+Denetimlerin kendisi de `scripts/yedek/denetim-testi.sh` ile sınanıyor — beş senaryo kasten bozulmuş girdilerle çalıştırılıyor ve her birinin **hata vermesi** bekleniyor. Bu test yedek işinin ilk adımı olarak her gece koşuyor: denetimleri kırılmış bir betikle alınan yedek, doğrulanmamış yedektir.
 
-| Seçenek | Ne verir | Maliyeti |
-|---|---|---|
-| **Pro plana geçmek** | Günlük otomatik yedek + PITR (ek özellik) | aylık ücret |
-| **Kendi dökümünü almak** | `pg_dump` ile şema + veri, dışarıda saklanır | kurulum ve saklama emeği; tatbikat yine zorunlu |
+**3. Başarısızlık zaten alarm.** §2'nin "sahipsiz alarm, kapatılan alarmdır" kuralı burada kendiliğinden karşılanıyor: GitHub başarısız zamanlanmış koşuyu depo sahibine e-postayla bildirir. Ayrı bir izleme kurulmadı, çünkü kurulacak alarmın ta kendisi bu.
 
-İkinci seçenek `iz_readonly` ile YAPILAMAZ: o rol RLS'i atlamıyor (ölçüldü: `rolbypassrls = false`), yani alınan döküm sessizce **eksik** olur — yedeklerin en kötü türü. Döküm ancak `postgres` rolüyle (veritabanı şifresi) alınabilir; `postgres` RLS'i atlıyor (`rolbypassrls = true`).
+### Bu kararın kabul ettiği risk
 
-**Free planın ikinci sonucu:** proje 7 gün hareketsiz kalırsa askıya alınır. Yedeksiz bir sistemde bu, veriye erişimin kendi elinizde olmaması demek.
-
-**Karar verilene kadar bu satır böyle kalır.** "Yedek politikası: Supabase otomatik" yazıp geçmek, olay anında var olmayan bir yedeğe güvenmek olurdu — bu belgenin en baştaki kuralının tam ihlali.
+Gece yedeği, **gün içi** bir veri kaybını geri almaz: sabah 10'da silinen bir şey için elde gece 03:00'ün hâli var. Bu bilinçli bir kabul — alternatifi Pro plan ve PITR. Sistem 33 MB ve aktif kullanıcı tek haneliyken makul; kullanıcı sayısı arttığında **yeniden karara bağlanmalı** ve tetikleyici §3'ün kuralıyla aynı: ölçülen tüketim değil, kabul edilebilir veri kaybının değişmesi.
 
 ### Geri yükleme tatbikatı — yılda en az bir kez
 
@@ -139,7 +137,7 @@ tests/anon-endpoint-probe.test.ts    (38 tablo + 11 RLS yardımcısı: 42501 var
 
 **İlk tatbikat tarihi:** 2026 Aralık ayının ilk haftası (öneri). Yıllık tekrar; tarih geçtiğinde bu satır yeni tarihle güncellenir. **Tarihi olmayan tatbikat yapılmamış tatbikattır** — bu yüzden boş bırakılmıyor, önerilen tarih yazılıyor.
 
-**Ama bugün tatbikat YAPILAMAZ.** Free planda yedek olmadığı için geri yüklenecek bir şey yok (§4). Yukarıdaki prosedür, yedek düzeni kurulduğu gün uygulanmak üzere duruyor; sırası şudur: **önce yedek kararı, sonra tatbikat.** Prosedürü şimdi yazmanın sebebi, kararın ardından unutulmaması.
+Tatbikatın adım adım komutları artık ayrı bir belgede: **`yedek-geri-yukleme.md`**. Orada indirme, şifre çözme, `pg_restore`, yetki doğrulama ve RTO/RPO ölçümü sırayla yazılı — olay anında bu belgeye değil oraya bakılır.
 
 ### Olay müdahalesi
 
@@ -221,6 +219,6 @@ LOAD_STAGE=taban npm run load
 | PERF-02 | **Pencere başladı** | Sıfırlama Supabase'de mümkün değil (`postgres` rolüne kapalı); yöntem iki anlık görüntünün farkına çevrildi. Başlangıç: `perf-02-anlik-01.md`. 3 gün boyunca canlıya karşı test koşulmaz |
 | PERF-01 | **Açık** | `111` canlıda YOKTU (26 Eylül'de ölçüldü); panelde uygulanması bekleniyor. Kalan 66 aday fark ölçümünden sonra değerlendirilecek |
 | LOAD-01 | **Koşumcu hazır** | Yalnız staging projesi eksik (§5) |
-| OPS-02 | **Açık — gerçek risk** | Free planda otomatik yedek YOK: RTO/RPO sonsuz. Karar gerekiyor: Pro plan ya da kendi `pg_dump` düzeni (§4) |
+| OPS-02 | **Kapandı (tatbikat hariç)** | Gece yedeği kuruldu: 03:00 TRT, 30 gün, şifreli, private depoda. RPO 24 saat. İlk tatbikat Aralık ilk haftası |
 | Alarm sahipliği | **Kapandı** | Birincil, yedek (yok) ve kanal §2'de yazılı |
 | SEC-01 | **Kapandı** | Teşhis 108 ile düzeltildi; kalıcı bekçi `tests/anon-endpoint-probe.test.ts`, geçmiş kanıtı `sec-01-log-sorgusu.md` |
