@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner'
 import { flowMembership } from '@/lib/weekly-flow'
 import { formatSessionLong } from '@/lib/service-structure'
-import { createHomeworkBatchAction } from './actions'
+import { createHomeworkBatchAction, retryAttachBatchToFlowAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
   approveUnitsAction,
@@ -510,7 +510,28 @@ export function HomeworkBuilder({
       // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
       // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
       // artmadığını bilmeden ekranda eksik sayı görürdü.
-      if (result?.flowWarning) {
+      //
+      // Bağlama DÜŞTÜYSE (B06) toast kapanmaz ve tek aksiyonu yalnız
+      // bağlamayı yeniden denemek: "Planı Yayınla"ya tekrar basmak ikinci
+      // bir ödev oluştururdu.
+      if (result?.attachFailed && result.batchId) {
+        const batchId = result.batchId
+        toast.warning(result.flowWarning, {
+          duration: Infinity,
+          action: {
+            label: 'Bağlamayı tekrar dene',
+            onClick: async () => {
+              const retry = await retryAttachBatchToFlowAction(studentId, batchId)
+              if (retry.error) toast.error(retry.error)
+              else {
+                if (retry.flowWarning) toast.warning(retry.flowWarning, { duration: 8000 })
+                else toast.success('Ödev haftalık akışa bağlandı.')
+                router.refresh()
+              }
+            },
+          },
+        })
+      } else if (result?.flowWarning) {
         toast.warning(result.flowWarning, { duration: 8000 })
       }
       router.refresh()
