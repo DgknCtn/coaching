@@ -14,7 +14,7 @@ import { AuthShell } from '@/components/shared/auth-shell'
 import { ShieldCheck, Sparkles } from 'lucide-react'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { registerSchema } from '@/lib/validation'
-import { GoogleButton } from '@/components/shared/google-button'
+import { GoogleSignInBlock } from '@/components/shared/google-button'
 
 // ŞEMA SUNUCUYLA ORTAK. Burada ayrı bir kopya vardı ve mesajları
 // sunucudakinden ayrışmıştı ("Ad en az 2 karakter olmalı" vs "Ad Soyad
@@ -125,19 +125,9 @@ export default function RegisterPage() {
       {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
           Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
           başladıktan sonra fark ederdi. */}
-      <GoogleButton />
-      <p className="mt-2 text-center text-xs text-muted-foreground">
-        En hızlı yöntem — 30 saniyede hesabınızı oluşturun.
-      </p>
-
-      <div className="relative my-5">
-        <div className="absolute inset-0 flex items-center" aria-hidden>
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center">
-          <span className="bg-card px-2 text-xs text-muted-foreground">veya</span>
-        </div>
-      </div>
+      {/* "30 saniyede" KALDIRILDI: ölçülmemiş bir süre vaadi (068'in
+          "10 dakika" kararıyla aynı gerekçe). */}
+      <GoogleSignInBlock hint="En hızlı yöntem — tek tıkla hesabınızı oluşturun." />
 
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
