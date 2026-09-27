@@ -5,10 +5,8 @@ import {
   computeStudentStatus,
   expectedProgressPercent,
   noticeSignal,
-  STATUS_LABEL,
   STATUS_THRESHOLDS,
 } from '@/lib/student-status'
-import { Badge } from '@/components/ui/badge'
 import { APP_TIME_ZONE, localDateString, todayDateString } from '@/lib/homework-status'
 import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-structure'
 import { Button } from '@/components/ui/button'
@@ -344,19 +342,6 @@ export default async function TeacherDashboard() {
   })
 
   // ============================================================
-  // B03 · DİKKAT İSTEYENLER ÖNCE
-  //
-  // Ana tablo sonraki temasa göre sıralı kalıyor (§6); dikkat isteyen
-  // öğrenci listenin ortasında kayboluyordu. Bu şerit aynı satırlardan
-  // — aynı durum motoru, aynı gerekçeler — yalnız sırayı ciddiyete göre
-  // kuruyor. Yeni eşik ya da puan YOK.
-  // ============================================================
-  const SEVERITY = { mudahale: 0, geride: 1, takip_et: 2, yolunda: 3 } as const
-  const attention = tableRows
-    .filter((r) => r.status !== 'yolunda')
-    .sort((a, b) => SEVERITY[a.status] - SEVERITY[b.status])
-
-  // ============================================================
   // ÖĞRENCİ GÜNCELLEMELERİ (§17A)
   //
   // Görülmemişler önce; aynı grup içinde en yeni üstte. Öğretmenin
@@ -529,43 +514,6 @@ export default async function TeacherDashboard() {
           },
         ]}
       />
-
-      {students.ok && (
-        <Section
-          title="Dikkat İsteyenler"
-          description={
-            attention.length > 0
-              ? `${attention.length} öğrenci · en acil olan üstte`
-              : undefined
-          }
-          variant="card"
-        >
-          {attention.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">
-              Şu an durumu dikkat gerektiren öğrenci yok.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {attention.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    href={`/teacher/students/${r.id}`}
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5 transition-colors hover:bg-muted/40"
-                  >
-                    <span className="font-medium">{r.name}</span>
-                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                      {r.signals.join(' · ')}
-                      <Badge variant={r.status === 'mudahale' ? 'destructive' : 'warning'}>
-                        {STATUS_LABEL[r.status]}
-                      </Badge>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
-      )}
 
       <Section
         title="Öğrenci Takibi"
