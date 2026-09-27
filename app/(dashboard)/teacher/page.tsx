@@ -1,12 +1,8 @@
 import Link from 'next/link'
 import { ArrowUpRight, Bell, CalendarDays, Clock, FileText, Plus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
-import {
-  computeStudentStatus,
-  expectedProgressPercent,
-  noticeSignal,
-  STATUS_THRESHOLDS,
-} from '@/lib/student-status'
+import { noticeSignal, STATUS_THRESHOLDS } from '@/lib/student-status'
+import { statusFromOperationRow } from '@/lib/operation-status'
 import { APP_TIME_ZONE, localDateString, todayDateString } from '@/lib/homework-status'
 import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-structure'
 import { Button } from '@/components/ui/button'
@@ -228,43 +224,7 @@ export default async function TeacherDashboard() {
   // View yalnız GİRDİLERİ döndürüyor; eşikler SQL'e gömülmedi ki
   // ayarlanabilir kalsınlar (§7 notu).
   const rows = raw.map((s) => {
-    const cutoff = s.submission_cutoff_at ? new Date(s.submission_cutoff_at) : null
-    const status = computeStudentStatus({
-      submittedPercent: Number(s.weekly_submitted_percent ?? 0),
-      expectedPercent: expectedProgressPercent({
-        startedAt: s.flow_started_at ? new Date(s.flow_started_at) : null,
-        submissionCutoffAt: cutoff,
-        now,
-      }),
-      msToNextContact: s.next_contact_at
-        ? new Date(s.next_contact_at).getTime() - now.getTime()
-        : null,
-      overdueWorkCount: Number(s.overdue_work_count ?? 0),
-      checkInOverdueHours: s.status_update_due_at
-        ? Math.max(
-            0,
-            (now.getTime() - new Date(s.status_update_due_at).getTime()) / 3_600_000
-          )
-        : 0,
-      submissionCutoffPassed: cutoff !== null && cutoff.getTime() < now.getTime(),
-      // R8 §16 — ANA SİNYAL SON GERÇEK ÇALIŞMA HAREKETİ.
-      //
-      // `hasRecentSignalOfLife` planlamayı ve akademik notu BİRLİKTE
-      // topluyor: ikisi de "öğrenci karanlıkta değil" demek. Ama
-      // hiçbiri teslimin yerine geçmiyor — plan yapmış olmak
-      // çalışmamayı gizlemez (§16).
-      daysSinceRealWork: s.days_since_real_work ?? null,
-      // "Karanlıkta değil" için hareketin YAKIN olması gerekir: altı ay
-      // önce yazılmış bir not bugünü açıklamaz. Eşik diğerleriyle aynı
-      // yerde (lib/student-status.ts); 103'te SQL'e gömülüydü ve orada
-      // en sessiz öğrenciyi listeden düşürüyordu (106).
-      hasRecentSignalOfLife: [s.last_planning_at, s.last_academic_note_at].some(
-        (at) =>
-          at !== null &&
-          now.getTime() - new Date(at).getTime() <
-            STATUS_THRESHOLDS.signalOfLifeDays * 86_400_000
-      ),
-    })
+    const status = statusFromOperationRow(s, now)
     return { ...s, computed: status }
   })
 
