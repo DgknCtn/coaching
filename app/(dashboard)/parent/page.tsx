@@ -550,7 +550,13 @@ export default async function ParentPage({
               <Section title="Dönem geneli">
                 <MetricRow
                   metrics={[
-                    { label: 'Genel ilerleme', value: `${overallPct}%` },
+                    // B11: yüzdenin PAYDASI yazılı. Birimler (test,
+                    // sayfa, konu) karışık olabildiği için "test" denmiyor.
+                    {
+                      label: 'Genel ilerleme',
+                      value: `${overallPct}%`,
+                      hint: `${books.length} kitaptaki ${overallTotal} çalışmanın onaylananları`,
+                    },
                     {
                       label: 'Tamamlanan çalışma',
                       value: overallCompleted,
