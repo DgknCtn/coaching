@@ -88,6 +88,18 @@ export default async function InvitePage({
 
   const roleLabel = roleLabels[invitation.role] ?? invitation.role
 
+  // YANLIŞ HESAP ÖNCEDEN BİLİNİR: davet bir e-postaya kesildiyse ve
+  // oturumdaki hesap o değilse kabul düğmesi HİÇ gösterilmez. Önceden
+  // düğme görünüyordu; basınca sayfa aynı hatayla yeniden yükleniyor ve
+  // kullanıcıya "hiçbir şey olmuyor" gibi geliyordu. (?hata=eposta da
+  // aynı duruma düşer — ör. sayfa açıkken başka sekmede hesap değişti.)
+  const wrongAccount =
+    Boolean(user) &&
+    (hata === 'eposta' ||
+      (invitation.invited_email !== null &&
+        invitation.invited_email !== undefined &&
+        invitation.invited_email.toLowerCase() !== (user?.email ?? '').toLowerCase()))
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
@@ -122,14 +134,14 @@ export default async function InvitePage({
         {/* YANLIŞ HESAP: davet başka bir adrese kesilmiş. İki adres de
             maskeli gösterilir; kullanıcı neden olmadığını anlar ve doğru
             hesaba geçebilir. */}
-        {hata === 'eposta' && (
+        {wrongAccount && (
           <div
             role="alert"
             className="mb-6 rounded-md border border-destructive-border bg-destructive-subtle px-3 py-2.5 text-sm text-destructive-foreground"
           >
             Bu davet <strong>{maskEmail(invitation.invited_email)}</strong> adresine gönderildi;
-            sen <strong>{maskEmail(user?.email)}</strong> ile girdin. Davetin gönderildiği
-            hesapla gir.
+            sen <strong>{maskEmail(user?.email)}</strong> ile girdin. Daveti kabul etmek için
+            davetin gönderildiği hesapla gir.
           </div>
         )}
         {hata && ACCEPT_ERRORS[hata] && (
@@ -141,7 +153,10 @@ export default async function InvitePage({
           </div>
         )}
 
-        {user ? (
+        {user && wrongAccount ? (
+          // Tek eylem: doğru hesaba geçmek. Oturum kapanır, AYNI linke dönülür.
+          <SwitchAccountButton returnTo={`/invite/${token}`} primary />
+        ) : user ? (
           // OTURUM AÇIK: form doldurtulmaz. İkinci çocuğunun davetini açan
           // veli ya da Google'la girmiş öğrenci tek tıkla kabul eder.
           <div className="space-y-3">

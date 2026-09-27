@@ -9,12 +9,20 @@ import { logoutAction } from '@/app/(auth)/actions'
  * Yanlış hesapla girmiş davetlinin tek çıkış yolu; /login'e atılsaydı
  * linki yeniden bulması gerekirdi.
  */
-export function SwitchAccountButton({ returnTo }: { returnTo: string }) {
+export function SwitchAccountButton({
+  returnTo,
+  primary = false,
+}: {
+  returnTo: string
+  /** Tek eylem olduğunda (yanlış hesap) birincil düğme olarak çizilir. */
+  primary?: boolean
+}) {
   const [pending, startTransition] = useTransition()
   return (
     <Button
       type="button"
-      variant="outline"
+      variant={primary ? 'default' : 'outline'}
+      size={primary ? 'lg' : 'default'}
       className="w-full"
       disabled={pending}
       onClick={() => startTransition(async () => void (await logoutAction(returnTo)))}

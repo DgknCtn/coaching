@@ -273,6 +273,10 @@ export async function signInWithGoogleAction(next?: string) {
     provider: 'google',
     options: {
       redirectTo: `${appUrl.replace(/\/$/, '')}/auth/callback?next=${encodeURIComponent(safeNext)}`,
+      // HESAP SEÇİCİ HER ZAMAN AÇILIR. Google tarayıcıda açık olan son
+      // hesabı sormadan seçebiliyordu: davete yanlış hesapla girip "Başka
+      // hesapla gir" diyen kullanıcı yine aynı hesaba düşüyordu.
+      queryParams: { prompt: 'select_account' },
     },
   })
 
