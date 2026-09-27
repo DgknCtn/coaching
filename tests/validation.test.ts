@@ -45,10 +45,10 @@ describe('studentSchema', () => {
     if (!r.success) expect(firstIssue(r.error)).toContain('en az 2 karakter')
   })
 
-  it('rejects missing email', () => {
-    const r = studentSchema.safeParse({ ...valid, email: '' })
-    expect(r.success).toBe(false)
-    if (!r.success) expect(firstIssue(r.error)).toContain('E-posta zorunlu')
+  // 10a: e-postası olmayan öğrenci kullanıcı adı + PIN ile giriyor.
+  it('accepts missing email (e-postasız öğrenci)', () => {
+    expect(studentSchema.safeParse({ ...valid, email: '' }).success).toBe(true)
+    expect(studentSchema.safeParse({ ...valid, email: undefined }).success).toBe(true)
   })
 
   it('rejects invalid email', () => {

@@ -59,6 +59,14 @@ export async function createInviteAction(
   const invitedEmail =
     role === 'student' ? student.email : (parsed.data.email?.trim() || null)
 
+  // E-POSTASIZ ÖĞRENCİYE LİNK KESİLMEZ (10a): bağsız bir öğrenci linki,
+  // linki eline geçiren herkesin o öğrenci olarak katılması demekti.
+  if (role === 'student' && !invitedEmail) {
+    return {
+      error: 'Öğrencinin e-postası yok. Davet linki yerine kullanıcı adı + PIN girişi oluşturun.',
+    }
+  }
+
   // ============================================================
   // Yeni davet, AYNI KİŞİYE giden eskisini ÖLDÜRÜR.
   //

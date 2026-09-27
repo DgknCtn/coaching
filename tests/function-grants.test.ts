@@ -52,6 +52,9 @@ const ANON_IZINLI = [
   'check_rate_limit', // lib/rate-limit.ts:91 — giriş/kayıt öncesi
   'get_invitation_by_token', // app/invite/[token]/page.tsx:37 — oturumsuz sayfa
   'log_auth_event', // lib/auth-audit.ts:73 — başarısız girişte de yazar
+  // app/giris/ogrenci/actions.ts — kullanıcı adı + PIN girişi oturumsuz.
+  // Yalnız true/false döner; 5 hatada 15 dk kilit VERİTABANINDA (119).
+  'verify_student_pin',
   // 2) RLS politikalarından çağrılanlar
   'can_read_library',
   'can_read_student',

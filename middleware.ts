@@ -62,6 +62,8 @@ function isPublicPath(pathname: string): boolean {
     // Supabase auth e-posta bağlantılarının döndüğü callback; oturumu burada
     // kuruyoruz, dolayısıyla giriş kontrolünden muaf olmalı.
     pathname.startsWith('/auth/') ||
+    // 10a: e-postasız öğrenci girişi (kullanıcı adı + PIN) oturumsuz açılır.
+    pathname === '/giris/ogrenci' ||
     pathname.startsWith('/invite/')
   )
 }

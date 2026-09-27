@@ -116,7 +116,10 @@ export const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. S�
 // kuralı; yeri doğrulama katmanı.
 export const studentSchema = z.object({
   fullName: z.string().trim().min(2, 'Ad Soyad en az 2 karakter olmalı.').max(120),
-  email: z.string().trim().min(1, 'E-posta zorunlu.').email('Geçerli bir e-posta girin.'),
+  // E-POSTA İSTEĞE BAĞLI (10a): e-postası olmayan öğrenci kullanıcı adı +
+  // PIN ile giriyor. Yazılırsa geçerli olmalı; öğrenci davet linki yalnız
+  // e-postası olan öğrenciye kesilir (invite-actions.ts).
+  email: z.string().trim().email('Geçerli bir e-posta girin.').optional().or(z.literal('')),
   phone: z
     .string()
     .trim()

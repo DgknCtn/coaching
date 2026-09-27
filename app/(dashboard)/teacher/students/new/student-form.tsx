@@ -24,7 +24,7 @@ import { EXAM_TYPE_OPTIONS, GRADE_LEVELS, SERVICE_DRAFT_OPTIONS } from '@/lib/va
 // gönderdikten sonra görür.
 const schema = z.object({
   fullName: z.string().min(2, 'Ad en az 2 karakter'),
-  email: z.string().min(1, 'E-posta zorunlu.').email('Geçerli e-posta'),
+  email: z.string().email('Geçerli e-posta').optional().or(z.literal('')),
   phone: z
     .string()
     .min(7, 'Telefon numarası zorunlu.')
@@ -176,7 +176,12 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">E-posta *</Label>
+              <Label htmlFor="email">
+                E-posta{' '}
+                <span className="text-muted-foreground">
+                  (yoksa boş bırak; kullanıcı adı + PIN ile girer)
+                </span>
+              </Label>
               <Input id="email" type="email" placeholder="ornek@mail.com" {...register('email')} />
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>

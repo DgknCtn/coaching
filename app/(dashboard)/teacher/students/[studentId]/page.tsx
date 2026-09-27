@@ -1,3 +1,4 @@
+import { StudentLoginSection } from './student-login-section'
 import { InterventionSection } from './intervention-section'
 import Link from 'next/link'
 import { compareHomeworkItems, isOverdue } from '@/lib/homework-status'
@@ -1212,6 +1213,14 @@ export default async function StudentDetailPage({
               </ul>
             )}
           </Section>
+
+          {/* 10a: e-postasız öğrenci için kullanıcı adı + PIN. */}
+          <StudentLoginSection
+            studentId={studentId}
+            studentName={student.full_name}
+            hasAccount={hasAccount}
+            hasEmail={Boolean(student.email)}
+          />
 
           {invites.length > 0 && (
             <Section

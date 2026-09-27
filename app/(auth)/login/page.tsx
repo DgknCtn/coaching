@@ -223,7 +223,12 @@ export default function LoginPage() {
       <p className="mt-6 flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden />
         Ayrı bir öğrenci veya veli girişi yok. Öğrenci ya da veliysen öğretmeninin gönderdiği davet
-        linkini aç ya da davetin geldiği e-postayla gir; bekleyen davetin girişte karşına çıkar.
+        linkini aç ya da davetin geldiği e-postayla gir; bekleyen davetin girişte karşına çıkar.{' '}
+        E-postan yoksa{' '}
+        <Link href="/giris/ogrenci" className="font-medium text-primary underline-offset-4 hover:underline">
+          kullanıcı adı ve PIN ile gir
+        </Link>
+        .
       </p>
     </AuthShell>
   )

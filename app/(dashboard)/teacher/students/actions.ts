@@ -52,7 +52,7 @@ export async function createStudentAction(
     workspace_id: workspaceId,
     primary_teacher_profile_id: profile.id,
     full_name: v.fullName,
-    email: v.email,
+    email: v.email || null,
     phone: v.phone,
     grade_level: v.gradeLevel || null,
     exam_type: v.examType || null,
@@ -134,7 +134,7 @@ export async function updateStudentAction(
     .from('students')
     .update({
       full_name: v.fullName,
-      email: v.email,
+      email: v.email || null,
       phone: v.phone,
       grade_level: v.gradeLevel || null,
       exam_type: v.examType || null,
