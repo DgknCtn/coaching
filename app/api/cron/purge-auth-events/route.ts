@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,11 +65,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const supabase = await createClient()
+  // SERVİS İSTEMCİSİ (122). Önceden oturumsuz (anon) istemci kullanılıyordu;
+  // 109 anon'un fonksiyon yetkilerini kaldırınca temizlik sessizce
+  // çalışmaz oldu. Bu uç, service.ts'nin tarif ettiği türden: oturumsuz,
+  // sır korumalı, yalnız sunucuda çalışan bir iş. Fonksiyon artık yalnız
+  // service_role ya da yöneticiye açık.
+  const supabase = createServiceClient() as unknown as SupabaseClient
+  const startedAt = new Date().toISOString()
 
-  // Fonksiyon SECURITY DEFINER (089) — oturumsuz çağrıda da çalışır ve
-  // yalnız 90 günü geçmiş satırlara dokunur.
   const { data, error } = await supabase.rpc('purge_auth_event_ips')
+
+  // HER ÇALIŞMA KAYDA GEÇER (cron_runs, 122): yönetimdeki Sistem sekmesi
+  // "son çalışma" ve sonucu buradan gösterir. Kayıt yazılamazsa iş yine
+  // de sonucunu döner; kaydın kendisi işi bozmamalı.
+  const { error: logError } = await supabase.from('cron_runs').insert({
+    job: 'purge-auth-events',
+    started_at: startedAt,
+    finished_at: new Date().toISOString(),
+    ok: !error,
+    affected: typeof data === 'number' ? data : null,
+    error: error ? (error.code ?? 'error').slice(0, 500) : null,
+  })
+  if (logError) {
+    console.error('[cron/purge-auth-events] cron_runs yazılamadı:', logError.message)
+  }
 
   if (error) {
     // SESSİZ BAŞARISIZLIK YOK. Temizlik çalışmıyorsa bunu bilmek gerekir;

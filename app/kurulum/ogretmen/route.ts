@@ -1,3 +1,4 @@
+import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
@@ -59,6 +60,21 @@ export async function GET(request: NextRequest) {
     // kullanıcı döngüye girer. /erisim ne olduğunu anlatır.
     return NextResponse.redirect(new URL('/erisim', origin))
   }
+
+  // HESAP OLUŞTURMA KAYDI: 'register' olay türü tanımlıydı ama hiçbir yer
+  // yazmıyordu; yönetimdeki "yeni kayıt" eğilimi bu satırdan besleniyor.
+  // create_teacher_workspace idempotent — tekrar çağrıda da bir satır
+  // düşer; yöntem ayrımı için detail.
+  await logAuthEvent({
+    type: 'register',
+    profileId: user.email ? await resolveProfileIdByEmail(supabase, user.email) : null,
+    detail: {
+      method:
+        (user.app_metadata as { provider?: string } | undefined)?.provider === 'google'
+          ? 'google'
+          : 'email',
+    },
+  })
 
   // Atıf kullanıldı; aynı tarayıcıdan açılan ikinci hesap aynı partnere
   // yazılmasın.

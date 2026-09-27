@@ -22,7 +22,8 @@ import type { Database } from '@/types/database'
 // ============================================================
 // KULLANIM KURALLARI — İHLAL EDİLİRSE RLS'İN TAMAMI ANLAMSIZLAŞIR
 //
-// 1. YALNIZ ödeme callback'i ve benzeri oturumsuz sunucu uçları kullanır.
+// 1. YALNIZ oturumsuz sunucu uçları kullanır: ödeme callback'i ve
+//    CRON_SECRET korumalı zamanlanmış işler (/api/cron/*, 122).
 //    Bir Server Component ya da Server Action bu istemciye ihtiyaç
 //    duyuyorsa, neredeyse her zaman doğru cevap eksik bir RLS
 //    politikasıdır — servis anahtarı değil.

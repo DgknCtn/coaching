@@ -1,5 +1,6 @@
 'use server'
 
+import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -34,13 +35,25 @@ export async function studentCodeLoginAction(username: string, pin: string) {
     p_username: parsed.data.username,
     p_pin: parsed.data.pin,
   })
-  if (error || ok !== true) return { error: GENERIC }
+  if (error || ok !== true) {
+    // Kullanıcı adı KAYDA YAZILMAZ (girilen metin kişisel veri olabilir);
+    // yöntem yeterli — yönetimdeki başarısız giriş eğilimine girer.
+    await logAuthEvent({ type: 'login.failed', detail: { method: 'pin' } })
+    return { error: GENERIC }
+  }
 
+  const email = studentLoginEmail(parsed.data.username)
   const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: studentLoginEmail(parsed.data.username),
+    email,
     password: studentLoginPassword(parsed.data.username),
   })
   if (signInError) return { error: GENERIC }
+
+  await logAuthEvent({
+    type: 'login.success',
+    profileId: await resolveProfileIdByEmail(supabase, email),
+    detail: { method: 'pin' },
+  })
 
   redirect('/')
 }

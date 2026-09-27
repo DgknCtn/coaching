@@ -139,6 +139,12 @@ export async function registerAction(
   })
   if (rpcError) return { error: authErrorToTr(rpcError.message) }
 
+  await logAuthEvent({
+    type: 'register',
+    profileId: await resolveProfileIdByEmail(supabase, parsed.data.email),
+    detail: { method: 'email' },
+  })
+
   // Atıf kullanıldı; çerez silinir. Silinmezse aynı tarayıcıdan açılan
   // ikinci hesap da aynı partnere yazılırdı.
   await clearReferralCode()

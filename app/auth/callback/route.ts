@@ -1,3 +1,4 @@
+import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
@@ -34,6 +35,20 @@ export async function GET(request: NextRequest) {
   if (error) {
     return NextResponse.redirect(`${origin}/login?error=baglanti_suresi_doldu`)
   }
+
+  // GİRİŞ KAYDI (122 dönemi). Google girişi auth_events'e hiç yazılmıyordu;
+  // yönetimdeki "aktif kullanıcı" sayıları bu yüzden eksik çıkıyordu.
+  // Şifre sıfırlama bağlantısı da buradan geçer — o durumda yöntem 'link'.
+  // İlk girişte profil henüz yok (kurulum /'da); profileId null olabilir.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const provider = (user?.app_metadata as { provider?: string } | undefined)?.provider
+  await logAuthEvent({
+    type: 'login.success',
+    profileId: user?.email ? await resolveProfileIdByEmail(supabase, user.email) : null,
+    detail: { method: provider === 'google' ? 'google' : 'link' },
+  })
 
   return NextResponse.redirect(`${origin}${next}`)
 }
