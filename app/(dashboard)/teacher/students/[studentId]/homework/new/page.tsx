@@ -7,6 +7,13 @@ import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
 import { localDateString } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { HomeworkBuilder } from './homework-builder'
+import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
+
+// Sorgu hatası boş sonuca çevrilmez; teacher/error.tsx hata sınırına gider.
+function orThrow<T>(r: QueryResult<T>): T {
+  if (!r.ok) throw new Error(r.error)
+  return r.data
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +61,7 @@ export default async function NewHomeworkPage({
   //
   // Taslak sorgusu haritadan bağımsız; ikisi tek dalgada çalışır. (Taslak
   // KALEMLERİ taslağın id'sine bağlı olduğu için o aşağıda sıralı kalır.)
-  const [books, keepActiveTopicIds, { data: draft }] = await Promise.all([
+  const [books, keepActiveTopicIds, draftRes] = await Promise.all([
     loadBookMap(supabase, { workspaceId, studentId }),
     // Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü (041 §6.5).
     loadKeepActiveTopicIds(supabase, { workspaceId, studentId }),
@@ -69,19 +76,27 @@ export default async function NewHomeworkPage({
       .maybeSingle(),
   ])
 
+  // TASLAK OKUNAMADIYSA EKRAN AÇILMAZ (B01 + B05). Boş açılsaydı
+  // öğretmenin ilk tıklamasındaki otomatik kayıt, kayıtlı taslağın
+  // ÜZERİNE boş seçimi yazardı: bir okuma hatası kalıcı veri kaybına
+  // dönüşürdü. Hata sınırı "tekrar dene" sunar.
+  const draft = orThrow(singleResult(draftRes, 'homework_new.draft'))
+
   // AKTİF HAFTALIK AKIŞ (R7/05 kabul #4).
   //
   // Ekranın varsayılan son teslimi buradan gelir: "Öğretmene aynı tarihi
   // tekrar seçtirmek gerekmez." Akış yoksa alan boş kalır ve öğretmen
   // eskisi gibi elle girer — aktif akışı olmayan öğrenciye ödev
   // verilememesi saçma olurdu.
-  const { data: activeFlowRow } = await supabase
+  const activeFlowRes = await supabase
     .from('weekly_flows')
     .select('id, due_at, due_source')
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
     .eq('status', 'active')
     .maybeSingle()
+  // Akış okunamazsa "akış yok" sanılıp ödev akışsız yayınlanırdı (B06).
+  const activeFlowRow = orThrow(singleResult(activeFlowRes, 'homework_new.active_flow'))
 
   const activeFlow = activeFlowRow
     ? {
@@ -97,11 +112,12 @@ export default async function NewHomeworkPage({
 
   let draftTestIds: string[] = []
   if (draft?.id) {
-    const { data: draftItems } = await supabase
+    const draftItemsRes = await supabase
       .from('weekly_plan_draft_items')
       .select('book_test_id')
       .eq('draft_id', draft.id)
-    draftTestIds = (draftItems ?? []).map(i => i.book_test_id)
+    const draftItems = orThrow(listResult(draftItemsRes, 'homework_new.draft_items'))
+    draftTestIds = draftItems.map(i => i.book_test_id)
   }
 
   if (books.length === 0) {
