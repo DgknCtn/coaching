@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Copy, MessageCircle } from 'lucide-react'
+import { Check, MessageCircle, UserCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/shared/empty-state'
+import { Initial } from './student-updates'
 import { buildFollowUpMessage } from '@/lib/share-text'
 
 // TAKİP GEREKENLER (R8 §17B, §19).
@@ -42,12 +44,16 @@ export interface FollowUpStudent {
 export function FollowUpList({ students }: { students: FollowUpStudent[] }) {
   if (students.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Şu an takip gerektiren öğrenci yok.
-      </p>
+      <EmptyState
+        icon={UserCheck}
+        title="Takip gerektiren öğrenci yok"
+        description="Uzun süre çalışma hareketi olmayan öğrenci olduğunda burada görünür."
+        className="py-10"
+      />
     )
   }
 
+  // Sıra sunucudan geliyor: en uzun sessizlik en üstte.
   return (
     <ul className="divide-y">
       {students.map(student => (
@@ -64,6 +70,9 @@ function FollowUpRow({ student }: { student: FollowUpStudent }) {
     try {
       await navigator.clipboard.writeText(buildFollowUpMessage(student.name))
       setCopied(true)
+      // Onay kalıcı değil: aynı düğmeyle ikinci kez kopyalanabildiği
+      // anlaşılsın diye birkaç saniye sonra eski hâline döner.
+      setTimeout(() => setCopied(false), 2000)
       toast.success('Mesaj kopyalandı. WhatsApp grubundan gönderebilirsin.')
     } catch {
       // Pano izni yoksa sessizce başarısız olmak yerine söylüyoruz:
@@ -73,20 +82,43 @@ function FollowUpRow({ student }: { student: FollowUpStudent }) {
   }
 
   return (
-    <li className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-          <Link href={`/teacher/students/${student.id}`} className="hover:underline">
+    <li className="flex flex-wrap items-start gap-3 py-3 first:pt-1 last:pb-1">
+      <Initial name={student.name} />
+
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <Link
+            href={`/teacher/students/${student.id}`}
+            className="font-medium hover:underline"
+          >
             {student.name}
           </Link>
           <Badge variant="warning">{student.silenceLabel}</Badge>
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{student.facts.join(' · ')}</p>
+        {/* Olgular ayrı etiketler: " · " ile birleşik tek satır dar
+            ekranda kırılıp hangi bilginin hangisi olduğu kayboluyordu. */}
+        <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Son durum">
+          {student.facts.map(fact => (
+            <li
+              key={fact}
+              className="rounded-md border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+            >
+              {fact}
+            </li>
+          ))}
+        </ul>
       </div>
 
-      <Button type="button" variant="outline" size="sm" onClick={copy}>
-        {copied ? <Copy className="size-3.5" /> : <MessageCircle className="size-3.5" />}
-        WhatsApp mesajını kopyala
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="shrink-0 max-sm:ml-11"
+        onClick={copy}
+        aria-label={`${student.name} için WhatsApp mesajını kopyala`}
+      >
+        {copied ? <Check className="size-3.5" /> : <MessageCircle className="size-3.5" />}
+        {copied ? 'Kopyalandı' : 'Mesajı kopyala'}
       </Button>
     </li>
   )

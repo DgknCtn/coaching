@@ -16,10 +16,12 @@ import { SectionHeading } from './section-heading'
 // ============================================================
 
 const VISIBLE = [
-  'Tamamlanan ödevler',
-  'Geciken görevler',
+  // TESLİM ≠ ONAY (B04): veli ikisini ayrı görür; "Tamamlanan" üründe
+  // yalnız öğretmenin onayladığı iş demek.
+  'Teslim edilen ve öğretmen onaylı çalışmalar',
+  'Geciken çalışmalar',
   'Kitap ilerlemesi',
-  'Haftalık performans',
+  'Haftalık özet',
 ]
 
 export function ParentSection() {

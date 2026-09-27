@@ -1,4 +1,5 @@
 import { GraduationCap, BookOpen, Users, Check } from 'lucide-react'
+import { STATUS_LABEL } from '@/lib/student-status'
 import { SectionHeading } from './section-heading'
 
 const roles = [
@@ -8,16 +9,16 @@ const roles = [
     tagline: 'Sınıfınızı bir bakışta görün',
     Icon: GraduationCap,
     description:
-      'Tüm öğrencilerinizi tek ekrandan yönetin. Risk analiziyle kimlerin takibe ihtiyacı olduğunu erkenden görün.',
+      'Tüm öğrencilerinizi tek ekrandan yönetin. Kimin neden takibe ihtiyacı olduğunu, gerekçesiyle birlikte erkenden görün.',
     features: [
-      'Öğrenci başına kitap ataması',
-      'Geride kalan öğrencileri siz fark etmeden sistem fark etsin',
-      // Ürünün rozet sözlüğüyle birebir aynı üçlü (status-badge.tsx).
-      // Kullanıcı kaydolduktan sonra bu kelimelerin aynısını görüyor.
-      'Kritik / Dikkat / İyi olarak haftalık durum',
-      'Ödev oluşturma ve ilerleme takibi',
-      'Veli & öğrenci davet sistemi',
-      'Eğitim dönemi yönetimi',
+      'Haftalık Akış: haftanın yükü, tempo ve tek son teslim',
+      "Kitap Haritası'ndan ödev verme, hazır WhatsApp metni",
+      'Teslimleri onaylama — ilerlemeye yalnız onaylı iş sayılır',
+      // ÜRÜNÜN DURUM SÖZLÜĞÜ (lib/student-status.ts) — elle yazılmıyor.
+      // Önceden "Kritik / Dikkat / İyi" yazıyordu; üründe olmayan bir üçlü.
+      `Durum ve nedeni: ${Object.values(STATUS_LABEL).join(' / ')}`,
+      'Görüşme ve ders takibi',
+      'Veli ve öğrenci davet sistemi',
     ],
   },
   {
@@ -26,12 +27,12 @@ const roles = [
     tagline: 'Odaklan, ilerle, başar',
     Icon: BookOpen,
     description:
-      'Ödevlerini ve kitap ilerlemeni takip et. Gecikmeleri önceden gör, hedeflerine odaklan.',
+      "Haftam'da bu haftanın işini, resmi son teslimini ve kendi planını tek ekranda gör.",
     features: [
-      'Güncel ödev listesi (geciken / yaklaşan)',
-      'Test tamamlama işaretleme',
-      'Kitap bölümü ilerleme çubuğu',
-      'Haftalık performans özeti',
+      'Haftam: haftanın yükü ve resmi son teslim',
+      'İşleri günlere kendin dağıt; gün notu ve kişisel ajanda',
+      'Tek dokunuşla teslim, öğretmenin notu görünür',
+      'Kitap ilerleme çubuğu',
       'Çoklu kitap desteği',
     ],
   },
@@ -47,7 +48,7 @@ const roles = [
     description:
       'Çocuğunuzun gelişimini kendi panelinizden izleyin. Geciken ödevleri ve ilerlemeyi öğretmenle aynı veriden görün.',
     features: [
-      'Haftalık performans kartları',
+      'Teslim edilen ve öğretmen onaylı çalışmalar ayrı ayrı',
       'Geciken ödevleri panelde görme',
       'Kitap ilerleme takibi',
       'Birden fazla öğrenci desteği',

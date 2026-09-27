@@ -76,6 +76,15 @@ export const TRIAL_CTA_LABEL = `${TRIAL_DAYS} Gün Ücretsiz Başla`
 export const TRIAL_STUDENT_LIMIT = 3
 
 /**
+ * Lisans alımında koşulsuz iade süresi (gün) — TEK KAYNAK.
+ *
+ * Landing'deki güvence şeridi, SSS ve /iade sayfası bu sayıyı elle
+ * yazıyordu. İade politikası değişirse üç yeri ayrı ayrı aramak, birini
+ * unutup vitrinde yanlış taahhüt vermek demekti.
+ */
+export const REFUND_DAYS = 14
+
+/**
  * Her planın kapsadığı özellikler — TEK KAYNAK.
  *
  * Hem vitrindeki fiyat bölümü hem uygulama içindeki plan ekranı bunu
@@ -86,9 +95,10 @@ export const TRIAL_STUDENT_LIMIT = 3
  * sayısı ve süre değişiyor. Bu yüzden tek bir dizi yeterli.
  */
 export const PLAN_INCLUDED = [
-  'Kitap havuzu ve kitap haritası',
+  'Kitap havuzu ve Kitap Haritası',
   'İçindekiler listesini yapıştırarak toplu kitap aktarma',
-  'Haftalık plan, ödev takibi ve öğretmen onayı',
+  'Haftalık Akış, ödev takibi ve öğretmen onayı',
+  "Öğrencinin kendi haftası: Haftam'da günlük plan ve teslim",
   'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
   'Geride kalan öğrencileri siz fark etmeden sistem fark etsin.',
   'Kitabın hangi sayfasında kaldığınızı otomatik takip edin.',

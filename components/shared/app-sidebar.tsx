@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 // Mobil başlıktaki tema düğmesi burada KALIYOR: üst bardaki düğme dar
 // ekranda gizli (rozetlerle birlikte sığmıyor). Telefonda sağ üst köşe
 // yine bu başlık.
@@ -173,7 +173,7 @@ export function AppSidebar({
    * Rail içeriği. `compact` yalnız masaüstü daraltılmış rail için true olur;
    * mobil çekmece her zaman tam etiketli render edilir.
    */
-  function inner(compact: boolean) {
+  function inner(compact: boolean, beforeFooter?: ReactNode) {
     const brand = (
       <div className={cn('mb-4 flex items-center gap-2.5', compact ? 'justify-center px-3' : 'px-5')}>
         <BrandMark size={32} />
@@ -361,7 +361,7 @@ export function AppSidebar({
     )
 
     const footer = (
-      <div className="mt-auto border-t border-sidebar-border px-3 pt-3">
+      <div className="border-t border-sidebar-border px-3 pt-3">
         <div
           className={cn(
             'flex items-center gap-3 py-2',
@@ -395,7 +395,7 @@ export function AppSidebar({
           aria-label={compact ? 'Çıkış Yap' : undefined}
           title={compact ? 'Çıkış Yap' : undefined}
           className={cn(
-            'flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:opacity-40',
+            'mt-1 flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40',
             compact ? 'justify-center px-0' : 'px-3'
           )}
         >
@@ -434,7 +434,10 @@ export function AppSidebar({
           {panelBlock}
         </div>
 
-        {footer}
+        <div className="mt-auto">
+          {beforeFooter}
+          {footer}
+        </div>
       </>
     )
   }
@@ -449,28 +452,35 @@ export function AppSidebar({
           collapsed ? 'w-16' : 'w-60'
         )}
       >
-        {inner(collapsed)}
-        <div className="px-3 pt-2">
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-expanded={!collapsed}
-            aria-controls="app-sidebar"
-            aria-label={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
-            title={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground',
-              collapsed ? 'justify-center px-0' : 'px-3'
-            )}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4 shrink-0" />
-            ) : (
-              <PanelLeftClose className="size-4 shrink-0" />
-            )}
-            {!collapsed && 'Daralt'}
-          </button>
-        </div>
+        {/* ÇIKIŞ EN ALTTA, DARALT ONUN ÜSTÜNDE.
+            Önce sıra kullanıcı → Çıkış Yap → Daralt idi: iki düğme art
+            arda, aynı görünümde duruyordu ve menüyü daraltmak isteyen
+            kullanıcı yanlışlıkla oturumu kapatıyordu. Daralt artık
+            footer'ın üstünde, Çıkış Yap menünün en dibinde. */}
+        {inner(
+          collapsed,
+            <div className="px-3 pb-2">
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-expanded={!collapsed}
+                aria-controls="app-sidebar"
+                aria-label={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
+                title={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-md py-2 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                  collapsed ? 'justify-center px-0' : 'px-3'
+                )}
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="size-4 shrink-0" />
+                ) : (
+                  <PanelLeftClose className="size-4 shrink-0" />
+                )}
+                {!collapsed && 'Daralt'}
+              </button>
+            </div>
+        )}
       </aside>
 
       {/*

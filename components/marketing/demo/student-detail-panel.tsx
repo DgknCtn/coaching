@@ -1,4 +1,4 @@
-import { StatusBadge } from '@/components/shared/status-badge'
+import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { demoRelative } from '@/lib/demo-data'
 import type { DemoStudent } from './demo-students'
@@ -31,7 +31,7 @@ export function StudentDetailPanel({ student }: { student: DemoStudent }) {
         <span className="text-sm text-muted-foreground">
           {student.grade} · {student.exam}
         </span>
-        <StatusBadge status={student.status} />
+        <StudentStatusBadge status={student.status} />
         <span className="ml-auto text-xs text-muted-foreground">
           Son aktivite: {demoRelative(student.lastActiveDays)}
         </span>
@@ -49,7 +49,7 @@ export function StudentDetailPanel({ student }: { student: DemoStudent }) {
             <ProgressBar
               value={weekPercent}
               label={`${student.name} haftalık ilerleme`}
-              tone={student.status === 'red' ? 'destructive' : 'primary'}
+              tone={student.status === 'mudahale' ? 'destructive' : 'primary'}
               className="flex-1"
             />
             <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
@@ -88,7 +88,7 @@ export function StudentDetailPanel({ student }: { student: DemoStudent }) {
                   <span className="min-w-0">
                     {task.name}
                     <span className="block text-xs text-muted-foreground">
-                      Teslim: {task.due}
+                      Son teslim: {task.due}
                     </span>
                   </span>
                 </li>

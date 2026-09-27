@@ -1,29 +1,28 @@
 import Link from 'next/link'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { GuaranteeStrip } from './guarantee-strip'
+import { StudentStatusBadge } from '@/components/shared/student-status-badge'
+import { counterLabel } from '@/lib/homework-status'
+import { demoStudents, demoSummary } from './demo/demo-students'
+
+// ÖNİZLEME DEMO İLE AYNI SAHNEDEN (demo-students.ts).
+//
+// Önceden burada "24 öğrenci · %86 · İyi/Dikkat/Kritik" elle yazılıydı;
+// demo aynı paneli "%74" ile gösteriyordu ve iki etiket de üründe yoktu.
+// Sayılar ve satırlar artık demo fikstüründen, etiketler ürünün durum
+// sözlüğünden geliyor.
+const summary = demoSummary()
 
 const previewStats = [
-  { label: 'Öğrenci', value: '24' },
-  { label: 'Bu hafta', value: '86%' },
-  { label: 'Geciken', value: '3' },
-  { label: 'Riskli', value: '2' },
+  { label: 'Öğrenci', value: String(summary.students) },
+  { label: `Bu hafta ${counterLabel('delivered').toLocaleLowerCase('tr')}`, value: `${summary.deliveredPercent}%` },
+  { label: counterLabel('overdue'), value: String(summary.overdue) },
+  { label: 'Dikkat isteyen', value: String(summary.needsAttention) },
 ]
 
-const previewRows = [
-  { name: 'Elif Yılmaz', detail: 'TYT · 12. sınıf', week: '12/12', status: 'İyi' },
-  { name: 'Mert Demir', detail: 'AYT · 12. sınıf', week: '7/10', status: 'Dikkat' },
-  { name: 'Zeynep Kaya', detail: 'TYT · 11. sınıf', week: '9/9', status: 'İyi' },
-  { name: 'Can Öztürk', detail: 'AYT · 12. sınıf', week: '3/11', status: 'Kritik' },
-]
-
-const statusTone: Record<string, string> = {
-  'İyi': 'border-success-border bg-success-subtle text-success-foreground',
-  'Dikkat': 'border-warning-border bg-warning-subtle text-warning-foreground',
-  'Kritik': 'border-destructive-border bg-destructive-subtle text-destructive-foreground',
-}
+const previewRows = demoStudents.slice(0, 4)
 
 export function HeroSection() {
   return (
@@ -105,28 +104,25 @@ export function HeroSection() {
           <div className="border-t">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <p className="text-sm font-semibold">Öğrenci durumu</p>
-              <p className="text-xs text-muted-foreground">24 öğrenci</p>
+              <p className="text-xs text-muted-foreground">{summary.students} öğrenci</p>
             </div>
             <ul className="divide-y">
               {previewRows.map((r) => (
                 <li
-                  key={r.name}
+                  key={r.id}
                   className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{r.detail}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {r.signals[0] ?? `${r.exam} · ${r.grade}`}
+                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-4">
-                    <span className="text-sm tabular-nums text-muted-foreground">{r.week}</span>
-                    <span
-                      className={cn(
-                        'rounded-sm border px-2 py-0.5 text-xs font-medium',
-                        statusTone[r.status]
-                      )}
-                    >
-                      {r.status}
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {r.doneTasks}/{r.totalTasks}
                     </span>
+                    <StudentStatusBadge status={r.status} />
                   </div>
                 </li>
               ))}

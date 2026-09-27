@@ -2,9 +2,9 @@ import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
 import { MetricRow } from '@/components/shared/metric-row'
 import { demoDate } from '@/lib/demo-data'
-import { isOverdue } from '@/lib/homework-status'
+import { counterLabel, isOverdue } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
-import { StatusBadge } from '@/components/shared/status-badge'
+import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 
 const mockChild = {
@@ -94,7 +94,10 @@ export function ParentDemo() {
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold tracking-tight">{mockChild.name}</h2>
         <Badge variant="neutral">{mockChild.grade}</Badge>
-        <StatusBadge status="green" />
+        {/* Durum listeden türer: gecikmiş ödevi olan çocuğa "Yolunda"
+            denmez. Önceden sabit "İyi" rozeti, aşağıdaki geciken ödevle
+            çelişiyordu. */}
+        <StudentStatusBadge status={overdue > 0 ? 'takip_et' : 'yolunda'} />
       </div>
 
       <Section title="Bu hafta">
@@ -104,10 +107,14 @@ export function ParentDemo() {
             ürünün sayılarına duyulan güveni zedeler. */}
         <MetricRow
           metrics={[
-            { label: 'Verilen ödev', value: rows.length },
-            { label: 'Tamamlanan', value: completed },
-            { label: 'Bekleyen', value: rows.length - completed },
-            { label: 'Geciken', value: overdue },
+            { label: counterLabel('assigned', 'parent'), value: rows.length },
+            {
+              label: counterLabel('completed', 'parent'),
+              value: completed,
+              hint: 'öğretmen onaylı',
+            },
+            { label: counterLabel('pending', 'parent'), value: rows.length - completed },
+            { label: counterLabel('overdue', 'parent'), value: overdue },
           ]}
         />
       </Section>

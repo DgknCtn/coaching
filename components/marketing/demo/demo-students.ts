@@ -1,4 +1,5 @@
 import { demoDate } from '@/lib/demo-data'
+import type { StudentStatus } from '@/lib/student-status'
 
 // DEMO ÖĞRENCİ VERİSİ — tablo ve detay paneli için TEK KAYNAK.
 //
@@ -35,7 +36,10 @@ export interface DemoStudent {
   name: string
   exam: string
   grade: string
-  status: 'green' | 'yellow' | 'red'
+  /** Ürünün durum sözlüğü (lib/student-status.ts) — demoya özel etiket yok. */
+  status: StudentStatus
+  /** Durumun NEDENİ; üründe panel tablosu bunu rozetin altında gösterir. */
+  signals: string[]
   completion: number
   overdue: number
   books: number
@@ -55,7 +59,8 @@ export const demoStudents: DemoStudent[] = [
     name: 'Ayşe Y.',
     exam: 'YKS',
     grade: '12. Sınıf',
-    status: 'green',
+    status: 'yolunda',
+    signals: [],
     completion: 92,
     overdue: 0,
     books: 3,
@@ -74,7 +79,8 @@ export const demoStudents: DemoStudent[] = [
     name: 'Mehmet K.',
     exam: 'YKS',
     grade: '12. Sınıf',
-    status: 'yellow',
+    status: 'takip_et',
+    signals: ['2 geciken çalışma'],
     completion: 67,
     overdue: 2,
     books: 4,
@@ -96,7 +102,8 @@ export const demoStudents: DemoStudent[] = [
     name: 'Zeynep A.',
     exam: 'YKS',
     grade: '11. Sınıf',
-    status: 'red',
+    status: 'mudahale',
+    signals: ['5 geciken çalışma', '4 gündür çalışma teslimi yok'],
     completion: 34,
     overdue: 5,
     books: 2,
@@ -119,7 +126,8 @@ export const demoStudents: DemoStudent[] = [
     name: 'Ali Rıza D.',
     exam: 'LGS',
     grade: '8. Sınıf',
-    status: 'green',
+    status: 'yolunda',
+    signals: [],
     completion: 78,
     overdue: 1,
     books: 3,
@@ -137,7 +145,8 @@ export const demoStudents: DemoStudent[] = [
     name: 'Elif Ş.',
     exam: 'YKS',
     grade: '12. Sınıf',
-    status: 'yellow',
+    status: 'geride',
+    signals: ['3 geciken çalışma', 'Haftalık teslim beklenenin gerisinde'],
     completion: 55,
     overdue: 3,
     books: 5,
@@ -155,3 +164,23 @@ export const demoStudents: DemoStudent[] = [
     note: 'Kimya haftalık planın gerisinde.',
   },
 ]
+
+// ============================================================
+// SAHNE ÖZETİ — landing'deki önizleme ve demo AYNI sayıları gösterir.
+//
+// Önceden hero "24 öğrenci · %86", demo "24 öğrenci · %74" diyordu ve
+// ikisi de listelenen beş öğrenciyle tutmuyordu. Sayılar artık listeden
+// türetiliyor: vitrin kendi içinde çelişmiyor.
+// ============================================================
+export function demoSummary() {
+  const delivered = demoStudents.reduce((n, s) => n + s.doneTasks, 0)
+  const total = demoStudents.reduce((n, s) => n + s.totalTasks, 0)
+  return {
+    students: demoStudents.length,
+    delivered,
+    total,
+    deliveredPercent: total > 0 ? Math.round((delivered / total) * 100) : 0,
+    overdue: demoStudents.reduce((n, s) => n + s.overdue, 0),
+    needsAttention: demoStudents.filter((s) => s.status !== 'yolunda').length,
+  }
+}

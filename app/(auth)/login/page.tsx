@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState } from 'react'
+import { useEffect, useTransition, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
-import { GoogleButton } from '@/components/shared/google-button'
+import { GoogleSignInBlock } from '@/components/shared/google-button'
 import { TRIAL_DAYS } from '@/lib/plans'
 
 // E-POSTA BOŞLUKLARI KIRPILIR.
@@ -33,10 +33,26 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+// /auth/callback'in döndürdüğü hata kodları. Önceden callback bu kodla
+// buraya yönlendiriyordu ama sayfa parametreyi hiç okumuyordu: Google
+// girişi yarıda kalan kullanıcı açıklamasız bir giriş formuna düşüyordu.
+const CALLBACK_ERRORS: Record<string, string> = {
+  google: 'Google ile giriş tamamlanamadı. Tekrar deneyin ya da e-posta ve şifreyle girin.',
+  gecersiz_baglanti: 'Bağlantı geçersiz. Lütfen yeniden giriş yapın.',
+  baglanti_suresi_doldu: 'Bağlantının süresi dolmuş. Lütfen yeniden giriş yapın.',
+}
+
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+
+  // useSearchParams yerine window: sayfa statik üretiliyor ve
+  // useSearchParams bir Suspense sınırı gerektirirdi.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error')
+    if (code && CALLBACK_ERRORS[code]) setServerError(CALLBACK_ERRORS[code])
+  }, [])
 
   const {
     register,
@@ -71,16 +87,7 @@ export default function LoginPage() {
       {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
           Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
           başladıktan sonra fark ederdi. */}
-      <GoogleButton />
-
-      <div className="relative my-5">
-        <div className="absolute inset-0 flex items-center" aria-hidden>
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center">
-          <span className="bg-card px-2 text-xs text-muted-foreground">veya</span>
-        </div>
-      </div>
+      <GoogleSignInBlock />
 
       {/* SUNUCU HATASI FORMUN ÜSTÜNDE VE role="alert" İLE.
           Önce düğmenin hemen üstünde, alan hatalarıyla aynı boyutta bir

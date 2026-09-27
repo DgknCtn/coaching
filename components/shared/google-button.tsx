@@ -34,6 +34,40 @@ function GoogleIcon() {
   )
 }
 
+/**
+ * Google girişi AÇIK MI — panel ayarı bitmeden düğme gösterilmez.
+ *
+ * Kod hazır (signInWithGoogleAction, /auth/callback, ilk girişte çalışma
+ * alanı kurulumu app/page.tsx'te). Ama Supabase'de Google sağlayıcısı
+ * açılmamışsa düğme kullanıcıyı Supabase'in İngilizce hata sayfasına
+ * götürüyordu. Bayrak, panel ayarı yapıldıktan sonra açılır:
+ *   NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true
+ */
+export const GOOGLE_AUTH_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === 'true'
+
+/**
+ * Düğme + (isteğe bağlı) not + "veya" ayırıcısı — TEK BLOK.
+ * Bayrak kapalıyken bloğun tamamı yok olur; yalnız düğmeyi gizlemek
+ * formun üstünde yetim bir "veya" çizgisi bırakırdı.
+ */
+export function GoogleSignInBlock({ hint }: { hint?: string }) {
+  if (!GOOGLE_AUTH_ENABLED) return null
+  return (
+    <>
+      <GoogleButton />
+      {hint && <p className="mt-2 text-center text-xs text-muted-foreground">{hint}</p>}
+      <div className="relative my-5">
+        <div className="absolute inset-0 flex items-center" aria-hidden>
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-2 text-xs text-muted-foreground">veya</span>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function GoogleButton({ label = 'Google ile devam et' }: { label?: string }) {
   const [pending, startTransition] = useTransition()
 

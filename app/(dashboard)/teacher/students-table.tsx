@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MoreHorizontal, Users } from 'lucide-react'
-import { STATUS_LABEL, type NoticeKind, type StudentStatus } from '@/lib/student-status'
-import { Badge } from '@/components/ui/badge'
+import { type NoticeKind, type StudentStatus } from '@/lib/student-status'
+import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -57,14 +57,6 @@ export interface DashboardRow {
   status: StudentStatus
   /** Durumun gerekçeleri (computeStudentStatus.signals); yolunda ise boş. */
   signals: string[]
-}
-
-/** Durum etiketinin rozet varyantı — renk YALNIZ sinyal verir (§8). */
-const STATUS_VARIANT: Record<StudentStatus, 'success' | 'warning' | 'destructive' | 'neutral'> = {
-  yolunda: 'success',
-  takip_et: 'warning',
-  geride: 'warning',
-  mudahale: 'destructive',
 }
 
 /**
@@ -290,7 +282,7 @@ export function StudentsTable({ rows }: { rows: DashboardRow[] }) {
       align: 'right',
       render: (s) => (
         <div className="flex flex-col items-end gap-0.5">
-          <Badge variant={STATUS_VARIANT[s.status]}>{STATUS_LABEL[s.status]}</Badge>
+          <StudentStatusBadge status={s.status} />
           {/* B02: rozetin NEDENİ satırda görünür. İlki yazılır, kalanı
               sayıyla belirtilir; tamamı title ve ekran okuyucuda. */}
           {s.signals.length > 0 && (

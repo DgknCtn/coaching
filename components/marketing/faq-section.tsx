@@ -1,5 +1,5 @@
 import { BRAND, contactMailto } from '@/lib/brand'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { REFUND_DAYS, TRIAL_DAYS } from '@/lib/plans'
 import { SectionHeading } from './section-heading'
 
 // SSS — satın alma kararının önündeki gerçek soruları karşılar.
@@ -52,7 +52,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Aboneliği iptal etmem gerekir mi? Param geri döner mi?',
-    a: 'Lisans otomatik yenilenmediği için iptal edilecek yinelenen bir ödeme yok — yeni bir lisans almadığınız sürece sizden başka tahsilat yapılmaz. Ayrıca her lisans alımı için 14 gün koşulsuz iade hakkınız var.',
+    a: `Lisans otomatik yenilenmediği için iptal edilecek yinelenen bir ödeme yok — yeni bir lisans almadığınız sürece sizden başka tahsilat yapılmaz. Ayrıca her lisans alımı için ${REFUND_DAYS} gün koşulsuz iade hakkınız var.`,
   },
   {
     q: 'Öğrenciler telefondan kullanabilir mi?',

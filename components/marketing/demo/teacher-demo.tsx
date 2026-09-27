@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { StatusBadge } from '@/components/shared/status-badge'
+import { StudentStatusBadge } from '@/components/shared/student-status-badge'
+import { counterLabel } from '@/lib/homework-status'
 import { MetricRow } from '@/components/shared/metric-row'
 import { Section } from '@/components/shared/section'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { academicYearLabel, demoRelative } from '@/lib/demo-data'
 import { cn } from '@/lib/utils'
-import { demoStudents, type DemoStudent } from './demo-students'
+import { demoStudents, demoSummary, type DemoStudent } from './demo-students'
 import { StudentDetailPanel } from './student-detail-panel'
 
 // KOÇ PANELİ DEMOSU.
@@ -37,23 +38,28 @@ export function TeacherDemo() {
   // keşfin kendisi oluyor.
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected: DemoStudent | undefined = demoStudents.find((s) => s.id === selectedId)
+  const summary = demoSummary()
 
   return (
     <div className="space-y-6">
-      {/* SAYI DEĞİL, SORU. "Risk altında 3" bir veritabanı sayımı;
-          "Kritik Öğrenci — müdahale gereken öğrenciler" öğretmenin
-          zihninde bir iş. Kelime ürünün kendi rozet sözlüğünden
-          (status-badge.tsx): kullanıcı kaydolduktan sonra AYNI kelimeyi
-          görüyor, demoya özel bir dil uydurulmuyor. */}
+      {/* SAYILAR LİSTEDEN, ETİKETLER ÜRÜNÜN SÖZLÜĞÜNDEN.
+          Önceden "24 öğrenci · %74 · Kritik Öğrenci" elle yazılıydı:
+          sayılar aşağıdaki beş satırla tutmuyor, "Kritik" ise üründe
+          olmayan bir kelimeydi. Etiketler artık counterLabel ve
+          STATUS_LABEL'dan geliyor — kayıttan sonra aynı kelimeler. */}
       <MetricRow
         metrics={[
-          { label: 'Aktif Öğrenci', value: 24 },
-          { label: 'Bu Haftaki Görev Tamamlama', value: '74%' },
-          { label: 'Geciken Görev', value: 11 },
+          { label: 'Aktif Öğrenci', value: summary.students },
           {
-            label: 'Kritik Öğrenci',
-            value: 3,
-            hint: 'Müdahale gereken öğrenciler',
+            label: `Bu Hafta ${counterLabel('delivered')}`,
+            value: `${summary.deliveredPercent}%`,
+            hint: `${summary.delivered}/${summary.total} çalışma`,
+          },
+          { label: counterLabel('overdue'), value: summary.overdue },
+          {
+            label: 'Dikkat İsteyen',
+            value: summary.needsAttention,
+            hint: 'Yolunda olmayan öğrenciler',
           },
         ]}
       />
@@ -74,7 +80,7 @@ export function TeacherDemo() {
                   Sınav
                 </th>
                 <th scope="col" className={cn(COLUMN_CLASS, 'hidden md:table-cell')}>
-                  Ödevler
+                  Bu Hafta Teslim
                 </th>
                 <th scope="col" className={cn(COLUMN_CLASS, 'hidden lg:table-cell')}>
                   Son Aktivite
@@ -144,7 +150,12 @@ export function TeacherDemo() {
                       </div>
                     </td>
                     <td className={cn(COLUMN_CLASS, 'text-center')}>
-                      <StatusBadge status={s.status} />
+                      <StudentStatusBadge status={s.status} />
+                      {s.signals[0] && (
+                        <p className="mt-1 hidden text-[11px] text-muted-foreground sm:block">
+                          {s.signals[0]}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 )
