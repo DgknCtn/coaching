@@ -553,7 +553,11 @@ export default async function TeacherDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Section
           title="Öğrenci Güncellemeleri"
-          description="Öğrencilerin kendi yazdığı gün notları."
+          description={
+            dayNotes.ok && students.ok && updates.some((u) => !u.seen)
+              ? `Öğrencilerin kendi yazdığı gün notları · ${updates.filter((u) => !u.seen).length} yeni`
+              : 'Öğrencilerin kendi yazdığı gün notları.'
+          }
           variant="card"
         >
           {/* Güncellemeler öğrenci ADIYLA gösteriliyor ve isimler öğrenci
@@ -570,7 +574,11 @@ export default async function TeacherDashboard() {
 
         <Section
           title="Takip Gerekenler"
-          description="Uzun süredir gerçek akademik hareket göstermeyen öğrenciler."
+          description={
+            students.ok && followUps.length > 0
+              ? `${followUps.length} öğrenci · uzun süredir gerçek akademik hareket yok`
+              : 'Uzun süredir gerçek akademik hareket göstermeyen öğrenciler.'
+          }
           variant="card"
         >
           {/* Boş takip listesi "herkes çalışıyor" demek. Öğrenci listesi
