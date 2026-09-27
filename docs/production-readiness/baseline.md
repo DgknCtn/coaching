@@ -620,3 +620,15 @@ REST ölçümlerinde ağ tabanı ~70 ms. Kalan maliyet: `my_workspace_ids` her p
 | A · `teacher_student_operation_view` (REST, p50) | 116 ms | 109 ms | **87 ms** |
 
 Satır tahmini düzelince planlayıcı iki alt sorguda Memoize'lu iç içe döngü seçti (812 satırda 791 önbellek isabeti). REST ölçümlerinde ağ tabanı ~70 ms: B'de veritabanı payı ~190 ms'den ~50 ms'ye indi.
+
+## 40 eşzamanlı, 114 + 115 sonrası (27 Eylül 2026)
+
+| Ölçüm | 112+113 sonrası (12:06) | **114+115 sonrası** |
+|---|---|---|
+| Toplam istek (15 dk) | 26.310 | **39.486** (+%50 iş hacmi) |
+| Genel p50 / p95 / p99 | 678 / 3.371 / 6.891 ms | **413 / 2.178 / 4.313 ms** |
+| Panel (03) p50 / p99 | 2.163 / 11.952 ms | **1.489 / 6.102 ms** |
+| 5xx | 0 | **10** (%0,025; 8 panel + 2 öğrenci operasyonu, 57014 zaman aşımı) |
+| 42501 (yetki) | 0 | 0 |
+
+Kabul kapısı (`tenant-isolation`, `cross-tenant`, `anon-endpoint-probe`, `invite-live`) koşum sonrası 116/116 yeşil. Koşum sırasında aynı veritabanına canlı testler de gönderildi; 10 zaman aşımının bir kısmı bu eşzamanlı yükten olabilir, ayrıştırılmadı. Panel adımı hâlâ en yavaş uç ve filtresiz `teacher_student_overview_view` okuyor (uygulamanın gerçek sorgusu değil — senaryo düzeltmesi açık iş).
