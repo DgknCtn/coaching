@@ -1,3 +1,4 @@
+import { InterventionSection } from './intervention-section'
 import Link from 'next/link'
 import { compareHomeworkItems, isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
@@ -891,6 +892,11 @@ export default async function StudentDetailPage({
 
         </>
       )}
+
+      {/* MÜDAHALE (B16): genel bakışta, özet bloklarının hemen altında —
+          "bu öğrenci için ne yapıyorum" sorusu öğrenciye girilince ilk
+          bakılan yer. Kendi verisini çekiyor (intervention-section.tsx). */}
+      {!tab && <InterventionSection studentId={studentId} workspaceId={workspaceId} />}
 
       {/* PANELLER ARTIK ÜST ŞERİTTE (068).
           Burada bir TabsList vardı ve seçim client state'te tutuluyordu:

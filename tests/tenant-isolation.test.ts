@@ -120,6 +120,9 @@ const LOCKED_TABLES = [
   'student_day_notes',
   'homework_item_notes',
   'student_personal_items',
+  // 118 (B16) — öğretmenin müdahale kaydı: hangi öğrencinin neden
+  // dikkat istediği ve ne yapıldığı. Öğrenci/veliye bile kapalı.
+  'interventions',
 ] as const
 
 async function anonSelect(view: string) {
