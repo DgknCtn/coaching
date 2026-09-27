@@ -179,7 +179,7 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
               <Label htmlFor="email">
                 E-posta{' '}
                 <span className="text-muted-foreground">
-                  (yoksa boş bırak; kullanıcı adı + PIN ile girer)
+                  (boş bırakılabilir; öğrenci hesabına davet için gerekir)
                 </span>
               </Label>
               <Input id="email" type="email" placeholder="ornek@mail.com" {...register('email')} />

@@ -63,7 +63,8 @@ export async function createInviteAction(
   // linki eline geçiren herkesin o öğrenci olarak katılması demekti.
   if (role === 'student' && !invitedEmail) {
     return {
-      error: 'Öğrencinin e-postası yok. Davet linki yerine kullanıcı adı + PIN girişi oluşturun.',
+      error:
+        'Öğrencinin e-postası yok. Davet için öğrenci bilgilerine e-posta ekleyin (kullanıcı adı + PIN girişi açıksa onu da kullanabilirsiniz).',
     }
   }
 

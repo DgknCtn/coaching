@@ -1,5 +1,6 @@
 import { Section } from '@/components/shared/section'
 import { createClient } from '@/lib/supabase/server'
+import { studentLoginConfigured } from '@/lib/student-login'
 import { StudentLoginControls } from './student-login-controls'
 
 // E-POSTASIZ GİRİŞ KARTI (10a).
@@ -19,6 +20,11 @@ export async function StudentLoginSection({
   hasAccount: boolean
   hasEmail: boolean
 }) {
+  // Yapılandırılmamışsa (STUDENT_LOGIN_EMAIL_DOMAIN / SECRET yok) kart
+  // hiç çizilmez: işe yaramayan bir "PIN oluştur" düğmesi göstermektense
+  // öğretmen e-postalı davet yolunu kullanır.
+  if (!studentLoginConfigured()) return null
+
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('student_login_code_info', { p_student_id: studentId })
   // Migration uygulanmadıysa ya da okuma düştüyse kart gösterilmez; bu

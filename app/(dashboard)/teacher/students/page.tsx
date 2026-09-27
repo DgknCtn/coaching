@@ -1,4 +1,3 @@
-import { fetchOperationRows } from '@/lib/operation-rows'
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -68,7 +67,12 @@ export default async function StudentsPage({
   // overview'da var) ayrı okunup öğrenci kimliğiyle eşleniyor.
   // ============================================================
   const [operationRes, progressRes] = await Promise.all([
-    fetchOperationRows(supabase, workspaceId),
+    supabase
+      .from('teacher_student_operation_view')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('student_full_name')
+      .limit(500),
     supabase
       .from('teacher_student_overview_view')
       .select('student_id, completion_percentage')
