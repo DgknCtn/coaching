@@ -11,6 +11,7 @@ import {
 } from '@/lib/weekly-flow'
 import { compareHomeworkItems, localDateString } from '@/lib/homework-status'
 import { groupIntoCards, sortCardsForDay, type HaftamWork } from '@/lib/haftam'
+import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
 import { HaftamClient, type HaftamView } from './haftam-client'
 
 export const dynamic = 'force-dynamic'
@@ -45,13 +46,30 @@ export const dynamic = 'force-dynamic'
 export default async function HaftamPage() {
   const { supabase, student, workspaceId } = await getStudentContext()
 
-  const { data: flow } = await supabase
+  // ============================================================
+  // SORGU HATASI BOŞ VERİ GİBİ OKUNMAZ (B01)
+  //
+  // Buradaki dört sorgunun hiçbiri için kısmi ekran güvenli değil:
+  //   - akış düşerse "açık bir çalışma haftan yok" denirdi — hafta açıkken;
+  //   - kalemler düşerse "0 iş, tempo yok" gösterilirdi;
+  //   - gün notu / kişisel madde / kalem notu düşerse öğrenci notunu boş
+  //     görür, yeniden yazar ve kayıtlı olanın ÜZERİNE yazardı.
+  // Bu yüzden herhangi biri düşerse sayfa hata sınırına (student/error.tsx)
+  // düşüyor: "tekrar dene" dürüst, boş ekran değil.
+  // ============================================================
+  const need = <T,>(r: QueryResult<T>): T => {
+    if (!r.ok) throw new Error(r.error)
+    return r.data
+  }
+
+  const flowRes = await supabase
     .from('weekly_flows')
     .select('id, starts_at, due_at, due_source')
     .eq('student_id', student.id)
     .eq('workspace_id', workspaceId)
     .eq('status', 'active')
     .maybeSingle()
+  const flow = need(singleResult(flowRes, 'haftam.active_flow'))
 
   if (!flow) {
     return (
@@ -83,7 +101,7 @@ export default async function HaftamPage() {
   // `hb.status='active'` süzgeci, aktif yükten çıkarılmış ödevin
   // (R7-06.01) haftanın yükünde görünmesini engelliyor —
   // student_active_flow_load_view da aynı süzgeci kullanıyor.
-  const { data: items } = await supabase
+  const itemsRes = await supabase
     .from('homework_items')
     .select(
       `id, status, submitted_at, rejected_at, planned_for_date, teacher_note,
@@ -96,6 +114,7 @@ export default async function HaftamPage() {
     .eq('homework_batches.weekly_flow_id', flow.id)
     .eq('homework_batches.status', 'active')
     .neq('status', 'cancelled')
+  const items = need(listResult(itemsRes, 'haftam.items'))
 
   // ÖĞRENCİNİN KENDİ YAZDIKLARI (R8 · 101).
   //
@@ -107,7 +126,7 @@ export default async function HaftamPage() {
   const windowStart = localDateString(startsAt)
   const windowEnd = localDateString(dueAt)
 
-  const [{ data: dayNotes }, { data: personalItems }, { data: itemNotes }] = await Promise.all([
+  const [dayNotesRes, personalItemsRes, itemNotesRes] = await Promise.all([
     supabase
       .from('student_day_notes')
       .select('note_date, note_text')
@@ -126,14 +145,17 @@ export default async function HaftamPage() {
       .select('homework_item_id, note_text')
       .eq('student_id', student.id),
   ])
+  const dayNotes = need(listResult(dayNotesRes, 'haftam.day_notes'))
+  const personalItems = need(listResult(personalItemsRes, 'haftam.personal_items'))
+  const itemNotes = need(listResult(itemNotesRes, 'haftam.item_notes'))
 
   const dayNoteByDate = new Map<string, string>()
-  for (const n of dayNotes ?? []) {
+  for (const n of dayNotes) {
     dayNoteByDate.set(n.note_date as string, n.note_text as string)
   }
 
   const noteByItemId = new Map<string, string>()
-  for (const n of itemNotes ?? []) {
+  for (const n of itemNotes) {
     noteByItemId.set(n.homework_item_id as string, n.note_text as string)
   }
 
@@ -142,7 +164,7 @@ export default async function HaftamPage() {
   const one = <T,>(v: T | T[] | null | undefined): T | null =>
     Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
 
-  const rows = (items ?? []).map(r => {
+  const rows = items.map(r => {
     const batch = one(
       r.homework_batches as unknown as { id: string; title: string | null; created_at: string }
     )
@@ -278,7 +300,7 @@ export default async function HaftamPage() {
       planned: plannedByDay.get(d.date) ?? 0,
       cards: sortCardsForDay(groupIntoCards(works.filter(w => w.plannedForDate === d.date))),
       dayNote: dayNoteByDate.get(d.date) ?? null,
-      personalItems: (personalItems ?? [])
+      personalItems: personalItems
         .filter(p => (p.item_date as string) === d.date)
         .map(p => ({
           id: p.id as string,
