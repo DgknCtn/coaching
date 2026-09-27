@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/active-workspace'
 import { firstIssue, uuidSchema } from '@/lib/validation'
-import { PANEL_ROLES, type PanelKind } from '@/lib/workspace'
+import { isPanelKind, PANEL_ROLES, type PanelKind } from '@/lib/panels'
 
 /**
  * Aktif çalışma alanını değiştirir (Faz 3).
@@ -25,7 +25,7 @@ export async function switchWorkspaceAction(
   /** B18: seçilen panel. Üyelik o panelin rolleriyle doğrulanır. */
   panel: PanelKind = 'teacher'
 ) {
-  if (!(panel in PANEL_ROLES)) return { error: 'Geçersiz panel.' }
+  if (!isPanelKind(panel)) return { error: 'Geçersiz panel.' }
   const parsed = uuidSchema.safeParse(workspaceId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 

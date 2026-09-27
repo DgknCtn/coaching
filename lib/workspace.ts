@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import type { WorkspaceUsage } from '@/lib/plans'
+import { PANEL_ROLES, type PanelKind } from '@/lib/panels'
 import {
   ACTIVE_WORKSPACE_COOKIE,
   resolveActiveWorkspace,
@@ -58,14 +59,6 @@ async function blockedRedirectTarget(
 // başka alanda öğretmen olup veli davetini kabul eden kişi veli
 // panelinde bağlı çocuğunu bulamıyordu.
 // ============================================================
-
-export type PanelKind = 'teacher' | 'student' | 'parent'
-
-export const PANEL_ROLES: Record<PanelKind, string[]> = {
-  teacher: ['owner', 'teacher'],
-  student: ['student'],
-  parent: ['parent'],
-}
 
 export interface PanelOption {
   workspaceId: string

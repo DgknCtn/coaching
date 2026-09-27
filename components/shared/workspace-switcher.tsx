@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { PANEL_LABEL, type PanelKind } from '@/lib/panels'
 
 // Çalışma alanı seçici (Faz 3).
 //
@@ -27,8 +28,6 @@ import { cn } from '@/lib/utils'
 // olmayan bir karar varmış gibi gösterir. Bireysel öğretmenlerin ekranı
 // bugünkü gibi kalır.
 
-export type PanelKind = 'teacher' | 'student' | 'parent'
-
 export interface WorkspaceOption {
   id: string
   name: string
@@ -37,12 +36,6 @@ export interface WorkspaceOption {
    * birinde veli olabilir; seçici bunların hepsini gösterir.
    */
   panel?: PanelKind
-}
-
-const PANEL_LABEL: Record<PanelKind, string> = {
-  teacher: 'Öğretmen',
-  student: 'Öğrenci',
-  parent: 'Veli',
 }
 
 export function WorkspaceSwitcher({

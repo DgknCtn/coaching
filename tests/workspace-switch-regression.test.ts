@@ -48,9 +48,15 @@ describe('switchWorkspaceAction üyelik okuması', () => {
     expect(membershipQuery).not.toContain('.single(')
   })
 
-  it('rol süzgeci owner ve teacher ile kalır', () => {
-    expect(membershipQuery).toContain("'owner'")
-    expect(membershipQuery).toContain("'teacher'")
+  // B18: süzgeç artık seçilen panelin rolleri (PANEL_ROLES). Korunan kural
+  // aynı: öğretmen paneline geçiş owner VE teacher üyeliğini kabul eder,
+  // öğrenci/veli paneli yalnız kendi rolünü.
+  it('rol süzgeci panelin rollerinden; öğretmen paneli owner ve teacher', async () => {
+    expect(membershipQuery).toContain('PANEL_ROLES[panel]')
+    const { PANEL_ROLES } = await import('@/lib/panels')
+    expect(PANEL_ROLES.teacher).toEqual(['owner', 'teacher'])
+    expect(PANEL_ROLES.student).toEqual(['student'])
+    expect(PANEL_ROLES.parent).toEqual(['parent'])
   })
 
   it('üyelik yokluğu ayrı ve anlaşılır mesajla döner', () => {
