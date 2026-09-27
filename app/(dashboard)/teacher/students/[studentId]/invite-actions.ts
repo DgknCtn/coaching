@@ -56,28 +56,60 @@ export async function createInviteAction(
 
   if (!student) return { error: 'Öğrenci bulunamadı' }
 
+  const invitedEmail =
+    role === 'student' ? student.email : (parsed.data.email?.trim() || null)
+
   // ============================================================
-  // Yeni davet, eskisini ÖLDÜRÜR.
+  // Yeni davet, AYNI KİŞİYE giden eskisini ÖLDÜRÜR.
   //
   // Önceden her tıklama bağımsız geçerli bir link daha üretiyordu ve
-  // yanlış kişiye giden bir linki geçersiz kılmanın hiçbir yolu yoktu.
-  // Artık "yeniden gönder" doğal olarak çalışıyor: eski link ölür.
+  // yanlış kişiye giden bir linki geçersiz kılmanın yolu yoktu; "yeniden
+  // gönder" eski linki öldürerek çalışıyor.
   //
-  // Ayrıca 045'teki partial unique index bunu veritabanı düzeyinde de
-  // zorunlu kılıyor; bu güncelleme olmadan insert çakışırdı.
+  // KAPSAM 116'DA DARALDI:
+  //   - öğrenci daveti : öğrencinin bekleyen öğrenci daveti iptal edilir.
+  //   - veli daveti    : YALNIZ aynı e-postaya kesilmiş bekleyen veli
+  //                      daveti. Önceden anneye link verilince babanınki
+  //                      de ölüyordu. E-postasız veli davetleri birbirini
+  //                      iptal etmez (hangisinin kime gittiği bilinmez).
+  // Veritabanındaki tekillik index'leri (116) aynı kuralı zorunlu kılıyor.
   // ============================================================
-  const { error: revokeError } = await supabase
+  let revokeIds: string[] | null = null
+  if (role === 'parent') {
+    if (invitedEmail) {
+      const { data: pendingParents, error: listError } = await supabase
+        .from('invitations')
+        .select('id, invited_email')
+        .eq('workspace_id', workspaceId)
+        .eq('student_id', studentId)
+        .eq('role', 'parent')
+        .eq('status', 'pending')
+      if (listError) return { error: dbErrorToTr(listError.message) }
+      // Karşılaştırma burada: `ilike` e-postadaki '_' karakterini joker
+      // sayardı ve başka bir velinin davetini de iptal edebilirdi.
+      revokeIds = (pendingParents ?? [])
+        .filter((i) => (i.invited_email as string | null)?.toLowerCase() === invitedEmail.toLowerCase())
+        .map((i) => i.id as string)
+    } else {
+      revokeIds = []
+    }
+  }
+
+  const revokeQuery = supabase
     .from('invitations')
     .update({ status: 'revoked' })
     .eq('workspace_id', workspaceId)
     .eq('student_id', studentId)
     .eq('role', role)
     .eq('status', 'pending')
+  const { error: revokeError } =
+    revokeIds === null
+      ? await revokeQuery
+      : revokeIds.length > 0
+        ? await revokeQuery.in('id', revokeIds)
+        : { error: null }
 
   if (revokeError) return { error: dbErrorToTr(revokeError.message) }
-
-  const invitedEmail =
-    role === 'student' ? student.email : (parsed.data.email?.trim() || null)
 
   const token = generateToken()
   const tokenHash = await hashToken(token)

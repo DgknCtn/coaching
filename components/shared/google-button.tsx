@@ -50,11 +50,20 @@ export const GOOGLE_AUTH_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED =
  * Bayrak kapalıyken bloğun tamamı yok olur; yalnız düğmeyi gizlemek
  * formun üstünde yetim bir "veya" çizgisi bırakırdı.
  */
-export function GoogleSignInBlock({ hint }: { hint?: string }) {
+export function GoogleSignInBlock({
+  hint,
+  next,
+  label,
+}: {
+  hint?: string
+  /** Girişten sonra gidilecek uygulama içi yol (callback `next`). */
+  next?: string
+  label?: string
+}) {
   if (!GOOGLE_AUTH_ENABLED) return null
   return (
     <>
-      <GoogleButton />
+      <GoogleButton next={next} label={label} />
       {hint && <p className="mt-2 text-center text-xs text-muted-foreground">{hint}</p>}
       <div className="relative my-5">
         <div className="absolute inset-0 flex items-center" aria-hidden>
@@ -68,14 +77,20 @@ export function GoogleSignInBlock({ hint }: { hint?: string }) {
   )
 }
 
-export function GoogleButton({ label = 'Google ile devam et' }: { label?: string }) {
+export function GoogleButton({
+  label = 'Google ile devam et',
+  next,
+}: {
+  label?: string
+  next?: string
+}) {
   const [pending, startTransition] = useTransition()
 
   function start() {
     startTransition(async () => {
       // Başarılı olduğunda bu aksiyon yönlendirme yapar ve buraya
       // dönmez; yalnız hata durumunda bir sonuç gelir.
-      const res = await signInWithGoogleAction()
+      const res = await signInWithGoogleAction(next)
       if (res?.error) toast.error(res.error)
     })
   }

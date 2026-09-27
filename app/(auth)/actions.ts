@@ -101,6 +101,10 @@ export async function registerAction(
     options: {
       data: {
         full_name: parsed.data.fullName,
+        // ÖĞRETMEN NİYETİ AÇIKÇA YAZILIR (lib/landing-decision.ts). Alanı
+        // olmayan kullanıcı artık otomatik öğretmen yapılmıyor; e-posta
+        // doğrulamasından dönen öğretmen bu anahtarla tanınıyor.
+        signup_intent: 'teacher',
         workspace_name: parsed.data.workspaceName || null,
         // Elle girilen kod ÜST VERİYE de yazılır: e-posta doğrulaması
         // açıkken workspace burada kurulmuyor, kullanıcı doğrulama
@@ -212,7 +216,12 @@ export async function updatePasswordAction(password: string, passwordConfirm: st
   redirect('/')
 }
 
-export async function logoutAction() {
+/**
+ * @param returnTo Yalnız davet linkine dönüş için: "Başka hesapla gir"
+ *   diyen davetli, oturumu kapattıktan sonra AYNI davete döner. Başka her
+ *   değer yok sayılır (açık yönlendirme koruması).
+ */
+export async function logoutAction(returnTo?: string) {
   const supabase = await createClient()
 
   // ÇIKIŞTAN ÖNCE kaydedilir: signOut() sonrası oturum yok, profil
@@ -225,6 +234,7 @@ export async function logoutAction() {
   await logAuthEvent({ type: 'logout', profileId: (data as { id: string } | null)?.id ?? null })
 
   await supabase.auth.signOut()
+  if (returnTo && /^\/invite\/[0-9a-f]{64}$/.test(returnTo)) redirect(returnTo)
   redirect('/login')
 }
 

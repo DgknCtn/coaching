@@ -83,6 +83,8 @@ export function inviteErrorToTr(message: string): string {
   if (m.includes('already used') || m.includes('invalid'))
     return 'Bu davet geçersiz veya zaten kullanılmış.'
   if (m.includes('expired')) return 'Bu davetin süresi dolmuş.'
+  if (m.includes('only be accepted with its link'))
+    return 'Bu davet yalnız öğretmeninin gönderdiği linkle kabul edilebilir.'
   if (m.includes('different email'))
     return 'Bu davet farklı bir e-posta adresi için oluşturulmuş.'
   return 'Davet kabul edilemedi. Lütfen tekrar deneyin.'

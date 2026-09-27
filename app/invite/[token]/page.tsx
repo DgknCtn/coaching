@@ -3,6 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import { InviteForm } from './invite-form'
 import { AlertCircle, GraduationCap } from 'lucide-react'
 import { BRAND } from '@/lib/brand'
+import { buttonVariants } from '@/components/ui/button'
+import { GoogleSignInBlock } from '@/components/shared/google-button'
+import { maskEmail } from '@/lib/invite-accept'
+import { SwitchAccountButton } from './switch-account-button'
+
+// ?hata= kodları /invite/[token]/kabul'den gelir.
+const ACCEPT_ERRORS: Record<string, string> = {
+  sure: 'Bu davetin süresi dolmuş. Öğretmeninden yeni bir link iste.',
+  gecersiz: 'Bu davet geçersiz ya da zaten kullanılmış.',
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -26,12 +36,18 @@ function InviteNotice({ title, description }: { title: string; description: stri
 
 export default async function InvitePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ hata?: string }>
 }) {
   const { token } = await params
+  const { hata } = await searchParams
   const tokenHash = await hashToken(token)
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data: rows, error } = await supabase
     .rpc('get_invitation_by_token', { p_token_hash: tokenHash })
@@ -103,7 +119,50 @@ export default async function InvitePage({
           </p>
         </div>
 
-        <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
+        {/* YANLIŞ HESAP: davet başka bir adrese kesilmiş. İki adres de
+            maskeli gösterilir; kullanıcı neden olmadığını anlar ve doğru
+            hesaba geçebilir. */}
+        {hata === 'eposta' && (
+          <div
+            role="alert"
+            className="mb-6 rounded-md border border-destructive-border bg-destructive-subtle px-3 py-2.5 text-sm text-destructive-foreground"
+          >
+            Bu davet <strong>{maskEmail(invitation.invited_email)}</strong> adresine gönderildi;
+            sen <strong>{maskEmail(user?.email)}</strong> ile girdin. Davetin gönderildiği
+            hesapla gir.
+          </div>
+        )}
+        {hata && ACCEPT_ERRORS[hata] && (
+          <div
+            role="alert"
+            className="mb-6 rounded-md border border-destructive-border bg-destructive-subtle px-3 py-2.5 text-sm text-destructive-foreground"
+          >
+            {ACCEPT_ERRORS[hata]}
+          </div>
+        )}
+
+        {user ? (
+          // OTURUM AÇIK: form doldurtulmaz. İkinci çocuğunun davetini açan
+          // veli ya da Google'la girmiş öğrenci tek tıkla kabul eder.
+          <div className="space-y-3">
+            {/* Route Handler: prefetch daveti kabul etmesin diye düz <a>. */}
+            <a
+              href={`/invite/${token}/kabul`}
+              className={buttonVariants({ size: 'lg', className: 'w-full' })}
+            >
+              {user.email} olarak kabul et
+            </a>
+            <SwitchAccountButton returnTo={`/invite/${token}`} />
+          </div>
+        ) : (
+          <>
+            <GoogleSignInBlock
+              label="Google ile kabul et"
+              next={`/invite/${token}/kabul`}
+            />
+            <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
+          </>
+        )}
       </div>
     </div>
   )

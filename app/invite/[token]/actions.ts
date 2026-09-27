@@ -6,6 +6,7 @@ import { authErrorToTr, inviteErrorToTr } from '@/lib/auth-errors'
 import { acceptInviteSchema, firstIssue } from '@/lib/validation'
 import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 import { redirect } from 'next/navigation'
+import { finishInviteAcceptance } from '@/lib/invite-accept'
 
 export async function acceptInviteAction(token: string, fullName: string, email: string, password: string) {
   const parsed = acceptInviteSchema.safeParse({ fullName, email, password })
@@ -56,7 +57,7 @@ export async function acceptInviteAction(token: string, fullName: string, email:
 
   if (!authUserId) return { error: 'Kimlik doğrulama başarısız.' }
 
-  const { error: rpcError } = await supabase.rpc('accept_invitation', {
+  const { data: accepted, error: rpcError } = await supabase.rpc('accept_invitation', {
     p_token_hash: tokenHash,
     p_auth_user_id: authUserId,
     p_full_name: fullName,
@@ -65,5 +66,8 @@ export async function acceptInviteAction(token: string, fullName: string, email:
 
   if (rpcError) return { error: inviteErrorToTr(rpcError.message) }
 
-  redirect('/')
+  // Kabul edilen alan aktif olur ve davetin rolüne ait panel açılır
+  // (lib/invite-accept.ts). Önceden '/' adresine gidiliyordu; başka alanda
+  // öğretmen olan veli yine öğretmen paneline düşüyordu.
+  redirect(await finishInviteAcceptance(accepted))
 }

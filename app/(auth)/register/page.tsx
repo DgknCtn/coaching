@@ -127,7 +127,13 @@ export default function RegisterPage() {
           başladıktan sonra fark ederdi. */}
       {/* "30 saniyede" KALDIRILDI: ölçülmemiş bir süre vaadi (068'in
           "10 dakika" kararıyla aynı gerekçe). */}
-      <GoogleSignInBlock hint="En hızlı yöntem — tek tıkla hesabınızı oluşturun." />
+      {/* KAYIT SAYFASI ÖĞRETMEN KAYDIDIR: Google ile gelen kullanıcı
+          doğrudan alan kurulumuna gider. /login'deki Google düğmesi ise
+          niyet taşımaz; alanı olmayan kullanıcı orada /hosgeldin'e düşer. */}
+      <GoogleSignInBlock
+        hint="En hızlı yöntem — tek tıkla hesabınızı oluşturun."
+        next="/kurulum/ogretmen"
+      />
 
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">

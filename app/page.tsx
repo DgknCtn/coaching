@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { readReferralCode, normalizeReferralCode } from '@/lib/referral'
+import { decideLanding } from '@/lib/landing-decision'
 import { LandingPage } from '@/components/marketing/landing-page'
 import { StructuredData } from '@/components/marketing/structured-data'
 
@@ -56,69 +56,26 @@ export default async function RootPage() {
     redirect('/erisim')
   }
 
-  // GEÇ KURULUM (Faz 3): e-posta doğrulaması açıkken kayıt anında oturum
-  // olmadığı için workspace kurulamıyor — create_teacher_workspace'in
-  // auth.uid() kontrolü (024) başarısız olur. Kullanıcı e-postasını
-  // doğrulayıp ilk kez buraya geldiğinde oturum VARDIR; workspace o anda,
-  // kayıtta üst veriye yazılan bilgilerle kurulur.
+  // ============================================================
+  // ÇALIŞMA ALANI YOKSA: KİM OLDUĞU DEĞİL, NE İSTEDİĞİ BELİRLER
   //
-  // Doğrulama kapalıyken bu dal hiç çalışmaz: workspace zaten kayıt
-  // sırasında kurulmuş olur.
-  if (!profile?.default_workspace_id) {
-    const meta = user.user_metadata as
-      | {
-          full_name?: string
-          name?: string
-          workspace_name?: string | null
-          partner_code?: string | null
-        }
-      | undefined
-
-    // AD İÇİN YEDEK ZİNCİRİ.
-    //
-    // Bu dal artık Google ile girenler için de çalışıyor ve orada kayıt
-    // formu YOK. Google çoğu zaman `full_name` veriyor ama garanti
-    // değil; ad boş kalırsa kullanıcı sessizce /login'e atılıyor,
-    // çalışma alanı hiç kurulmuyor ve sonsuz döngüye giriyordu.
-    // E-postanın yerel kısmı, hiç yoktan iyidir ve kullanıcı adını
-    // sonradan değiştirebilir.
-    const fullName =
-      meta?.full_name?.trim() ||
-      meta?.name?.trim() ||
-      user.email?.split('@')[0] ||
-      'Kullanıcı'
-
-    {
-      const { error } = await supabase.rpc('create_teacher_workspace', {
-        p_auth_user_id: user.id,
-        p_full_name: fullName,
-        p_email: user.email ?? '',
-        p_workspace_name: meta?.workspace_name ?? null,
-        // Kayıt formuna ELLE girilen kod üst veride taşınır; e-posta
-        // doğrulaması açıkken workspace burada kurulduğu için kodun tek
-        // hayatta kalma yolu budur. Yoksa `?ref=` çerezine düşülür.
-        p_partner_code:
-          normalizeReferralCode(meta?.partner_code) ?? (await readReferralCode()),
-      })
-      // Kurulum başarılıysa davet çerezi silinip aynı sayfaya dönülür ve
-      // bu kez profil dolu gelir. Silme bir Route Handler'da: Server
-      // Component çerez DEĞİŞTİREMEZ, burada silmek Google ile ilk girişte
-      // "Bir hata oluştu" ekranı üretiyordu (app/auth/kurulum-tamam).
-      if (!error) redirect('/auth/kurulum-tamam')
-      console.error('[kurulum] çalışma alanı kurulamadı', error)
-    }
-
-    // KURULUM BAŞARISIZ → /erisim, /login DEĞİL (068 · rapor bulgusu 3).
-    //
-    // Buradaki eski yorum "sonsuz döngü olmaz çünkü /login korumasız bir
-    // rota" diyordu ve bu ARTIK DOĞRU DEĞİL: /login public olsa da
-    // middleware oturumu olan kullanıcıyı /login'den geri /'a
-    // yönlendiriyor. Yani oturumu olup çalışma alanı kurulamamış
-    // kullanıcı / → /login → / arasında kilitleniyordu.
-    //
-    // /erisim ne olduğunu anlatıyor ve oturumu kapatma yolu sunuyor.
-    redirect('/erisim')
-  }
+  // Önceden burada alanı olmayan HERKES için öğretmen alanı kuruluyordu.
+  // Google girişi açılınca davet linkini kullanmadan giren öğrenci ya da
+  // veli de öğretmen yapılıyordu. Karar artık lib/landing-decision.ts'te:
+  //
+  //   - öğretmen niyeti belli (kayıt formu üst verisi) -> alanı kur
+  //   - belli değil -> /hosgeldin: bekleyen davetler ya da rol seçimi
+  //
+  // Kurulumun kendisi /kurulum/ogretmen'de (Route Handler): burası bir
+  // Server Component ve davet çerezini silemiyordu (20cd4ed).
+  // ============================================================
+  const landing = decideLanding({
+    profileError: false,
+    hasWorkspace: Boolean(profile?.default_workspace_id),
+    metadata: user.user_metadata,
+  })
+  if (landing === 'setup-teacher') redirect('/kurulum/ogretmen')
+  if (landing === 'welcome' || !profile?.default_workspace_id) redirect('/hosgeldin')
 
   const { data: member } = await supabase
     .from('workspace_members')
