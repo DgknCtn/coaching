@@ -1,4 +1,4 @@
-import {
+import { Rocket,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -388,6 +388,7 @@ export const adminNav: NavItem[] = [
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
   { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
+  { href: '/admin/aktivasyon', label: 'Aktivasyon', icon: Rocket },
   { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert },
 ]
 
