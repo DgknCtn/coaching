@@ -97,7 +97,11 @@ CREATE POLICY "interventions_update_teacher" ON public.interventions
 -- SİLME YOK: müdahale geçmişi bir kayıttır. Yanlış açılan kayıt
 -- 'diger' sonucuyla ve bir notla kapatılır.
 
-REVOKE ALL ON public.interventions FROM anon;
+-- Supabase public şemasındaki yeni tablolara authenticated için VARSAYILAN
+-- olarak TÜM yetkileri veriyor (DELETE ve TRUNCATE dahil). Önce hepsi
+-- geri alınır, sonra yalnız gerekenler verilir; aksi hâlde aşağıdaki
+-- doğrulama "silme yetkisi açık" der (ilk uygulamada böyle oldu).
+REVOKE ALL ON public.interventions FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.interventions TO authenticated;
 
 -- ------------------------------------------------------------
