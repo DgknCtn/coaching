@@ -606,3 +606,17 @@ Korunan üç ince davranış: kitabında hiç test satırı olmayan atama görü
 | A · `teacher_student_operation_view` (REST, kurum filtreli, p50) | 116 ms | 109 ms |
 
 REST ölçümlerinde ağ tabanı ~70 ms. Kalan maliyet: `my_workspace_ids` her politika kullanımında yeniden hesaplanıyor (~20 kez × ~1,5 ms) ve 20 ms planlama.
+
+## 115 — my_workspace_ids plpgsql ve ROWS 3 (27 Eylül 2026)
+
+`my_workspace_ids` panel planında ~20 kez çalışıyordu; her çağrı 3 satır için ~1,5 ms ve satır tahmini 1000. 115 fonksiyonu aynı gövdeyle plpgsql'e çevirdi (plan oturum boyunca saklanıyor) ve `ROWS 3` verdi. Migration eski/yeni tanımı her gerçek kullanıcı ve üç rol kümesi için karşılaştırdı. Sonrasında canlı RLS testleri (`tenant-isolation`, `cross-tenant`, `anon-endpoint-probe`) 112/112 yeşil.
+
+| Ölçüm | 114 öncesi | 114 sonrası | **115 sonrası** |
+|---|---|---|---|
+| B · panel planı (Execution / Planning) | 117 / 31 ms | 70 / 20 ms | **52 / 18 ms** |
+| B · `my_workspace_ids` çağrı başına | ~1,5 ms | ~1,5 ms | **~0,7 ms** |
+| B · `teacher_student_operation_view` (REST, p50) | 260 ms | 149 ms | **119 ms** |
+| B · `teacher_student_overview_view` (REST, p50) | 258 ms | 142 ms | **118 ms** |
+| A · `teacher_student_operation_view` (REST, p50) | 116 ms | 109 ms | **87 ms** |
+
+Satır tahmini düzelince planlayıcı iki alt sorguda Memoize'lu iç içe döngü seçti (812 satırda 791 önbellek isabeti). REST ölçümlerinde ağ tabanı ~70 ms: B'de veritabanı payı ~190 ms'den ~50 ms'ye indi.
