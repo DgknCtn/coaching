@@ -1,7 +1,8 @@
 import { hashToken } from '@/lib/invite'
 import { createClient } from '@/lib/supabase/server'
 import { InviteForm } from './invite-form'
-import { AlertCircle, GraduationCap } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
+import { BrandMark } from '@/components/shared/brand-mark'
 import { BRAND } from '@/lib/brand'
 import { buttonVariants } from '@/components/ui/button'
 import { GoogleSignInBlock } from '@/components/shared/google-button'
@@ -104,10 +105,10 @@ export default async function InvitePage({
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-md bg-muted">
-            <GraduationCap className="size-4 text-muted-foreground" />
-          </div>
-          <span className="text-sm font-semibold">{BRAND.name}</span>
+          {/* Marka işareti sitenin geri kalanıyla aynı (BrandMark);
+              önceden genel bir kep ikonu duruyordu. */}
+          <BrandMark size={32} />
+          <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
         </div>
 
         <div className="mb-8">
