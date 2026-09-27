@@ -591,3 +591,18 @@ Korunan üç ince davranış: kitabında hiç test satırı olmayan atama görü
 ### Kapanmayan komşu kalem
 
 `book_tests` **tam taraması** hâlâ pahalı: A'da 589 ms, B'de 366 ms. Panel artık o yola girmiyor ama gerçekten çok satır okuyan ekranlar (kitap haritası) bundan etkilenmeye devam ediyor. Kaynak, `tests_select` politikasının satır başına maliyeti. PRD'nin B13 kaleminde ayrı iş olarak duruyor.
+
+## 114 — kurum filtresi ödev kalemine indi (27 Eylül 2026)
+
+40 eşzamanlı koşuda (112 + 113 sonrası) 5xx = 0 ama panel p50 2.163 ms. B öğretmeninin panel sorgusu SQL Editor'de, öğretmen kimliğiyle ve RLS dahil açıklandı (`scripts/teshis-panel-plani.sql`). Geciken ve onay bekleyen alt sorguları `homework_items`'ı yalnız duruma göre tarıyordu; başka kiracının 4 satırı politikanın öğrenci/veli dalını kurduruyordu (SubPlan 58: 24,4 ms, SubPlan 52: 23,8 ms). Maliyet veritabanındaki kiracı sayısıyla büyüyordu.
+
+114 birleşime `hi.workspace_id = hb.workspace_id` ekledi (veri koşulu ve iki yönlü `EXCEPT ALL` eşdeğerliği migration içinde doğrulandı).
+
+| Ölçüm | 114 öncesi | 114 sonrası |
+|---|---|---|
+| B · panel planı (Execution / Planning) | 117 / 31 ms | **70 / 20 ms** |
+| B · `teacher_student_operation_view` (REST, kurum filtreli, p50) | 260 ms | **149 ms** |
+| B · `teacher_student_overview_view` (REST, kurum filtreli, p50) | 258 ms | **142 ms** |
+| A · `teacher_student_operation_view` (REST, kurum filtreli, p50) | 116 ms | 109 ms |
+
+REST ölçümlerinde ağ tabanı ~70 ms. Kalan maliyet: `my_workspace_ids` her politika kullanımında yeniden hesaplanıyor (~20 kez × ~1,5 ms) ve 20 ms planlama.
