@@ -192,6 +192,24 @@ export function StudentsTable({ rows }: { rows: DashboardRow[] }) {
         <div>
           <p className="font-medium">{s.name}</p>
           {s.meta && <p className="mt-0.5 text-xs text-muted-foreground">{s.meta}</p>}
+          {/* B09 · DAR EKRANDA BİLGİ KAYBOLMAZ. Onay ve Bildirim sütunları
+              sm/md altında gizleniyor; aynı bilgi burada, yalnız o
+              genişliklerde görünüyor. */}
+          {s.approvalPending > 0 && (
+            <p className="mt-0.5 text-xs font-medium sm:hidden">{s.approvalPending} onay bekliyor</p>
+          )}
+          {s.noticeKind !== 'none' && (
+            <p
+              className={cn(
+                'mt-0.5 text-xs md:hidden',
+                s.noticeKind === 'check_in_late'
+                  ? 'font-medium text-warning-foreground'
+                  : 'text-muted-foreground'
+              )}
+            >
+              {s.noticeLabel}
+            </p>
+          )}
         </div>
       ),
     },
