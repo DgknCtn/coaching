@@ -170,8 +170,8 @@ export function BookForm({ terms, defaultTermId }: Props) {
         <CardContent className="pt-5 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="title">Kitap Adı *</Label>
-            <Input id="title" placeholder="Bilgi Sarmal TYT Kimya" aria-invalid={!!errors.title} {...register('title')} />
-            {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+            <Input id="title" placeholder="Bilgi Sarmal TYT Kimya" aria-invalid={!!errors.title} aria-describedby={errors.title ? 'title-error' : undefined} {...register('title')} />
+            {errors.title && <p id="title-error" className="text-xs text-destructive">{errors.title.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -191,13 +191,13 @@ export function BookForm({ terms, defaultTermId }: Props) {
               <Label htmlFor="levelExam">Seviye / Sınav Türü *</Label>
               <NativeSelect
                 id="levelExam"
-                aria-invalid={!!errors.levelExam}
+                aria-invalid={!!errors.levelExam} aria-describedby={errors.levelExam ? 'levelExam-error' : undefined}
                 {...register('levelExam')}
               >
                 <option value="">Seçin</option>
                 {LEVEL_EXAMS.map(l => <option key={l} value={l}>{l}</option>)}
               </NativeSelect>
-              {errors.levelExam && <p className="text-xs text-destructive">{errors.levelExam.message}</p>}
+              {errors.levelExam && <p id="levelExam-error" className="text-xs text-destructive">{errors.levelExam.message}</p>}
             </div>
           </div>
 

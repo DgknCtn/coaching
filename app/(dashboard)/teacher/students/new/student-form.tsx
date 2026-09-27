@@ -106,8 +106,8 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="fullName">Ad Soyad *</Label>
-            <Input id="fullName" placeholder="Ahmet Yılmaz" aria-invalid={!!errors.fullName} {...register('fullName')} />
-            {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
+            <Input id="fullName" placeholder="Ahmet Yılmaz" aria-invalid={!!errors.fullName} aria-describedby={errors.fullName ? 'fullName-error' : undefined} {...register('fullName')} />
+            {errors.fullName && <p id="fullName-error" className="text-xs text-destructive">{errors.fullName.message}</p>}
           </div>
 
           {/* R6-11: iki alan BAĞIMSIZDIR. "9. Sınıf + YKS" ya da

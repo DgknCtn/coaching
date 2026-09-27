@@ -310,7 +310,7 @@ export function AssignBookDialog({
             </Label>
             <NativeSelect
               id="bookId"
-              aria-invalid={!!errors.bookId}
+              aria-invalid={!!errors.bookId} aria-describedby={errors.bookId ? 'bookId-error' : undefined}
               disabled={filtered.length === 0}
               {...register('bookId')}
             >
@@ -327,7 +327,7 @@ export function AssignBookDialog({
                 </>
               )}
             </NativeSelect>
-            {errors.bookId && <p className="text-xs text-destructive">{errors.bookId.message}</p>}
+            {errors.bookId && <p id="bookId-error" className="text-xs text-destructive">{errors.bookId.message}</p>}
           </div>
 
           {/* Başlangıç / Hedef Bitiş alanları BURADAN KALDIRILDI (§4.2).
