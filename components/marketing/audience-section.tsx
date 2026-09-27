@@ -1,4 +1,5 @@
 import { GraduationCap, Brain, Users } from 'lucide-react'
+import { MAX_SELF_SERVICE_STUDENTS } from '@/lib/billing/pricing'
 import { SectionHeading } from './section-heading'
 
 // KİMLER İÇİN — nitelendirme bölümü.
@@ -50,7 +51,10 @@ export function AudienceSection() {
         </div>
 
         <p className="mt-8 text-center text-sm font-medium">
-          20+ öğrenciniz varsa İZ sizin için tasarlandı.
+          {/* "20+ öğrenci" KALDIRILDI: ürünün alt sınırı yok. Üst sınır
+              kendi kendine satın alma sınırından okunuyor. */}
+          Tek öğrenciden {MAX_SELF_SERVICE_STUDENTS} öğrenciye kadar kendiniz
+          başlayın; daha büyük ekipler için bize yazın.
         </p>
       </div>
     </section>

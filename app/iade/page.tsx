@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalShell, LegalHeading } from '@/components/marketing/legal-shell'
 import { BRAND } from '@/lib/brand'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { REFUND_DAYS, TRIAL_DAYS } from '@/lib/plans'
 
 // İADE VE İPTAL KOŞULLARI — TASLAK.
 //
@@ -47,11 +47,11 @@ export default function RefundPage() {
         yeni bir lisans aldığınızda aynı verilerle kaldığınız yerden devam edersiniz.
       </p>
 
-      <LegalHeading>14 gün koşulsuz iade</LegalHeading>
+      <LegalHeading>{REFUND_DAYS} gün koşulsuz iade</LegalHeading>
       <p>
         Hizmet sözleşmelerinde cayma hakkı mevzuat gereği kullanılamamaktadır. Buna
         rağmen, ilk ödemenizden itibaren{' '}
-        <strong className="text-foreground">14 gün içinde</strong> talep etmeniz hâlinde
+        <strong className="text-foreground">{REFUND_DAYS} gün içinde</strong> talep etmeniz hâlinde
         ücretinizi <strong className="text-foreground">koşulsuz iade ediyoruz</strong>.
         Gerekçe sormuyoruz.
       </p>
@@ -69,9 +69,9 @@ export default function RefundPage() {
 
       <LegalHeading>Sonraki lisans alımlarında iade</LegalHeading>
       <p>
-        14 günlük süre <strong className="text-foreground">her lisans alımı</strong> için
+        {REFUND_DAYS} günlük süre <strong className="text-foreground">her lisans alımı</strong> için
         ayrı ayrı geçerlidir; yalnız ilk alımla sınırlı değildir. Yanlışlıkla aldığınız
-        ya da fikir değiştirdiğiniz bir lisansı 14 gün içinde iade edebilirsiniz.
+        ya da fikir değiştirdiğiniz bir lisansı {REFUND_DAYS} gün içinde iade edebilirsiniz.
       </p>
 
       <LegalHeading>İade yapmadığımız durumlar</LegalHeading>

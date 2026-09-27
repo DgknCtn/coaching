@@ -1,5 +1,5 @@
 import { ShieldCheck, CreditCard, RotateCcw } from 'lucide-react'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { REFUND_DAYS, TRIAL_DAYS } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 
 // GÜVENCE ŞERİDİ — her CTA'nın altında aynı üç cümle.
@@ -27,7 +27,7 @@ const ITEMS = [
   { Icon: CreditCard, text: 'Tek çekim, otomatik yenileme yok' },
   // 14 gün, DENEME süresinden ayrı bir taahhüt: ödeme yapıldıktan
   // sonraki iade penceresi. İkisi karıştırılmamalı.
-  { Icon: RotateCcw, text: 'Ödemede 14 gün koşulsuz iade' },
+  { Icon: RotateCcw, text: `Ödemede ${REFUND_DAYS} gün koşulsuz iade` },
 ]
 
 export function GuaranteeStrip({

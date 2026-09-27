@@ -7,7 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND, contactMailto } from '@/lib/brand'
-import { PLAN_INCLUDED, TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
+import { PLAN_INCLUDED, TRIAL_CTA_LABEL, TRIAL_DAYS, TRIAL_STUDENT_LIMIT } from '@/lib/plans'
 import {
   quote,
   isSelfService,
@@ -190,9 +190,12 @@ export function PricingSection() {
 
         <GuaranteeStrip className="mt-8" />
 
+        {/* DENEME SINIRI AÇIKÇA YAZILI. Hiç söylenmiyordu; öğretmen
+            dördüncü öğrenciyi eklerken sınıra ilk kez orada takılıyordu. */}
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Öğrenci ve veli hesapları ücretsizdir — yalnızca öğretmen tarafı
-          ücretlendirilir.{' '}
+          {TRIAL_DAYS} günlük denemede en fazla {TRIAL_STUDENT_LIMIT} öğrenci
+          ekleyebilirsiniz. Öğrenci ve veli hesapları ücretsizdir — yalnızca
+          öğretmen tarafı ücretlendirilir.{' '}
           <Link href="/iade" className="underline underline-offset-4 hover:text-foreground">
             İade koşulları
           </Link>
