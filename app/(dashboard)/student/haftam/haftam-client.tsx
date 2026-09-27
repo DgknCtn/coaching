@@ -69,7 +69,7 @@ export function HaftamClient({ view }: { view: HaftamView }) {
       {/* ============================================================
           ÜST RESMİ HAFTA ÖZETİ (§3)
 
-          Bu özet YALNIZ MatMüh tarafından verilen resmi çalışmaları
+          Bu özet YALNIZ öğretmenin verdiği resmi çalışmaları
           kapsar. Kişisel ajanda maddeleri buraya GİRMEZ ve bu cümle
           ekranda da yazılı: öğrenci "10 sayfa kitap oku" yazdığı için
           haftalık yükünün arttığını sanmamalı.
@@ -79,7 +79,7 @@ export function HaftamClient({ view }: { view: HaftamView }) {
           <div className="min-w-48 flex-1">
             <p className="text-sm font-medium">Haftalık Özet</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Bu özet yalnızca MatMüh tarafından verilen resmi çalışmaları kapsar.
+              Bu özet yalnızca öğretmeninin verdiği resmi çalışmaları kapsar.
               Kişisel ajanda öğeleri dahil değildir.
             </p>
           </div>

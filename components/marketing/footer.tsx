@@ -57,18 +57,18 @@ export function Footer() {
 
           {/* Links */}
           <nav className="flex flex-wrap justify-center gap-6">
-            <a
-              href="#ozellikler"
+            <Link
+              href="/#ozellikler"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Özellikler
-            </a>
-            <a
-              href="#nasil-calisir"
+            </Link>
+            <Link
+              href="/#nasil-calisir"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Nasıl Çalışır
-            </a>
+            </Link>
             <Link
               href="/demo"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"

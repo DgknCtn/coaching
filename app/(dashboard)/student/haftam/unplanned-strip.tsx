@@ -35,7 +35,7 @@ export function UnplannedStrip({ cards, days }: { cards: HaftamCard[]; days: Haf
         <h2 className="text-sm font-semibold">Planlanmamışlar</h2>
         <Badge variant="neutral">{cards.length}</Badge>
         <p className="text-xs text-muted-foreground">
-          Henüz bir güne yerleştirilmemiş resmi MatMüh çalışmaları.
+          Öğretmeninin verdiği, henüz bir güne yerleştirmediğin çalışmalar.
         </p>
       </div>
 
