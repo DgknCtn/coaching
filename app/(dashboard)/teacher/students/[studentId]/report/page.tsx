@@ -7,6 +7,7 @@ import { Section } from '@/components/shared/section'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
+import { listResult } from '@/lib/data-result'
 import { PrintButton } from './print-button'
 
 export const dynamic = 'force-dynamic'
@@ -37,14 +38,14 @@ export default async function StudentReportPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  const { data: bookProgress } = await supabase
+  const bookProgressRes = await supabase
     .from('student_book_progress_view')
     .select('*')
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
 
   // Tüm zamanlar ödev geçmişi (aktif partiler) — tamamlanma ve gecikme oranı.
-  const { data: batches } = await supabase
+  const batchesRes = await supabase
     .from('homework_batches')
     .select('due_date, status, homework_items(status)')
     .eq('student_id', studentId)
@@ -52,7 +53,15 @@ export default async function StudentReportPage({
     .eq('status', 'active')
     .limit(500)
 
-  const books = bookProgress ?? []
+  // B01: YAZDIRILAN RAPOR veliye gidebiliyor. Sorgu düştüğünde "%0
+  // ilerleme, 0 geciken" basılsaydı yanlış bir belge üretilirdi; bu
+  // yüzden rapor hiç üretilmiyor ve hata sınırı "tekrar dene" diyor.
+  const bookProgressResult = listResult(bookProgressRes, 'report.book_progress')
+  const batchesResult = listResult(batchesRes, 'report.batches')
+  if (!bookProgressResult.ok) throw new Error(bookProgressResult.error)
+  if (!batchesResult.ok) throw new Error(batchesResult.error)
+  const batches = batchesResult.data
+  const books = bookProgressResult.data
   const totalTests = books.reduce((s, b) => s + Number(b.total_tests ?? 0), 0)
   const completedTests = books.reduce((s, b) => s + Number(b.completed_tests ?? 0), 0)
   const overallPct = totalTests > 0 ? Math.round((completedTests / totalTests) * 100) : 0
@@ -62,7 +71,7 @@ export default async function StudentReportPage({
   let hwTotal = 0
   let hwCompleted = 0
   let hwOverdue = 0
-  for (const b of (batches ?? []) as HomeworkBatch[]) {
+  for (const b of batches as HomeworkBatch[]) {
     const items = b.homework_items ?? []
     const active = items.filter((i) => i.status !== 'cancelled')
     hwTotal += active.length
@@ -95,9 +104,19 @@ export default async function StudentReportPage({
 
       <MetricRow
         metrics={[
-          { label: 'Genel ilerleme', value: `${overallPct}%` },
+          // B11: payda ve kapsam yazılı; kitap ilerlemesi ile ödev oranı
+          // farklı kümeler ve karışabiliyordu.
+          {
+            label: 'Genel ilerleme',
+            value: `${overallPct}%`,
+            hint: `atanmış kitaplardaki ${totalTests} çalışmanın onaylananları`,
+          },
           { label: 'Tamamlanan çalışma', value: completedTests, subValue: `/${totalTests}` },
-          { label: 'Ödev tamamlama', value: `${hwRate}%`, hint: `${hwCompleted}/${hwTotal}` },
+          {
+            label: 'Ödev tamamlama',
+            value: `${hwRate}%`,
+            hint: `verilen ${hwTotal} ödev kaleminden ${hwCompleted} onaylı`,
+          },
           { label: 'Geciken çalışma', value: hwOverdue },
         ]}
       />

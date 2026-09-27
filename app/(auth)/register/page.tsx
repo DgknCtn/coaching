@@ -146,11 +146,11 @@ export default function RegisterPage() {
             id="fullName"
             type="text"
             autoComplete="name"
-            aria-invalid={!!errors.fullName}
+            aria-invalid={!!errors.fullName} aria-describedby={errors.fullName ? 'fullName-error' : undefined}
             {...register('fullName')}
           />
           {errors.fullName && (
-            <p className="text-xs text-destructive">{errors.fullName.message}</p>
+            <p id="fullName-error" className="text-xs text-destructive">{errors.fullName.message}</p>
           )}
         </div>
 
@@ -161,11 +161,11 @@ export default function RegisterPage() {
             type="email"
             placeholder="ornek@mail.com"
             autoComplete="email"
-            aria-invalid={!!errors.email}
+            aria-invalid={!!errors.email} aria-describedby={errors.email ? 'email-error' : undefined}
             {...register('email')}
           />
           {errors.email && (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
+            <p id="email-error" className="text-xs text-destructive">{errors.email.message}</p>
           )}
         </div>
 
@@ -175,11 +175,11 @@ export default function RegisterPage() {
             id="password"
             type="password"
             autoComplete="new-password"
-            aria-invalid={!!errors.password}
+            aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined}
             {...register('password')}
           />
           {errors.password && (
-            <p className="text-xs text-destructive">{errors.password.message}</p>
+            <p id="password-error" className="text-xs text-destructive">{errors.password.message}</p>
           )}
         </div>
 
@@ -202,11 +202,11 @@ export default function RegisterPage() {
             placeholder="ORNEK123"
             autoComplete="off"
             autoCapitalize="characters"
-            aria-invalid={!!errors.partnerCode}
+            aria-invalid={!!errors.partnerCode} aria-describedby={errors.partnerCode ? 'partnerCode-error' : undefined}
             {...register('partnerCode')}
           />
           {errors.partnerCode && (
-            <p className="text-xs text-destructive">{errors.partnerCode.message}</p>
+            <p id="partnerCode-error" className="text-xs text-destructive">{errors.partnerCode.message}</p>
           )}
         </div>
 

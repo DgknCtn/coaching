@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
-import { homeworkBatchSchema, firstIssue } from '@/lib/validation'
+import { homeworkBatchSchema, firstIssue, uuidSchema } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
 import { trackFeature } from '@/lib/telemetry'
@@ -72,23 +72,16 @@ export async function createHomeworkBatchAction(
   // kapanışını aşan bir ödev sessizce akışsız kalıyor, öğretmen ise
   // "yayınlandı" görüp haftanın toplamına eklendiğini sanıyordu. Yayın
   // BAŞARILIDIR — bu yüzden hata değil, uyarı olarak dönüyor.
-  let flowWarning: string | undefined
-  if (batchId) {
-    const { data: attachedFlowId, error: attachError } = await supabase.rpc(
-      'attach_batch_to_flow',
-      { p_batch_id: batchId }
-    )
-    if (attachError) {
-      console.error('[weekly-flow] ödev aktif akışa bağlanamadı:', attachError.message)
-      flowWarning = 'Ödev yayınlandı ancak haftalık akışa bağlanamadı.'
-    } else if (attachedFlowId === null) {
-      // RPC null döndürdü: ya aktif akış yok ya da son teslim kapanışı
-      // aşıyor (Senaryo B). İkisi de kural gereği, ama ikisi de
-      // öğretmenin ekranda gördüğü toplamı etkiliyor.
-      flowWarning =
-        'Ödev yayınlandı. Son teslimi aktif haftanın kapanışını aştığı için bu haftanın toplamına eklenmedi; açık akış yoksa da bir haftaya bağlanmaz.'
-    }
-  }
+  //
+  // KISMİ BAŞARI (B06): bağlama DÜŞERSE ödev yine yayınlanmıştır. Öğretmen
+  // "Yayınla"ya tekrar basarsa İKİNCİ bir ödev oluşurdu; bu yüzden
+  // `batchId` dönüyor ve arayüz yalnız bağlamayı yeniden deniyor
+  // (retryAttachBatchToFlowAction). attach_batch_to_flow tekrar çağrıya
+  // dayanıklı: aynı partiyi aynı akışa yeniden yazar.
+  const attach = batchId ? await attachAndExplain(supabase, batchId) : undefined
+
+  const flowWarning = attach?.warning
+  const attachFailed = attach?.failed ?? false
 
   // Ödev yayınlama ürünün merkezi eylemi: hem denetim kaydına hem
   // kullanım sayacına girer.
@@ -105,5 +98,85 @@ export async function createHomeworkBatchAction(
   revalidatePath(`/teacher/students/${studentId}`)
   revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
-  return { success: true, flowWarning }
+  return { success: true, flowWarning, attachFailed, batchId }
+}
+
+type Supabase = Awaited<ReturnType<typeof createClient>>
+
+/**
+ * Bağlar ve SONUCU AÇIKLAR. İki "bağlanmadı" nedeni ayrı söyleniyor:
+ * eskiden tek cümle ikisini birden sayıyordu ve öğretmen hangisinin
+ * geçerli olduğunu bilemiyordu.
+ */
+async function attachAndExplain(
+  supabase: Supabase,
+  batchId: string
+): Promise<{ failed: boolean; warning?: string }> {
+  const { data: attachedFlowId, error } = await supabase.rpc('attach_batch_to_flow', {
+    p_batch_id: batchId,
+  })
+  if (error) {
+    console.error('[weekly-flow] ödev aktif akışa bağlanamadı:', error.message)
+    return {
+      failed: true,
+      warning:
+        'Ödev yayınlandı ama haftalık akışa bağlanamadı. Yeniden yayınlamayın — yalnız bağlamayı tekrar deneyin.',
+    }
+  }
+  if (attachedFlowId !== null) return { failed: false }
+
+  // RPC null döndü: ya aktif akış yok ya da son teslim kapanışı aşıyor
+  // (Senaryo B). Hangisi olduğu partinin öğrencisinin akışından okunuyor.
+  const { data: batch } = await supabase
+    .from('homework_batches')
+    .select('student_id')
+    .eq('id', batchId)
+    .maybeSingle()
+  const { data: flow, error: flowError } = batch
+    ? await supabase
+        .from('weekly_flows')
+        .select('id')
+        .eq('student_id', batch.student_id)
+        .eq('status', 'active')
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (!flowError && batch && !flow) {
+    return {
+      failed: false,
+      warning: 'Ödev yayınlandı. Öğrencinin açık bir çalışma haftası olmadığı için bir haftaya bağlanmadı.',
+    }
+  }
+  if (!flowError && flow) {
+    return {
+      failed: false,
+      warning:
+        'Ödev yayınlandı. Son teslimi aktif haftanın kapanışından sonra olduğu için bu haftanın toplamına eklenmedi; Yaklaşan Ödevler’de bekliyor.',
+    }
+  }
+  return {
+    failed: false,
+    warning: 'Ödev yayınlandı ama bu haftanın toplamına eklenmedi.',
+  }
+}
+
+/**
+ * Yalnız bağlamayı yeniden dener; YENİ ÖDEV OLUŞTURMAZ (B06).
+ */
+export async function retryAttachBatchToFlowAction(studentId: string, batchId: string) {
+  const parsedBatch = uuidSchema.safeParse(batchId)
+  const parsedStudent = uuidSchema.safeParse(studentId)
+  if (!parsedBatch.success) return { error: firstIssue(parsedBatch.error) }
+  if (!parsedStudent.success) return { error: firstIssue(parsedStudent.error) }
+
+  // Oturum kontrolü; yetki RPC'nin içinde de doğrulanıyor.
+  await getTeacherContext()
+  const supabase = await createClient()
+  const result = await attachAndExplain(supabase, parsedBatch.data)
+  if (result.failed) return { error: 'Bağlama yine başarısız oldu. Biraz sonra tekrar deneyin.' }
+
+  revalidatePath(`/teacher/students/${parsedStudent.data}`)
+  revalidatePath(`/teacher/students/${parsedStudent.data}/haftalik-akis`)
+  revalidatePath('/teacher')
+  return { success: true, flowWarning: result.warning }
 }

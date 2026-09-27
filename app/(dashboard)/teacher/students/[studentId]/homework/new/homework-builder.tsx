@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner'
 import { flowMembership } from '@/lib/weekly-flow'
 import { formatSessionLong } from '@/lib/service-structure'
-import { createHomeworkBatchAction } from './actions'
+import { createHomeworkBatchAction, retryAttachBatchToFlowAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
   approveUnitsAction,
@@ -308,26 +308,64 @@ export function HomeworkBuilder({
     return modes.size === 1 ? unitLabel([...modes][0]) : 'çalışma'
   }, [groupedSelection])
 
-  // Taslağı debounce'lu kaydet. upsert_weekly_plan_draft idempotent olduğu
+  // ============================================================
+  // TASLAK KAYDI (B05)
+  //
+  // Debounce'lu kaydedilir. upsert_weekly_plan_draft idempotent olduğu
   // için aynı payload'ın iki kez gitmesi zararsızdır.
+  //
+  // İKİ KURAL:
+  //   1. Kayıtlar SIRAYLA gider (tek zincir). Paralel gitselerdi geç dönen
+  //      eski istek sunucuda yeni taslağın ÜZERİNE yazabilirdi. Yayından
+  //      sonraki temizlik de aynı zincirden geçer.
+  //   2. Sonuç görünür. Eskiden dönüş hiç okunmuyordu: kayıt düşse bile
+  //      öğretmen taslağının saklandığını sanıyordu. Durumu yalnız EN SON
+  //      istenen kayıt belirler; eski bir yanıt yeni durumu ezemez.
+  // ============================================================
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const draftChainRef = useRef<Promise<unknown>>(Promise.resolve())
+  const draftSeqRef = useRef(0)
+
+  const enqueueDraft = useCallback((run: () => Promise<{ error?: string }>) => {
+    const seq = ++draftSeqRef.current
+    setDraftStatus('saving')
+    const next = draftChainRef.current.then(async () => {
+      let failed: boolean
+      try {
+        failed = Boolean((await run()).error)
+      } catch {
+        failed = true
+      }
+      if (seq === draftSeqRef.current) setDraftStatus(failed ? 'error' : 'saved')
+    })
+    draftChainRef.current = next
+    return next
+  }, [])
+
+  const saveDraftNow = useCallback(
+    () =>
+      enqueueDraft(() =>
+        saveWeeklyPlanDraftAction(
+          workspaceId,
+          studentId,
+          dueDate || undefined,
+          title || undefined,
+          toHomeworkItems(selectedTests),
+          note || undefined
+        )
+      ),
+    [enqueueDraft, selectedTests, dueDate, title, note, workspaceId, studentId]
+  )
+
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
       return
     }
-    const handle = setTimeout(() => {
-      void saveWeeklyPlanDraftAction(
-        workspaceId,
-        studentId,
-        dueDate || undefined,
-        title || undefined,
-        toHomeworkItems(selectedTests),
-        note || undefined
-      )
-    }, 500)
+    const handle = setTimeout(() => void saveDraftNow(), 500)
     return () => clearTimeout(handle)
-  }, [selectedTests, dueDate, title, note, workspaceId, studentId])
+  }, [saveDraftNow])
 
   // Shift+tık aralık seçiminin çıpası: en son tıklanan hücre.
   const lastClickedRef = useRef<string | null>(null)
@@ -460,7 +498,7 @@ export function HomeworkBuilder({
         return
       }
       // Yayınlanan plan taslakta durmamalı.
-      await clearWeeklyPlanDraftAction(workspaceId, studentId)
+      await enqueueDraft(() => clearWeeklyPlanDraftAction(workspaceId, studentId))
       // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
       // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
       // zorunluluk değil.
@@ -472,7 +510,28 @@ export function HomeworkBuilder({
       // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
       // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
       // artmadığını bilmeden ekranda eksik sayı görürdü.
-      if (result?.flowWarning) {
+      //
+      // Bağlama DÜŞTÜYSE (B06) toast kapanmaz ve tek aksiyonu yalnız
+      // bağlamayı yeniden denemek: "Planı Yayınla"ya tekrar basmak ikinci
+      // bir ödev oluştururdu.
+      if (result?.attachFailed && result.batchId) {
+        const batchId = result.batchId
+        toast.warning(result.flowWarning, {
+          duration: Infinity,
+          action: {
+            label: 'Bağlamayı tekrar dene',
+            onClick: async () => {
+              const retry = await retryAttachBatchToFlowAction(studentId, batchId)
+              if (retry.error) toast.error(retry.error)
+              else {
+                if (retry.flowWarning) toast.warning(retry.flowWarning, { duration: 8000 })
+                else toast.success('Ödev haftalık akışa bağlandı.')
+                router.refresh()
+              }
+            },
+          },
+        })
+      } else if (result?.flowWarning) {
         toast.warning(result.flowWarning, { duration: 8000 })
       }
       router.refresh()
@@ -933,6 +992,23 @@ export function HomeworkBuilder({
                   </div>
 
                   {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+
+                  <p className="text-[11px] text-muted-foreground" aria-live="polite">
+                    {draftStatus === 'saving' && 'Taslak kaydediliyor…'}
+                    {draftStatus === 'saved' && 'Taslak kaydedildi · yenilesen de geri gelir'}
+                    {draftStatus === 'error' && (
+                      <span className="text-destructive">
+                        Taslak kaydedilemedi — sayfayı yenilersen son değişiklikler kaybolur.{' '}
+                        <button
+                          type="button"
+                          className="underline underline-offset-2"
+                          onClick={() => void saveDraftNow()}
+                        >
+                          Tekrar dene
+                        </button>
+                      </span>
+                    )}
+                  </p>
 
                   <Button
                     className="w-full"

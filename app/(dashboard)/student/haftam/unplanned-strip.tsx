@@ -30,12 +30,12 @@ export function UnplannedStrip({ cards, days }: { cards: HaftamCard[]; days: Haf
   if (cards.length === 0) return null
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div id="planlanmamislar" className="scroll-mt-4 rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold">Planlanmamışlar</h2>
         <Badge variant="neutral">{cards.length}</Badge>
         <p className="text-xs text-muted-foreground">
-          Henüz bir güne yerleştirilmemiş resmi MatMüh çalışmaları.
+          Öğretmeninin verdiği, henüz bir güne yerleştirmediğin çalışmalar.
         </p>
       </div>
 

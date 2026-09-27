@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MoreHorizontal, Users } from 'lucide-react'
 import { STATUS_LABEL, type NoticeKind, type StudentStatus } from '@/lib/student-status'
 import { Badge } from '@/components/ui/badge'
@@ -54,6 +55,8 @@ export interface DashboardRow {
   contactIsToday: boolean
 
   status: StudentStatus
+  /** Durumun gerekçeleri (computeStudentStatus.signals); yolunda ise boş. */
+  signals: string[]
 }
 
 /** Durum etiketinin rozet varyantı — renk YALNIZ sinyal verir (§8). */
@@ -133,9 +136,40 @@ function RowMenu({ studentId, studentName }: { studentId: string; studentName: s
   )
 }
 
+/** Geçersiz ?durum= değeri güvenli varsayılana düşer (B12). */
+function parseFilter(value: string | null): StatusFilter {
+  return FILTER_OPTIONS.some((o) => o.value === value) ? (value as StatusFilter) : 'hepsi'
+}
+
 export function StudentsTable({ rows }: { rows: DashboardRow[] }) {
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<StatusFilter>('hepsi')
+  // B12 · ARAMA VE FİLTRE URL'DE. Öğrenci detayından geri dönüldüğünde
+  // öğretmen süzdüğü listeyi kaybetmiyor. `replace` kullanılıyor: her
+  // harf geçmişe yeni bir adım eklemesin.
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [query, setQueryState] = useState(() => searchParams.get('ara') ?? '')
+  const [filter, setFilterState] = useState<StatusFilter>(() =>
+    parseFilter(searchParams.get('durum'))
+  )
+
+  function syncUrl(nextQuery: string, nextFilter: StatusFilter) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextQuery.trim() === '') params.delete('ara')
+    else params.set('ara', nextQuery)
+    if (nextFilter === 'hepsi') params.delete('durum')
+    else params.set('durum', nextFilter)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
+  function setQuery(value: string) {
+    setQueryState(value)
+    syncUrl(value, filter)
+  }
+  function setFilter(value: StatusFilter) {
+    setFilterState(value)
+    syncUrl(query, value)
+  }
 
   const visible = useMemo(() => {
     // Türkçe arama: "İ"/"ı" çiftleri yüzünden `toLowerCase()` tek başına
@@ -158,6 +192,24 @@ export function StudentsTable({ rows }: { rows: DashboardRow[] }) {
         <div>
           <p className="font-medium">{s.name}</p>
           {s.meta && <p className="mt-0.5 text-xs text-muted-foreground">{s.meta}</p>}
+          {/* B09 · DAR EKRANDA BİLGİ KAYBOLMAZ. Onay ve Bildirim sütunları
+              sm/md altında gizleniyor; aynı bilgi burada, yalnız o
+              genişliklerde görünüyor. */}
+          {s.approvalPending > 0 && (
+            <p className="mt-0.5 text-xs font-medium sm:hidden">{s.approvalPending} onay bekliyor</p>
+          )}
+          {s.noticeKind !== 'none' && (
+            <p
+              className={cn(
+                'mt-0.5 text-xs md:hidden',
+                s.noticeKind === 'check_in_late'
+                  ? 'font-medium text-warning-foreground'
+                  : 'text-muted-foreground'
+              )}
+            >
+              {s.noticeLabel}
+            </p>
+          )}
         </div>
       ),
     },
@@ -236,7 +288,27 @@ export function StudentsTable({ rows }: { rows: DashboardRow[] }) {
       key: 'status',
       header: 'Durum',
       align: 'right',
-      render: (s) => <Badge variant={STATUS_VARIANT[s.status]}>{STATUS_LABEL[s.status]}</Badge>,
+      render: (s) => (
+        <div className="flex flex-col items-end gap-0.5">
+          <Badge variant={STATUS_VARIANT[s.status]}>{STATUS_LABEL[s.status]}</Badge>
+          {/* B02: rozetin NEDENİ satırda görünür. İlki yazılır, kalanı
+              sayıyla belirtilir; tamamı title ve ekran okuyucuda. */}
+          {s.signals.length > 0 && (
+            <span
+              className="max-w-48 text-right text-xs text-muted-foreground"
+              title={s.signals.join(' · ')}
+            >
+              {s.signals[0]}
+              {s.signals.length > 1 && (
+                <>
+                  <span aria-hidden> +{s.signals.length - 1}</span>
+                  <span className="sr-only">, {s.signals.slice(1).join(', ')}</span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'menu',

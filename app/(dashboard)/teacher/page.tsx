@@ -5,8 +5,10 @@ import {
   computeStudentStatus,
   expectedProgressPercent,
   noticeSignal,
+  STATUS_LABEL,
   STATUS_THRESHOLDS,
 } from '@/lib/student-status'
+import { Badge } from '@/components/ui/badge'
 import { APP_TIME_ZONE, localDateString, todayDateString } from '@/lib/homework-status'
 import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-structure'
 import { Button } from '@/components/ui/button'
@@ -16,6 +18,9 @@ import { TrialBanner } from '@/components/shared/trial-banner'
 import { QuotaNotice } from '@/components/shared/quota-notice'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { Section } from '@/components/shared/section'
+import { SectionUnavailable } from '@/components/shared/section-unavailable'
+import { countResult, listResult, singleResult } from '@/lib/data-result'
+import type { MetricTile } from '@/components/shared/metric-tiles'
 import { StudentsTable, type DashboardRow } from './students-table'
 import { StudentUpdates, type StudentUpdate } from './student-updates'
 import { FollowUpList, type FollowUpStudent } from './follow-up-list'
@@ -110,7 +115,7 @@ export default async function TeacherDashboard() {
   // çalışıyordu: dashboard açılışı dört ayrı gidiş-dönüş bekliyordu.
   // Yalnız öğrenci listesi RPC'ye bağımlı (aşağıya bakınız); geri kalanın
   // sırayla beklemesi için hiçbir sebep yoktu.
-  const [{ count: bookCount }, { count: homeworkCount }] =
+  const [bookCountRes, homeworkCountRes, checkInRes] =
     await Promise.all([
       // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
       // gövdesi taşınmaz.
@@ -134,6 +139,17 @@ export default async function TeacherDashboard() {
       // (student/page.tsx'te aynı kalıp kullanılıyor.)
       supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
     ])
+
+  // Kurulum kartının iki girdisi. Sayım düşerse 0 DEĞİL "bilinmiyor":
+  // aksi hâlde kart, kitap eklemiş bir öğretmene "kitap ekleyin" derdi.
+  const bookCount = countResult(bookCountRes, 'teacher.book_count')
+  const homeworkCount = countResult(homeworkCountRes, 'teacher.homework_count')
+
+  // RPC'nin sonucu okunmuyor ama arızası GÖRÜNMELİ: bildirim satırları
+  // açılmazsa "Durum Bildirimi Bekleyen" sayısı sessizce bayat kalır.
+  // Kullanıcıya ayrıca bir şey söylenmiyor (sayı yine gerçek satırlardan
+  // geliyor, yanlış değil yalnız eski olabilir); raporlanıyor.
+  singleResult(checkInRes, 'teacher.ensure_check_ins')
   // LİSANS DURUMU BAĞLAMDAN GELİYOR, AYRI SORGUDAN DEĞİL.
   //
   // Burada `workspace_licenses` tablosuna ayrı bir sorgu vardı; oysa
@@ -152,7 +168,7 @@ export default async function TeacherDashboard() {
   // soruluyordu. Ama bir performans iyileştirmesi olarak sunulamaz.
   const hasLicense = usage?.licenseStatus === 'active'
 
-  const [{ data: students }, { data: upcomingSessions }, { data: dayNotes }] = await Promise.all([
+  const [studentsRes, upcomingRes, dayNotesRes] = await Promise.all([
     supabase
       .from('teacher_student_operation_view')
       .select('*')
@@ -180,21 +196,35 @@ export default async function TeacherDashboard() {
       .limit(30),
   ])
 
+  // PRD · B01 — hata ve boşluk ayrı. Bu sayfada ÖĞRENCİ LİSTESİ her şeyin
+  // kaynağı: kartlar, tablo, takip listesi, güncellemelerdeki isimler ve
+  // kurulum kartı. Eskiden sorgu düştüğünde `students ?? []` boş diziye
+  // dönüyor ve ekranın tamamı "hiç öğrenciniz yok" diyordu: kartlar 0,
+  // tablo boş, kurulum kartı "ilk öğrencinizi ekleyin".
+  const students = listResult(studentsRes, 'teacher.operation_view')
+  const upcoming = listResult(upcomingRes, 'teacher.upcoming_sessions')
+  const dayNotes = listResult(dayNotesRes, 'teacher.day_notes')
+
   const now = new Date()
   const today = todayDateString(now)
 
-  const todaySessions = (upcomingSessions ?? []).filter((s) => {
-    const at = (s.actual_at ?? s.planned_at) as string | null
-    return at !== null && localDateString(new Date(at)) === today
-  })
-  const todayLessons = todaySessions.filter(
+  // Bugünkü temaslar: sorgu düştüyse `null` — "Bugün yok" DEĞİL.
+  const todaySessions = upcoming.ok
+    ? upcoming.data.filter((s) => {
+        const at = (s.actual_at ?? s.planned_at) as string | null
+        return at !== null && localDateString(new Date(at)) === today
+      })
+    : null
+  const todayLessons = (todaySessions ?? []).filter(
     (s) =>
       (Array.isArray(s.student_services) ? s.student_services[0] : s.student_services)
         ?.kind === 'ders'
   ).length
-  const todayCoaching = todaySessions.length - todayLessons
+  const todayCoaching = (todaySessions?.length ?? 0) - todayLessons
 
-  const raw = (students ?? []) as StudentRow[]
+  // Aşağıdaki hesaplar boş diziyle de çalışsın diye `[]`; ama ekrana
+  // hiçbiri `students.ok` kontrol edilmeden çizilmiyor.
+  const raw = (students.ok ? students.data : []) as StudentRow[]
 
   // Durum motoru satır satır burada çalışır (lib/student-status.ts).
   // View yalnız GİRDİLERİ döndürüyor; eşikler SQL'e gömülmedi ki
@@ -306,8 +336,25 @@ export default async function TeacherDashboard() {
       contactIsToday: contactAt !== null && localDateString(contactAt) === today,
 
       status: s.computed.status,
+      // B02 · NEDEN: durum motorunun ürettiği hazır Türkçe gerekçeler.
+      // Tabloda yalnız rozet görünüyordu; öğretmen "neden dikkat?"
+      // sorusu için öğrenciyi tek tek açıyordu. İkinci bir hesap YOK.
+      signals: s.computed.signals,
     }
   })
+
+  // ============================================================
+  // B03 · DİKKAT İSTEYENLER ÖNCE
+  //
+  // Ana tablo sonraki temasa göre sıralı kalıyor (§6); dikkat isteyen
+  // öğrenci listenin ortasında kayboluyordu. Bu şerit aynı satırlardan
+  // — aynı durum motoru, aynı gerekçeler — yalnız sırayı ciddiyete göre
+  // kuruyor. Yeni eşik ya da puan YOK.
+  // ============================================================
+  const SEVERITY = { mudahale: 0, geride: 1, takip_et: 2, yolunda: 3 } as const
+  const attention = tableRows
+    .filter((r) => r.status !== 'yolunda')
+    .sort((a, b) => SEVERITY[a.status] - SEVERITY[b.status])
 
   // ============================================================
   // ÖĞRENCİ GÜNCELLEMELERİ (§17A)
@@ -317,7 +364,7 @@ export default async function TeacherDashboard() {
   // ============================================================
   const nameById = new Map(rows.map((s) => [s.student_id, s.student_full_name]))
 
-  const updates: StudentUpdate[] = (dayNotes ?? [])
+  const updates: StudentUpdate[] = (dayNotes.ok ? dayNotes.data : [])
     // Silinmiş/pasif öğrencinin notu akışta görünmez: tıklanınca açılacak
     // bir öğrenci yok.
     .filter((n) => nameById.has(n.student_id as string))
@@ -389,53 +436,74 @@ export default async function TeacherDashboard() {
       {/* Kurulum adımları tek bir kartta toplandı: önceden yalnız "dönem
           yok" uyarısı vardı ve kullanıcı sonraki iki adımı (kitap, öğrenci)
           kendi başına keşfetmek zorundaydı. Üçü de tamamlanınca kart
-          tamamen kaybolur. */}
-      <OnboardingChecklist
-        state={{
-          hasTerm: !!activeTerm,
-          hasBook: (bookCount ?? 0) > 0,
-          hasStudent: rows.length > 0,
-          hasHomework: (homeworkCount ?? 0) > 0,
-        }}
-        firstStudentId={rows[0]?.student_id ?? null}
-      />
+          tamamen kaybolur.
+
+          GİRDİLERDEN BİRİ BİLİNMİYORSA KART HİÇ ÇİZİLMEZ (PRD · B01).
+          Eksik veriyle çizilen kart, kitap ve öğrenci eklemiş bir
+          öğretmene "ilk öğrencinizi ekleyin" diyordu. Yardımcı bir kartın
+          bir gün görünmemesi, yanlış yönlendirmesinden iyidir. */}
+      {bookCount.ok && homeworkCount.ok && students.ok && (
+        <OnboardingChecklist
+          state={{
+            hasTerm: !!activeTerm,
+            hasBook: bookCount.data > 0,
+            hasStudent: rows.length > 0,
+            hasHomework: homeworkCount.data > 0,
+          }}
+          firstStudentId={rows[0]?.student_id ?? null}
+        />
+      )}
 
       {usage && <QuotaNotice usage={usage} />}
 
       {/* §4'ün dört kartı. "Bu hafta tamamlanan" KALDIRILDI: belge
           "öğrenci bazında anlamlı olmadığı için toplam kart gereksiz"
           diyor. Kalan üçü tek sayı yerine YAYILIMI gösteriyor —
-          "27 çalışma · 4 öğrenci" bir sayıdan fazlasını söyler. */}
+          "27 çalışma · 4 öğrenci" bir sayıdan fazlasını söyler.
+
+          VERİ GELMEDİYSE "—", ASLA 0 (PRD · B01, §26: "Hata verilen
+          sorgu hiçbir yerde gerçek sıfır gibi sunulmaz"). "Süresi Geçen:
+          0" öğretmene "gecikme yok" der; bilmiyorsak bunu söyleyemeyiz. */}
       <MetricTiles
         className="xl:grid-cols-4"
         metrics={[
-          {
-            label: 'Öğrenciden Teslim Edilen',
-            value: submittedWork,
-            icon: FileText,
-            hint: `${submittedStudents} öğrenci · kontrol bekliyor`,
-            href: '/teacher/tasks?filter=approval',
-          },
-          {
-            label: 'Süresi Geçen',
-            value: overdueWork,
-            // OVERDUE_HINT ("Beklenenler içinde") burada KULLANILMIYOR:
-            // o ipucu, yanında "Bekleyen" sayacı dururken gecikenlerin
-            // onun alt kümesi olduğunu anlatmak için vardı. Bu şeritte
-            // öyle bir komşu yok; ipucu bağlamsız kalıp kafa karıştırırdı.
-            hint: `${overdueStudents} öğrenci · teslim tarihi geçen`,
-            href: '/teacher/tasks?filter=overdue',
-            icon: Clock,
-            tone: overdueWork > 0 ? 'destructive' : 'default',
-          },
-          {
-            label: 'Durum Bildirimi Bekleyen',
-            value: checkInWaiting,
-            hint: 'öğrenci · beklenen bildirimi geciken',
-            href: '/teacher/tasks?filter=checkin',
-            icon: Bell,
-            tone: checkInWaiting > 0 ? 'warning' : 'default',
-          },
+          ...(students.ok
+            ? ([
+                {
+                  label: 'Öğrenciden Teslim Edilen',
+                  value: submittedWork,
+                  icon: FileText,
+                  hint: `${submittedStudents} öğrenci · kontrol bekliyor`,
+                  href: '/teacher/tasks?filter=approval',
+                },
+                {
+                  label: 'Süresi Geçen',
+                  value: overdueWork,
+                  // OVERDUE_HINT ("Beklenenler içinde") burada KULLANILMIYOR:
+                  // o ipucu, yanında "Bekleyen" sayacı dururken gecikenlerin
+                  // onun alt kümesi olduğunu anlatmak için vardı. Bu şeritte
+                  // öyle bir komşu yok; ipucu bağlamsız kalıp kafa karıştırırdı.
+                  hint: `${overdueStudents} öğrenci · teslim tarihi geçen`,
+                  href: '/teacher/tasks?filter=overdue',
+                  icon: Clock,
+                  tone: overdueWork > 0 ? 'destructive' : 'default',
+                },
+                {
+                  label: 'Durum Bildirimi Bekleyen',
+                  value: checkInWaiting,
+                  hint: 'öğrenci · beklenen bildirimi geciken',
+                  href: '/teacher/tasks?filter=checkin',
+                  icon: Bell,
+                  tone: checkInWaiting > 0 ? 'warning' : 'default',
+                },
+              ] satisfies MetricTile[])
+            : ([
+                // Bağlantılar KORUNUYOR: görev ekranı kendi sorgusunu
+                // yapıyor, oradan gerçek sayıya ulaşılabilir.
+                { label: 'Öğrenciden Teslim Edilen', value: '—', icon: FileText, hint: 'şu an alınamadı', href: '/teacher/tasks?filter=approval' },
+                { label: 'Süresi Geçen', value: '—', icon: Clock, hint: 'şu an alınamadı', href: '/teacher/tasks?filter=overdue' },
+                { label: 'Durum Bildirimi Bekleyen', value: '—', icon: Bell, hint: 'şu an alınamadı', href: '/teacher/tasks?filter=checkin' },
+              ] satisfies MetricTile[])),
           {
             // HEDEFİ YOK ve bu bilinçli: belge bu kartı "sıradaki
             // ders/koçluk listesi"ne bağlamak istiyor ama öyle bir ekran
@@ -443,20 +511,66 @@ export default async function TeacherDashboard() {
             // doğru — aşağıdaki tablo zaten sıradaki temasa göre sıralı
             // ve bugünküler en üstte.
             label: 'Yaklaşan Temaslar',
-            value: todaySessions.length === 0 ? 'Bugün yok' : `Bugün ${todaySessions.length}`,
+            // Sorgu düştüyse "Bugün yok" DENMEZ: öğretmen o gün
+            // görüşmesini unutabilir.
+            value:
+              todaySessions === null
+                ? '—'
+                : todaySessions.length === 0
+                  ? 'Bugün yok'
+                  : `Bugün ${todaySessions.length}`,
             icon: CalendarDays,
             hint:
-              todaySessions.length > 0
-                ? `${todayLessons} ders · ${todayCoaching} koçluk`
-                : undefined,
+              todaySessions === null
+                ? 'şu an alınamadı'
+                : todaySessions.length > 0
+                  ? `${todayLessons} ders · ${todayCoaching} koçluk`
+                  : undefined,
           },
         ]}
       />
 
+      {students.ok && (
+        <Section
+          title="Dikkat İsteyenler"
+          description={
+            attention.length > 0
+              ? `${attention.length} öğrenci · en acil olan üstte`
+              : undefined
+          }
+          variant="card"
+        >
+          {attention.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              Şu an durumu dikkat gerektiren öğrenci yok.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {attention.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`/teacher/students/${r.id}`}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5 transition-colors hover:bg-muted/40"
+                  >
+                    <span className="font-medium">{r.name}</span>
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                      {r.signals.join(' · ')}
+                      <Badge variant={r.status === 'mudahale' ? 'destructive' : 'warning'}>
+                        {STATUS_LABEL[r.status]}
+                      </Badge>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
+
       <Section
         title="Öğrenci Takibi"
         description={
-          rows.length
+          students.ok && rows.length
             ? `Toplam ${rows.length} öğrenci · sonraki temas tarihine göre sıralanır.`
             : undefined
         }
@@ -468,7 +582,17 @@ export default async function TeacherDashboard() {
           </Button>
         }
       >
-        <StudentsTable rows={tableRows} />
+        {students.ok ? (
+          <StudentsTable rows={tableRows} />
+        ) : (
+          <div className="p-4">
+            <SectionUnavailable
+              title="Öğrenci listesi şu an alınamadı"
+              description="Durumlar ve sayılar gösterilemiyor. Bu, öğrenci olmadığı anlamına gelmez."
+              retryHref="/teacher"
+            />
+          </div>
+        )}
       </Section>
 
       {/* ============================================================
@@ -484,7 +608,16 @@ export default async function TeacherDashboard() {
           description="Öğrencilerin kendi yazdığı gün notları."
           variant="card"
         >
-          <StudentUpdates updates={updates} />
+          {/* Güncellemeler öğrenci ADIYLA gösteriliyor ve isimler öğrenci
+              listesinden geliyor; o da düştüyse notlar isimsiz kalırdı
+              (ve filtre hepsini elerdi — "yeni güncelleme yok" gibi). */}
+          {dayNotes.ok && students.ok ? (
+            <StudentUpdates updates={updates} />
+          ) : (
+            <div className="p-4">
+              <SectionUnavailable retryHref="/teacher" />
+            </div>
+          )}
         </Section>
 
         <Section
@@ -492,7 +625,15 @@ export default async function TeacherDashboard() {
           description="Uzun süredir gerçek akademik hareket göstermeyen öğrenciler."
           variant="card"
         >
-          <FollowUpList students={followUps} />
+          {/* Boş takip listesi "herkes çalışıyor" demek. Öğrenci listesi
+              gelmediyse bunu söyleyemeyiz. */}
+          {students.ok ? (
+            <FollowUpList students={followUps} />
+          ) : (
+            <div className="p-4">
+              <SectionUnavailable retryHref="/teacher" />
+            </div>
+          )}
         </Section>
       </div>
     </div>

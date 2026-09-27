@@ -340,8 +340,23 @@ export const TEST_STATE_VARIANT: Record<HomeworkTestState, TestStateVariant> = {
  * gerçek bir bilgi ve öğrencinin onu görmesi gerekiyor — yalnız güncel
  * haftanın işiyle karışmaması şartıyla (R7-06.02).
  */
+// ============================================================
+// TESLİM ≠ TAMAMLANAN (B04 · ortak sözlük)
+//
+//   delivered  "Teslim edilen" — öğrenci gönderdi (`submitted_at` dolu).
+//              Onay bekleyen iş DAHİL. Haftalık akışın temposu, günlük
+//              dağılımı ve Haftam bunu sayar: öğrencinin işi göndermesi
+//              öğretmenin ne zaman baktığına bağlı olmamalı.
+//   completed  "Tamamlanan" — öğretmen onayladı ya da tamamlandı olarak
+//              işledi. Kitap ilerlemesi ve veli özeti bunu sayar.
+//
+// Eskiden haftalık akış ve Haftam `delivered` sayısını "Tamamlanan" diye
+// gösteriyordu; aynı öğrenci için kitap ekranı daha küçük bir
+// "Tamamlanan" gösterince iki sayı çelişiyor gibi okunuyordu.
+// ============================================================
 export type CounterKey =
   | 'assigned'
+  | 'delivered'
   | 'completed'
   | 'pending'
   | 'pendingApproval'
@@ -351,6 +366,7 @@ export type CounterKey =
 
 const TEACHER_COUNTER: Record<CounterKey, string> = {
   assigned: 'Öğrenciye Verilen',
+  delivered: 'Teslim Edilen',
   completed: 'Tamamlanan',
   pending: 'Öğrenciden Beklenen',
   pendingApproval: 'Onay Bekleyen',
@@ -369,6 +385,7 @@ const TEACHER_COUNTER: Record<CounterKey, string> = {
  */
 const STUDENT_COUNTER: Record<CounterKey, string> = {
   assigned: 'Sana Verilen',
+  delivered: 'Teslim Ettiğin',
   completed: 'Tamamladığın',
   pending: 'Yapmadıkların',
   pendingApproval: 'Onay Bekleyen',
@@ -379,6 +396,7 @@ const STUDENT_COUNTER: Record<CounterKey, string> = {
 
 const PARENT_COUNTER: Record<CounterKey, string> = {
   assigned: 'Verilen',
+  delivered: 'Teslim Edilen',
   completed: 'Tamamlanan',
   pending: 'Yapılmayı Bekleyen',
   pendingApproval: 'Onay Bekleyen',

@@ -102,6 +102,8 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
 
   return (
     <div
+      // B07: "Bugüne git" bağlantısının hedefi.
+      id={`gun-${day.date}`}
       onDragOver={e => {
         e.preventDefault()
         setDragOver(true)
@@ -125,10 +127,10 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
         </p>
       </div>
 
-      {/* 1) MATMÜH ÇALIŞMALARI */}
+      {/* 1) ÖĞRETMENİN VERDİĞİ ÇALIŞMALAR */}
       <section className="space-y-2">
         <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          MatMüh Çalışmaları
+          Öğretmeninin verdikleri
         </h3>
         {day.cards.length === 0 ? (
           <p className="rounded-md border border-dashed px-2 py-3 text-center text-[11px] text-muted-foreground">

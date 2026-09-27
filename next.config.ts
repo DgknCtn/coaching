@@ -47,8 +47,13 @@ const supabaseOrigin = (() => {
 
 const csp = [
   "default-src 'self'",
-  // 'unsafe-eval' YOK: Next.js üretim derlemesi buna ihtiyaç duymuyor.
-  "script-src 'self' 'unsafe-inline'",
+  // 'unsafe-eval' ÜRETİMDE YOK: Next.js üretim derlemesi buna ihtiyaç
+  // duymuyor. GELİŞTİRMEDE VAR: dev paketleyicisi modülleri eval ile
+  // yüklüyor; engellenince sayfa hidrate olmuyor ve giriş formu JS'siz
+  // yedek POST'a düşüp "sayfa yenileniyor" gibi görünüyordu.
+  process.env.NODE_ENV === 'production'
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   // Tailwind ve next-themes satır içi stil yazıyor.
   "style-src 'self' 'unsafe-inline'",
   // data: — OG görseli ve ikonlar; blob: — istemcide üretilen yedek

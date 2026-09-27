@@ -190,8 +190,8 @@ export function BookEditForm({
           <form onSubmit={handleSubmit(onSubmit)} onKeyDown={blockEnterSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="title">Kitap Adı *</Label>
-              <Input id="title" aria-invalid={!!errors.title} {...register('title')} />
-              {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+              <Input id="title" aria-invalid={!!errors.title} aria-describedby={errors.title ? 'title-error' : undefined} {...register('title')} />
+              {errors.title && <p id="title-error" className="text-xs text-destructive">{errors.title.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

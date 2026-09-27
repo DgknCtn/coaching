@@ -61,11 +61,11 @@ export default function UpdatePasswordPage() {
             id="password"
             type="password"
             autoComplete="new-password"
-            aria-invalid={!!errors.password}
+            aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined}
             {...register('password')}
           />
           {errors.password && (
-            <p className="text-xs text-destructive">{errors.password.message}</p>
+            <p id="password-error" className="text-xs text-destructive">{errors.password.message}</p>
           )}
         </div>
 
@@ -75,11 +75,11 @@ export default function UpdatePasswordPage() {
             id="passwordConfirm"
             type="password"
             autoComplete="new-password"
-            aria-invalid={!!errors.passwordConfirm}
+            aria-invalid={!!errors.passwordConfirm} aria-describedby={errors.passwordConfirm ? 'passwordConfirm-error' : undefined}
             {...register('passwordConfirm')}
           />
           {errors.passwordConfirm && (
-            <p className="text-xs text-destructive">{errors.passwordConfirm.message}</p>
+            <p id="passwordConfirm-error" className="text-xs text-destructive">{errors.passwordConfirm.message}</p>
           )}
         </div>
 

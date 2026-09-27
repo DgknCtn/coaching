@@ -73,11 +73,11 @@ export default function ForgotPasswordPage() {
               type="email"
               placeholder="ornek@mail.com"
               autoComplete="email"
-              aria-invalid={!!errors.email}
+              aria-invalid={!!errors.email} aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
             {errors.email && (
-              <p className="text-xs text-destructive">{errors.email.message}</p>
+              <p id="email-error" className="text-xs text-destructive">{errors.email.message}</p>
             )}
           </div>
 

@@ -13,6 +13,7 @@ import {
 import { formatSessionLong, WEEKDAY_SHORT_LABEL, type Weekday } from '@/lib/service-structure'
 import { LinkTabs, type LinkTab } from '@/components/shared/link-tabs'
 import { Legend } from '@/components/shared/legend'
+import { counterLabel } from '@/lib/homework-status'
 import { ProgressRing } from '@/components/shared/progress-ring'
 import { moodLabel, formatRelativeTime } from '@/lib/student-attention'
 import { CheckInScheduleForm } from '../check-in-panel'
@@ -326,7 +327,7 @@ export function FlowClient({
                   />
                   <dl className="flex-1 space-y-0.5 text-sm">
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted-foreground">Tamamlanan</dt>
+                      <dt className="text-muted-foreground">{counterLabel('delivered')}</dt>
                       <dd className="tabular-nums">{flow.delivered}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
@@ -552,7 +553,7 @@ function BatchPanel({
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-2 font-medium">Ödev</th>
                   <th className="py-2 text-right font-medium">Toplam</th>
-                  <th className="py-2 text-right font-medium">Tamamlanan</th>
+                  <th className="py-2 text-right font-medium">{counterLabel('delivered')}</th>
                   <th className="py-2 text-right font-medium">Kalan</th>
                 </tr>
               </thead>
@@ -611,7 +612,7 @@ function BookPanel({ books, flow }: { books: FlowBookRow[]; flow: FlowView }) {
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-2 font-medium">Kaynak</th>
                   <th className="py-2 text-right font-medium">Toplam</th>
-                  <th className="py-2 text-right font-medium">Tamamlanan</th>
+                  <th className="py-2 text-right font-medium">{counterLabel('delivered')}</th>
                   <th className="py-2 text-right font-medium">Kalan</th>
                 </tr>
               </thead>
@@ -738,7 +739,7 @@ function NewlyAddedPanel({ batches }: { batches: FlowBatchRow[] }) {
                     <th className="py-2 font-medium">Ödev</th>
                     <th className="py-2 font-medium">Yayın</th>
                     <th className="py-2 text-right font-medium">Çalışma</th>
-                    <th className="py-2 text-right font-medium">Tamamlanan</th>
+                    <th className="py-2 text-right font-medium">{counterLabel('delivered')}</th>
                   </tr>
                 </thead>
                 <tbody>
