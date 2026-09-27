@@ -1,3 +1,4 @@
+import { fetchOperationRows } from '@/lib/operation-rows'
 import Link from 'next/link'
 import { ArrowUpRight, Bell, CalendarDays, Clock, FileText, Plus } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
@@ -163,10 +164,8 @@ export default async function TeacherDashboard() {
   const hasLicense = usage?.licenseStatus === 'active'
 
   const [studentsRes, upcomingRes, dayNotesRes] = await Promise.all([
-    supabase
-      .from('teacher_student_operation_view')
-      .select('*')
-      .eq('workspace_id', workspaceId),
+    // 117: plan saklayan RPC (view'a geri düşer — lib/operation-rows.ts).
+    fetchOperationRows(supabase, workspaceId),
     // BUGÜNKÜ TEMASLAR (§3 kart 4). Öğrenci başına "sıradaki" temastan
     // türetilemez: bir öğrencinin aynı gün iki görüşmesi olabilir ve
     // yalnız biri "sıradaki"dir. Pencere geniş tutulup gün YEREL
