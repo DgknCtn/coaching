@@ -271,6 +271,7 @@ export default async function HaftamPage() {
     // SON TESLİMİN METNİ TEK YERDEN (R7-06.06): aynı `due_at` için
     // farklı kartların çelişkili metin üretmesine izin verilmiyor.
     dueText: dueLabel({ dueAt, now }),
+    today: localDateString(now),
     total,
     delivered,
     remaining: Math.max(0, total - delivered),

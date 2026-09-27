@@ -41,6 +41,8 @@ export interface HaftamView {
   dueSource: 'anchor' | 'custom'
   /** Son teslimin metni — lib/weekly-flow.ts `dueLabel` üretir. */
   dueText: string
+  /** Sunucunun yerel günü (YYYY-MM-DD) — istemci saati kaymış olabilir. */
+  today: string
   total: number
   delivered: number
   remaining: number
@@ -136,6 +138,36 @@ export function HaftamClient({ view }: { view: HaftamView }) {
           Dar ekranda sütunlar alt alta iner: yedi sütunu telefona
           sıkıştırmak, her birini okunamaz hale getirirdi.
           ============================================================ */}
+      {/* B07 · BUGÜN BİR ADIMDA. Dar ekranda sütunlar alt alta indiği
+          için bugün beşinci sütunsa öğrenci dört günü kaydırarak
+          geçiyordu. Plan taşıma resmi son teslimi DEĞİŞTİRMEZ; bu
+          bağlantılar yalnız gezinme. */}
+      {(() => {
+        const todayCol = view.days.find(d => d.date === view.today)
+        const unplannedCount = view.unplanned.length
+        if (!todayCol && unplannedCount === 0) return null
+        return (
+          <nav aria-label="Hızlı erişim" className="flex flex-wrap gap-2">
+            {todayCol && (
+              <a
+                href={`#gun-${todayCol.date}`}
+                className="rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted"
+              >
+                Bugüne git{todayCol.planned > 0 ? ` · ${todayCol.planned} çalışma planladın` : ''}
+              </a>
+            )}
+            {unplannedCount > 0 && (
+              <a
+                href="#planlanmamislar"
+                className="rounded-md border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                Planlanmamışlar · {unplannedCount}
+              </a>
+            )}
+          </nav>
+        )
+      })()}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {view.days.map(day => (
           <DayColumn key={day.date} day={day} days={view.days} />

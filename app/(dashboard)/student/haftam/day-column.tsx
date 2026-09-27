@@ -102,6 +102,8 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
 
   return (
     <div
+      // B07: "Bugüne git" bağlantısının hedefi.
+      id={`gun-${day.date}`}
       onDragOver={e => {
         e.preventDefault()
         setDragOver(true)
