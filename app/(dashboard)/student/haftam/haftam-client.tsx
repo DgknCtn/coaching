@@ -87,13 +87,13 @@ export function HaftamClient({ view }: { view: HaftamView }) {
           <SummaryStat value={view.total} label="çalışma" hint="Toplam atanmış" />
           <SummaryStat
             value={view.delivered}
-            label={counterLabel('completed', 'student')}
-            hint="Tamamlanan"
+            label={counterLabel('delivered', 'student')}
+            hint="Onay bekleyenler dahil"
           />
           <SummaryStat
             value={view.remaining}
             label="kaldı"
-            hint="Tamamlanmayan"
+            hint="Teslim edilmeyen"
             emphasis={view.remaining > 0}
           />
 
