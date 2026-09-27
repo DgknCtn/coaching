@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
+import { readReferralCode, normalizeReferralCode } from '@/lib/referral'
 import { LandingPage } from '@/components/marketing/landing-page'
 import { StructuredData } from '@/components/marketing/structured-data'
 
@@ -100,10 +100,11 @@ export default async function RootPage() {
         p_partner_code:
           normalizeReferralCode(meta?.partner_code) ?? (await readReferralCode()),
       })
-      if (!error) await clearReferralCode()
-      // Kurulum başarılıysa aynı sayfaya dönülür ve bu kez profil dolu
-      // gelir.
-      if (!error) redirect('/')
+      // Kurulum başarılıysa davet çerezi silinip aynı sayfaya dönülür ve
+      // bu kez profil dolu gelir. Silme bir Route Handler'da: Server
+      // Component çerez DEĞİŞTİREMEZ, burada silmek Google ile ilk girişte
+      // "Bir hata oluştu" ekranı üretiyordu (app/auth/kurulum-tamam).
+      if (!error) redirect('/auth/kurulum-tamam')
       console.error('[kurulum] çalışma alanı kurulamadı', error)
     }
 
