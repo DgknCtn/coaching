@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 
 export default async function ParentLayout({ children }: { children: React.ReactNode }) {
-  const { profile, linkedStudents } = await getParentContext()
+  const { profile, linkedStudents, panels, workspaceId } = await getParentContext()
 
   const studentNames = linkedStudents.map((l) => l.students.full_name)
   const collapsed = await getSidebarCollapsed()
@@ -30,6 +30,9 @@ export default async function ParentLayout({ children }: { children: React.React
         role="parent"
         roleLabel="Veli"
         userName={profile.full_name}
+        // B18: birden fazla kurum/panel varsa seçici; yoksa hiç çizilmez.
+        workspaces={panels.map((p) => ({ id: p.workspaceId, name: p.name, panel: p.panel }))}
+        activeWorkspaceId={workspaceId}
         panel={studentNames.length ? { label: 'Takip edilen', items: studentNames } : undefined}
         defaultCollapsed={collapsed}
       />

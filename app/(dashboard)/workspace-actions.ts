@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/active-workspace'
 import { firstIssue, uuidSchema } from '@/lib/validation'
+import { PANEL_ROLES, type PanelKind } from '@/lib/workspace'
 
 /**
  * Aktif çalışma alanını değiştirir (Faz 3).
@@ -19,7 +20,12 @@ import { firstIssue, uuidSchema } from '@/lib/validation'
  * `has_workspace_role` üzerinden zaten süzülür (051), yani askıdaki bir
  * kiracıya geçiş de burada engellenmiş olur.
  */
-export async function switchWorkspaceAction(workspaceId: string) {
+export async function switchWorkspaceAction(
+  workspaceId: string,
+  /** B18: seçilen panel. Üyelik o panelin rolleriyle doğrulanır. */
+  panel: PanelKind = 'teacher'
+) {
+  if (!(panel in PANEL_ROLES)) return { error: 'Geçersiz panel.' }
   const parsed = uuidSchema.safeParse(workspaceId)
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
@@ -52,7 +58,7 @@ export async function switchWorkspaceAction(workspaceId: string) {
     .eq('profile_id', profile.id)
     .eq('workspace_id', parsed.data)
     .eq('status', 'active')
-    .in('role', ['owner', 'teacher'])
+    .in('role', PANEL_ROLES[panel])
     .limit(1)
 
   if (error) return { error: dbErrorToTr(error.message) }

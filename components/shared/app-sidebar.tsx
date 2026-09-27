@@ -200,6 +200,7 @@ export function AppSidebar({
         <WorkspaceSwitcher
           workspaces={workspaces}
           activeId={activeWorkspaceId}
+          currentPanel={role === 'student' || role === 'parent' ? role : 'teacher'}
           compact={compact}
         />
       </div>

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, workspaceId, profile, activeTerm, workspaces, usage } =
+  const { supabase, workspaceId, profile, activeTerm, workspaces, panels, usage } =
     await getTeacherContext()
 
   // Sidebar'daki aktif öğrenci seçicisi için hafif liste.
@@ -85,7 +85,12 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         userName={profile.full_name}
         panel={activeTerm ? { label: 'Aktif dönem', items: [activeTerm.name] } : undefined}
         students={students}
-        workspaces={workspaces}
+        // B18: öğretmen alanları + başka alanlardaki öğrenci/veli panelleri.
+        workspaces={
+          panels.length > 0
+            ? panels.map((p) => ({ id: p.workspaceId, name: p.name, panel: p.panel }))
+            : workspaces
+        }
         activeWorkspaceId={workspaceId}
         defaultCollapsed={collapsed}
         // /admin hiçbir yerden bağlantılı değildi; adresi elle yazmak

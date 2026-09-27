@@ -46,6 +46,72 @@ async function blockedRedirectTarget(
   return '/login'
 }
 
+// ============================================================
+// PANEL SEÇENEKLERİ (B18) — alan + rol
+//
+// Bir kişi bir kurumda öğretmen, başka birinde veli, üçüncüsünde öğrenci
+// olabilir. Seçici artık yalnız öğretmen alanlarını değil, kullanıcının
+// TÜM panellerini gösteriyor; seçim o alana geçip o paneli açıyor.
+//
+// Önceden öğrenci ve veli bağlamı yalnız `default_workspace_id`'yi
+// okuyordu: ikinci kuruma davet edilen öğrenci o kurumu hiç göremiyor,
+// başka alanda öğretmen olup veli davetini kabul eden kişi veli
+// panelinde bağlı çocuğunu bulamıyordu.
+// ============================================================
+
+export type PanelKind = 'teacher' | 'student' | 'parent'
+
+export const PANEL_ROLES: Record<PanelKind, string[]> = {
+  teacher: ['owner', 'teacher'],
+  student: ['student'],
+  parent: ['parent'],
+}
+
+export interface PanelOption {
+  workspaceId: string
+  name: string
+  panel: PanelKind
+}
+
+type RawMember = { role: string; workspace_id: string; status: string }
+
+function activeMembers(raw: unknown): RawMember[] {
+  return ((raw ?? []) as RawMember[]).filter(m => m.status === 'active')
+}
+
+/** Kullanıcının tüm panelleri; alan adları tek sorguda. */
+async function loadPanelOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  members: RawMember[],
+  activeWorkspaceId: string | null
+): Promise<PanelOption[]> {
+  const seen = new Set<string>()
+  const pairs: { workspaceId: string; panel: PanelKind }[] = []
+  for (const m of members) {
+    const panel = (Object.keys(PANEL_ROLES) as PanelKind[]).find(k => PANEL_ROLES[k].includes(m.role))
+    if (!panel) continue
+    const key = `${m.workspace_id}:${panel}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    pairs.push({ workspaceId: m.workspace_id, panel })
+  }
+  if (pairs.length < 2) return []
+
+  const { data } = await supabase
+    .from('workspaces')
+    .select('id, name, is_library')
+    .in('id', [...new Set(pairs.map(p => p.workspaceId))])
+  const byId = new Map(
+    ((data ?? []) as { id: string; name: string; is_library: boolean | null }[]).map(w => [w.id, w])
+  )
+  // Kütüphane seçicide görünmez (069) — yalnız şu an oradaysa.
+  return pairs
+    .filter(p => byId.has(p.workspaceId))
+    .filter(p => !byId.get(p.workspaceId)!.is_library || p.workspaceId === activeWorkspaceId)
+    .map(p => ({ ...p, name: byId.get(p.workspaceId)!.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr') || a.panel.localeCompare(b.panel))
+}
+
 export const getTeacherContext = cache(async function getTeacherContext() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -212,8 +278,10 @@ export const getTeacherContext = cache(async function getTeacherContext() {
     workspaceId,
     role: memberships.find(m => m.workspaceId === workspaceId)?.role ?? 'teacher',
     activeTerm: activeTerm as { id: string; name: string; status: string } | null,
-    /** Kullanıcının öğretmen olduğu tüm çalışma alanları (seçici için). */
+    /** Kullanıcının öğretmen olduğu tüm çalışma alanları. */
     workspaces: workspaceOptions.map(w => ({ id: w.id, name: w.name })),
+    /** Tüm paneller (B18): öğretmen + başka alanlardaki öğrenci/veli. */
+    panels: await loadPanelOptions(supabase, activeMembers(profile.workspace_members), workspaceId),
     /** Lisans, kota ve deneme durumu (058). RPC satır dizisi döndürür. */
     usage: (() => {
       const row = ((usageRows ?? []) as {
@@ -246,23 +314,34 @@ export const getStudentContext = cache(async function getStudentContext() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, full_name, email, default_workspace_id')
+    .select('id, full_name, email, default_workspace_id, workspace_members(role, workspace_id, status)')
     .eq('auth_user_id', user.id)
     .single()
 
-  if (!profile?.default_workspace_id) redirect('/login')
+  if (!profile) redirect('/login')
 
-  const [{ data: studentRecord }, { data: activeTerm }] = await Promise.all([
+  // AKTİF ALAN ÖĞRENCİ ÜYELİKLERİ ARASINDAN (B18) — öğretmen bağlamıyla
+  // aynı kural: çerez → varsayılan → ilk üyelik.
+  const members = activeMembers(profile.workspace_members)
+  const workspaceId = resolveActiveWorkspace(
+    members.filter(m => m.role === 'student').map(m => ({ workspaceId: m.workspace_id, role: m.role })),
+    await readActiveWorkspaceCookie(),
+    profile.default_workspace_id
+  ).workspaceId
+  if (!workspaceId) redirect(await blockedRedirectTarget(supabase))
+
+  const [{ data: studentRecord }, panels, { data: activeTerm }] = await Promise.all([
     supabase
       .from('students')
       .select('id, full_name, workspace_id, exam_type')
       .eq('profile_id', profile.id)
-      .eq('workspace_id', profile.default_workspace_id)
+      .eq('workspace_id', workspaceId)
       .single(),
+    loadPanelOptions(supabase, members, workspaceId),
     supabase
       .from('academic_terms')
       .select('id, name')
-      .eq('workspace_id', profile.default_workspace_id)
+      .eq('workspace_id', workspaceId)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -279,8 +358,10 @@ export const getStudentContext = cache(async function getStudentContext() {
     supabase,
     profile: profile as { id: string; full_name: string; email: string | null; default_workspace_id: string },
     student: studentRecord,
-    workspaceId: profile.default_workspace_id as string,
+    workspaceId,
     activeTerm: activeTerm as { id: string; name: string } | null,
+    /** Tüm paneller (B18) — seçici için; tek panelde boş. */
+    panels,
   }
 })
 
@@ -291,18 +372,32 @@ export const getParentContext = cache(async function getParentContext() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, full_name, email, default_workspace_id')
+    .select('id, full_name, email, default_workspace_id, workspace_members(role, workspace_id, status)')
     .eq('auth_user_id', user.id)
     .single()
 
-  if (!profile?.default_workspace_id) redirect('/login')
+  if (!profile) redirect('/login')
 
-  const { data: linkedStudents } = await supabase
-    .from('parent_student_links')
-    .select('id, student_id, students(id, full_name, exam_type, grade_level)')
-    .eq('parent_profile_id', profile.id)
-    .eq('workspace_id', profile.default_workspace_id)
-    .eq('status', 'active')
+  // AKTİF ALAN VELİ ÜYELİKLERİ ARASINDAN (B18). Önceden yalnız varsayılan
+  // alan okunuyordu: başka alanda öğretmen olan kişi veli davetini kabul
+  // edince veli paneli onun ÖĞRETMEN alanında çocuk arıyor, boş kalıyordu.
+  const members = activeMembers(profile.workspace_members)
+  const workspaceId = resolveActiveWorkspace(
+    members.filter(m => m.role === 'parent').map(m => ({ workspaceId: m.workspace_id, role: m.role })),
+    await readActiveWorkspaceCookie(),
+    profile.default_workspace_id
+  ).workspaceId
+  if (!workspaceId) redirect(await blockedRedirectTarget(supabase))
+
+  const [{ data: linkedStudents }, panels] = await Promise.all([
+    supabase
+      .from('parent_student_links')
+      .select('id, student_id, students(id, full_name, exam_type, grade_level)')
+      .eq('parent_profile_id', profile.id)
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active'),
+    loadPanelOptions(supabase, members, workspaceId),
+  ])
 
   // Bağlı öğrencisi olmayan veliyi /login'e YÖNLENDİRME: middleware girişli
   // kullanıcıyı /'a, / da rolü veli görüp /parent'a geri gönderdiği için bu
@@ -312,7 +407,9 @@ export const getParentContext = cache(async function getParentContext() {
   return {
     supabase,
     profile: profile as { id: string; full_name: string; email: string | null; default_workspace_id: string },
-    workspaceId: profile.default_workspace_id as string,
+    workspaceId,
+    /** Tüm paneller (B18) — seçici için; tek panelde boş. */
+    panels,
     linkedStudents: (linkedStudents ?? []) as unknown as Array<{
       id: string
       student_id: string

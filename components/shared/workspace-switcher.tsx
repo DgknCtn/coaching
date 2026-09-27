@@ -27,39 +27,63 @@ import { cn } from '@/lib/utils'
 // olmayan bir karar varmış gibi gösterir. Bireysel öğretmenlerin ekranı
 // bugünkü gibi kalır.
 
+export type PanelKind = 'teacher' | 'student' | 'parent'
+
 export interface WorkspaceOption {
   id: string
   name: string
+  /**
+   * Seçenek hangi paneli açar (B18). Bir kişi bir alanda öğretmen, başka
+   * birinde veli olabilir; seçici bunların hepsini gösterir.
+   */
+  panel?: PanelKind
+}
+
+const PANEL_LABEL: Record<PanelKind, string> = {
+  teacher: 'Öğretmen',
+  student: 'Öğrenci',
+  parent: 'Veli',
 }
 
 export function WorkspaceSwitcher({
   workspaces,
   activeId,
+  currentPanel = 'teacher',
   compact = false,
 }: {
   workspaces: WorkspaceOption[]
   activeId: string
+  /** Şu an açık olan panel. */
+  currentPanel?: PanelKind
   /** Daraltılmış rail'de yalnız ikon gösterilir. */
   compact?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  // Tek çalışma alanı varsa seçim diye bir şey yok.
+  // Tek seçenek varsa seçim diye bir şey yok.
   if (workspaces.length < 2) return null
 
-  const active = workspaces.find(w => w.id === activeId)
+  const panelOf = (w: WorkspaceOption) => w.panel ?? 'teacher'
+  const isActive = (w: WorkspaceOption) => w.id === activeId && panelOf(w) === currentPanel
+  const active = workspaces.find(isActive) ?? workspaces.find(w => w.id === activeId)
+  // Rol etiketi yalnız birden fazla panel türü varsa yazılır: yalnız
+  // öğretmen alanları olan koçun ekranı bugünkü gibi kalır.
+  const mixed = new Set(workspaces.map(panelOf)).size > 1
+  const label = (w: WorkspaceOption) => (mixed ? `${w.name} · ${PANEL_LABEL[panelOf(w)]}` : w.name)
 
-  function pick(id: string) {
-    if (id === activeId) return
+  function pick(option: WorkspaceOption) {
+    if (isActive(option)) return
     startTransition(async () => {
-      const result = await switchWorkspaceAction(id)
+      const result = await switchWorkspaceAction(option.id, panelOf(option))
       if (result?.error) {
         toast.error(result.error)
         return
       }
-      // Sunucu bağlamı değişti; ekranın tamamı yenilenmeli.
-      router.refresh()
+      // Başka bir panele geçiliyorsa oraya gidilir; aynı panelse sunucu
+      // bağlamı değişti, ekranın tamamı yenilenir.
+      if (panelOf(option) !== currentPanel) router.push(`/${panelOf(option)}`)
+      else router.refresh()
     })
   }
 
@@ -80,7 +104,9 @@ export function WorkspaceSwitcher({
         ) : (
           <Building2 className="size-3.5 shrink-0" />
         )}
-        {!compact && <span className="truncate">{active?.name ?? 'Çalışma alanı'}</span>}
+        {!compact && (
+          <span className="truncate">{active ? label(active) : 'Çalışma alanı'}</span>
+        )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-56">
@@ -88,17 +114,14 @@ export function WorkspaceSwitcher({
         <DropdownMenuSeparator />
         {workspaces.map(workspace => (
           <DropdownMenuItem
-            key={workspace.id}
+            key={`${workspace.id}:${panelOf(workspace)}`}
             disabled={isPending}
-            onClick={() => pick(workspace.id)}
+            onClick={() => pick(workspace)}
           >
             <Check
-              className={cn(
-                'size-4 shrink-0',
-                workspace.id === activeId ? 'opacity-100' : 'opacity-0'
-              )}
+              className={cn('size-4 shrink-0', isActive(workspace) ? 'opacity-100' : 'opacity-0')}
             />
-            <span className="truncate">{workspace.name}</span>
+            <span className="truncate">{label(workspace)}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

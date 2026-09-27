@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { decideLanding } from '@/lib/landing-decision'
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  resolveActiveWorkspaceId,
+  rolesInWorkspace,
+} from '@/lib/active-workspace'
 import { LandingPage } from '@/components/marketing/landing-page'
 import { StructuredData } from '@/components/marketing/structured-data'
 
@@ -77,15 +83,27 @@ export default async function RootPage() {
   if (landing === 'setup-teacher') redirect('/kurulum/ogretmen')
   if (landing === 'welcome' || !profile?.default_workspace_id) redirect('/hosgeldin')
 
-  const { data: member } = await supabase
+  // ROL AKTİF ALANDAN (B18) — middleware ile aynı kural (çerez →
+  // varsayılan → ilk üyelik). Önceden yalnız varsayılan alan okunuyordu:
+  // seçiciyle veli paneline geçen öğretmen ana sayfaya dönünce yeniden
+  // öğretmen paneline atılıyordu.
+  const { data: rows } = await supabase
     .from('workspace_members')
-    .select('role')
+    .select('role, workspace_id')
     .eq('profile_id', profile.id)
-    .eq('workspace_id', profile.default_workspace_id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const memberships = (rows ?? []).map((r) => ({
+    workspaceId: r.workspace_id as string,
+    role: r.role as string,
+  }))
+  const activeId = resolveActiveWorkspaceId(
+    memberships,
+    (await cookies()).get(ACTIVE_WORKSPACE_COOKIE)?.value ?? null,
+    profile.default_workspace_id
+  )
+  const roles = rolesInWorkspace(memberships, activeId)
+  const member = roles.length > 0 ? { role: roles.includes('owner') || roles.includes('teacher') ? 'teacher' : roles[0] } : null
 
   // ÜYELİK YOK: kullanıcı yetkisiz değil, çalışma alanına BAĞLI DEĞİL —
   // askıya alınmış bir kiracının üyelikleri de RLS tarafından süzülüp

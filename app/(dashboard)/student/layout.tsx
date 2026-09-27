@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const { student } = await getStudentContext()
+  const { student, panels, workspaceId } = await getStudentContext()
   const collapsed = await getSidebarCollapsed()
 
   return (
@@ -28,6 +28,9 @@ export default async function StudentLayout({ children }: { children: React.Reac
         role="student"
         roleLabel="Öğrenci"
         userName={student.full_name}
+        // B18: birden fazla kurum/panel varsa seçici; yoksa hiç çizilmez.
+        workspaces={panels.map((p) => ({ id: p.workspaceId, name: p.name, panel: p.panel }))}
+        activeWorkspaceId={workspaceId}
         defaultCollapsed={collapsed}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
