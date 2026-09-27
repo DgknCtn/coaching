@@ -2,17 +2,19 @@ import { SectionHeading } from './section-heading'
 
 const steps = [
   {
-    title: 'Öğrencilerinizi ekleyin',
-    description: 'Öğrenci ve velilerinize davet linki gönderin.',
-  },
-  {
-    title: 'Ödevleri planlayın',
+    title: 'Öğrencilerinizi ve kitaplarınızı ekleyin',
     description:
-      'Kitap, test, sayfa veya video bazında haftalık görevler oluşturun.',
+      'Öğrenci ve velilere davet linki gönderin. Kitabı içindekiler listesini yapıştırarak aktarın.',
   },
   {
-    title: 'Takip etmeye başlayın',
-    description: 'Kim yaptı, kim gecikti, kim geride kaldı? Tek ekrandan görün.',
+    title: 'Haftayı açın, ödevi verin',
+    description:
+      "Kitap Haritası'ndan test, sayfa veya video seçin. Ödev haftalık akışa bağlanır, WhatsApp metni hazır gelir.",
+  },
+  {
+    title: 'Teslimleri onaylayın',
+    description:
+      'Kim teslim etti, kim gecikti, kim geride? Onayladığınız iş ilerlemeye sayılır; veli aynı veriyi görür.',
   },
 ]
 

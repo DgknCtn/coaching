@@ -26,11 +26,11 @@ const BEFORE = [
 
 const AFTER = [
   'Tüm öğrenciler tek ekranda',
-  'Haftalık ödev planı',
+  'Haftalık Akış ile ödev planı',
   'Kitap ilerleme takibi',
   'Öğretmen onaylı ilerleme',
   'Veli kendi panelinden takip eder',
-  'Riskli öğrencileri anında görün',
+  'Geride kalanı nedeniyle birlikte görün',
 ]
 
 export function BeforeAfterSection() {
