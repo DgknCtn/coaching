@@ -30,7 +30,12 @@ function adminFunctionBodies(): { file: string; name: string; body: string }[] {
 }
 
 // Öğretmen adı dönmesine izin verilen fonksiyonlar (müşteri = öğretmen).
-const TEACHER_NAME_ALLOWED = new Set(['admin_teacher_activity', 'admin_workspace_activity'])
+// admin_list_workspaces (126): sahibin adı — sahip öğretmendir.
+const TEACHER_NAME_ALLOWED = new Set([
+  'admin_teacher_activity',
+  'admin_workspace_activity',
+  'admin_list_workspaces',
+])
 
 describe('yönetim fonksiyonları mahremiyeti', () => {
   const fns = adminFunctionBodies()

@@ -10,6 +10,7 @@ import { formatKurusShort } from '@/lib/billing/pricing'
 import { daysLeft, planLabel, workspaceStatusLabel } from '@/lib/plans'
 import { formatDateTr, formatRelativeTr } from '@/lib/format'
 import { auditActionLabel } from '@/lib/audit'
+import { workspaceFlags } from '@/lib/admin/workspace-flags'
 
 export const metadata: Metadata = { title: 'Müşteriler' }
 export const dynamic = 'force-dynamic'
@@ -57,6 +58,10 @@ interface WorkspaceRow {
   license_months: number | null
   last_activity_at: string | null
   pending_order_kurus: number
+  // 126:
+  teacher_last_login_at: string | null
+  homework_7d: number
+  active_students_7d: number
 }
 
 interface ActivityRow {
@@ -131,7 +136,27 @@ export default async function AdminCustomers({
     {
       key: 'workspace',
       header: 'Çalışma Alanı',
-      render: (r) => <span className="font-medium">{r.workspace_name}</span>,
+      // Etiketler kurala dayalı ve yazılı (lib/admin/workspace-flags);
+      // renk yalnız tarama hızı için, anlamı metin taşıyor.
+      render: (r) => {
+        const flags = workspaceFlags(r)
+        return (
+          <div className="min-w-0">
+            <span className="font-medium">{r.workspace_name}</span>
+            {flags.length > 0 && (
+              <ul className="mt-1 flex flex-wrap gap-1">
+                {flags.map((f) => (
+                  <li key={f.text}>
+                    <Badge variant={f.tone === 'destructive' ? 'destructive' : 'warning'}>
+                      {f.text}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'owner',
@@ -216,11 +241,33 @@ export default async function AdminCustomers({
       },
     },
     {
+      key: 'usage',
+      header: 'Son 7 Gün',
+      hideBelow: 'md',
+      render: (r) => (
+        <div className="tabular-nums">
+          <p>{r.homework_7d} ödev</p>
+          <p className="text-xs text-muted-foreground">
+            {r.active_students > 0
+              ? `${r.active_students_7d} / ${r.active_students} öğrenci teslim etti`
+              : 'öğrenci yok'}
+          </p>
+        </div>
+      ),
+    },
+    {
       key: 'activity',
-      header: 'Son Aktivite',
+      header: 'Öğretmen Girişi',
       hideBelow: 'lg',
       render: (r) => (
-        <span className="text-muted-foreground">{formatRelativeTr(r.last_activity_at)}</span>
+        <div>
+          <p className="text-muted-foreground">
+            {r.teacher_last_login_at ? formatRelativeTr(r.teacher_last_login_at) : 'kayıt yok'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            son işlem {formatRelativeTr(r.last_activity_at)}
+          </p>
+        </div>
       ),
     },
     {

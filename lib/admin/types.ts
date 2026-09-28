@@ -52,6 +52,21 @@ export interface SystemStatus {
   rate_limit_rows: number
 }
 
+/** admin_workspace_activity (124) — öğretmenler adıyla, öğrenci/veli yalnız sayı. */
+export interface WorkspaceActivity {
+  daily: { day: string; published: number; submitted: number; approved: number }[]
+  teachers: { name: string | null; email: string | null; role: string; last_login_at: string | null }[]
+  counts: {
+    students: number
+    students_with_account: number
+    parents: number
+    active_students_7d: number
+    open_interventions: number
+  }
+  actions: { action: string; total: number }[]
+  failed_orders: { kurus: number; reason: string | null; at: string }[]
+}
+
 const dayFormatter = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 
 /** "2026-09-27" → "27 Eyl" (gün zaten yerel gün olarak geliyor). */

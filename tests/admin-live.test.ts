@@ -20,6 +20,7 @@ const CALLS: [string, Record<string, unknown>][] = [
   ['admin_support_metrics', { p_days: 30 }],
   ['admin_deletion_queue', {}],
   ['purge_auth_event_ips', {}],
+  ['admin_list_workspaces', {}],
 ]
 
 describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', () => {
