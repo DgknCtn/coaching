@@ -11,6 +11,10 @@ import { authEventLabel } from '@/lib/auth-audit'
 import { formatRelativeTr } from '@/lib/format'
 import { eventTone, shortUserAgent, locationLabel } from '@/lib/auth-event-display'
 import { SecurityFilters } from './security-filters'
+import Link from 'next/link'
+import { KpiCard } from '@/components/admin/kpi-card'
+import { TrendChart } from '@/components/admin/charts/trend-chart'
+import { dayLabel, type DayRow, type SystemStatus } from '@/lib/admin/types'
 
 export const metadata: Metadata = { title: 'Güvenlik' }
 export const dynamic = 'force-dynamic'
@@ -71,6 +75,13 @@ interface ActiveUserRow {
   user_agent: string | null
 }
 
+interface CountryRow {
+  country: string | null
+  success: number
+  failed: number
+  accounts: number
+}
+
 interface SummaryRow {
   basarili: number
   basarisiz: number
@@ -103,8 +114,15 @@ export default async function AdminSecurityPage({
   const eventType = EVENT_TYPES.includes(tur as (typeof EVENT_TYPES)[number]) ? tur! : null
   const page = Math.max(Number.parseInt(sayfa ?? '1', 10) || 1, 1)
 
-  const [{ data: summaryRows }, { data: eventRows }, { data: suspiciousRows }, { data: activeRows }] =
-    await Promise.all([
+  const [
+    { data: summaryRows },
+    { data: eventRows },
+    { data: suspiciousRows },
+    { data: activeRows },
+    seriesRes,
+    countriesRes,
+    systemRes,
+  ] = await Promise.all([
       supabase.rpc('admin_auth_summary', { p_hours: 24 }),
       supabase.rpc('admin_auth_events', {
         p_limit: PAGE_SIZE,
@@ -115,7 +133,16 @@ export default async function AdminSecurityPage({
       }),
       supabase.rpc('admin_auth_suspicious', { p_hours: 168, p_limit: 20 }),
       supabase.rpc('admin_active_users', { p_hours: 12 }),
+      // Yönetim 7/8: 30 günlük eğilim, ülke dağılımı, PIN kilidi, temizlik.
+      supabase.rpc('admin_timeseries', { p_days: 30 }),
+      supabase.rpc('admin_login_countries', { p_days: 30 }),
+      supabase.rpc('admin_system_status'),
     ])
+
+  const series = seriesRes.error ? null : ((seriesRes.data ?? []) as unknown as DayRow[])
+  const countries = countriesRes.error ? null : ((countriesRes.data ?? []) as CountryRow[])
+  const system = systemRes.error ? null : (systemRes.data as unknown as SystemStatus)
+  const lastPurge = system?.cron.find((c) => c.job === 'purge-auth-events') ?? null
 
   const summary = ((summaryRows ?? []) as SummaryRow[])[0]
   const events = (eventRows ?? []) as AuthEventRow[]
@@ -204,7 +231,8 @@ export default async function AdminSecurityPage({
 
       {/* SAKLAMA SÜRESİ GÖRÜNÜR: 90 günü geçmiş ama hâlâ adres taşıyan
           satır varsa temizlik çalışmamış demektir. Sessizce birikmesi,
-          KVKK taahhüdünün sessizce ihlali olurdu. */}
+          KVKK taahhüdünün sessizce ihlali olurdu. Temizlik 122'den beri
+          her gece cron'la çalışıyor; sonucu Sistem sekmesinde. */}
       {summary && summary.temizlenecek_ip > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
           <Trash2 className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-500" />
@@ -212,12 +240,108 @@ export default async function AdminSecurityPage({
             <p className="font-medium">Saklama süresi dolmuş kayıt var</p>
             <p className="text-muted-foreground">
               {summary.temizlenecek_ip} kayıtta 90 günü geçmiş adres/cihaz bilgisi hâlâ duruyor.
-              Temizlik için <code className="font-mono text-xs">purge_auth_event_ips()</code>{' '}
-              çalıştırılmalı.
+              Gece temizliği çalışmamış olabilir: son çalışma ve sonucu{' '}
+              <Link href="/admin/sistem" className="underline underline-offset-2">
+                Sistem
+              </Link>{' '}
+              sekmesinde.
             </p>
           </div>
         </div>
       )}
+
+      <Section title="Son 30 gün" description="Günlük giriş denemeleri; saklama ve kilit durumu">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <KpiCard
+              label="Saklama temizliği"
+              value={lastPurge ? formatRelativeTr(lastPurge.started_at) : system ? 'hiç çalışmadı' : '—'}
+              hint={
+                lastPurge
+                  ? lastPurge.ok
+                    ? `başarılı · ${lastPurge.affected ?? 0} kayıt temizlendi`
+                    : 'son çalışma başarısız'
+                  : undefined
+              }
+              tone={lastPurge && lastPurge.ok === false ? 'destructive' : 'default'}
+              href="/admin/sistem"
+            />
+            <KpiCard
+              label="Kilitli PIN hesabı"
+              value={system ? system.pin_locked : '—'}
+              hint="çok sayıda hatalı PIN denemesi"
+              tone={system && system.pin_locked > 0 ? 'warning' : 'default'}
+            />
+          </div>
+          {series ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {(
+                [
+                  ['Başarılı giriş', 'logins'],
+                  ['Başarısız giriş', 'failed_logins'],
+                ] as const
+              ).map(([title, key]) => (
+                <div key={key} className="rounded-lg border bg-card p-4">
+                  <p className="mb-2 flex items-baseline justify-between gap-2 text-sm font-medium">
+                    {title}
+                    <span className="text-xs font-normal tabular-nums text-muted-foreground">
+                      toplam {series.reduce((s, d) => s + Number(d[key]), 0).toLocaleString('tr-TR')}
+                    </span>
+                  </p>
+                  <TrendChart
+                    title={title}
+                    kind="line"
+                    data={series.map((d) => ({ label: dayLabel(d.day), value: Number(d[key]) }))}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Eğilim verisi alınamadı.</p>
+          )}
+        </div>
+      </Section>
+
+      <Section title="Ülkelere göre" description="Son 30 gün; yalnız sayı (IP ya da kişi yok)" variant="card">
+        {!countries ? (
+          <p className="p-4 text-sm text-muted-foreground">Ülke dağılımı alınamadı.</p>
+        ) : countries.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">Son 30 günde giriş denemesi yok.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Ülke</th>
+                <th className="px-4 py-2 text-right font-medium">Başarılı</th>
+                <th className="px-4 py-2 text-right font-medium">Başarısız</th>
+                <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Hesap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countries.map((c) => (
+                <tr key={c.country ?? '-'} className="border-b last:border-0">
+                  <td className="px-4 py-2">
+                    {c.country ?? <span className="text-muted-foreground">Bilinmiyor</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums">{c.success}</td>
+                  <td
+                    className={
+                      c.failed > 0
+                        ? 'px-4 py-2 text-right font-medium tabular-nums text-destructive-foreground'
+                        : 'px-4 py-2 text-right tabular-nums text-muted-foreground'
+                    }
+                  >
+                    {c.failed}
+                  </td>
+                  <td className="hidden px-4 py-2 text-right tabular-nums text-muted-foreground sm:table-cell">
+                    {c.accounts}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Section>
 
       <Section
         title="Şu an aktif"

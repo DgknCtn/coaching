@@ -9,6 +9,23 @@ import { createClient } from '@/lib/supabase/server'
 import { ticketCategoryLabel, ticketStatusLabel, ticketStatusVariant } from '@/lib/support'
 import { formatRelativeTr, formatDateTr } from '@/lib/format'
 import { AdminTicket } from './admin-ticket'
+import { KpiCard } from '@/components/admin/kpi-card'
+
+// Yönetim 7/8: destek yükü (admin_support_metrics, 124) — son 90 gün.
+interface SupportMetrics {
+  tickets: number
+  answered: number
+  median_first_reply_hours: number | null
+  by_category: Record<string, number>
+}
+
+/** 0,4 sa → "25 dk"; 30 sa → "1,3 gün" */
+function formatReplyTime(hours: number | null): string {
+  if (hours === null) return '—'
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} dk`
+  if (hours < 24) return `${hours.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sa`
+  return `${(hours / 24).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün`
+}
 
 export const metadata: Metadata = { title: 'Destek Talepleri' }
 export const dynamic = 'force-dynamic'
@@ -47,10 +64,15 @@ function waitingDays(lastMessageAt: string): number {
 export default async function AdminTicketsPage() {
   const supabase = await createClient()
 
-  const { data } = await supabase.rpc('admin_list_tickets', {
-    p_status: null,
-    p_limit: 200,
-  })
+  const [{ data }, metricsRes] = await Promise.all([
+    supabase.rpc('admin_list_tickets', {
+      p_status: null,
+      p_limit: 200,
+    }),
+    supabase.rpc('admin_support_metrics', { p_days: 90 }),
+  ])
+  const metrics = metricsRes.error ? null : (metricsRes.data as unknown as SupportMetrics)
+  const categories = Object.entries(metrics?.by_category ?? {}).sort((a, b) => b[1] - a[1])
 
   const rows = (data ?? []) as unknown as TicketRow[]
   const open = rows.filter((r) => r.status !== 'closed')
@@ -74,6 +96,27 @@ export default async function AdminTicketsPage() {
         }
         className="mb-0"
       />
+
+      {metrics && metrics.tickets > 0 && (
+        <Section title="Son 90 gün" description="İlk yanıt: talebin açılmasından ilk ekip yanıtına kadar geçen süre">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <KpiCard
+              label="İlk yanıt (ortanca)"
+              value={formatReplyTime(metrics.median_first_reply_hours)}
+              hint={`${metrics.answered} / ${metrics.tickets} talep yanıtlandı`}
+            />
+            <KpiCard label="Talep" value={metrics.tickets} />
+            <KpiCard
+              label="En sık kategori"
+              value={categories[0] ? ticketCategoryLabel(categories[0][0]) : '—'}
+              hint={categories
+                .slice(0, 4)
+                .map(([c, n]) => `${ticketCategoryLabel(c)} ${n}`)
+                .join(' · ')}
+            />
+          </div>
+        </Section>
+      )}
 
       <Section title={`Açık talepler (${open.length})`} variant="card">
         {open.length === 0 ? (
