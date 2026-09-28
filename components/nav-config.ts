@@ -1,4 +1,4 @@
-import { Rocket,
+import { Building2, Rocket,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -384,7 +384,8 @@ export function studentOverviewNav(studentId: string): NavItem[] {
  * yönetim adresinin öneki olduğundan onsuz hep aktif görünürdü.
  */
 export const adminNav: NavItem[] = [
-  { href: '/admin', label: 'Özet', icon: LayoutDashboard, exact: true },
+  { href: '/admin', label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
+  { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2 },
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
   { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },

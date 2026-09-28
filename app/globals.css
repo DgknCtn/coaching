@@ -158,7 +158,9 @@
   --info-subtle: oklch(0.26 0.05 240);
   --info-border: oklch(0.36 0.06 240);
 
-  --chart-1: oklch(0.72 0.15 45);
+  /* Grafik serisi: koyu yüzeyde açıklık bandı 0.48-0.67 (dataviz doğrulayıcısı).
+     0.72 bandın dışındaydı; 0.66 tüm denetimlerden geçti (#db703b / #141619). */
+  --chart-1: oklch(0.66 0.15 45);
   --chart-2: oklch(0.70 0.10 240);
   --chart-3: oklch(0.70 0.11 155);
   --chart-4: oklch(0.75 0.11 75);
