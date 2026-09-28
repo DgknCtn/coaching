@@ -227,8 +227,10 @@ async function gorevler(ayar, o, t) {
 
 // ------------------------------------------------------------
 // ÖĞRENCİ DETAYI — app/(dashboard)/teacher/students/[studentId]/page.tsx
-// En ağır sayfa: 1 + 15 paralel sorgu + kitap haritası (lib/book-map.ts)
-// + kapsam yükleyicileri (lib/student-scopes.ts).
+// Varsayılan sekme (Genel Bakış). Sayfa yalnız açık sekmenin verisini
+// çekiyor (lib/student-detail-needs.ts): 1 + 12 paralel sorgu + kitap
+// haritası (lib/book-map.ts), ardından müdahale bölümünün üç sorgusu.
+// Kapsam yükleyicileri (ogrenciKapsamlari) yalnız Kitaplar sekmesinde.
 // ------------------------------------------------------------
 async function kitapHaritasi(ayar, o, t, S, ogrenciId) {
   const h = { headers: o.basliklar }
@@ -342,28 +344,6 @@ async function ogrenciDetay(ayar, o, t) {
           ['order', 'due_date.desc'],
           ['limit', '20'],
         ]),
-        q('onay_bekleyen', 'homework_items', [
-          [
-            'select',
-            'id, book_id, homework_batch_id, books(title, tracking_mode), book_sections(title, order_index), book_tests(title, order_index, page_start), homework_batches!inner(student_id, workspace_id, title, due_date)',
-          ],
-          ['status', 'eq.pending_approval'],
-          ['homework_batches.student_id', sid],
-          ['homework_batches.workspace_id', ws],
-        ]),
-        q('veli_baglari', 'parent_student_links', [
-          ['select', 'id, relationship_type, status, parent_profile_id, profiles(full_name, email)'],
-          ['student_id', sid],
-          ['workspace_id', ws],
-          ['status', 'neq.removed'],
-        ]),
-        q('davetler', 'invitations', [
-          ['select', 'id, role, status, expires_at, created_at, accepted_at, invited_email'],
-          ['student_id', sid],
-          ['workspace_id', ws],
-          ['order', 'created_at.desc'],
-          ['limit', '10'],
-        ]),
         q('haftalik_ozet', 'student_weekly_homework_summary_view', [['select', '*'], ['student_id', sid], ['workspace_id', ws]]),
         q('onay_sayisi', 'student_pending_approval_view', [['select', 'pending_approval_items'], ['student_id', sid], ['workspace_id', ws]]),
         q('geciken_sayisi', 'student_overdue_homework_view', [['select', 'overdue_items'], ['student_id', sid], ['workspace_id', ws]]),
@@ -410,12 +390,28 @@ async function ogrenciDetay(ayar, o, t) {
         q('konu_acik_is', 'student_topic_open_work_view', [['select', 'topic_id, open_items'], ['student_id', sid], ['workspace_id', ws]]),
         q('konu_istisna', 'student_topic_overrides', [['select', 'topic_id, keep_active'], ['student_id', sid], ['workspace_id', ws]]),
         kitapHaritasi(ayar, o, t, S, ogrenci.id),
-        ogrenciKapsamlari(ayar, o, t, S, ogrenci.id),
-        q('alan_kapsamlari', 'academic_scopes', [
-          ['select', 'id, name, subject, level_exam, sort_order'],
+      ])
+      // Müdahale bölümü (intervention-section.tsx): sayfa verisinden SONRA
+      // çizilen ayrı sunucu bileşeni — kendi üç sorgusu ikinci dalga.
+      const simdi = Date.now()
+      await Promise.all([
+        q('mudahale_satir', 'teacher_student_operation_view', [['select', '*'], ['workspace_id', ws], ['student_id', sid]]),
+        q('mudahale_liste', 'interventions', [
+          ['select', 'id, status, opened_status, opened_signals, note, session_id, opened_at, outcome, close_note, closed_at'],
           ['workspace_id', ws],
-          ['active', 'eq.true'],
-          ['order', 'sort_order'],
+          ['student_id', sid],
+          ['order', 'opened_at.desc'],
+          ['limit', '20'],
+        ]),
+        q('mudahale_gorusmeler', 'service_sessions', [
+          ['select', 'id, planned_at, actual_at, status'],
+          ['workspace_id', ws],
+          ['student_id', sid],
+          ['status', 'neq.iptal'],
+          ['planned_at', `gte.${new Date(simdi - 30 * 86_400_000).toISOString()}`],
+          ['planned_at', `lte.${new Date(simdi + 14 * 86_400_000).toISOString()}`],
+          ['order', 'planned_at.desc'],
+          ['limit', '30'],
         ]),
       ])
     })(),

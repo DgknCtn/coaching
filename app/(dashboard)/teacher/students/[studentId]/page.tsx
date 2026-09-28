@@ -68,6 +68,7 @@ import { formatUnitCount } from '@/lib/unit-labels'
 import { calculateFlowPace, deliverySilence } from '@/lib/weekly-flow'
 import { ThisWeekCard, type ThisWeekView } from '@/components/shared/this-week-card'
 import { AcademicFlowCard } from '@/components/shared/academic-flow-card'
+import { studentDetailNeeds, type StudentDetailTab } from '@/lib/student-detail-needs'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,6 +99,11 @@ export default async function StudentDetailPage({
   }
 
   const tab = studentOverviewTabBySlug(sekme)
+  // YALNIZ AÇIK SEKMENİN VERİSİ (B13): eşleme lib/student-detail-needs.ts'te.
+  // Çekilmeyen sorgu boş sonuç döner; aşağıdaki hesaplar zaten `?? []` ile
+  // boşu karşılıyor ve o blok bu sekmede çizilmiyor.
+  const need = studentDetailNeeds((tab?.slug ?? null) as StudentDetailTab)
+  const skip = Promise.resolve({ data: null })
   const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -145,156 +151,188 @@ export default async function StudentDetailPage({
     // Durum bildirimi sorguları BURADAN KALKTI: panel Haftalık Akış'a
     // taşındı ve veriyi orası çekiyor. Bırakılsalardı her Genel Bakış
     // açılışında hiç okunmayan iki sorgu çalışırdı.
-    supabase
-      .from('homework_batches')
-      .select(`
-        id, title, description, due_date, status, weekly_flow_id,
-        homework_items(
-          id, status, book_id, section_id,
-          books(title, tracking_mode),
-          book_sections(title, order_index),
-          book_tests(order_index)
-        )
-      `)
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      // ARŞİVLENMİŞ ÖDEV DE ÇEKİLİYOR (R7-06.01). Belge: *"Ödev geçmiş
-      // listede kaybolmaz; raporlanabilir durumda kalır."* Aktif yükten
-      // çıkarılan ödev listeden silinmiyor, ayrı ve kapalı bir blokta
-      // yaşıyor — bu yüzden süzgeç 'active' yerine iki durumu kapsıyor.
-      .in('status', ['active', 'archived'])
-      .order('due_date', { ascending: false })
-      .limit(20),
-    supabase
-      .from('homework_items')
-      .select(`
-        id, book_id, homework_batch_id,
-        books(title, tracking_mode),
-        book_sections(title, order_index),
-        book_tests(title, order_index, page_start),
-        homework_batches!inner(student_id, workspace_id, title, due_date)
-      `)
-      .eq('status', 'pending_approval')
-      .eq('homework_batches.student_id', studentId)
-      .eq('homework_batches.workspace_id', workspaceId),
-    supabase
-      .from('parent_student_links')
-      .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .neq('status', 'removed'),
+    need.homeworkBatches
+      ? supabase
+          .from('homework_batches')
+          .select(`
+            id, title, description, due_date, status, weekly_flow_id,
+            homework_items(
+              id, status, book_id, section_id,
+              books(title, tracking_mode),
+              book_sections(title, order_index),
+              book_tests(order_index)
+            )
+          `)
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          // ARŞİVLENMİŞ ÖDEV DE ÇEKİLİYOR (R7-06.01). Belge: *"Ödev geçmiş
+          // listede kaybolmaz; raporlanabilir durumda kalır."* Aktif yükten
+          // çıkarılan ödev listeden silinmiyor, ayrı ve kapalı bir blokta
+          // yaşıyor — bu yüzden süzgeç 'active' yerine iki durumu kapsıyor.
+          .in('status', ['active', 'archived'])
+          .order('due_date', { ascending: false })
+          .limit(20)
+      : skip,
+    need.pendingApprovalItems
+      ? supabase
+          .from('homework_items')
+          .select(`
+            id, book_id, homework_batch_id,
+            books(title, tracking_mode),
+            book_sections(title, order_index),
+            book_tests(title, order_index, page_start),
+            homework_batches!inner(student_id, workspace_id, title, due_date)
+          `)
+          .eq('status', 'pending_approval')
+          .eq('homework_batches.student_id', studentId)
+          .eq('homework_batches.workspace_id', workspaceId)
+      : skip,
+    need.parentsAndInvites
+      ? supabase
+          .from('parent_student_links')
+          .select('id, relationship_type, status, parent_profile_id, profiles(full_name, email)')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .neq('status', 'removed')
+      : skip,
     // Davet geçmişi: "gönderdim mi, açık mı, kabul edildi mi?" sorusunun
     // arayüzdeki tek cevabı. Son 10 kayıt yeter — eskisi arşiv değeri taşımaz.
-    supabase
-      .from('invitations')
-      .select('id, role, status, expires_at, created_at, accepted_at, invited_email')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
-      .limit(10),
-    supabase
-      .from('student_weekly_homework_summary_view')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle(),
+    need.parentsAndInvites
+      ? supabase
+          .from('invitations')
+          .select('id, role, status, expires_at, created_at, accepted_at, invited_email')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .order('created_at', { ascending: false })
+          .limit(10)
+      : skip,
+    need.overviewCounters
+      ? supabase
+          .from('student_weekly_homework_summary_view')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .maybeSingle()
+      : skip,
     // "Onay Bekleyen" ve "Süresi Geçen" hafta penceresinden BAĞIMSIZ sayılır.
     // weeklySummary yalnız bu haftaya düşen batch'leri görür; oysa yukarıdaki
     // pendingApprovalItems listesi (ve /teacher/tasks) tüm haftaları kapsıyor.
     // 017 bu düzeltmeyi dashboard'a uygulamıştı, bu sayfa atlanmıştı — sayaç
     // "2" derken altındaki liste 5 satır gösterebiliyordu.
-    supabase
-      .from('student_pending_approval_view')
-      .select('pending_approval_items')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle(),
-    supabase
-      .from('student_overdue_homework_view')
-      .select('overdue_items')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle(),
+    need.overviewCounters
+      ? supabase
+          .from('student_pending_approval_view')
+          .select('pending_approval_items')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .maybeSingle()
+      : skip,
+    need.overviewCounters
+      ? supabase
+          .from('student_overdue_homework_view')
+          .select('overdue_items')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .maybeSingle()
+      : skip,
     // "BU HAFTA" bloğu (R7/02 §1). DASHBOARD İLE AYNI SATIR: ikinci bir
     // hesap yazılsaydı öğretmen listede bir sayı, öğrenciye girince
     // başka bir sayı görürdü.
-    supabase
-      .from('teacher_student_operation_view')
-      // TEK STRING LİTERAL: supabase-js select'i TİP DÜZEYİNDE ayrıştırıyor;
-      // `+` ile birleştirilen bir ifade literal tip olmadığı için dönen
-      // satır `GenericStringError`'a düşer ve bütün alanlar kaybolur.
-      .select(
-        'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, weekly_pending_approval, next_contact_at, next_contact_kind'
-      )
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle(),
+    need.weekOperation
+      ? supabase
+          .from('teacher_student_operation_view')
+          // TEK STRING LİTERAL: supabase-js select'i TİP DÜZEYİNDE ayrıştırıyor;
+          // `+` ile birleştirilen bir ifade literal tip olmadığı için dönen
+          // satır `GenericStringError`'a düşer ve bütün alanlar kaybolur.
+          .select(
+            'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, weekly_pending_approval, next_contact_at, next_contact_kind'
+          )
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .maybeSingle()
+      : skip,
     // Son gönderim anı: "3+ gündür yeni teslim yok" sinyalinin girdisi.
     // Ölçüt ÖĞRENCİNİN GÖNDERİMİ (submitted_at), onay değil — 081'in
     // düzelttiği hatanın aynısı buraya da sızabilirdi.
-    supabase
-      .from('homework_items')
-      .select('submitted_at, homework_batches!inner(student_id, workspace_id)')
-      .eq('homework_batches.student_id', studentId)
-      .eq('homework_batches.workspace_id', workspaceId)
-      .not('submitted_at', 'is', null)
-      .order('submitted_at', { ascending: false })
-      .limit(1),
+    need.overviewCounters
+      ? supabase
+          .from('homework_items')
+          .select('submitted_at, homework_batches!inner(student_id, workspace_id)')
+          .eq('homework_batches.student_id', studentId)
+          .eq('homework_batches.workspace_id', workspaceId)
+          .not('submitted_at', 'is', null)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+      : skip,
     // Akademik Not (R6-07). RLS gereği bu sorgu yalnız eğitmen oturumunda
     // satır döndürür; öğrenci/veli için politika tanımlı değildir.
-    supabase
-      .from('academic_notes')
-      .select('id, note_text, pinned, created_at, profiles(full_name)')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
-      .limit(100),
+    need.notes
+      ? supabase
+          .from('academic_notes')
+          .select('id, note_text, pinned, created_at, profiles(full_name)')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .order('created_at', { ascending: false })
+          .limit(100)
+      : skip,
     // ÖĞRENCİNİN GÜN NOTLARI (R8 §13 · 101).
     //
     // Hafıza kronolojik olmak zorunda ve o haftanın en iyi anlatıcısı
     // çoğu zaman öğrencinin kendi cümlesi. Öğretmen bu satırları OKUR,
     // yazamaz ve silemez — 101'de öğretmen için yalnız SELECT politikası
     // var; arayüzdeki salt okunurluk o kararın görünür yüzü.
-    supabase
-      .from('student_day_notes')
-      .select('id, note_date, note_text')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .order('note_date', { ascending: false })
-      .limit(100),
+    need.notes
+      ? supabase
+          .from('student_day_notes')
+          .select('id, note_date, note_text')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+          .order('note_date', { ascending: false })
+          .limit(100)
+      : skip,
     // R5.5: üç özet kartın verisi. Hepsi opsiyoneldir — R5 verisi olmayan
     // öğrencide boş döner ve kartlar nötr boş durum gösterir (OG-07).
-    supabase
-      .from('student_curriculum_items')
-      .select('topic_id, scope_id, start_date, end_date, passed_at, topics(name), academic_scopes(name)')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId),
-    supabase
-      .from('student_topic_contact_view')
-      .select('topic_id, last_contact_date, last_contact_source, last_contact_amount')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId),
-    supabase
-      .from('student_topic_open_work_view')
-      .select('topic_id, open_items')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId),
-    supabase
-      .from('student_topic_overrides')
-      .select('topic_id, keep_active')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId),
+    need.topicSignals
+      ? supabase
+          .from('student_curriculum_items')
+          .select('topic_id, scope_id, start_date, end_date, passed_at, topics(name), academic_scopes(name)')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+      : skip,
+    need.topicSignals
+      ? supabase
+          .from('student_topic_contact_view')
+          .select('topic_id, last_contact_date, last_contact_source, last_contact_amount')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+      : skip,
+    need.topicSignals
+      ? supabase
+          .from('student_topic_open_work_view')
+          .select('topic_id, open_items')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+      : skip,
+    need.topicSignals
+      ? supabase
+          .from('student_topic_overrides')
+          .select('topic_id, keep_active')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId)
+      : skip,
     // Kaynak Planı özeti kapsam-duyarlı olmalı: Plan % ana göstergedir
     // (OG-04), o da hedef kapsamından hesaplanır.
-    loadBookMap(supabase, {
-      workspaceId,
-      studentId,
-      statuses: ['active', 'pending', 'paused', 'completed'],
-    }),
+    need.bookMap
+      ? loadBookMap(supabase, {
+          workspaceId,
+          studentId,
+          statuses: ['active', 'pending', 'paused', 'completed'],
+        })
+      : Promise.resolve([]),
     // Ders/kapsam listesi Akademik Kapsam'dan gelir, kitaplardan DEĞİL
     // (R7 §7). Kaynağı olmayan alan da görünmek zorunda.
-    loadStudentScopes(supabase, { workspaceId, studentId }),
-    loadWorkspaceScopes(supabase, { workspaceId }),
+    need.inventory ? loadStudentScopes(supabase, { workspaceId, studentId }) : Promise.resolve([]),
+    need.inventory ? loadWorkspaceScopes(supabase, { workspaceId }) : Promise.resolve([]),
   ])
 
   const academicNotes: AcademicNote[] = ((academicNoteRows ?? []) as unknown as {
@@ -601,11 +639,15 @@ export default async function StudentDetailPage({
   // 'pending' açılıyor. bookProgress kullanılsaydı bekleyen bir kaynak
   // "atanabilir" görünür, ikinci atama denemesi de (student_id, book_id,
   // term) tekillik kısıtına takılırdı.
-  const availableBooks = await loadAssignableBooks(supabase, {
-    workspaceId,
-    termId: activeTerm?.id ?? null,
-    assignedBookIds: (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map(b => b.bookId),
-  })
+  // Yalnız Kitaplar sekmesinde: önceden her açılışta, diğer sorgular
+  // bittikten SONRA ayrı bir gidiş-dönüş olarak çalışıyordu.
+  const availableBooks = need.inventory
+    ? await loadAssignableBooks(supabase, {
+        workspaceId,
+        termId: activeTerm?.id ?? null,
+        assignedBookIds: (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map(b => b.bookId),
+      })
+    : []
 
   const hasAccount = !!student.profile_id
 
