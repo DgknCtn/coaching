@@ -2,7 +2,7 @@ import { Section } from '@/components/shared/section'
 import { SectionUnavailable } from '@/components/shared/section-unavailable'
 import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { createClient } from '@/lib/supabase/server'
-import { listResult, singleResult } from '@/lib/data-result'
+import { listResult, type QueryResult } from '@/lib/data-result'
 import { statusFromOperationRow, type OperationStatusRow } from '@/lib/operation-status'
 import { formatSessionLong, SESSION_STATUS_LABEL, type SessionStatus } from '@/lib/service-structure'
 import { OUTCOME_LABEL, openDays, type InterventionRow } from '@/lib/interventions'
@@ -11,29 +11,28 @@ import { InterventionControls, type SessionChoice } from './intervention-control
 
 // MÜDAHALE BÖLÜMÜ (B16).
 //
-// Kendi verisini çeker: öğrenci detay sayfası durum hesaplamıyor (yalnız
-// sayılar), müdahalenin ihtiyacı ise panelle AYNI durum ve gerekçe.
-// Sorgular paralel; biri düşerse bölüm "alınamadı" der, boş durum değil.
+// Müdahale listesini ve görüşmeleri kendisi çeker. Durum ve gerekçe
+// panelle AYNI operasyon satırından gelir; o satırı sayfa zaten "Bu Hafta"
+// için okuyor, bu yüzden buraya HATASIYLA birlikte veriliyor (B13 aşama 0:
+// önceden aynı satır ikinci kez sorgulanıyordu). Satır ya da liste
+// alınamazsa bölüm "alınamadı" der, boş durum değil.
 
 export async function InterventionSection({
   studentId,
   workspaceId,
+  operationRow: row,
 }: {
   studentId: string
   workspaceId: string
+  /** Sayfanın okuduğu operasyon satırı (`select('*')`), hatasıyla. */
+  operationRow: QueryResult<OperationStatusRow | null>
 }) {
   const supabase = await createClient()
   const now = new Date()
   const from = new Date(now.getTime() - 30 * 86_400_000).toISOString()
   const to = new Date(now.getTime() + 14 * 86_400_000).toISOString()
 
-  const [rowRes, listRes, sessionsRes] = await Promise.all([
-    supabase
-      .from('teacher_student_operation_view')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .eq('student_id', studentId)
-      .maybeSingle(),
+  const [listRes, sessionsRes] = await Promise.all([
     supabase
       .from('interventions')
       .select(
@@ -55,7 +54,6 @@ export async function InterventionSection({
       .limit(30),
   ])
 
-  const row = singleResult(rowRes, 'intervention.operation_row')
   const list = listResult(listRes, 'intervention.list')
   const sessions = listResult(sessionsRes, 'intervention.sessions')
 
@@ -73,7 +71,7 @@ export async function InterventionSection({
   }
 
   const current = row.data
-    ? statusFromOperationRow(row.data as OperationStatusRow, now)
+    ? statusFromOperationRow(row.data, now)
     : { status: 'yolunda' as StudentStatus, signals: [] as string[] }
   const all = list.data as InterventionRow[]
   const open = all.find((i) => i.status === 'open') ?? null

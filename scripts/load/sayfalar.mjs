@@ -229,7 +229,7 @@ async function gorevler(ayar, o, t) {
 // ÖĞRENCİ DETAYI — app/(dashboard)/teacher/students/[studentId]/page.tsx
 // Varsayılan sekme (Genel Bakış). Sayfa yalnız açık sekmenin verisini
 // çekiyor (lib/student-detail-needs.ts): 1 + 12 paralel sorgu + kitap
-// haritası (lib/book-map.ts), ardından müdahale bölümünün üç sorgusu.
+// haritası (lib/book-map.ts), ardından müdahale bölümünün iki sorgusu.
 // Kapsam yükleyicileri (ogrenciKapsamlari) yalnız Kitaplar sekmesinde.
 // ------------------------------------------------------------
 async function kitapHaritasi(ayar, o, t, S, ogrenciId) {
@@ -347,14 +347,8 @@ async function ogrenciDetay(ayar, o, t) {
         q('haftalik_ozet', 'student_weekly_homework_summary_view', [['select', '*'], ['student_id', sid], ['workspace_id', ws]]),
         q('onay_sayisi', 'student_pending_approval_view', [['select', 'pending_approval_items'], ['student_id', sid], ['workspace_id', ws]]),
         q('geciken_sayisi', 'student_overdue_homework_view', [['select', 'overdue_items'], ['student_id', sid], ['workspace_id', ws]]),
-        q('bu_hafta', 'teacher_student_operation_view', [
-          [
-            'select',
-            'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, weekly_pending_approval, next_contact_at, next_contact_kind',
-          ],
-          ['student_id', sid],
-          ['workspace_id', ws],
-        ]),
+        // Tüm satır: müdahale bölümü de bunu kullanıyor (B13 aşama 0).
+        q('bu_hafta', 'teacher_student_operation_view', [['select', '*'], ['student_id', sid], ['workspace_id', ws]]),
         q('son_teslim', 'homework_items', [
           ['select', 'submitted_at, homework_batches!inner(student_id, workspace_id)'],
           ['homework_batches.student_id', sid],
@@ -392,10 +386,10 @@ async function ogrenciDetay(ayar, o, t) {
         kitapHaritasi(ayar, o, t, S, ogrenci.id),
       ])
       // Müdahale bölümü (intervention-section.tsx): sayfa verisinden SONRA
-      // çizilen ayrı sunucu bileşeni — kendi üç sorgusu ikinci dalga.
+      // çizilen ayrı sunucu bileşeni — iki sorgusu ikinci dalga (operasyon
+      // satırını sayfadan alıyor).
       const simdi = Date.now()
       await Promise.all([
-        q('mudahale_satir', 'teacher_student_operation_view', [['select', '*'], ['workspace_id', ws], ['student_id', sid]]),
         q('mudahale_liste', 'interventions', [
           ['select', 'id, status, opened_status, opened_signals, note, session_id, opened_at, outcome, close_note, closed_at'],
           ['workspace_id', ws],

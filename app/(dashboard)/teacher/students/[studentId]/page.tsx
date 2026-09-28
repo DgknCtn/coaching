@@ -1,5 +1,6 @@
 import { StudentLoginSection } from './student-login-section'
 import { InterventionSection } from './intervention-section'
+import { singleResult } from '@/lib/data-result'
 import Link from 'next/link'
 import { compareHomeworkItems, isOverdue } from '@/lib/homework-status'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
@@ -103,7 +104,7 @@ export default async function StudentDetailPage({
   // Çekilmeyen sorgu boş sonuç döner; aşağıdaki hesaplar zaten `?? []` ile
   // boşu karşılıyor ve o blok bu sekmede çizilmiyor.
   const need = studentDetailNeeds((tab?.slug ?? null) as StudentDetailTab)
-  const skip = Promise.resolve({ data: null })
+  const skip = Promise.resolve({ data: null, error: null })
   const { supabase, workspaceId, activeTerm } = await getTeacherContext()
 
   const { data: student } = await supabase
@@ -130,7 +131,7 @@ export default async function StudentDetailPage({
     { data: weeklySummary },
     { data: pendingApprovalSummary },
     { data: overdueSummary },
-    { data: weekOperation },
+    weekOperationRes,
     { data: lastSubmittedRows },
     { data: academicNoteRows },
     { data: dayNoteRows },
@@ -238,15 +239,15 @@ export default async function StudentDetailPage({
     // "BU HAFTA" bloğu (R7/02 §1). DASHBOARD İLE AYNI SATIR: ikinci bir
     // hesap yazılsaydı öğretmen listede bir sayı, öğrenciye girince
     // başka bir sayı görürdü.
+    //
+    // TÜM SATIR (B13 aşama 0): Müdahale bölümü aynı satırın tamamını
+    // (durum ve gerekçe için) AYRICA sorguluyordu — aynı öğrenci için
+    // operasyon görünümüne ikinci bir gidiş. Artık bir kez okunuyor ve
+    // bölüme hatasıyla birlikte veriliyor (aşağıda singleResult).
     need.weekOperation
       ? supabase
           .from('teacher_student_operation_view')
-          // TEK STRING LİTERAL: supabase-js select'i TİP DÜZEYİNDE ayrıştırıyor;
-          // `+` ile birleştirilen bir ifade literal tip olmadığı için dönen
-          // satır `GenericStringError`'a düşer ve bütün alanlar kaybolur.
-          .select(
-            'weekly_flow_id, flow_started_at, flow_due_at, first_published_at, weekly_total, weekly_submitted, weekly_submitted_percent, approval_pending_count, weekly_pending_approval, next_contact_at, next_contact_kind'
-          )
+          .select('*')
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
           .maybeSingle()
@@ -376,6 +377,7 @@ export default async function StudentDetailPage({
   // Tempo eşikleri burada YAZILMIYOR — aynı bant Haftalık Akış
   // ekranında da gösteriliyor ve iki yerde ayrı yazılsaydı aynı öğrenci
   // iki ekranda iki farklı bant alırdı.
+  const weekOperation = weekOperationRes.data
   const now = new Date()
   const lastSubmittedAt =
     (lastSubmittedRows?.[0]?.submitted_at as string | null | undefined) ?? null
@@ -939,7 +941,13 @@ export default async function StudentDetailPage({
       {/* MÜDAHALE (B16): genel bakışta, özet bloklarının hemen altında —
           "bu öğrenci için ne yapıyorum" sorusu öğrenciye girilince ilk
           bakılan yer. Kendi verisini çekiyor (intervention-section.tsx). */}
-      {!tab && <InterventionSection studentId={studentId} workspaceId={workspaceId} />}
+      {!tab && (
+        <InterventionSection
+          studentId={studentId}
+          workspaceId={workspaceId}
+          operationRow={singleResult(weekOperationRes, 'intervention.operation_row')}
+        />
+      )}
 
       {/* PANELLER ARTIK ÜST ŞERİTTE (068).
           Burada bir TabsList vardı ve seçim client state'te tutuluyordu:
