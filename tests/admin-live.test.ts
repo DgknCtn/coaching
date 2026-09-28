@@ -34,6 +34,11 @@ const CALLS: [string, Record<string, unknown>][] = [
   ['admin_set_student_limit', { p_workspace_id: ZERO, p_limit: 1, p_reason: 'canlı yetki testi' }],
   ['admin_resolve_order', { p_order_id: ZERO, p_outcome: 'failed', p_reason: 'canlı yetki testi' }],
   ['admin_list_actions', { p_limit: 1 }],
+  // 129 — kayda bağlanan eski işlemler (yeni imzalarla).
+  ['admin_update_partner', { p_partner_id: ZERO, p_reason: 'canlı yetki testi', p_status: 'active' }],
+  ['admin_mark_commissions_paid', { p_partner_id: ZERO, p_reason: 'canlı yetki testi' }],
+  ['approve_book_for_library', { p_book_id: ZERO, p_reason: 'canlı yetki testi' }],
+  ['reject_book_for_library', { p_book_id: ZERO, p_reason: 'canlı yetki testi' }],
 ]
 
 describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', () => {

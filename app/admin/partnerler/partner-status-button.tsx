@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { ActionDialog } from '@/components/admin/action-dialog'
 import { updatePartnerAction } from './actions'
 
 /**
@@ -14,9 +12,10 @@ import { updatePartnerAction } from './actions'
  * (settle_billing_order ve resolve_partner_code yalnız aktif partneri
  * arıyor), birikmiş ödenmemiş hakedişi ise yerinde durur.
  *
- * İKİ ADIMLI: partnerin kodu dışarıda dolaşıyor. Yanlışlıkla askıya
- * alınan bir partner, o sırada onun bağlantısından gelen herkesi
- * sessizce kaybeder — geri alındığında bile o kayıtlar geri gelmez.
+ * ONAYLI VE GEREKÇELİ (129): partnerin kodu dışarıda dolaşıyor.
+ * Yanlışlıkla askıya alınan bir partner, o sırada onun bağlantısından
+ * gelen herkesi sessizce kaybeder. Askıya almada partner adı yazılarak
+ * onaylanır; her iki yön de yönetim kaydına girer.
  */
 export function PartnerStatusButton({
   partnerId,
@@ -27,59 +26,43 @@ export function PartnerStatusButton({
   partnerName: string
   status: string
 }) {
-  const [confirming, setConfirming] = useState(false)
-  const [pending, startTransition] = useTransition()
-
   const suspended = status !== 'active'
-  const next = suspended ? 'active' : 'suspended'
 
-  function apply() {
-    startTransition(async () => {
-      const res = await updatePartnerAction({ partnerId, status: next })
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-      toast.success(
-        suspended
-          ? `${partnerName} yeniden aktif.`
-          : `${partnerName} askıya alındı; kodu artık yeni atıf almaz.`
-      )
-      setConfirming(false)
-    })
-  }
-
-  // Geri açmak zararsız: onay adımı yalnız askıya almada.
   if (suspended) {
     return (
-      <Button type="button" size="sm" variant="outline" disabled={pending} onClick={apply}>
-        {pending ? '…' : 'Aktif et'}
-      </Button>
-    )
-  }
-
-  if (!confirming) {
-    return (
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        onClick={() => setConfirming(true)}
-        aria-label={`${partnerName} partnerini askıya al`}
-      >
-        Askıya al
-      </Button>
+      <ActionDialog
+        triggerLabel="Aktif et"
+        title="Partneri yeniden aktif et"
+        description="Kodu yeniden atıf ve hakediş üretmeye başlar."
+        submitLabel="Aktif et"
+        successMessage={`${partnerName} yeniden aktif.`}
+        preview={
+          <p>
+            Durum: <span className="text-muted-foreground">askıda</span> →{' '}
+            <span className="font-medium">aktif</span>
+          </p>
+        }
+        onSubmit={(reason) => updatePartnerAction({ partnerId, status: 'active', reason })}
+      />
     )
   }
 
   return (
-    <span className="flex items-center justify-end gap-1.5">
-      <Button type="button" size="sm" variant="outline" disabled={pending} onClick={apply}>
-        {pending ? '…' : 'Askıya al'}
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-        Vazgeç
-      </Button>
-    </span>
+    <ActionDialog
+      triggerLabel="Askıya al"
+      title="Partneri askıya al"
+      description="Kodu artık yeni atıf almaz ve yeni hakediş üretmez; birikmiş ödenmemiş hakediş yerinde kalır."
+      submitLabel="Askıya al"
+      successMessage={`${partnerName} askıya alındı; kodu artık yeni atıf almaz.`}
+      destructive
+      confirmPhrase={partnerName}
+      preview={
+        <p>
+          Durum: <span className="text-muted-foreground">aktif</span> →{' '}
+          <span className="font-medium">askıda</span>
+        </p>
+      }
+      onSubmit={(reason) => updatePartnerAction({ partnerId, status: 'suspended', reason })}
+    />
   )
 }

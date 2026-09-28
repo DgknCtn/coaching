@@ -35,8 +35,11 @@ export function ActionDialog({
   children,
   onSubmit,
   onOpenChange,
+  trigger,
 }: {
   triggerLabel: string
+  /** Varsayılan düğme yerine özel tetik (ör. simge düğmesi). */
+  trigger?: React.ReactElement
   title: string
   description?: string
   /** "Şu değişecek" — alan değerlerine göre canlı. */
@@ -89,9 +92,11 @@ export function ActionDialog({
     <Dialog open={open} onOpenChange={change}>
       <DialogTrigger
         render={
-          <Button size="sm" variant={destructive ? 'destructive' : 'outline'}>
-            {triggerLabel}
-          </Button>
+          trigger ?? (
+            <Button size="sm" variant={destructive ? 'destructive' : 'outline'}>
+              {triggerLabel}
+            </Button>
+          )
         }
       />
       <DialogContent className="sm:max-w-md">

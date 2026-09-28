@@ -48,6 +48,11 @@ const FIELD_LABEL: Record<string, string> = {
   months: 'Ay',
   student_count: 'Öğrenci',
   gross_kurus: 'Tutar',
+  partner: 'Partner',
+  commission_rate: 'Komisyon',
+  marked: 'Hakediş',
+  commission_kurus: 'Ödenen',
+  title: 'Kaynak',
 }
 
 const VALUE_LABEL: Record<string, string> = {
@@ -58,11 +63,14 @@ const VALUE_LABEL: Record<string, string> = {
   pending: 'bekliyor',
   paid: 'ödendi',
   failed: 'başarısız',
+  approved: 'yayında',
+  rejected: 'reddedildi',
 }
 
 function show(key: string, value: unknown): string {
   if (value === null || value === undefined) return '—'
-  if (key === 'gross_kurus') return formatKurus(Number(value))
+  if (key === 'gross_kurus' || key === 'commission_kurus') return formatKurus(Number(value))
+  if (key === 'commission_rate') return `%${Math.round(Number(value) * 1000) / 10}`
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTimeTr(value)
   if (typeof value === 'string') return VALUE_LABEL[value] ?? value
   return String(value)
@@ -114,7 +122,7 @@ export default async function AdminActionLog({
           <EmptyState
             icon={ScrollText}
             title="Henüz işlem yok"
-            description="Müşteri detayından ya da Gelir sekmesinden yapılan işlemler burada görünür."
+            description="Müşteri detayı, Gelir, Partnerler ve Kütüphane sekmelerinden yapılan işlemler burada görünür."
           />
         ) : (
           <ol className="divide-y">

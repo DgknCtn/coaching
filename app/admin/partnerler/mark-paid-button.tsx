@@ -1,16 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { ActionDialog } from '@/components/admin/action-dialog'
 import { markCommissionsPaidAction } from './actions'
 
 // HAKEDİŞİ ÖDENDİ İŞARETLE.
 //
-// İKİ ADIMLI: para transferini kaydeden, geri alınamaz bir işlem.
-// Yanlışlıkla tıklanan tek bir düğme, ödenmemiş bir hakedişi ödenmiş
-// gösterir ve partner parasını hiç alamaz — üstelik kayıt onu haklı
-// çıkarmaz. Onay adımı tutarı da tekrar gösteriyor.
+// ONAYLI VE GEREKÇELİ (129): para transferini kaydeden, geri alınamaz
+// bir işlem. Yanlışlıkla işaretlenen hakediş, partnerin parasını hiç
+// alamaması demek. Diyalog tutarı yeniden gösterir; gerekçe (ör. havale
+// referansı) yönetim kaydına değişmez olarak yazılır.
 
 export function MarkPaidButton({
   partnerId,
@@ -21,37 +19,20 @@ export function MarkPaidButton({
   partnerName: string
   amount: string
 }) {
-  const [confirming, setConfirming] = useState(false)
-  const [pending, startTransition] = useTransition()
-
-  function mark() {
-    startTransition(async () => {
-      const res = await markCommissionsPaidAction(partnerId)
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-      toast.success(`${partnerName} için ${amount} ödendi olarak işaretlendi.`)
-      setConfirming(false)
-    })
-  }
-
-  if (!confirming) {
-    return (
-      <Button type="button" size="sm" variant="outline" onClick={() => setConfirming(true)}>
-        Ödendi işaretle
-      </Button>
-    )
-  }
-
   return (
-    <div className="flex justify-end gap-1.5">
-      <Button type="button" size="sm" disabled={pending} onClick={mark}>
-        {pending ? '…' : `${amount} ödendi`}
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-        Vazgeç
-      </Button>
-    </div>
+    <ActionDialog
+      triggerLabel="Ödendi işaretle"
+      title="Hakedişi ödendi işaretle"
+      description="Yalnız ödeme partnere gerçekten gönderildiyse. Gerekçeye havale/EFT referansını yazın."
+      submitLabel={`${amount} ödendi`}
+      successMessage={`${partnerName} için ${amount} ödendi olarak işaretlendi.`}
+      preview={
+        <p>
+          {partnerName} · {amount}: <span className="text-muted-foreground">ödenmedi</span> →{' '}
+          <span className="font-medium">ödendi</span>
+        </p>
+      }
+      onSubmit={(reason) => markCommissionsPaidAction(partnerId, reason)}
+    />
   )
 }

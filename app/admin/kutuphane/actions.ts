@@ -17,8 +17,12 @@ const MAX_BACKUP_CHARS = 4_000_000
 // kontrol ediyor. Yetkiyi burada tekrarlamak ikinci bir doğruluk kaynağı
 // yaratır ve biri güncellenirken diğeri unutulur.
 
+// GEREKÇE (129): onay ve red yönetim kaydına gerekçeyle yazılır; en az
+// 10 karakter kuralı RPC'de. Reddetmede koça giden not AYRI ve isteğe bağlı.
+
 export async function approveLibrarySubmissionAction(
-  bookId: string
+  bookId: string,
+  reason: string
 ): Promise<{ error?: string }> {
   const parsed = libraryReviewSchema.safeParse({ bookId })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
@@ -26,31 +30,36 @@ export async function approveLibrarySubmissionAction(
   const supabase = await createClient()
   const { error } = await supabase.rpc('approve_book_for_library', {
     p_book_id: parsed.data.bookId,
+    p_reason: reason,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
 
   revalidatePath('/admin/kutuphane')
+  revalidatePath('/admin/kayit')
   revalidatePath('/teacher/books/library')
   return {}
 }
 
 export async function rejectLibrarySubmissionAction(
   bookId: string,
+  note: string,
   reason: string
 ): Promise<{ error?: string }> {
-  const parsed = libraryReviewSchema.safeParse({ bookId, reason })
+  const parsed = libraryReviewSchema.safeParse({ bookId, reason: note })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const supabase = await createClient()
   const { error } = await supabase.rpc('reject_book_for_library', {
     p_book_id: parsed.data.bookId,
-    p_reason: parsed.data.reason || null,
+    p_reason: reason,
+    p_note: parsed.data.reason || null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
 
   revalidatePath('/admin/kutuphane')
+  revalidatePath('/admin/kayit')
   return {}
 }
 

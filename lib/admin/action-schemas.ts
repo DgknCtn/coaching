@@ -57,6 +57,11 @@ export const ADMIN_ACTION_LABEL: Record<string, string> = {
   'license.grant': 'Lisans verildi',
   'order.mark_paid': 'Sipariş ödendi sayıldı',
   'order.mark_failed': 'Sipariş başarısız sayıldı',
+  // 129:
+  'partner.update': 'Partner güncellendi',
+  'partner.commissions_paid': 'Partner hakedişi ödendi',
+  'library.approve': 'Kütüphane önerisi onaylandı',
+  'library.reject': 'Kütüphane önerisi reddedildi',
 }
 
 export function adminActionLabel(action: string): string {

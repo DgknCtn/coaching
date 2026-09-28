@@ -8,18 +8,24 @@ import { dbErrorToTr } from '@/lib/auth-errors'
 // girişinde is_platform_admin() bakıyor. Burada tekrarlamak iki ayrı
 // doğruluk kaynağı yaratırdı.
 
+// GEREKÇE (129): para ya da erişim etkileyen işlemler yönetim kaydına
+// gerekçeyle yazılır; en az 10 karakter kuralı RPC'de (require_admin_reason).
+
 export async function markCommissionsPaidAction(
-  partnerId: string
+  partnerId: string,
+  reason: string
 ): Promise<{ error?: string; marked?: number }> {
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('admin_mark_commissions_paid', {
     p_partner_id: partnerId,
+    p_reason: reason,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
 
   revalidatePath('/admin/partnerler')
+  revalidatePath('/admin/kayit')
   return { marked: (data as unknown as { marked: number })?.marked ?? 0 }
 }
 
@@ -70,11 +76,13 @@ export async function updatePartnerAction(input: {
   partnerId: string
   commissionPercent?: number
   status?: 'active' | 'suspended'
+  reason: string
 }): Promise<{ error?: string }> {
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('admin_update_partner', {
     p_partner_id: input.partnerId,
+    p_reason: input.reason,
     p_commission_rate:
       input.commissionPercent === undefined ? null : input.commissionPercent / 100,
     p_status: input.status ?? null,
