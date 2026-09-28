@@ -13,6 +13,7 @@ import { formatKurus, formatKurusShort } from '@/lib/billing/pricing'
 import { daysLeft } from '@/lib/plans'
 import { formatDateTr, formatRelativeTr } from '@/lib/format'
 import { monthLabel, type Revenue } from '@/lib/admin/types'
+import { ResolveOrder } from './resolve-order'
 
 export const metadata: Metadata = { title: 'Gelir' }
 export const dynamic = 'force-dynamic'
@@ -214,6 +215,14 @@ export default async function AdminRevenue({
                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
                       {unmatched(o) && <Badge variant="destructive">Belirteç yok · elle mutabakat</Badge>}
                       {formatRelativeTr(o.created_at)}
+                      {/* 128: bir saatten yeni siparişte ödeme sürüyor olabilir. */}
+                      {now - new Date(o.created_at).getTime() > HOUR && (
+                        <ResolveOrder
+                          orderId={o.order_id}
+                          workspaceName={o.workspace_name}
+                          amount={formatKurus(Number(o.kurus))}
+                        />
+                      )}
                     </span>
                   </li>
                 ))}

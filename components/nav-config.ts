@@ -1,4 +1,4 @@
-import { Activity, Building2, Scale, Server, UsersRound,
+import { Activity, Building2, Scale, ScrollText, Server, UsersRound,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -395,6 +395,7 @@ export const adminNav: NavItem[] = [
   { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert },
   { href: '/admin/sistem', label: 'Sistem', icon: Server },
   { href: '/admin/uyum', label: 'Uyum', icon: Scale },
+  { href: '/admin/kayit', label: 'Yönetim Kaydı', icon: ScrollText },
 ]
 
 export const studentNav: NavItem[] = [

@@ -15,6 +15,16 @@ import { KpiCard } from '@/components/admin/kpi-card'
 import { TrendChart } from '@/components/admin/charts/trend-chart'
 import { WindowPicker, parseWindow } from '@/components/admin/window-picker'
 import { dayLabel, type WorkspaceActivity } from '@/lib/admin/types'
+import { adminActionLabel } from '@/lib/admin/action-schemas'
+import { ActionsPanel } from './actions-panel'
+
+interface AdminActionRow {
+  id: string
+  created_at: string
+  actor_name: string | null
+  action: string
+  reason: string
+}
 
 export const metadata: Metadata = { title: 'Çalışma Alanı' }
 export const dynamic = 'force-dynamic'
@@ -97,10 +107,12 @@ export default async function AdminWorkspaceDetail({
   const supabase = await createClient()
 
   // Etkinlik ayrı sorgu: düşerse sayfa değil yalnız o bölümler "alınamadı" der.
-  const [{ data, error }, activityRes] = await Promise.all([
+  const [{ data, error }, activityRes, actionsRes] = await Promise.all([
     supabase.rpc('admin_workspace_detail', { p_workspace_id: workspaceId }),
     supabase.rpc('admin_workspace_activity', { p_workspace_id: workspaceId, p_days: days }),
+    supabase.rpc('admin_list_actions', { p_limit: 10, p_offset: 0, p_workspace_id: workspaceId }),
   ])
+  const adminActions = actionsRes.error ? null : ((actionsRes.data ?? []) as AdminActionRow[])
 
   // RPC yetkisiz çağrıda exception atıyor; layout zaten admin olmayanı
   // içeri almıyor. Buradaki hata pratikte "böyle bir kayıt yok" demek.
@@ -134,6 +146,45 @@ export default async function AdminWorkspaceDetail({
         backHref="/admin/musteriler"
         badges={statusBadge}
       />
+
+      {/* İŞLEMLER (128): her biri gerekçe ister ve yönetim kaydına yazılır. */}
+      <Section
+        title="İşlemler"
+        description="Her işlem gerekçe ister ve değiştirilemez yönetim kaydına yazılır."
+        className="mb-6"
+        action={
+          <Link href="/admin/kayit" className="text-sm underline-offset-4 hover:underline">
+            Yönetim kaydı
+          </Link>
+        }
+      >
+        <ActionsPanel
+          workspaceId={w.id}
+          workspaceName={w.name}
+          plan={w.plan}
+          status={w.status}
+          trialEndsAt={w.trial_ends_at}
+          studentLimit={w.student_limit}
+          activeStudents={w.active_students}
+          licenseEndsAt={detail.license?.ends_at ?? null}
+          licenseStudentCount={detail.license?.student_count ?? null}
+        />
+        {adminActions && adminActions.length > 0 && (
+          <ul className="mt-4 divide-y rounded-lg border bg-card text-sm">
+            {adminActions.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium">{adminActionLabel(a.action)}</span>{' '}
+                  <span className="text-muted-foreground">· {a.reason}</span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {a.actor_name ?? '—'} · {formatRelativeTr(a.created_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

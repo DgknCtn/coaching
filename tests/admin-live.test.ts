@@ -27,6 +27,13 @@ const CALLS: [string, Record<string, unknown>][] = [
   ['purge_auth_event_ips', {}],
   ['admin_list_workspaces', {}],
   ['admin_login_countries', { p_days: 7 }],
+  // 128 — işlemler: yönetici olmayan için gerekçe/kayıt denetimine hiç gelinmez.
+  ['admin_extend_trial', { p_workspace_id: ZERO, p_days: 1, p_reason: 'canlı yetki testi' }],
+  ['admin_set_workspace_status', { p_workspace_id: ZERO, p_status: 'active', p_reason: 'canlı yetki testi' }],
+  ['admin_grant_license', { p_workspace_id: ZERO, p_student_count: 1, p_months: 1, p_reason: 'canlı yetki testi' }],
+  ['admin_set_student_limit', { p_workspace_id: ZERO, p_limit: 1, p_reason: 'canlı yetki testi' }],
+  ['admin_resolve_order', { p_order_id: ZERO, p_outcome: 'failed', p_reason: 'canlı yetki testi' }],
+  ['admin_list_actions', { p_limit: 1 }],
 ]
 
 describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', () => {
@@ -75,6 +82,23 @@ describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', (
     })
     expect(r.status, JSON.stringify(r.body)).toBeGreaterThanOrEqual(400)
     expect(r.code).toBe('42501')
+  })
+
+  // 128: yönetim kaydı yalnız fonksiyonlardan; doğrudan okuma/yazma yok,
+  // iç yardımcı istemciye kapalı. Yönetici hesabı için de geçerli.
+  it('admin_actions doğrudan okunamaz ve yazılamaz', async () => {
+    expect((await a.select('admin_actions?select=id&limit=1')).status).toBeGreaterThanOrEqual(400)
+    const w = await a.write('POST', 'admin_actions', {
+      actor_profile_id: ZERO,
+      action: 'x',
+      reason: 'doğrudan yazma denemesi',
+    })
+    expect(w.status).toBeGreaterThanOrEqual(400)
+    const r = await a.rpc('record_admin_action', {
+      p_action: 'x', p_workspace_id: null, p_target_id: null,
+      p_reason: 'doğrudan yazma denemesi', p_before: {}, p_after: {},
+    })
+    expect(r.status).toBeGreaterThanOrEqual(400)
   })
 
   it('cron_runs doğrudan okunamaz', async () => {
