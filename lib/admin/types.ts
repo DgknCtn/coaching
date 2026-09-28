@@ -75,6 +75,43 @@ export interface FeatureUsage {
   last_at: string
 }
 
+/** admin_revenue (124) — tutarlar kuruş. */
+export interface Revenue {
+  monthly: { month: string; kurus: number; orders: number }[]
+  active_licenses: number
+  licensed_students: number
+  expiring: {
+    workspace_id: string
+    workspace_name: string
+    kind: 'license' | 'trial'
+    ends_at: string
+    student_count: number | null
+  }[]
+  failed: {
+    order_id: string
+    workspace_id: string
+    workspace_name: string
+    kurus: number
+    reason: string | null
+    at: string
+  }[]
+  pending: {
+    order_id: string
+    workspace_id: string
+    workspace_name: string
+    kurus: number
+    created_at: string
+    has_token: boolean
+  }[]
+}
+
+const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+
+/** "2026-09" → "Eyl 26" */
+export function monthLabel(yyyyMm: string): string {
+  return monthFormatter.format(new Date(`${yyyyMm}-01T00:00:00Z`))
+}
+
 /** admin_workspace_activity (124) — öğretmenler adıyla, öğrenci/veli yalnız sayı. */
 export interface WorkspaceActivity {
   daily: { day: string; published: number; submitted: number; approved: number }[]

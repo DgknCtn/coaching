@@ -388,6 +388,7 @@ export const adminNav: NavItem[] = [
   { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2 },
   { href: '/admin/kullanicilar', label: 'Kullanıcılar', icon: UsersRound },
   { href: '/admin/kullanim', label: 'Kullanım', icon: Activity },
+  { href: '/admin/gelir', label: 'Gelir', icon: Wallet },
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
   { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },

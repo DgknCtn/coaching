@@ -3,46 +3,61 @@ import { cn } from '@/lib/utils'
 
 // ZAMAN PENCERESİ — yönetim sayfalarının ortak filtresi (dataviz: tek satır,
 // grafiklerin üstünde, tarih aralığı önce; hazır seçenekler).
-// URL'de ?gun= — paylaşılabilir, geri tuşu çalışır. Geçersiz değer varsayılana düşer.
+// URL'de ?gun= (ya da `param`) — paylaşılabilir, geri tuşu çalışır.
+// Geçersiz değer varsayılana düşer.
 
 export const WINDOW_OPTIONS = [7, 30, 90, 365] as const
 
-export function parseWindow(value: string | undefined, fallback = 30): number {
+export function parseWindow(
+  value: string | undefined,
+  fallback = 30,
+  options: readonly number[] = WINDOW_OPTIONS
+): number {
   const n = Number(value)
-  return (WINDOW_OPTIONS as readonly number[]).includes(n) ? n : fallback
+  return options.includes(n) ? n : fallback
+}
+
+function dayLabel(d: number) {
+  return d === 365 ? '1 yıl' : `${d} gün`
 }
 
 export function WindowPicker({
   basePath,
   value,
   extra,
+  param = 'gun',
+  options = WINDOW_OPTIONS,
+  label = dayLabel,
 }: {
   basePath: string
   value: number
   /** Korunacak diğer sorgu parametreleri. */
   extra?: Record<string, string | undefined>
+  param?: string
+  options?: readonly number[]
+  label?: (n: number) => string
 }) {
-  function href(days: number) {
+  function href(n: number) {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(extra ?? {})) if (v) params.set(k, v)
-    params.set('gun', String(days))
+    params.set(param, String(n))
     return `${basePath}?${params.toString()}`
   }
   return (
     <nav aria-label="Zaman aralığı" className="flex flex-wrap gap-1.5 text-sm">
-      {WINDOW_OPTIONS.map((d) => (
+      {options.map((n) => (
         <Link
-          key={d}
-          href={href(d)}
-          aria-current={d === value ? 'page' : undefined}
+          key={n}
+          href={href(n)}
+          aria-current={n === value ? 'page' : undefined}
           className={cn(
             'rounded-md border px-3 py-1 transition-colors',
-            d === value
+            n === value
               ? 'border-primary bg-primary/10 font-medium text-foreground'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
         >
-          {d === 365 ? '1 yıl' : `${d} gün`}
+          {label(n)}
         </Link>
       ))}
     </nav>
