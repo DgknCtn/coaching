@@ -46,6 +46,27 @@ describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', (
     })
   }
 
+  // Önkoşul: yukarıdaki "öğretmen çağıramaz" testleri yalnız yönetici
+  // OLMAYAN bir hesapla anlamlı. Hesap yöneticiyse hepsi kırmızıdır;
+  // nedeni burada tek satırda yazar.
+  it('test hesabı platform yöneticisi değil', async () => {
+    const r = await a.rpc<boolean>('is_platform_admin', {})
+    expect(r.body, `${a.email} platform yöneticisi — SQL Editor'de is_platform_admin = FALSE yapın`).toBe(false)
+  })
+
+  // 125: kullanıcı kendi yönetici bayrağını değiştiremez (her iki yönde).
+  it('kullanıcı is_platform_admin bayrağını değiştiremez', async () => {
+    const me = await a.select<{ id: string; is_platform_admin: boolean }[]>(
+      'profiles?select=id,is_platform_admin&limit=1'
+    )
+    const row = me.body[0]
+    const r = await a.write('PATCH', `profiles?id=eq.${row.id}`, {
+      is_platform_admin: !row.is_platform_admin,
+    })
+    expect(r.status, JSON.stringify(r.body)).toBeGreaterThanOrEqual(400)
+    expect(r.code).toBe('42501')
+  })
+
   it('cron_runs doğrudan okunamaz', async () => {
     const r = await a.select<unknown[]>('cron_runs?select=id&limit=1')
     expect(r.status).toBeGreaterThanOrEqual(400)
