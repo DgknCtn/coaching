@@ -23,7 +23,9 @@
 //   npm run load
 //
 // Seçimlik: LOAD_APP_URL (Vercel tarafını da ölçmek için),
-// LOAD_WRITES=0 (yazmaları kapat).
+// LOAD_WRITES=0 (yazmaları kapat), LOAD_SENARYO=sayfa|eski (varsayılan
+// sayfa — sayfalar.mjs; eski = senaryolar.mjs `tur`, aşırı yük ölçüsü),
+// LOAD_DUSUNME_SN="5-20" (sayfa senaryosunda sayfalar arası saniye).
 //
 // ============================================================
 // ÜRETİM KİLİDİ — TEK GERÇEK KORUMA
@@ -44,6 +46,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { girisYap, tur } from './senaryolar.mjs'
+import { dusunmeAraligi, sayfaGoruntule } from './sayfalar.mjs'
 import { raporYaz, toplayiciOlustur } from './olcum.mjs'
 
 /** `operations.md` §5'teki kademe tablosunun birebir karşılığı. */
@@ -174,9 +177,16 @@ function ayarOku() {
     )
   }
 
+  const senaryo = (process.env.LOAD_SENARYO ?? 'sayfa').trim()
+  if (senaryo !== 'sayfa' && senaryo !== 'eski') {
+    cik(`bilinmeyen senaryo "${senaryo}". Seçenekler: sayfa, eski`)
+  }
+
   return {
     url,
     anonKey,
+    senaryo,
+    dusunme: dusunmeAraligi(process.env.LOAD_DUSUNME_SN),
     appUrl: appUrl || null,
     kademeAdi,
     kademe: sureliKademe,
@@ -185,15 +195,24 @@ function ayarOku() {
   }
 }
 
-/** Tek bir sanal kullanıcı: süre bitene kadar tur döndürür. */
+/** Tek bir sanal kullanıcı: süre bitene kadar sayfa (ya da tur) döndürür. */
 async function sanalKullanici(ayar, oturum, toplayici, bitisZamani) {
   while (Date.now() < bitisZamani) {
-    await tur(ayar, oturum, toplayici)
+    if (ayar.senaryo === 'eski') {
+      await tur(ayar, oturum, toplayici)
+      // Eski senaryonun düşünmesi (0,5-2 sn) — aşırı yük ölçüsü olarak korunuyor.
+      await new Promise(c => setTimeout(c, 500 + Math.random() * 1500))
+      continue
+    }
 
-    // DÜŞÜNME SÜRESİ. Gerçek kullanıcı turları arka arkaya yapmaz;
-    // sıfır beklemeyle koşmak, ölçüyü "sistem ne kadar hızlı boğulur"a
-    // çevirir ve gecikme sayılarını anlamsızlaştırır.
-    await new Promise(c => setTimeout(c, 500 + Math.random() * 1500))
+    await sayfaGoruntule(ayar, oturum, toplayici)
+
+    // DÜŞÜNME SÜRESİ — SAYFALAR ARASI (varsayılan 5-20 sn). Kapalı döngüde
+    // kısa düşünme, sorgular hızlandıkça yükü şişirir: 28 Eylül'de aynı 40
+    // sanal kullanıcı saniyede 29'dan 94 isteğe çıktı ve ölçülen şey
+    // kullanıcı değil boğulma hızı oldu.
+    const [a, b] = ayar.dusunme
+    await new Promise(c => setTimeout(c, a + Math.random() * (b - a)))
   }
 }
 
@@ -206,6 +225,11 @@ async function main() {
       `süre=${kademe.dakika}dk yazma=${ayar.yazmaAcik ? 'açık' : 'kapalı'}`
   )
   console.log(`amaç: ${kademe.amac}`)
+  console.log(
+    ayar.senaryo === 'eski'
+      ? 'senaryo: ESKİ (tur, 0,5-2 sn düşünme — aşırı yük ölçüsü, gerçek kullanım değil)'
+      : `senaryo: sayfa (panel/öğrenci detayı/öğrenciler/görevler), düşünme ${ayar.dusunme[0] / 1000}-${ayar.dusunme[1] / 1000} sn`
+  )
   console.log(`hedef: ${ayar.url}${ayar.appUrl ? ` + ${ayar.appUrl}` : ' (Vercel ölçülmüyor)'}`)
 
   const toplayici = toplayiciOlustur()

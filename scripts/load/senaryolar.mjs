@@ -82,8 +82,8 @@ export function yazmaSayisi() {
  */
 const gorulenHatalar = new Set()
 
-/** Ortak: bir isteği ölç ve sınıflandır. */
-async function istek(toplayici, ad, url, secenekler = {}) {
+/** Ortak: bir isteği ölç ve sınıflandır. (sayfalar.mjs de kullanır) */
+export async function istek(toplayici, ad, url, secenekler = {}) {
   const baslangic = performance.now()
   try {
     const yanit = await fetch(url, secenekler)
@@ -173,6 +173,8 @@ export async function girisYap(ayar, kullanici, toplayici) {
 
   return {
     etiket: kullanici.email,
+    // sayfalar.mjs: getTeacherContext profili auth_user_id ile okur.
+    kullaniciId: yanit.govde?.user?.id ?? null,
     basliklar,
     workspaceId: liste[0].workspace_id,
     ogrenciler: liste,
@@ -189,6 +191,14 @@ function buGun() {
 }
 
 /**
+ * ESKİ SENARYO — `LOAD_SENARYO=eski` ile seçilir (28 Eylül 2026'dan beri
+ * varsayılan DEĞİL; varsayılan sayfalar.mjs).
+ *
+ * Uygulamanın yapmadığı sorgular içeriyor: panel adımı overview'ı
+ * filtresiz `select=*` ile okuyor, uygulama ise çalışma alanıyla ve iki
+ * sütunla. Düşünme süresi de adım başına 0,5-2 sn. Gerçek kullanımı değil
+ * AŞIRI YÜKÜ ölçer; bu amaçla korunuyor.
+ *
  * TEK BİR SANAL KULLANICI TURU.
  *
  * Sıra, gerçek bir öğretmenin oturumunu taklit ediyor: panel → öğrenci
