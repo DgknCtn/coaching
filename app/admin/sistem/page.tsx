@@ -34,6 +34,7 @@ interface Health {
 
 const JOB_LABEL: Record<string, string> = {
   'purge-auth-events': 'Giriş kayıtlarında 90 günlük temizlik',
+  hatirlatmalar: 'Deneme ve lisans hatırlatma e-postaları',
 }
 
 export default async function AdminSystem() {

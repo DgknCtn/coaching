@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/service'
+import { checkCronAuth } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,35 +34,19 @@ export const dynamic = 'force-dynamic'
 //     ödemek olurdu.
 //   - Vercel Cron `Authorization: Bearer <CRON_SECRET>` gönderir.
 //   - Karşılaştırma SABİT SÜRELİ: uzunluk farkı ve karakter farkı
-//     zamanlamadan sızmasın.
+//     zamanlamadan sızmasın. (Kural lib/cron-auth.ts'te, uçlar ortak.)
 //
 // İşin kendisi zararsız bir temizlik ama yetkisiz çağrı, ucun
 // tekrar tekrar tetiklenip veritabanına yük bindirmesine izin verirdi.
 
-/** Sabit süreli karşılaştırma — erken dönüş yok. */
-function timingSafeEqual(a: string, b: string): boolean {
-  // Uzunluk farkı tek başına sızıntıdır; ikisini de aynı uzunlukta
-  // gezmek için farkı sonuca katıyoruz.
-  let diff = a.length ^ b.length
-  const len = Math.max(a.length, b.length)
-  for (let i = 0; i < len; i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
-  }
-  return diff === 0
-}
-
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-
-  if (!secret) {
+  // Yetki kuralı (sır yoksa kapalı, sabit süreli karşılaştırma) lib/cron-auth.ts'te.
+  const auth = checkCronAuth(request)
+  if (auth === 'not_configured') {
     console.error('[cron/purge-auth-events] CRON_SECRET tanımlı değil; uç kapalı.')
     return NextResponse.json({ error: 'not_configured' }, { status: 503 })
   }
-
-  const header = request.headers.get('authorization') ?? ''
-  const expected = `Bearer ${secret}`
-
-  if (!timingSafeEqual(header, expected)) {
+  if (auth === 'unauthorized') {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 

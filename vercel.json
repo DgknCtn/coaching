@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/purge-auth-events",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/hatirlatmalar",
+      "schedule": "0 6 * * *"
     }
   ]
 }

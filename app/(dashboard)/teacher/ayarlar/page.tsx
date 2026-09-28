@@ -8,6 +8,8 @@ import { Section } from '@/components/shared/section'
 import { Button } from '@/components/ui/button'
 import { AccountForm } from './account-form'
 import { PasswordForm } from './password-form'
+import { NotificationToggle } from './notification-toggle'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = { title: 'Ayarlar' }
 export const dynamic = 'force-dynamic'
@@ -23,10 +25,10 @@ export const dynamic = 'force-dynamic'
 // için ortak bir yer yoktu — ad değiştirmek, şifre değiştirmek ve plana
 // bakmak üç farklı zihinsel adresti; ilk ikisinin adresi ise hiç yoktu.
 //
-// BİLDİRİM AYARLARI BİLİNÇLİ OLARAK YOK: sistemde bildirim gönderen
-// hiçbir altyapı yok. Hiçbir şeyi değiştirmeyen açma/kapama düğmeleri,
-// kullanıcıya kapattığını sandığı bir şeyin aslında hiç var olmadığını
-// gizler.
+// BİLDİRİMLER (131): uygulama artık hatırlatma e-postası gönderiyor
+// (lib/email.ts). Tercih yalnız GERÇEKTEN gönderilen iletiyi kapatır;
+// henüz var olmayan bildirim türleri için düğme konmaz — hiçbir şeyi
+// değiştirmeyen düğme, kullanıcıya kapattığını sandığı şeyi gizler.
 // ============================================================
 
 export default async function SettingsPage() {
@@ -38,6 +40,15 @@ export default async function SettingsPage() {
       ? usage?.licenseEndsAt
       : usage?.trialEndsAt
   const left = daysLeft(endsAt ?? null)
+
+  // Tercih ayrı okunuyor: bağlam sorgusunu (her sayfada çalışan) bir
+  // sütun için genişletmeye değmez. Okunamazsa bölüm çizilmez — yanlış
+  // değeri gösteren bir kutu, yanlış bir tercih kaydettirir.
+  const { data: notifRow, error: notifError } = await (await createClient())
+    .from('profiles')
+    .select('email_notifications')
+    .eq('id', profile.id)
+    .maybeSingle()
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 md:p-8">
@@ -55,6 +66,12 @@ export default async function SettingsPage() {
       <Section title="Şifre" variant="card" contentClassName="p-5">
         <PasswordForm />
       </Section>
+
+      {!notifError && notifRow && (
+        <Section title="Bildirimler" variant="card" contentClassName="p-5">
+          <NotificationToggle enabled={notifRow.email_notifications !== false} />
+        </Section>
+      )}
 
       {/* PLAN BURADA ÖZETLENİR, YÖNETİLMEZ. Satın alma ve sipariş geçmişi
           kendi ekranında duruyor; buradaki tek iş "durumum ne?" sorusunu

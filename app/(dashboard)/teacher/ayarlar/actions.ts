@@ -47,6 +47,26 @@ export async function updateAccountAction(
 }
 
 /**
+ * Hizmet e-postaları tercihi (131). Kullanıcı yalnız kendi satırını
+ * değiştirebilir (profiles_update_own); hedef satır oturumdan bulunuyor,
+ * istemciden gelen bir kimlikten değil.
+ */
+export async function updateEmailNotificationsAction(
+  enabled: boolean
+): Promise<{ error?: string; success?: boolean }> {
+  if (typeof enabled !== 'boolean') return { error: 'Geçersiz değer.' }
+  const { profile } = await getTeacherContext()
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('profiles')
+    .update({ email_notifications: enabled })
+    .eq('id', profile.id)
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidatePath('/teacher/ayarlar')
+  return { success: true }
+}
+
+/**
  * Şifre değiştirme — MEVCUT ŞİFRE DOĞRULANARAK.
  *
  * `supabase.auth.updateUser` mevcut şifreyi sormaz; oturum açıksa
