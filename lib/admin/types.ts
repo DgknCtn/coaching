@@ -52,6 +52,29 @@ export interface SystemStatus {
   rate_limit_rows: number
 }
 
+/** admin_teacher_activity (124) — öğretmen adıyla. */
+export interface TeacherActivity {
+  profile_id: string
+  teacher_name: string | null
+  teacher_email: string | null
+  workspace_id: string
+  workspace_name: string
+  last_login_at: string | null
+  logins: number
+  homework_published: number
+  approvals: number
+  sessions_marked: number
+  active_students: number
+}
+
+/** admin_feature_usage (124) — eylem türü; detail yok. */
+export interface FeatureUsage {
+  action: string
+  total: number
+  workspaces: number
+  last_at: string
+}
+
 /** admin_workspace_activity (124) — öğretmenler adıyla, öğrenci/veli yalnız sayı. */
 export interface WorkspaceActivity {
   daily: { day: string; published: number; submitted: number; approved: number }[]

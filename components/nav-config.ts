@@ -1,4 +1,4 @@
-import { Building2, Rocket,
+import { Activity, Building2, UsersRound,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -386,10 +386,11 @@ export function studentOverviewNav(studentId: string): NavItem[] {
 export const adminNav: NavItem[] = [
   { href: '/admin', label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
   { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2 },
+  { href: '/admin/kullanicilar', label: 'Kullanıcılar', icon: UsersRound },
+  { href: '/admin/kullanim', label: 'Kullanım', icon: Activity },
   { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
   { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
   { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
-  { href: '/admin/aktivasyon', label: 'Aktivasyon', icon: Rocket },
   { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert },
 ]
 
