@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { canRunTenantTests, signInBothTenants, type Tenant } from './helpers/tenant'
 
-// YÖNETİM FONKSİYONLARI (122-124) — admin olmayan hiç kimse çağıramaz.
-// Test öğretmeni (platform yöneticisi DEĞİL) 'Permission denied' almalı;
+// YÖNETİM FONKSİYONLARI (122-126) — admin olmayan hiç kimse çağıramaz.
+// Test kiracılarından yönetici OLMAYAN biri 'Permission denied' almalı;
 // anon zaten yetkisiz. Migration'lar canlıda değilse bu dosya kırmızıdır.
+//
+// Test hesapları bilerek platform yöneticisi olabilir (28 Eylül 2026,
+// kullanıcı kararı: panel onlarla deneniyor). İkisi de yöneticiyse
+// "öğretmen çağıramaz" testleri kırmızı değil ATLANMIŞ görünür — yönetici
+// zaten çağırabilir, bu bir açık değil. Anon testleri her durumda koşar.
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -25,14 +30,25 @@ const CALLS: [string, Record<string, unknown>][] = [
 
 describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', () => {
   let a: Tenant
+  // Yönetici olmayan test kiracısı; yoksa null.
+  let nonAdmin: Tenant | null = null
 
   beforeAll(async () => {
-    a = (await signInBothTenants()).a
+    const both = await signInBothTenants()
+    a = both.a
+    for (const t of [both.a, both.b]) {
+      const r = await t.rpc<boolean>('is_platform_admin', {})
+      if (r.body === false) {
+        nonAdmin = t
+        break
+      }
+    }
   }, 30_000)
 
   for (const [name, body] of CALLS) {
-    it(`${name}: öğretmen çağıramaz`, async () => {
-      const r = await a.rpc(name, body)
+    it(`${name}: öğretmen çağıramaz`, async (ctx) => {
+      if (!nonAdmin) ctx.skip()
+      const r = await nonAdmin!.rpc(name, body)
       expect(r.status, JSON.stringify(r.body)).toBeGreaterThanOrEqual(400)
       expect(JSON.stringify(r.body)).toMatch(/Permission denied|42501/)
     })
@@ -46,14 +62,6 @@ describe.skipIf(!canRunTenantTests)('yönetim fonksiyonları · canlı yetki', (
       expect(res.status).toBeGreaterThanOrEqual(400)
     })
   }
-
-  // Önkoşul: yukarıdaki "öğretmen çağıramaz" testleri yalnız yönetici
-  // OLMAYAN bir hesapla anlamlı. Hesap yöneticiyse hepsi kırmızıdır;
-  // nedeni burada tek satırda yazar.
-  it('test hesabı platform yöneticisi değil', async () => {
-    const r = await a.rpc<boolean>('is_platform_admin', {})
-    expect(r.body, `${a.email} platform yöneticisi — SQL Editor'de is_platform_admin = FALSE yapın`).toBe(false)
-  })
 
   // 125: kullanıcı kendi yönetici bayrağını değiştiremez (her iki yönde).
   it('kullanıcı is_platform_admin bayrağını değiştiremez', async () => {
