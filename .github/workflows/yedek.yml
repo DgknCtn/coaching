@@ -68,7 +68,7 @@ jobs:
     name: Döküm al, şifrele, yükle
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: PostgreSQL 17 istemcisini kur
         # `ubuntu-latest` PG 16 istemcisiyle geliyor; sunucu 17.6.
