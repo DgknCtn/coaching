@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { uuidSchema, firstIssue } from '@/lib/validation'
 import { dbErrorToTr } from '@/lib/auth-errors'
+import { logAudit } from '@/lib/audit'
 
 const targetSchema = z
   .object({
@@ -214,7 +215,7 @@ export async function setStudentBookScopeAction(
     if (!scope.success) return { error: 'Geçersiz ders/kapsam.' }
   }
 
-  await getTeacherContext()
+  const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('set_student_book_scope', {
@@ -224,8 +225,66 @@ export async function setStudentBookScopeAction(
 
   if (error) return { error: dbErrorToTr(error.message) }
 
+  // M1.0-01 §1.3: yalnız alan değişir; ilerleme, hedef, tarih ve ödev
+  // geçmişi atamanın id'sine bağlı olduğu için korunur.
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'assignment.scope_change',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { assignmentId: parsed.data, bookId, scopeId: scopeId || null },
+  })
+
+  revalidateResource(studentId, bookId)
+  return { success: true }
+}
+
+function revalidateResource(studentId: string, bookId: string) {
   revalidatePath(`/teacher/students/${studentId}/books/${bookId}`)
   revalidatePath(`/teacher/students/${studentId}/goals`)
+  revalidatePath(`/teacher/students/${studentId}/homework/new`)
   revalidatePath(`/teacher/students/${studentId}`)
+  revalidatePath('/teacher/tasks')
+}
+
+/**
+ * Atanmış kaynağın temizliği (M1.0-01 §1.2).
+ *
+ *   delete    — hiç kullanılmamış kaynak (ödev/ilerleme yok). RPC kullanımı
+ *               yeniden denetler; arayüzün gösterdiği butona güvenmez.
+ *   archive   — kullanılmış kaynak. Açık kalemler iptal olur, geçmiş kalır.
+ *   unarchive — arşivden aktif plana dönüş.
+ */
+export async function assignmentCleanupAction(
+  studentId: string,
+  bookId: string,
+  assignmentId: string,
+  kind: 'delete' | 'archive' | 'unarchive'
+) {
+  const parsed = uuidSchema.safeParse(assignmentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  if (!['delete', 'archive', 'unarchive'].includes(kind)) return { error: 'Geçersiz işlem.' }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const rpc = {
+    delete: 'delete_unused_assignment',
+    archive: 'archive_assignment',
+    unarchive: 'unarchive_assignment',
+  }[kind]
+
+  const { data, error } = await supabase.rpc(rpc, { p_assignment_id: parsed.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: `assignment.${kind}`,
+    entityType: 'student',
+    entityId: studentId,
+    detail: { assignmentId: parsed.data, bookId, result: data ?? null },
+  })
+
+  revalidateResource(studentId, bookId)
   return { success: true }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Loader2, Save, Layers } from 'lucide-react'
+import { Loader2, Save, Layers, Archive, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import type { BookMapBook } from '@/lib/book-map'
@@ -10,7 +10,14 @@ import {
   BOOK_ROLE_OPTIONS,
   bookPlanStatusLabel,
 } from '@/lib/resource-plan'
-import { setStudentBookPlanAction } from './target-actions'
+import {
+  assignmentCleanupAction,
+  setStudentBookPlanAction,
+  setStudentBookScopeAction,
+} from './target-actions'
+import type { StudentScope } from '@/lib/student-scopes'
+import { UNASSIGNED_SCOPE_LABEL } from '@/lib/student-scopes'
+import { ConfirmActionDialog } from '@/components/shared/confirm-action-dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -27,9 +34,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 interface Props {
   studentId: string
   book: BookMapBook
+  /** Çalışma alanının aktif ders/kapsamları (M1.0-01 §1.3). */
+  scopes: StudentScope[]
+  /** Kaynak ödev veya resmi tamamlama üretmiş mi (sunucuda hesaplanır). */
+  isUsed: boolean
+  /** Temizlikten sonra dönülecek liste. */
+  backHref: string
 }
 
-export function ResourcePlanCard({ studentId, book }: Props) {
+export function ResourcePlanCard({ studentId, book, scopes, isUsed, backHref }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -44,18 +57,40 @@ export function ResourcePlanCard({ studentId, book }: Props) {
 
   const [status, setStatus] = useState(initialStatus)
   const [role, setRole] = useState(book.role ?? '')
+  // Kayıtlı alan listede yoksa (pasif/silinmiş alan) "Alan atanmamış"
+  // gibi davranılır; seçim yapılınca düzelir.
+  const initialScope = book.scopeId && scopes.some(s => s.id === book.scopeId) ? book.scopeId : ''
+  const [scopeId, setScopeId] = useState(initialScope)
 
-  const dirty = status !== initialStatus || role !== (book.role ?? '')
+  const planDirty = status !== initialStatus || role !== (book.role ?? '')
+  const scopeDirty = scopeId !== initialScope
+  const dirty = planDirty || scopeDirty
 
   function save() {
     startTransition(async () => {
-      const result = await setStudentBookPlanAction(studentId, book.bookId, book.assignmentId, {
-        status,
-        role,
-      })
-      if (result?.error) {
-        toast.error(result.error)
-        return
+      if (planDirty) {
+        const result = await setStudentBookPlanAction(studentId, book.bookId, book.assignmentId, {
+          status,
+          role,
+        })
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
+      }
+      // DERS / KAPSAM (M1.0-01 §1.3): kaynağı silip yeniden eklemeden
+      // alan değişir; ilerleme, hedef, tarih ve ödev geçmişi korunur.
+      if (scopeDirty) {
+        const result = await setStudentBookScopeAction(
+          studentId,
+          book.bookId,
+          book.assignmentId,
+          scopeId || null
+        )
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
       }
       toast.success('Kaynak planı güncellendi.')
       router.refresh()
@@ -74,6 +109,27 @@ export function ResourcePlanCard({ studentId, book }: Props) {
         <p className="text-xs text-muted-foreground">
           Bu kaynağın öğrencinin planındaki yeri. İkisi de ilerleme hesabına girmez.
         </p>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="planScope">Ders / Kapsam</Label>
+          <NativeSelect
+            id="planScope"
+            value={scopeId}
+            onChange={e => setScopeId(e.target.value)}
+          >
+            <option value="">{UNASSIGNED_SCOPE_LABEL}</option>
+            {scopes.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </NativeSelect>
+          {scopeDirty && (
+            <p className="text-[11px] text-muted-foreground">
+              Yalnız alan değişir: ilerleme, hedefler, tarihler ve ödev geçmişi korunur.
+            </p>
+          )}
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -114,6 +170,66 @@ export function ResourcePlanCard({ studentId, book }: Props) {
           {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Kaydet
         </Button>
+
+        {/* KAYNAK TEMİZLİĞİ (M1.0-01 §1.2): kullanılmamış kaynak silinir,
+            kullanılmış kaynak arşivlenir. Hangisinin sunulacağı sunucuda
+            hesaplanır; RPC kullanımı ayrıca yeniden denetler. */}
+        <div className="border-t pt-4">
+          {isUsed ? (
+            <ConfirmActionDialog
+              trigger={
+                <Button type="button" variant="outline" size="sm">
+                  <Archive className="size-4" />
+                  Arşivle / öğrenciden kaldır
+                </Button>
+              }
+              title="Kaynak öğrenciden kaldırılsın mı?"
+              description={
+                <div className="space-y-2">
+                  <p>
+                    <strong>{book.title}</strong> aktif Kaynak Planından ve yeni ödev seçiminden
+                    çıkar.
+                  </p>
+                  <p>
+                    Bekleyen ve onay bekleyen çalışmaları aktif yükten çıkarılır. Tamamlanan
+                    çalışmalar, ilerleme ve geçmiş haftalar olduğu gibi kalır. Kaynak Planındaki
+                    arşiv bölümünden geri alınabilir.
+                  </p>
+                </div>
+              }
+              confirmLabel="Arşivle"
+              onConfirm={() =>
+                assignmentCleanupAction(studentId, book.bookId, book.assignmentId, 'archive')
+              }
+              successMessage="Kaynak arşivlendi."
+              onDone={() => router.push(backHref)}
+            />
+          ) : (
+            <ConfirmActionDialog
+              trigger={
+                <Button type="button" variant="outline" size="sm" className="text-destructive">
+                  <Trash2 className="size-4" />
+                  Kaynağı sil
+                </Button>
+              }
+              title="Kaynak silinsin mi?"
+              description={
+                <p>
+                  <strong>{book.title}</strong> bu öğrencide hiç ödev veya ilerleme üretmedi;
+                  atama, hedefi ve taslaktaki seçimleriyle birlikte silinir. Kitap havuzdan
+                  silinmez.
+                </p>
+              }
+              confirmLabel="Sil"
+              destructive
+              onConfirm={() =>
+                assignmentCleanupAction(studentId, book.bookId, book.assignmentId, 'delete')
+              }
+              successMessage="Kaynak silindi."
+              onDone={() => router.push(backHref)}
+            />
+          )}
+        </div>
       </CardContent>
     </Card>
   )

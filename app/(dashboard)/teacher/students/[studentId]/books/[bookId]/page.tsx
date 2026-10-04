@@ -16,6 +16,7 @@ import {
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
 import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
+import { loadWorkspaceScopes } from '@/lib/student-scopes'
 import { resolveInterimScope, resolvePlanScope } from '@/lib/plan-scope'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -66,7 +67,7 @@ export default async function StudentBookDetailPage({
   // Öğrencinin TÜM kaynakları tek çağrıda gelir: hem bu sayfanın verisi hem
   // de kaynaklar arası önceki/sonraki gezinmesi aynı kümeden türer. Ayrı bir
   // sorgu açmak, iki listenin (harita ve gezinme) ayrışması riskini getirirdi.
-  const [allBooks, keepActiveTopicIds] = await Promise.all([
+  const [allBooks, keepActiveTopicIds, workspaceScopes] = await Promise.all([
     loadBookMap(supabase, {
       workspaceId,
       studentId,
@@ -74,12 +75,23 @@ export default async function StudentBookDetailPage({
     }),
     // Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü (041 §6.5).
     loadKeepActiveTopicIds(supabase, { workspaceId, studentId }),
+    // Ders / Kapsam seçicisi (M1.0-01 §1.3).
+    loadWorkspaceScopes(supabase, { workspaceId }),
   ])
 
   const bookIndex = allBooks.findIndex(b => b.bookId === bookId)
   const book = bookIndex === -1 ? undefined : allBooks[bookIndex]
 
   if (!book) notFound()
+
+
+  // Sil mi arşivle mi (M1.0-01 §1.2): ödev kalemi veya resmi tamamlama
+  // varsa kaynak kullanılmıştır. Kural 133'teki assignment_is_used'da.
+  const { data: isUsedData, error: isUsedError } = await supabase.rpc('assignment_is_used', {
+    p_assignment_id: book.assignmentId,
+  })
+  // Okunamazsa güvenli taraf: kullanılmış say (yalnız arşiv sunulur).
+  const isUsed = isUsedError ? true : Boolean(isUsedData)
 
   const previousBook = bookIndex > 0 ? allBooks[bookIndex - 1] : null
   const nextBook = bookIndex < allBooks.length - 1 ? allBooks[bookIndex + 1] : null
@@ -263,7 +275,13 @@ export default async function StudentBookDetailPage({
         title="Kaynak planı"
         description="Bu kaynağın öğrencinin planındaki durumu ve rolü."
       >
-        <ResourcePlanCard studentId={studentId} book={book} />
+        <ResourcePlanCard
+          studentId={studentId}
+          book={book}
+          scopes={workspaceScopes}
+          isUsed={isUsed}
+          backHref={backHref}
+        />
       </Section>
 
       <Section

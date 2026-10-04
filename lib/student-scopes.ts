@@ -55,6 +55,8 @@ export async function loadStudentScopes(
       .select('scope_id')
       .eq('workspace_id', workspaceId)
       .eq('student_id', studentId)
+      // Arşivlenen kaynağın alanı aktif planda boş bir blok doğurmasın.
+      .neq('status', 'archived')
       .not('scope_id', 'is', null),
   ])
 
@@ -165,9 +167,13 @@ export function groupByScope<T extends { scopeId: string | null }>(
   items: T[],
   scopes: StudentScope[]
 ): ScopeGroup<T>[] {
+  // Alanı dolu ama listede olmayan kaynak (silinmiş/pasif alan) da sanal
+  // gruba düşer — eskiden hiçbir gruba girmeyip SESSİZCE kayboluyordu
+  // (M1.0-01 §1.3).
+  const known = new Set(scopes.map(s => s.id))
   const byScope = new Map<string, T[]>()
   for (const item of items) {
-    const key = item.scopeId ?? UNASSIGNED_SCOPE_KEY
+    const key = item.scopeId && known.has(item.scopeId) ? item.scopeId : UNASSIGNED_SCOPE_KEY
     byScope.set(key, [...(byScope.get(key) ?? []), item])
   }
 

@@ -29,6 +29,20 @@ export type AuditAction =
   | 'homework.release_from_active_load'
   | 'homework.restore_to_active_load'
   | 'student.archive'
+  // M1.0-01 §1.1: arşivden dönüş ve test öğrencisinin kalıcı silinmesi.
+  // Silmede öğrenci adı detail'a yazılır — satır gittikten sonra izin
+  // tek kaynağı budur.
+  | 'student.restore'
+  | 'student.purge'
+  // M1.0-01 §1.2–1.3: öğrenciye atanmış kaynağın temizliği.
+  | 'assignment.delete'
+  | 'assignment.archive'
+  | 'assignment.unarchive'
+  | 'assignment.scope_change'
+  // M1.0-01 §4: Yayınlanan Ödevler sağ paneli — kalem bazlı işlemler.
+  | 'homework.approve_items'
+  | 'homework.complete_manually'
+  | 'homework.release_items'
   | 'book.archive'
   // R7 §7.3: hiç atanmamış havuz kaydının kalıcı silinmesi. Atanmış
   // kaynak silinemez, arşivlenir — bu yüzden iki ayrı eylem.
@@ -90,6 +104,15 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework.release_from_active_load': 'Ödevi aktif yükten çıkardı',
   'homework.restore_to_active_load': 'Ödevi yeniden aktifleştirdi',
   'student.archive': 'Öğrenci arşivledi',
+  'student.restore': 'Öğrenciyi arşivden geri aldı',
+  'student.purge': 'Öğrenciyi kalıcı sildi',
+  'assignment.delete': 'Kullanılmamış kaynağı sildi',
+  'assignment.archive': 'Kaynağı öğrenciden kaldırdı (arşiv)',
+  'assignment.unarchive': 'Kaynağı arşivden geri aldı',
+  'assignment.scope_change': 'Kaynağın ders/kapsamını değiştirdi',
+  'homework.approve_items': 'Seçili çalışmaları onayladı',
+  'homework.complete_manually': 'Çalışmaları tamamlandı işaretledi',
+  'homework.release_items': 'Çalışmaları aktif yükten çıkardı',
   'book.archive': 'Kitap arşivledi',
   'book.delete': 'Kitap sildi (atanmamış kayıt)',
   'book.section_delete': 'Kitap bölümü sildi',

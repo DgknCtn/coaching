@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProgressBar } from '@/components/shared/progress-bar'
 import { MetricTiles } from '@/components/shared/metric-tiles'
+import { ArchivedResources, type ArchivedResource } from './archived-resources'
 import { LinkTabs } from '@/components/shared/link-tabs'
 import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
 import { loadAssignableBooks } from '@/lib/assignable-books'
@@ -125,7 +126,7 @@ export default async function StudentResourcePlanPage({
 
   // Bekliyor ve Hedef Tamamlandı grupları da görünmeli; loadBookMap'in
   // varsayılanı yalnız 'active'dir.
-  const [books, scopes, workspaceScopes, signals] = await Promise.all([
+  const [books, scopes, workspaceScopes, signals, archivedRes] = await Promise.all([
     loadBookMap(supabase, {
       workspaceId,
       studentId,
@@ -134,7 +135,27 @@ export default async function StudentResourcePlanPage({
     loadStudentScopes(supabase, { workspaceId, studentId }),
     loadWorkspaceScopes(supabase, { workspaceId }),
     loadResourceWeekSignals(supabase, { workspaceId, studentId }),
+    // Arşivlenen kaynaklar (M1.0-01 §1.2) — geri alma bloğu için.
+    supabase
+      .from('student_book_assignments')
+      .select('id, book_id, books(title)')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId)
+      .eq('status', 'archived')
+      .order('updated_at', { ascending: false }),
   ])
+
+  const archived: ArchivedResource[] = (
+    (archivedRes.data ?? []) as {
+      id: string
+      book_id: string
+      books: { title: string } | { title: string }[] | null
+    }[]
+  ).map(r => ({
+    assignmentId: r.id,
+    bookId: r.book_id,
+    title: (Array.isArray(r.books) ? r.books[0]?.title : r.books?.title) ?? 'Kaynak',
+  }))
 
   // Kaynak eklemek bu ekranın birincil eylemidir: kapsam ve tempo burada
   // okunuyor, eksik kaynak da burada fark ediliyor.
@@ -142,6 +163,7 @@ export default async function StudentResourcePlanPage({
     workspaceId,
     termId: activeTerm?.id ?? null,
     assignedBookIds: books.map(b => b.bookId),
+    studentId,
   })
 
   const today = new Date()
@@ -327,6 +349,8 @@ export default async function StudentResourcePlanPage({
           ))}
         </div>
       )}
+
+      <ArchivedResources studentId={studentId} items={archived} />
 
       <ExplainerCards cards={EXPLAINERS} />
     </div>

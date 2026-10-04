@@ -648,6 +648,7 @@ export default async function StudentDetailPage({
         workspaceId,
         termId: activeTerm?.id ?? null,
         assignedBookIds: (r5Books as Awaited<ReturnType<typeof loadBookMap>>).map(b => b.bookId),
+        studentId,
       })
     : []
 
