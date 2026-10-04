@@ -43,6 +43,16 @@ export const resolveOrderSchema = z.object({
   reason,
 })
 
+// 136: seçerek temizleme. Onay metni (ad / e-posta) RPC'de birebir denetlenir.
+export const cleanupKindSchema = z.enum(['workspace', 'partner', 'user'])
+
+export const deleteCleanupSchema = z.object({
+  kind: cleanupKindSchema,
+  id: uuid,
+  confirm: z.string().trim().min(1, 'Onay metnini yazın.').max(320),
+  reason,
+})
+
 /** İlk hatanın metni — diyalog tek satır gösteriyor. */
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Girdi geçersiz.'
@@ -62,6 +72,10 @@ export const ADMIN_ACTION_LABEL: Record<string, string> = {
   'partner.commissions_paid': 'Partner hakedişi ödendi',
   'library.approve': 'Kütüphane önerisi onaylandı',
   'library.reject': 'Kütüphane önerisi reddedildi',
+  // 136:
+  'workspace.delete': 'Çalışma alanı kalıcı silindi',
+  'partner.delete': 'Partner silindi',
+  'user.delete': 'Kullanıcı silindi',
 }
 
 export function adminActionLabel(action: string): string {

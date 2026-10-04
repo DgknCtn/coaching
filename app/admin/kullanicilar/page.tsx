@@ -12,6 +12,28 @@ import { createClient } from '@/lib/supabase/server'
 import { listResult } from '@/lib/data-result'
 import { formatRelativeTr } from '@/lib/format'
 import type { TeacherActivity, UserCounts } from '@/lib/admin/types'
+import { CleanupButton } from '../cleanup-button'
+
+/** 136 · admin_list_users — hesap temizliği listesi (yalnız kimlik ve rol). */
+interface AccountRow {
+  profile_id: string
+  full_name: string | null
+  email: string | null
+  roles: string[]
+  owned_workspaces: number
+  is_platform_admin: boolean
+  is_partner: boolean
+  created_at: string
+  last_sign_in_at: string | null
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: 'Sahip',
+  teacher: 'Öğretmen',
+  assistant: 'Asistan',
+  student: 'Öğrenci',
+  parent: 'Veli',
+}
 
 export const metadata: Metadata = { title: 'Kullanıcılar' }
 export const dynamic = 'force-dynamic'
@@ -33,17 +55,21 @@ const DAY = 86_400_000
 export default async function AdminUsers({
   searchParams,
 }: {
-  searchParams: Promise<{ gun?: string; q?: string }>
+  searchParams: Promise<{ gun?: string; q?: string; hesap?: string }>
 }) {
   const sp = await searchParams
   const days = parseWindow(sp.gun, 30)
   const q = sp.q?.trim().slice(0, 100) || null
+  const accountQ = sp.hesap?.trim().slice(0, 100) || null
   const supabase = await createClient()
 
-  const [countsRes, teachersRes] = await Promise.all([
+  const [countsRes, teachersRes, accountsRes] = await Promise.all([
     supabase.rpc('admin_user_counts'),
     supabase.rpc('admin_teacher_activity', { p_days: days, p_search: q, p_limit: 300 }),
+    supabase.rpc('admin_list_users', { p_search: accountQ, p_limit: 200 }),
   ])
+  const accountsR = listResult(accountsRes, 'admin.list_users')
+  const accounts = (accountsR.ok ? accountsR.data : []) as unknown as AccountRow[]
   const countsR = listResult(countsRes, 'admin.user_counts')
   const teachersR = listResult(teachersRes, 'admin.teacher_activity')
   const counts = countsR.ok ? (countsR.data[0] as unknown as UserCounts) : null
@@ -198,6 +224,104 @@ export default async function AdminUsers({
         ) : (
           <div className="p-4">
             <SectionUnavailable title="Öğretmen listesi alınamadı" retryHref="/admin/kullanicilar" />
+          </div>
+        )}
+      </Section>
+
+      {/* HESAP TEMİZLİĞİ (136): test hesaplarını tek tek silmek için.
+          Sahibi olduğu alanı kalan ya da başka alanlarda kaydı bulunan
+          hesap silinemez; önizleme nedenini söyler. Öğrencinin akademik
+          verisi burada YOK — yalnız kimlik ve rol. */}
+      <Section
+        title="Hesap temizliği"
+        description="Tüm hesaplar (öğretmen, öğrenci, veli, partner). Önce hesabın sahibi olduğu çalışma alanlarını silin."
+        variant="card"
+      >
+        <form method="get" className="flex flex-wrap items-center gap-2 border-b p-3">
+          <input type="hidden" name="gun" value={days} />
+          {q && <input type="hidden" name="q" value={q} />}
+          <input
+            type="search"
+            name="hesap"
+            defaultValue={accountQ ?? ''}
+            placeholder="Ad ya da e-posta ara…"
+            aria-label="Hesap ara"
+            className="h-9 w-full max-w-xs rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+          <button
+            type="submit"
+            className="h-9 rounded-md border border-input bg-card px-3 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Ara
+          </button>
+        </form>
+        {accountsR.ok ? (
+          <DataTable
+            columns={[
+              {
+                key: 'who',
+                header: 'Hesap',
+                render: (a: AccountRow) => (
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {a.full_name ?? <span className="text-muted-foreground">Ad gizli (öğrenci/veli)</span>}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{a.email ?? '—'}</p>
+                  </div>
+                ),
+              },
+              {
+                key: 'roles',
+                header: 'Rol',
+                render: (a: AccountRow) => (
+                  <span className="flex flex-wrap gap-1">
+                    {a.is_platform_admin && <Badge variant="info">Yönetici</Badge>}
+                    {a.is_partner && <Badge variant="neutral">Partner</Badge>}
+                    {a.roles.map((r) => (
+                      <Badge key={r} variant="neutral">
+                        {ROLE_LABEL[r] ?? r}
+                      </Badge>
+                    ))}
+                    {!a.is_platform_admin && !a.is_partner && a.roles.length === 0 && (
+                      <span className="text-xs text-muted-foreground">üyelik yok</span>
+                    )}
+                  </span>
+                ),
+              },
+              {
+                key: 'owned',
+                header: 'Sahibi olduğu alan',
+                align: 'right',
+                hideBelow: 'md',
+                render: (a: AccountRow) => <span className="tabular-nums">{a.owned_workspaces}</span>,
+              },
+              {
+                key: 'login',
+                header: 'Son giriş',
+                hideBelow: 'sm',
+                render: (a: AccountRow) => (
+                  <span className="text-muted-foreground">
+                    {a.last_sign_in_at ? formatRelativeTr(a.last_sign_in_at) : 'hiç'}
+                  </span>
+                ),
+              },
+              {
+                key: 'action',
+                header: '',
+                align: 'right',
+                render: (a: AccountRow) =>
+                  a.is_platform_admin ? null : (
+                    <CleanupButton kind="user" id={a.profile_id} label="Sil" size="xs" />
+                  ),
+              },
+            ]}
+            rows={accounts}
+            rowKey={(a) => a.profile_id}
+            empty={{ icon: Users, title: accountQ ? 'Eşleşen hesap yok' : 'Hesap yok' }}
+          />
+        ) : (
+          <div className="p-4">
+            <SectionUnavailable title="Hesap listesi alınamadı" retryHref="/admin/kullanicilar" />
           </div>
         )}
       </Section>

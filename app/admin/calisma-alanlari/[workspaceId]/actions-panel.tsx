@@ -12,6 +12,7 @@ import {
   setStudentLimitAction,
   setWorkspaceStatusAction,
 } from '@/app/admin/admin-actions'
+import { CleanupButton } from '@/app/admin/cleanup-button'
 
 // İŞLEM PANELİ (128) — müşteri detayında.
 //
@@ -209,6 +210,10 @@ export function ActionsPanel(p: ActionsPanelProps) {
             }
           />
         ))}
+
+      {/* 136: test alanını kalıcı sil. Ödenmiş siparişi/komisyonu olan ya da
+          kütüphane alanı silinemez — önizleme engeli gösterir. */}
+      <CleanupButton kind="workspace" id={p.workspaceId} redirectTo="/admin/musteriler" />
     </div>
   )
 }

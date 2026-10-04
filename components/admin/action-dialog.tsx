@@ -36,6 +36,7 @@ export function ActionDialog({
   onSubmit,
   onOpenChange,
   trigger,
+  disabled = false,
 }: {
   triggerLabel: string
   /** Varsayılan düğme yerine özel tetik (ör. simge düğmesi). */
@@ -51,8 +52,11 @@ export function ActionDialog({
   successMessage: string
   /** İşleme özgü alanlar (gün, ay, öğrenci…). */
   children?: React.ReactNode
-  onSubmit: (reason: string) => Promise<{ error?: string }>
+  /** `confirm`: confirmPhrase alanına yazılan metin — sunucu da denetlesin diye (136). */
+  onSubmit: (reason: string, confirm: string) => Promise<{ error?: string }>
   onOpenChange?: (open: boolean) => void
+  /** Önizleme bir engel bildirdiyse onay düğmesi kapalı kalır (136). */
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -78,7 +82,7 @@ export function ActionDialog({
     event.preventDefault()
     setError(null)
     startTransition(async () => {
-      const res = await onSubmit(reason)
+      const res = await onSubmit(reason, confirm.trim())
       if (res.error) {
         setError(res.error)
         return
@@ -161,7 +165,7 @@ export function ActionDialog({
             <Button
               type="submit"
               variant={destructive ? 'destructive' : 'default'}
-              disabled={pending || !reasonOk || !confirmOk}
+              disabled={pending || disabled || !reasonOk || !confirmOk}
             >
               {pending ? 'Uygulanıyor…' : submitLabel}
             </Button>

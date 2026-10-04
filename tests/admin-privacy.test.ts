@@ -35,6 +35,9 @@ const TEACHER_NAME_ALLOWED = new Set([
   'admin_teacher_activity',
   'admin_workspace_activity',
   'admin_list_workspaces',
+  // admin_list_users (136): hesap temizliği. Ad YALNIZ öğrenci/veli
+  // olmayan hesapta döner; maskeleme aşağıdaki ayrı testte sabit.
+  'admin_list_users',
 ])
 
 describe('yönetim fonksiyonları mahremiyeti', () => {
@@ -59,4 +62,18 @@ describe('yönetim fonksiyonları mahremiyeti', () => {
       expect(body).toMatch(/IF NOT public\.is_platform_admin\(\) THEN\s+RAISE EXCEPTION 'Permission denied'/)
     })
   }
+})
+
+describe('hesap temizliği listesi (136) öğrenci/veli adını maskeler', () => {
+  const sql = readFileSync(join(DIR, '136_admin_cleanup.sql'), 'utf8')
+
+  it('ad ve e-posta öğrenci/veli hesabında gizli', () => {
+    expect(sql).toMatch(/CASE WHEN l\.learner THEN NULL ELSE p\.full_name END/)
+    expect(sql).toMatch(/CASE WHEN l\.learner THEN public\.cleanup_mask_email\(/)
+    expect(sql).toMatch(/'name', CASE WHEN v_learner THEN NULL ELSE v_profile\.full_name END/)
+  })
+
+  it('öğrenci/veli hesabı adla aranamaz', () => {
+    expect(sql).toMatch(/NOT l\.learner AND p\.full_name ILIKE/)
+  })
 })

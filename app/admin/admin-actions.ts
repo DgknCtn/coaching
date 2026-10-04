@@ -1,9 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import {
+  cleanupKindSchema,
+  deleteCleanupSchema,
   extendTrialSchema,
   firstIssue,
   grantLicenseSchema,
@@ -103,5 +106,61 @@ export async function resolveOrderAction(input: unknown): Promise<Result> {
   revalidatePath('/admin/gelir')
   revalidatePath('/admin/kayit')
   revalidatePath('/admin')
+  return {}
+}
+
+// ============================================================
+// SEÇEREK TEMİZLEME (136)
+//
+// Önizleme diyalog açılınca istenir: neyin silineceği sayılarla ve varsa
+// ENGEL nedeniyle gösterilir. Silme RPC'si engelleri ve onay metnini
+// yeniden denetler; buradaki önizleme yalnız bilgilendirir.
+// ============================================================
+
+export type CleanupKind = z.infer<typeof cleanupKindSchema>
+
+export type CleanupPreview = Record<string, unknown> & {
+  name?: string | null
+  email?: string | null
+  blocked?: boolean
+  block_reason?: string | null
+}
+
+export async function cleanupPreviewAction(
+  kind: CleanupKind,
+  id: string
+): Promise<{ error?: string; preview?: CleanupPreview }> {
+  const parsedKind = cleanupKindSchema.safeParse(kind)
+  const parsedId = z.uuid().safeParse(id)
+  if (!parsedKind.success || !parsedId.success) return { error: 'Geçersiz kayıt.' }
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_cleanup_preview', {
+    p_kind: parsedKind.data,
+    p_id: parsedId.data,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+  return { preview: (data ?? {}) as CleanupPreview }
+}
+
+const DELETE_RPC: Record<CleanupKind, { fn: string; idArg: string; confirmArg: string }> = {
+  workspace: { fn: 'admin_delete_workspace', idArg: 'p_workspace_id', confirmArg: 'p_confirm_name' },
+  partner: { fn: 'admin_delete_partner', idArg: 'p_partner_id', confirmArg: 'p_confirm_name' },
+  user: { fn: 'admin_delete_user', idArg: 'p_profile_id', confirmArg: 'p_confirm_email' },
+}
+
+export async function deleteCleanupAction(input: unknown): Promise<Result> {
+  const parsed = deleteCleanupSchema.safeParse(input)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const { kind, id, confirm, reason } = parsed.data
+  const rpc = DELETE_RPC[kind]
+  const supabase = await createClient()
+  const { error } = await supabase.rpc(rpc.fn, {
+    [rpc.idArg]: id,
+    [rpc.confirmArg]: confirm,
+    p_reason: reason,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/admin', 'layout')
   return {}
 }

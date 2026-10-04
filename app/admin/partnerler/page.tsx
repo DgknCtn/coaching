@@ -12,6 +12,7 @@ import { NewPartnerDialog } from './new-partner-dialog'
 import { PartnerCodeCell } from './partner-code-cell'
 import { CommissionRateCell } from './commission-rate-cell'
 import { PartnerStatusButton } from './partner-status-button'
+import { CleanupButton } from '../cleanup-button'
 
 export const metadata: Metadata = { title: 'Partnerler' }
 export const dynamic = 'force-dynamic'
@@ -139,6 +140,8 @@ export default async function AdminPartnersPage() {
             partnerName={r.name}
             status={r.status}
           />
+          {/* 136: ödenmiş komisyonu olan partner silinemez (önizleme söyler). */}
+          <CleanupButton kind="partner" id={r.partner_id} label="Sil" size="xs" />
         </span>
       ),
     },
