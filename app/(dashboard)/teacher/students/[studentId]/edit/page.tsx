@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
 import { StudentForm } from '../../new/student-form'
+import { ArchiveStudentCard } from './archive-student-card'
 
 // Öğrenci düzenleme (R6-11).
 //
@@ -22,12 +23,13 @@ export default async function EditStudentPage({
 
   const { data: student } = await supabase
     .from('students')
-    .select('id, full_name, email, phone, grade_level, exam_type, lesson_type')
+    .select('id, full_name, email, phone, grade_level, exam_type, lesson_type, status')
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)
     .maybeSingle()
 
-  if (!student) notFound()
+  // Arşivdeki öğrenci düzenlenmez; önce arşivden geri alınır (M1.0-01).
+  if (!student || student.status === 'archived') notFound()
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6 md:p-8">
@@ -49,6 +51,8 @@ export default async function EditStudentPage({
           lessonType: student.lesson_type ?? '',
         }}
       />
+
+      <ArchiveStudentCard studentId={studentId} fullName={student.full_name ?? ''} />
     </div>
   )
 }

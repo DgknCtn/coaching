@@ -203,11 +203,8 @@ export async function archiveStudentAction(studentId: string) {
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
-  const { error } = await supabase
-    .from('students')
-    .update({ status: 'archived' })
-    .eq('id', parsed.data)
-    .eq('workspace_id', workspaceId)
+  // M1.0-01 §1.1: arşiv kim/ne zaman bilgisiyle RPC'den geçer (134).
+  const { error } = await supabase.rpc('archive_student', { p_student_id: parsed.data })
 
   if (error) return { error: dbErrorToTr(error.message) }
 
@@ -220,6 +217,61 @@ export async function archiveStudentAction(studentId: string) {
     entityId: parsed.data,
   })
 
+  revalidateStudentLists()
+  redirect('/teacher/students?durum=arsiv')
+}
+
+function revalidateStudentLists() {
   revalidatePath('/teacher/students')
-  redirect('/teacher/students')
+  revalidatePath('/teacher/tasks')
+  revalidatePath('/teacher', 'layout')
+}
+
+/** Arşivden aktif listeye dönüş (M1.0-01 §1.1). Kota RPC'de denetlenir. */
+export async function restoreStudentAction(studentId: string) {
+  const parsed = uuidSchema.safeParse(studentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('restore_student', { p_student_id: parsed.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'student.restore',
+    entityType: 'student',
+    entityId: parsed.data,
+  })
+
+  revalidateStudentLists()
+  return { success: true }
+}
+
+/**
+ * Test öğrencisinin kalıcı silinmesi (M1.0-01 §1.1).
+ *
+ * Yalnız arşivdeki öğrenci ve yalnız tam adı birebir yazılarak; iki şart
+ * da RPC'de (134) denetlenir. Denetim kaydını RPC silmeden ÖNCE yazar —
+ * burada ayrıca logAudit çağrılmaz.
+ */
+export async function purgeStudentAction(studentId: string, confirmName: string) {
+  const parsed = uuidSchema.safeParse(studentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  if (typeof confirmName !== 'string' || confirmName.length > 200) {
+    return { error: 'Onay için öğrencinin adını yazın.' }
+  }
+
+  await getTeacherContext()
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc('purge_archived_student', {
+    p_student_id: parsed.data,
+    p_confirm_name: confirmName,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidateStudentLists()
+  return { success: true }
 }

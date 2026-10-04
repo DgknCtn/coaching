@@ -17,6 +17,8 @@ import { listResult } from '@/lib/data-result'
 import { counterLabel } from '@/lib/homework-status'
 import { statusFromOperationRow, type OperationStatusRow } from '@/lib/operation-status'
 import type { StudentStatus } from '@/lib/student-status'
+import { LinkTabs } from '@/components/shared/link-tabs'
+import { ArchivedStudents, type ArchivedStudent } from './archived-students'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,12 +52,16 @@ export default async function StudentsPage({
   // Sol menüdeki "Öğrenci Ekranları" grubu buraya ?ekran=... ile gelir:
   // öğrenci seçilmeden o ekranlara girilemez, bu yüzden liste bir seçim
   // adımı olarak kullanılır ve satırlar doğrudan istenen ekrana bağlanır.
-  searchParams: Promise<{ ekran?: string }>
+  searchParams: Promise<{ ekran?: string; durum?: string }>
 }) {
   const { supabase, workspaceId, usage } = await getTeacherContext()
+  const query = await searchParams
   // Tanınmayan slug sessizce yok sayılır — elle yazılmış bir adres
   // yüzünden liste bozulmasın.
-  const screen = studentScreenBySlug((await searchParams).ekran)
+  const screen = studentScreenBySlug(query.ekran)
+  // ARŞİV GÖRÜNÜMÜ (M1.0-01 §1.1): geri alma ve test öğrencisini kalıcı
+  // silme yalnız burada. Ekran seçimi adımında arşiv sunulmaz.
+  const showArchive = !screen && query.durum === 'arsiv'
 
   // ============================================================
   // DURUM PANELLE AYNI KAYNAKTAN (lib/operation-status.ts)
@@ -66,7 +72,7 @@ export default async function StudentsPage({
   // ve gecikme artık panelin satırından; kitap ilerlemesi (yalnız
   // overview'da var) ayrı okunup öğrenci kimliğiyle eşleniyor.
   // ============================================================
-  const [operationRes, progressRes] = await Promise.all([
+  const [operationRes, progressRes, archivedRes] = await Promise.all([
     supabase
       .from('teacher_student_operation_view')
       .select('*')
@@ -78,7 +84,21 @@ export default async function StudentsPage({
       .select('student_id, completion_percentage')
       .eq('workspace_id', workspaceId)
       .limit(500),
+    supabase
+      .from('students')
+      .select('id, full_name, exam_type, grade_level, archived_at')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'archived')
+      .order('archived_at', { ascending: false, nullsFirst: false })
+      .limit(500),
   ])
+
+  const archivedStudents: ArchivedStudent[] = (archivedRes.data ?? []).map(s => ({
+    id: s.id as string,
+    fullName: s.full_name as string,
+    detail: [s.exam_type, s.grade_level].filter(Boolean).join(' · '),
+    archivedAt: (s.archived_at as string | null) ?? null,
+  }))
 
   // B01: liste düşerse "Henüz öğrenci yok" DENMEZ.
   const operation = listResult(operationRes, 'students.operation_view')
@@ -255,8 +275,25 @@ export default async function StudentsPage({
           yani sınıra dayanmış bir öğretmen düğmeye basmadan ÖNCE görüyor. */}
       {usage && <QuotaNotice usage={usage} />}
 
+      {!screen && (archivedStudents.length > 0 || showArchive) && (
+        <LinkTabs
+          activeKey={showArchive ? 'archive' : 'active'}
+          tabs={[
+            { key: 'active', label: 'Aktif', href: '/teacher/students', count: rows.length },
+            {
+              key: 'archive',
+              label: 'Arşiv',
+              href: '/teacher/students?durum=arsiv',
+              count: archivedStudents.length,
+            },
+          ]}
+        />
+      )}
+
       <Section variant="card">
-        {operation.ok ? (
+        {showArchive ? (
+          <ArchivedStudents students={archivedStudents} />
+        ) : operation.ok ? (
           <DataTable
             columns={columns}
             rows={rows}

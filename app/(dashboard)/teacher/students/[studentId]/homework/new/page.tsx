@@ -40,12 +40,13 @@ export default async function NewHomeworkPage({
 
   const { data: student } = await supabase
     .from('students')
-    .select('id, full_name')
+    .select('id, full_name, status')
     .eq('id', studentId)
     .eq('workspace_id', workspaceId)
     .single()
 
-  if (!student) notFound()
+  // Arşivdeki öğrenciye işlem yapılmaz (M1.0-01 §1.1).
+  if (!student || student.status === 'archived') notFound()
 
   if (!activeTerm) {
     return (

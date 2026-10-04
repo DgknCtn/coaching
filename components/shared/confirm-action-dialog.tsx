@@ -30,7 +30,8 @@ interface Props {
   confirmLabel: string
   destructive?: boolean
   requireText?: string
-  onConfirm: () => Promise<{ error?: string } | undefined | void>
+  /** `typed`: requireText alanına yazılan metin (sunucu da denetlesin diye). */
+  onConfirm: (typed: string) => Promise<{ error?: string } | undefined | void>
   successMessage?: string
   onDone?: () => void
 }
@@ -56,7 +57,7 @@ export function ConfirmActionDialog({
   function confirm() {
     setError(null)
     startTransition(async () => {
-      const result = await onConfirm()
+      const result = await onConfirm(typed.trim())
       if (result && result.error) {
         setError(result.error)
         return

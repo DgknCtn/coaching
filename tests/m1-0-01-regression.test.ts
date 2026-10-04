@@ -100,3 +100,31 @@ describe('§2 Son teslim tarih + saat (132)', () => {
     )
   })
 })
+
+describe('§1.1 Öğrenci arşivi ve kalıcı silme (134)', () => {
+  const sql = migration('134_student_archive_and_purge.sql')
+  const purge = fn(sql, 'purge_archived_student')
+
+  it('kalıcı silme yalnız arşivdeki öğrenci ve birebir ad ile', () => {
+    expect(purge).toMatch(/IF v_student\.status <> 'archived' THEN\s+RAISE EXCEPTION/)
+    expect(purge).toMatch(/btrim\(COALESCE\(p_confirm_name, ''\)\) <> btrim\(v_student\.full_name\)/)
+    // Şartlar silmeden ÖNCE denetlenir.
+    expect(purge.indexOf("status <> 'archived'")).toBeLessThan(purge.indexOf('DELETE FROM'))
+  })
+
+  it('iz silmeden önce yazılır ve adı taşır', () => {
+    expect(purge.indexOf("'student.purge'")).toBeLessThan(purge.indexOf('DELETE FROM'))
+    expect(purge).toMatch(/jsonb_build_object\('full_name', v_student\.full_name\)/)
+  })
+
+  it('RESTRICT bağlı tablolar öğrenciden önce açıkça silinir', () => {
+    const order = ['public.test_completions', 'public.homework_items', 'public.homework_batches', 'public.students WHERE id']
+    const idx = order.map(t => purge.indexOf(`DELETE FROM ${t}`))
+    expect(idx.every(i => i > -1)).toBe(true)
+    expect([...idx].sort((a, b) => a - b)).toEqual(idx)
+  })
+
+  it('geri alma kota sınırını denetler (052 tetikleyicisi yalnız INSERT)', () => {
+    expect(fn(sql, 'restore_student')).toMatch(/v_count >= v_limit/)
+  })
+})

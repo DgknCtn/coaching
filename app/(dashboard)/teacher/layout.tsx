@@ -44,14 +44,13 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   //
   // Dört sütunun dördü de `students` tablosunda ve
   // idx_students_workspace_status (workspace_id, status) indeksi zaten
-  // var. Süzgeç ve sıralama BİLİNÇLİ OLARAK AYNEN korundu: view'da
-  // durum süzgeci yoktu, yani arşivli öğrenci de listeleniyordu. Onu
-  // burada değiştirmek, performans düzeltmesinin arkasına gizlenmiş bir
-  // davranış değişikliği olurdu — ayrı bir karar.
+  // var. ARŞİVLİ ÖĞRENCİ GİZLENİR (M1.0-01 §1.1 — o "ayrı karar"
+  // verildi): arşivliler Öğrenciler › Arşiv sekmesinden açılır.
   const { data: studentRows } = await supabase
     .from('students')
     .select('student_id:id, student_full_name:full_name, grade_level, exam_type')
     .eq('workspace_id', workspaceId)
+    .eq('status', 'active')
     .order('full_name')
     .limit(500)
 

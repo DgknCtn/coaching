@@ -173,8 +173,10 @@ export default async function TeacherDashboard() {
     // takvimle aşağıda eleniyor — sabit bir +03:00 varsaymamak için.
     supabase
       .from('service_sessions')
-      .select('id, planned_at, actual_at, status, student_services(kind)')
+      .select('id, planned_at, actual_at, status, student_services(kind), students!inner(status)')
       .eq('workspace_id', workspaceId)
+      // M1.0-01 §1.1: arşivli öğrencinin oturumları yaklaşan temaslarda görünmez.
+      .eq('students.status', 'active')
       .in('status', ['planlandi', 'ertelendi'])
       .gte('planned_at', new Date(Date.now() - 2 * 86_400_000).toISOString())
       .lte('planned_at', new Date(Date.now() + 2 * 86_400_000).toISOString()),

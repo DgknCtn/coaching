@@ -59,7 +59,7 @@ type CheckInRow = {
 
 const ITEM_SELECT = `
   id, submitted_at, homework_batch_id, book_id,
-  homework_batches!inner(due_date, title, student_id, status, students(full_name)),
+  homework_batches!inner(due_date, title, student_id, status, students!inner(full_name, status)),
   books(title, tracking_mode),
   book_sections(title),
   book_tests(title)
@@ -98,6 +98,8 @@ export default async function TeacherTasksPage({
       .eq('workspace_id', workspaceId)
       .eq('status', 'pending_approval')
       .eq('homework_batches.status', 'active')
+      // M1.0-01 §1.1: arşivli öğrenci Görevler'den çıkar.
+      .eq('homework_batches.students.status', 'active')
     if (studentFilter) query = query.eq('homework_batches.student_id', studentFilter)
     const { data } = await query.order('submitted_at', { ascending: true })
     itemRows = (data ?? []) as unknown as ItemRow[]
@@ -111,6 +113,7 @@ export default async function TeacherTasksPage({
       .eq('workspace_id', workspaceId)
       .eq('status', 'pending')
       .eq('homework_batches.status', 'active')
+      .eq('homework_batches.students.status', 'active')
       .lt('homework_batches.due_date', today)
     if (studentFilter) query = query.eq('homework_batches.student_id', studentFilter)
     const { data } = await query
