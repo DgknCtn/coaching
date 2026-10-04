@@ -5,6 +5,14 @@ import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap } from '@/lib/book-map'
 import { loadKeepActiveTopicIds } from '@/lib/topic-overrides'
 import { localDateString } from '@/lib/homework-status'
+import {
+  defaultSubmissionDeadline,
+  deriveMainContact,
+  CONTACT_KIND_LABEL,
+  contactKindOf,
+  type ServiceLike,
+} from '@/lib/service-structure'
+import { localClock } from '@/lib/homework-load'
 import { Button } from '@/components/ui/button'
 import { HomeworkBuilder } from './homework-builder'
 import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
@@ -69,7 +77,7 @@ export default async function NewHomeworkPage({
     // seçimlerin korunmasını sağlar.
     supabase
       .from('weekly_plan_drafts')
-      .select('id, due_date, title, note')
+      .select('id, due_date, due_at, title, note')
       .eq('workspace_id', workspaceId)
       .eq('student_id', studentId)
       .eq('teacher_profile_id', profile.id)
@@ -109,6 +117,52 @@ export default async function NewHomeworkPage({
         dueSource: activeFlowRow.due_source as 'anchor' | 'custom',
       }
     : null
+
+  // AKIŞ YOKSA ANA TEMAS (M1.0-01 §2.1): Koçluk > Birebir > Grup önceliği
+  // deriveMainContact'ta zaten var. Sonraki oturumu varsayılan son teslim
+  // olur; hiçbir hizmet yoksa öğretmen tarih + saati elle seçer.
+  let fallbackDue: { dueAt: string; source: string } | null = null
+  if (!activeFlow) {
+    const servicesRes = await supabase
+      .from('student_services')
+      .select(
+        'id, kind, participation, medium, weekday, start_time, start_date, status, submission_offset_minutes'
+      )
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+    const serviceRows = orThrow(listResult(servicesRes, 'homework_new.services'))
+    const services = serviceRows.map(s => ({
+      id: s.id,
+      kind: s.kind,
+      participation: s.participation,
+      medium: s.medium,
+      weekday: s.weekday,
+      startTime: String(s.start_time).slice(0, 5),
+      startDate: s.start_date,
+      status: s.status,
+      submissionOffsetMinutes: s.submission_offset_minutes ?? 0,
+    })) as ServiceLike[]
+    const anchor = deriveMainContact(services)
+    const at = anchor ? defaultSubmissionDeadline(anchor, new Date()) : null
+    if (anchor && at) {
+      fallbackDue = {
+        dueAt: at.toISOString(),
+        source: CONTACT_KIND_LABEL[contactKindOf(anchor)],
+      }
+    }
+  }
+
+  // Varsayılan son teslim: taslak > aktif akış > ana temas > boş.
+  const defaultDueAt = activeFlow?.dueAt ?? fallbackDue?.dueAt ?? null
+  const draftDueAt = (draft?.due_at as string | null | undefined) ?? null
+  const initialDueDate =
+    (draftDueAt ? localDateString(new Date(draftDueAt)) : draft?.due_date) ??
+    (defaultDueAt ? localDateString(new Date(defaultDueAt)) : '')
+  const initialDueTime = draftDueAt
+    ? localClock(new Date(draftDueAt))
+    : defaultDueAt
+      ? localClock(new Date(defaultDueAt))
+      : '18:00'
 
   let draftTestIds: string[] = []
   if (draft?.id) {
@@ -155,7 +209,9 @@ export default async function NewHomeworkPage({
         // Taslak, akışın varsayılanını EZER: öğretmen o taslakta tarihi
         // bilinçle değiştirmiş olabilir ve kaydedilmiş bir tercihi
         // sessizce geri almak, yaptığı işi silmek olurdu.
-        initialDueDate={draft?.due_date ?? activeFlow?.dueDate ?? ''}
+        initialDueDate={initialDueDate}
+        initialDueTime={initialDueTime}
+        fallbackDue={fallbackDue}
         initialTitle={draft?.title ?? ''}
         initialNote={draft?.note ?? ''}
         keepActiveTopicIds={[...keepActiveTopicIds]}

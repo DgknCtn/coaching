@@ -20,13 +20,15 @@ export async function createHomeworkBatchAction(
   dueDate: string,
   title: string | undefined,
   items: HomeworkItem[],
-  note?: string
+  note?: string,
+  dueAt?: string
 ) {
   const parsed = homeworkBatchSchema.safeParse({
     workspaceId,
     termId,
     studentId,
     dueDate,
+    dueAt,
     title,
     note,
     items,
@@ -49,6 +51,8 @@ export async function createHomeworkBatchAction(
     // kullanılmıyordu; yeni kolon açmak yerine o alan kullanılır.
     p_description: parsed.data.note || null,
     p_items: items,
+    // M1.0-01: teslim gün + saat. due_date RPC'de bunun yerel gününden türer.
+    p_due_at: parsed.data.dueAt ?? null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -90,7 +94,11 @@ export async function createHomeworkBatchAction(
     action: 'homework.publish',
     entityType: 'student',
     entityId: parsed.data.studentId,
-    detail: { itemCount: parsed.data.items.length, dueDate: parsed.data.dueDate },
+    detail: {
+      itemCount: parsed.data.items.length,
+      dueDate: parsed.data.dueDate,
+      dueAt: parsed.data.dueAt ?? null,
+    },
   })
   await trackFeature(supabase, sessionWorkspaceId, 'homework.publish')
 

@@ -187,18 +187,20 @@ describe('R7-02/R7-04 · WhatsApp metni', () => {
   })
 
   it('kabul R7-02: her kitap için doğru miktar yazar', () => {
-    expect(text).toContain('345 Matematik (1 test)')
-    expect(text).toContain('TED Math 9 - Book 2 (10 sayfa)')
+    expect(text).toContain('345 Matematik · 1 test')
+    expect(text).toContain('TED Math 9 - Book 2 · 10 sayfa')
   })
 
   it('kabul R7-04: hiyerarşi öğrenci → tarih → kitap → çalışma → not sırasında', () => {
     const lines = text.split('\n')
     const idx = (needle: string) => lines.findIndex(l => l.startsWith(needle))
-    expect(idx('Merhaba')).toBeLessThan(idx('Teslim tarihi:'))
-    expect(idx('Teslim tarihi:')).toBeLessThan(idx('345 Matematik'))
+    expect(idx('Merhaba')).toBeLessThan(idx('Teslim:'))
+    expect(idx('Teslim:')).toBeLessThan(idx('345 Matematik'))
     expect(idx('345 Matematik')).toBeLessThan(idx('• 5. Bölüm'))
     expect(idx('• 5. Bölüm')).toBeLessThan(idx('Not:'))
-    expect(idx('Not:')).toBeLessThan(idx('Çalışmalarını tamamladığında'))
+    // M1.0-01: not son bloktur; panel hatırlatma cümlesi kaldırıldı.
+    expect(lines[lines.length - 1]).toBe('Not: Tekrarlarımızı unutmayalım.')
+    expect(text).not.toContain('panelden durumunu işaretlemeyi')
   })
 
   it('R6-05 regresyonu: not boşken çıktıya hiçbir şey eklenmez', () => {

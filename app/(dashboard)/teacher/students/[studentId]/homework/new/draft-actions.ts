@@ -15,12 +15,14 @@ export async function saveWeeklyPlanDraftAction(
   dueDate: string | undefined,
   title: string | undefined,
   items: { student_book_assignment_id: string; book_test_id: string }[],
-  note?: string
+  note?: string,
+  dueAt?: string
 ) {
   const parsed = weeklyPlanDraftSchema.safeParse({
     workspaceId,
     studentId,
     dueDate,
+    dueAt,
     title,
     note,
     items,
@@ -38,6 +40,7 @@ export async function saveWeeklyPlanDraftAction(
     p_title: parsed.data.title || null,
     p_items: parsed.data.items,
     p_note: parsed.data.note || null,
+    p_due_at: parsed.data.dueAt ?? null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }

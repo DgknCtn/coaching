@@ -419,6 +419,8 @@ export const homeworkBatchSchema = z.object({
   termId: uuid,
   studentId: uuid,
   dueDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir teslim tarihi seçin.'),
+  /** Son teslim anı (M1.0-01) — ISO; verilirse due_date onun İstanbul günüdür. */
+  dueAt: z.string().datetime({ offset: true }).optional(),
   title: z.string().trim().max(200).optional().or(z.literal('')),
   /** Ödev notu (R6-05) — isteğe bağlı, ödev başına tek alan. */
   note: z.string().trim().max(2000, 'Ödev notu en fazla 2000 karakter olabilir.').optional().or(z.literal('')),
@@ -440,6 +442,7 @@ export const weeklyPlanDraftSchema = z.object({
   workspaceId: uuid,
   studentId: uuid,
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir teslim tarihi seçin.').optional().or(z.literal('')),
+  dueAt: z.string().datetime({ offset: true }).optional(),
   title: z.string().trim().max(200).optional().or(z.literal('')),
   /** Ödev notu (R6-05). Sınır homeworkBatchSchema ile aynı. */
   note: z.string().trim().max(2000, 'Ödev notu en fazla 2000 karakter olabilir.').optional().or(z.literal('')),

@@ -12,10 +12,15 @@
 //
 // R7 hiyerarşisi (R7-04): mesajın İŞLEVİ değişmedi, sırası sadeleşti.
 //   öğrenci -> teslim tarihi -> kitap adı + miktar -> bölüm/test/sayfa
-//   -> isteğe bağlı not -> panel hatırlatması
+//   -> isteğe bağlı not
+//
+// M1.0-01 §3: teslim gün + SAAT yazılır; altına sepetteki yük özeti
+// (Toplam / kırılım / Günlük ort.) gelir — aynı lib/homework-load.ts
+// sonucundan, ayrı hesap yapılmaz. Panel hatırlatma cümlesi kaldırıldı.
 
 import { formatSelectedUnits } from '@/lib/book-map'
 import { APP_TIME_ZONE, todayDateString } from '@/lib/homework-status'
+import { formatLoadLines, localClock, type LoadSummary } from '@/lib/homework-load'
 import { formatUnitCount } from '@/lib/unit-labels'
 
 export interface ShareSection {
@@ -44,6 +49,10 @@ export interface ShareTextInput {
   studentName: string
   /** ISO tarih (YYYY-MM-DD); yoksa "—" yazılır. */
   dueDate?: string | null
+  /** Son teslim anı; verilirse teslim satırına saat eklenir (M1.0-01). */
+  dueAt?: Date | string | null
+  /** Sepetteki yük özeti — sepet kartıyla AYNI nesne (lib/homework-load.ts). */
+  load?: LoadSummary | null
   books: ShareBook[]
   /**
    * Ödev notu (R6-05) — isteğe bağlı insan bağlamı.
@@ -89,7 +98,11 @@ function dayDiff(from: string, to: string): number | null {
  * new Date()` karşılaştırması burada da yasaktır — UTC gece yarısına
  * ayrışıp gün kaydırır.
  */
-export function formatDueDate(dueDate?: string | null, today?: string): string {
+export function formatDueDate(
+  dueDate?: string | null,
+  today?: string,
+  dueAt?: Date | string | null
+): string {
   if (!dueDate) return '—'
   const parsed = Date.parse(`${dueDate}T12:00:00Z`)
   if (Number.isNaN(parsed)) return '—'
@@ -97,7 +110,11 @@ export function formatDueDate(dueDate?: string | null, today?: string): string {
   // "31 Ağustos 2026 Pazartesi" — tr-TR varsayılanı günü sona koyar.
   const parts = dateFormatter.formatToParts(new Date(parsed))
   const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
-  const natural = `${get('day')} ${get('month')} ${get('year')} ${get('weekday')}`
+  let natural = `${get('day')} ${get('month')} ${get('year')} ${get('weekday')}`
+
+  // M1.0-01: "10 Ekim 2026 Cumartesi · 18:00"
+  const at = dueAt ? (dueAt instanceof Date ? dueAt : new Date(dueAt)) : null
+  if (at && !Number.isNaN(at.getTime())) natural = `${natural} · ${localClock(at)}`
 
   const diff = dayDiff(today ?? todayDateString(), dueDate)
   if (diff === null) return natural
@@ -115,21 +132,25 @@ export function formatDueDate(dueDate?: string | null, today?: string): string {
  *   Merhaba Ömer,
  *
  *   Bu haftaki çalışmaların:
- *   Teslim tarihi: 31 Ağustos 2026 Pazartesi (7 gün sonra)
  *
- *   345 Matematik (1 test)
+ *   Teslim: 31 Ağustos 2026 Pazartesi · 18:00 (7 gün sonra)
+ *   Toplam: 11 çalışma
+ *   10 sayfa · 1 test
+ *   Günlük ort.: ~2 çalışma
+ *
+ *   345 Matematik · 1 test
  *   • 5. Bölüm - Trigonometri 1 → 4. Test
  *
- *   TED Math 9 - Book 2 (10 sayfa)
+ *   TED Math 9 - Book 2 · 10 sayfa
  *   • 4.1 Geometric Transformations → sf. 1-10
  *
- *   Not: Tekrarlarımızı unutmayalım.
- *
- *   Çalışmalarını tamamladığında panelden durumunu işaretlemeyi unutma.
+ *   Not: Tekrarlarımızı unutmayalım.      <- yalnız not doluysa
  */
 export function buildShareText({
   studentName,
   dueDate,
+  dueAt,
+  load,
   books,
   note,
   today,
@@ -138,7 +159,9 @@ export function buildShareText({
     `Merhaba ${studentName},`,
     '',
     'Bu haftaki çalışmaların:',
-    `Teslim tarihi: ${formatDueDate(dueDate, today)}`,
+    '',
+    `Teslim: ${formatDueDate(dueDate, today, dueAt)}`,
+    ...(load ? formatLoadLines(load) : []),
   ]
 
   for (const book of books) {
@@ -158,7 +181,7 @@ export function buildShareText({
     // video görevi olan kitap) başlık eskisi gibi sade kalır.
     const heading =
       book.unitCount && book.unitCount > 0
-        ? `${book.bookTitle} (${formatUnitCount(book.unitCount, book.trackingMode)})`
+        ? `${book.bookTitle} · ${formatUnitCount(book.unitCount, book.trackingMode)}`
         : book.bookTitle
 
     lines.push('', heading, ...sectionLines, ...videoLines)
@@ -168,8 +191,6 @@ export function buildShareText({
   // nasıl yapılacağına dair bağlam.
   const trimmedNote = note?.trim()
   if (trimmedNote) lines.push('', `Not: ${trimmedNote}`)
-
-  lines.push('', 'Çalışmalarını tamamladığında panelden durumunu işaretlemeyi unutma.')
 
   return lines.join('\n')
 }

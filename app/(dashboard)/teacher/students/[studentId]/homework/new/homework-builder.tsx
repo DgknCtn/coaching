@@ -22,6 +22,14 @@ import {
 import { toast } from 'sonner'
 import { flowMembership } from '@/lib/weekly-flow'
 import { formatSessionLong } from '@/lib/service-structure'
+import {
+  dueAtFromLocal,
+  formatDaysLeft,
+  formatDueDateTime,
+  formatBreakdown,
+  localClock,
+  summarizeLoad,
+} from '@/lib/homework-load'
 import { createHomeworkBatchAction, retryAttachBatchToFlowAction } from './actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
@@ -89,6 +97,13 @@ interface Props {
   /** 019 taslağından hidrate edilen seçimler (sayfa yenilemede korunur). */
   initialSelectedTestIds: string[]
   initialDueDate: string
+  /** Son teslim saati "HH:MM" (İstanbul) — M1.0-01: teslim gün + saat. */
+  initialDueTime: string
+  /**
+   * Akış yoksa ana temasın sıradaki oturumu (Koçluk > Birebir > Grup).
+   * Yalnız bilgi etiketi için; değer zaten initialDueDate/Time'a işlenmiş.
+   */
+  fallbackDue: { dueAt: string; source: string } | null
   initialTitle: string
   initialNote: string
   /**
@@ -116,6 +131,8 @@ export function HomeworkBuilder({
   initialBookId,
   initialSelectedTestIds,
   initialDueDate,
+  initialDueTime,
+  fallbackDue,
   initialTitle,
   initialNote,
   activeFlow,
@@ -133,6 +150,7 @@ export function HomeworkBuilder({
         : books[0]?.bookId) ?? ''
   )
   const [dueDate, setDueDate] = useState(initialDueDate)
+  const [dueTime, setDueTime] = useState(initialDueTime)
   // Son teslim akıştan MİRAS alınır; tarih alanı yalnız istisnada açılır
   // (§5: "Öğretmen isterse Farklı son teslim seçebilir"). Taslakta akışın
   // gününden farklı bir tarih kaydedilmişse istisna zaten seçilmiş
@@ -300,13 +318,18 @@ export function HomeworkBuilder({
     // hatırlatmayı göstermeye devam ediyordu.
   }, [selectedTests, videoTasksByBookId])
 
-  // Sepetteki kitaplar tek bir takip türünde toplanıyorsa o birimin adı
-  // kullanılır (R6-01 kabul #3). Test ve sayfa kaynakları karışıksa tek bir
-  // birim adı doğru olmaz; nötr "çalışma" denir.
-  const basketUnitLabel = useMemo(() => {
-    const modes = new Set(groupedSelection.map(g => g.trackingMode))
-    return modes.size === 1 ? unitLabel([...modes][0]) : 'çalışma'
-  }, [groupedSelection])
+  // SON TESLİM ANI (M1.0-01 §2): akıştan miras alınıyorsa akışın kesin
+  // anı; aksi hâlde seçilen gün + saat (İstanbul).
+  const effectiveDueAt = useMemo<Date | null>(() => {
+    if (activeFlow && !customDue) return new Date(activeFlow.dueAt)
+    return dueAtFromLocal(dueDate, dueTime)
+  }, [activeFlow, customDue, dueDate, dueTime])
+
+  // YÜK ÖZETİ — sepet kartı ve WhatsApp metni AYNI nesneyi kullanır.
+  const loadSummary = useMemo(
+    () => summarizeLoad(selectedTests, dueDate || null, new Date()),
+    [selectedTests, dueDate]
+  )
 
   // ============================================================
   // TASLAK KAYDI (B05)
@@ -351,10 +374,11 @@ export function HomeworkBuilder({
           dueDate || undefined,
           title || undefined,
           toHomeworkItems(selectedTests),
-          note || undefined
+          note || undefined,
+          effectiveDueAt?.toISOString()
         )
       ),
-    [enqueueDraft, selectedTests, dueDate, title, note, workspaceId, studentId]
+    [enqueueDraft, selectedTests, dueDate, title, note, workspaceId, studentId, effectiveDueAt]
   )
 
   const isFirstRender = useRef(true)
@@ -491,7 +515,8 @@ export function HomeworkBuilder({
         dueDate,
         title || undefined,
         toHomeworkItems(selectedTests),
-        note || undefined
+        note || undefined,
+        effectiveDueAt?.toISOString()
       )
       if (result?.error) {
         setServerError(result.error)
@@ -546,6 +571,8 @@ export function HomeworkBuilder({
       buildShareText({
         studentName,
         dueDate,
+        dueAt: effectiveDueAt,
+        load: loadSummary,
         books: groupedSelection.map(group => ({
           bookTitle: group.bookTitle,
           trackingMode: group.trackingMode,
@@ -591,7 +618,7 @@ export function HomeworkBuilder({
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={focusDueDate}>
             <CalendarDays />
-            {dueDate ? new Date(dueDate).toLocaleDateString('tr-TR') : 'Teslim tarihi'}
+            {dueDate ? formatDueDateTime(dueDate, effectiveDueAt) : 'Teslim tarihi'}
           </Button>
           <Button
             size="sm"
@@ -810,11 +837,42 @@ export function HomeworkBuilder({
               </button>
             </div>
 
-            {/* Özet listeyle birlikte kaymaz: "3 kitap · 14 çalışma" bilgisi
-                panel açıkken her zaman görünür kalır (R7-03). */}
-            <p className="shrink-0 px-4 pt-3 text-xs text-muted-foreground">
-              {groupedSelection.length} kitap · {selectedTests.length} {basketUnitLabel} planda
-            </p>
+            {/* YÜK ÖZETİ (M1.0-01 §2) listeyle birlikte kaymaz: toplam,
+                sayfa/test kırılımı, günlük ortalama ve son teslim her ekleme/
+                çıkarmada yeniden hesaplanır. WhatsApp metni aynı özeti
+                kullanır (lib/homework-load.ts). */}
+            <div className="shrink-0 space-y-0.5 px-4 pt-3 text-xs" aria-live="polite">
+              <p>
+                <span className="font-semibold tabular-nums">
+                  Toplam: {loadSummary.total} çalışma
+                </span>
+                <span className="text-muted-foreground">
+                  {' '}· {groupedSelection.length} kitap
+                </span>
+              </p>
+              {loadSummary.total > 0 && (
+                <p className="tabular-nums text-muted-foreground">
+                  {formatBreakdown(loadSummary)}
+                </p>
+              )}
+              {loadSummary.total > 0 && loadSummary.dailyAverage !== null && (
+                <p
+                  className="tabular-nums text-muted-foreground"
+                  title="Toplam çalışma / teslime kalan gün. Yaklaşık değerdir, günlük kota değildir."
+                >
+                  Günlük ort.: ~{loadSummary.dailyAverage} çalışma
+                </p>
+              )}
+              <p className="text-muted-foreground">
+                Son teslim:{' '}
+                <span className="text-foreground">
+                  {dueDate ? formatDueDateTime(dueDate, effectiveDueAt) : 'seçilmedi'}
+                </span>
+                {formatDaysLeft(loadSummary.daysLeft) && (
+                  <span> · {formatDaysLeft(loadSummary.daysLeft)}</span>
+                )}
+              </p>
+            </div>
 
             {panelOpen && (
               <>
@@ -911,14 +969,31 @@ export function HomeworkBuilder({
                       </div>
                     ) : (
                       <>
-                        <Input
-                          id="dueDate"
-                          ref={dueDateRef}
-                          type="date"
-                          value={dueDate}
-                          onChange={e => setDueDate(e.target.value)}
-                          min={todayDateString()}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            id="dueDate"
+                            ref={dueDateRef}
+                            type="date"
+                            value={dueDate}
+                            onChange={e => setDueDate(e.target.value)}
+                            min={todayDateString()}
+                            className="min-w-0 flex-1"
+                          />
+                          <Input
+                            id="dueTime"
+                            type="time"
+                            aria-label="Son teslim saati"
+                            value={dueTime}
+                            onChange={e => setDueTime(e.target.value)}
+                            className="w-28"
+                          />
+                        </div>
+                        {!activeFlow && fallbackDue && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Varsayılan: sonraki {fallbackDue.source.toLocaleLowerCase('tr-TR')}{' '}
+                            ({formatSessionLong(fallbackDue.dueAt)})
+                          </p>
+                        )}
                         {activeFlow && (
                           <>
                             {/* Seçilen tarihin SONUCU anında yazılıyor.
@@ -959,6 +1034,7 @@ export function HomeworkBuilder({
                               onClick={() => {
                                 setCustomDue(false)
                                 setDueDate(activeFlow.dueDate)
+                                setDueTime(localClock(new Date(activeFlow.dueAt)))
                               }}
                             >
                               Akışın son teslimine dön

@@ -38,19 +38,18 @@ describe('buildShareText (R4 §7)', () => {
         'Merhaba Ömer,',
         '',
         'Bu haftaki çalışmaların:',
-        'Teslim tarihi: 30 Ağustos 2026 Pazar (7 gün sonra)',
         '',
-        '345 Matematik (3 test)',
+        'Teslim: 30 Ağustos 2026 Pazar (7 gün sonra)',
+        '',
+        '345 Matematik · 3 test',
         '• Polinomlar → 3-5. Test',
         '',
-        'Metin 10.Sınıf Matematik (43 sayfa)',
+        'Metin 10.Sınıf Matematik · 43 sayfa',
         '• Üçgenler → sf. 1-36, 42-48',
         '',
-        'Zeduva 9.Sınıf Fizik (20 sayfa)',
+        'Zeduva 9.Sınıf Fizik · 20 sayfa',
         '• Hareket → sf. 72-91',
         '• Hareket konu anlatım videolarını izle',
-        '',
-        'Çalışmalarını tamamladığında panelden durumunu işaretlemeyi unutma.',
       ].join('\n')
     )
   })
@@ -87,7 +86,7 @@ describe('buildShareText (R4 §7)', () => {
 
   it('teslim tarihi yoksa tire yazar', () => {
     const text = buildShareText({ studentName: 'Ali', dueDate: null, books: [] })
-    expect(text).toContain('Teslim tarihi: —')
+    expect(text).toContain('Teslim: —')
   })
 
   it('yalnız video görevi olan kitabı da listeler', () => {
@@ -216,8 +215,8 @@ describe('buildShareText · kitap bazlı miktar (R7-02)', () => {
         },
       ],
     })
-    expect(text).toContain('345 Matematik (1 test)')
-    expect(text).toContain('TED Math 9 - Book 2 (10 sayfa)')
+    expect(text).toContain('345 Matematik · 1 test')
+    expect(text).toContain('TED Math 9 - Book 2 · 10 sayfa')
   })
 
   it('R7 takip türlerinde birim adı doğru gelir', () => {
@@ -232,7 +231,9 @@ describe('buildShareText · kitap bazlı miktar (R7-02)', () => {
         },
       ],
     })
-    expect(text).toContain('Deneme Seti (4 deneme)')
+    expect(text).toContain('Deneme Seti · 4 deneme')
+    // M1.0-01 yan düzeltme: deneme kitabında satır sonu "Test" değil.
+    expect(text).toContain('• TYT Denemeleri → 1-4. Deneme')
   })
 
   it('miktar verilmezse başlık sade kalır (yalnız video görevi olan kitap)', () => {

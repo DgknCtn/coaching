@@ -185,7 +185,7 @@ function zoneOffsetMs(instant: Date): number {
  * yeterdi; ikinci geçiş yaz saati uygulaması geri gelirse ya da kural
  * başka bir bölgeye taşınırsa doğru kalsın diye duruyor.
  */
-function zonedWallTimeToInstant(
+export function zonedWallTimeToInstant(
   year: number,
   month: number,
   day: number,

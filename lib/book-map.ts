@@ -466,5 +466,7 @@ export function formatSelectedUnits(
 
   if (trackingMode === 'page') return formatPageRangeLabel(ranges)
 
-  return `${formatRanges(ranges)}. Test`
+  // Bölüm / adım / deneme kitaplarında "3-5. Test" yanlış birimdi.
+  const suffix: Record<string, string> = { section: 'Bölüm', step: 'Adım', trial: 'Deneme' }
+  return `${formatRanges(ranges)}. ${suffix[trackingMode] ?? 'Test'}`
 }
