@@ -186,6 +186,18 @@ export interface FinanceEntry {
   /** Yalnız tahsilat satırında dolu. */
   method?: string
   note: string | null
+  /** Görüşmeler'den otomatik gelen ders satırı (085). Silinse de oturum
+   *  yeniden kaydedilirse geri yazılabilir; arayüz uyarır. */
+  auto?: boolean
+}
+
+/** Velinin "ödeme yaptım" bildirimi (086) — para kaydı değil. */
+export interface PaymentNotice {
+  id: string
+  monthStart: string
+  status: 'pending' | 'confirmed' | 'rejected'
+  note: string | null
+  createdAt: string
 }
 
 /**
@@ -197,7 +209,7 @@ export interface FinanceEntry {
  */
 export async function listStudentEntriesAction(
   studentId: string
-): Promise<{ error?: string; entries?: FinanceEntry[] }> {
+): Promise<{ error?: string; entries?: FinanceEntry[]; notices?: PaymentNotice[] }> {
   const parsedId = uuidSchema.safeParse(studentId)
   if (!parsedId.success) return { error: firstIssue(parsedId.error) }
 
@@ -206,11 +218,15 @@ export async function listStudentEntriesAction(
 
   const supabase = await createClient()
 
-  const [{ data: lessons, error: lessonError }, { data: payments, error: paymentError }] =
+  const [
+    { data: lessons, error: lessonError },
+    { data: payments, error: paymentError },
+    { data: notices },
+  ] =
     await Promise.all([
       supabase
         .from('finance_lessons')
-        .select('id, lesson_date, quantity, unit_price_kurus, note')
+        .select('id, lesson_date, quantity, unit_price_kurus, note, service_session_id')
         .eq('student_id', parsedId.data)
         .order('lesson_date', { ascending: false })
         .limit(100),
@@ -220,6 +236,12 @@ export async function listStudentEntriesAction(
         .eq('student_id', parsedId.data)
         .order('paid_on', { ascending: false })
         .limit(100),
+      supabase
+        .from('parent_payment_notices')
+        .select('id, month_start, status, note, created_at')
+        .eq('student_id', parsedId.data)
+        .order('month_start', { ascending: false })
+        .limit(50),
     ])
 
   if (lessonError || paymentError) {
@@ -234,6 +256,7 @@ export async function listStudentEntriesAction(
       amountKurus: Number(l.quantity ?? 1) * Number(l.unit_price_kurus ?? 0),
       quantity: Number(l.quantity ?? 1),
       note: (l.note as string | null) ?? null,
+      auto: Boolean(l.service_session_id),
     })),
     ...(payments ?? []).map((p) => ({
       id: p.id as string,
@@ -245,7 +268,77 @@ export async function listStudentEntriesAction(
     })),
   ].sort((a, b) => b.date.localeCompare(a.date))
 
-  return { entries }
+  return {
+    entries,
+    notices: (notices ?? []).map((n) => ({
+      id: n.id as string,
+      monthStart: n.month_start as string,
+      status: n.status as PaymentNotice['status'],
+      note: (n.note as string | null) ?? null,
+      createdAt: n.created_at as string,
+    })),
+  }
+}
+
+// ============================================================
+// FİNANS TEMİZLİĞİ (137)
+// ============================================================
+
+/** Ders ücreti tanımını kaldırır; geçmiş tahakkuklar kalır. */
+export async function deleteStudentFeeAction(studentId: string): Promise<FinanceActionResult> {
+  const parsedId = uuidSchema.safeParse(studentId)
+  if (!parsedId.success) return { error: firstIssue(parsedId.error) }
+  const ctx = await assertOwner()
+  if (!ctx) return DENIED
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('delete_student_fee', { p_student_id: parsedId.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/teacher/finans')
+  return { success: true }
+}
+
+/** Velinin ödeme bildirimini siler (deftere yazılmış tahsilat ayrı kalır). */
+export async function deletePaymentNoticeAction(noticeId: string): Promise<FinanceActionResult> {
+  const parsedId = uuidSchema.safeParse(noticeId)
+  if (!parsedId.success) return { error: firstIssue(parsedId.error) }
+  const ctx = await assertOwner()
+  if (!ctx) return DENIED
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('delete_payment_notice', { p_notice_id: parsedId.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/teacher/finans')
+  return { success: true }
+}
+
+/**
+ * Bir öğrencinin TÜM finans kayıtlarını siler (öğrenci kalır).
+ * Ad birebir eşleşmesi RPC'de de denetlenir.
+ */
+export async function purgeStudentFinanceAction(
+  studentId: string,
+  confirmName: string
+): Promise<FinanceActionResult> {
+  const parsedId = uuidSchema.safeParse(studentId)
+  if (!parsedId.success) return { error: firstIssue(parsedId.error) }
+  if (typeof confirmName !== 'string' || confirmName.length > 200) {
+    return { error: 'Onay için öğrencinin adını yazın.' }
+  }
+  const ctx = await assertOwner()
+  if (!ctx) return DENIED
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('purge_student_finance', {
+    p_student_id: parsedId.data,
+    p_confirm_name: confirmName,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/teacher/finans')
+  return { success: true }
 }
 
 /**

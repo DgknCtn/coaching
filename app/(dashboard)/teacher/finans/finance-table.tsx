@@ -44,9 +44,13 @@ import {
   addLessonAction,
   addPaymentAction,
   deleteFinanceEntryAction,
+  deletePaymentNoticeAction,
+  deleteStudentFeeAction,
   listStudentEntriesAction,
+  purgeStudentFinanceAction,
   setStudentFeeAction,
   type FinanceEntry,
+  type PaymentNotice,
 } from './actions'
 
 // ÖĞRENCİ BAZINDA TAKİP.
@@ -233,15 +237,18 @@ export function FinanceTable({ rows }: { rows: StudentFinanceRow[] }) {
                       >
                         <BadgeTurkishLira />
                       </Button>
+                      {/* Silme ve temizlik bu pencerede; simge tek başına
+                          bulunmuyordu, bu yüzden yazılı (137). */}
                       <Button
                         type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        title="Hareketler"
-                        aria-label={`${row.fullName} — hareket dökümü`}
+                        size="xs"
+                        variant="outline"
+                        title="Kayıtları gör, düzelt ve sil"
+                        aria-label={`${row.fullName} — hareketler ve silme`}
                         onClick={() => setActive({ row, kind: 'history' })}
                       >
                         <History />
+                        Hareketler
                       </Button>
                     </div>
                   </div>
@@ -492,6 +499,26 @@ function EntryDialog({
  * kılardı. Silinen satır zaten ekranda duruyordu ve yeniden girmek bir
  * diyalog uzaklıkta.
  */
+const NOTICE_STATUS_LABEL: Record<PaymentNotice['status'], string> = {
+  pending: 'Bekliyor',
+  confirmed: 'Onaylandı',
+  rejected: 'Reddedildi',
+}
+
+const monthFmt = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: 'Europe/Istanbul',
+  month: 'long',
+  year: 'numeric',
+})
+
+/**
+ * Öğrencinin finans merkezi: hareket dökümü + temizlik (137).
+ *
+ * SİLME İKİ ADIMLI: çöp kutusuna basmak satırı "Sil / Vazgeç" onayına
+ * çevirir. Önceden tek tık kaydı siliyordu; tutar taşıyan bir satırda bu
+ * fazla hızlıydı. İç içe pencere açmak yerine satır içi onay — liste
+ * kaydırma konumu korunur.
+ */
 function HistoryDialog({
   row,
   onClose,
@@ -501,7 +528,11 @@ function HistoryDialog({
 }) {
   const router = useRouter()
   const [entries, setEntries] = useState<FinanceEntry[] | null>(null)
+  const [notices, setNotices] = useState<PaymentNotice[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [purgeOpen, setPurgeOpen] = useState(false)
+  const [purgeName, setPurgeName] = useState('')
   const [pending, startTransition] = useTransition()
 
   const load = useCallback(() => {
@@ -512,33 +543,108 @@ function HistoryDialog({
         return
       }
       setEntries(res.entries ?? [])
+      setNotices(res.notices ?? [])
     })
   }, [row.studentId])
 
   useEffect(load, [load])
 
-  function remove(entry: FinanceEntry) {
+  function run(
+    task: () => Promise<{ error?: string }>,
+    success: string,
+    after: () => void
+  ) {
     startTransition(async () => {
-      const res = await deleteFinanceEntryAction(entry.kind, entry.id)
+      const res = await task()
+      setConfirming(null)
       if (res.error) {
         toast.error(res.error)
         return
       }
-      // Listeyi yerinde güncelle: yeniden yüklemek, uzun bir dökümde
-      // kaydırma konumunu başa atardı.
-      setEntries((prev) => prev?.filter((e) => e.id !== entry.id) ?? null)
-      toast.success('Kayıt silindi.')
+      after()
+      toast.success(success)
       router.refresh()
     })
   }
 
+  function removeEntry(entry: FinanceEntry) {
+    run(
+      () => deleteFinanceEntryAction(entry.kind, entry.id),
+      'Kayıt silindi.',
+      // Listeyi yerinde güncelle: yeniden yüklemek kaydırma konumunu atar.
+      () => setEntries((prev) => prev?.filter((e) => e.id !== entry.id) ?? null)
+    )
+  }
+
+  function removeNotice(notice: PaymentNotice) {
+    run(
+      () => deletePaymentNoticeAction(notice.id),
+      'Ödeme bildirimi silindi.',
+      () => setNotices((prev) => prev.filter((n) => n.id !== notice.id))
+    )
+  }
+
+  function removeFee() {
+    run(() => deleteStudentFeeAction(row.studentId), 'Ders ücreti tanımı kaldırıldı.', () => {})
+  }
+
+  function purgeAll() {
+    run(
+      () => purgeStudentFinanceAction(row.studentId, purgeName.trim()),
+      'Öğrencinin tüm finans kayıtları silindi.',
+      () => {
+        setEntries([])
+        setNotices([])
+        setPurgeOpen(false)
+        setPurgeName('')
+      }
+    )
+  }
+
+  /** Satır içi iki adımlı silme düğmesi. */
+  function DeleteControl({ id, onConfirm }: { id: string; onConfirm: () => void }) {
+    if (confirming === id) {
+      return (
+        <span className="flex items-center gap-1">
+          <Button type="button" size="xs" variant="destructive" disabled={pending} onClick={onConfirm}>
+            Sil
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => setConfirming(null)}
+          >
+            Vazgeç
+          </Button>
+        </span>
+      )
+    }
+    return (
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        disabled={pending}
+        title="Kaydı sil"
+        aria-label="Kaydı sil"
+        onClick={() => setConfirming(id)}
+      >
+        <Trash2 />
+      </Button>
+    )
+  }
+
+  const nameMatches = purgeName.trim() === row.fullName.trim()
+
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog open onOpenChange={(next) => !next && !pending && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Hareketler — {row.fullName}</DialogTitle>
           <DialogDescription>
-            Ders ve tahsilat kayıtları, tarihe göre. Yanlış girilen bir kaydı buradan
+            Ders ve tahsilat kayıtları, tarihe göre. Yanlış girilen bir kaydı çöp kutusuyla
             silebilirsiniz.
           </DialogDescription>
         </DialogHeader>
@@ -549,71 +655,196 @@ function HistoryDialog({
           </p>
         ) : entries === null ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Yükleniyor…</p>
-        ) : entries.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Bu öğrenci için henüz kayıt yok.
-          </p>
         ) : (
-          <ul className="max-h-80 divide-y overflow-y-auto">
-            {entries.map((entry) => (
-              <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-sm">
-                    {entry.kind === 'lesson' ? (
-                      <>
-                        {entry.quantity} ders
-                        <span className="text-muted-foreground"> · tahakkuk</span>
-                      </>
-                    ) : (
-                      <>
-                        Tahsilat
-                        <span className="text-muted-foreground">
-                          {' '}
-                          · {paymentMethodLabel(entry.method ?? 'nakit')}
-                        </span>
-                      </>
-                    )}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {formatDateTr(entry.date)}
-                    {entry.note && ` · ${entry.note}`}
-                  </p>
-                </div>
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto">
+            {entries.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Bu öğrenci için ders veya tahsilat kaydı yok.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {entries.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm">
+                        {entry.kind === 'lesson' ? (
+                          <>
+                            {entry.quantity} ders
+                            <span className="text-muted-foreground"> · tahakkuk</span>
+                            {entry.auto && (
+                              <span
+                                className="text-muted-foreground"
+                                title="Görüşmeler'den otomatik. Oturum yeniden kaydedilirse geri yazılabilir; kalıcı çözüm oturumun durumunu düzeltmek."
+                              >
+                                {' '}
+                                · otomatik
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            Tahsilat
+                            <span className="text-muted-foreground">
+                              {' '}
+                              · {paymentMethodLabel(entry.method ?? 'nakit')}
+                            </span>
+                          </>
+                        )}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {formatDateTr(entry.date)}
+                        {entry.note && ` · ${entry.note}`}
+                      </p>
+                    </div>
 
-                <div className="flex shrink-0 items-center gap-2">
-                  {/* İŞARET TUTARIN ÖNÜNDE: aynı sütunda hem borç hem
-                      ödeme var; renk tek başına ayırt etmeye yetmez
-                      (renk körlüğü) ve + / − işareti her koşulda okunur. */}
-                  <span
-                    className={cn(
-                      'text-sm font-medium tabular-nums',
-                      entry.kind === 'lesson'
-                        ? 'text-destructive-foreground'
-                        : 'text-success-foreground'
-                    )}
-                  >
-                    {entry.kind === 'lesson' ? '+' : '−'}
-                    {formatKurus(entry.amountKurus)}
-                  </span>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    disabled={pending}
-                    title="Kaydı sil"
-                    aria-label="Kaydı sil"
-                    onClick={() => remove(entry)}
-                  >
-                    <Trash2 />
-                  </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {/* İŞARET TUTARIN ÖNÜNDE: renk tek başına ayırt etmeye
+                          yetmez (renk körlüğü); + / − her koşulda okunur. */}
+                      <span
+                        className={cn(
+                          'text-sm font-medium tabular-nums',
+                          entry.kind === 'lesson'
+                            ? 'text-destructive-foreground'
+                            : 'text-success-foreground'
+                        )}
+                      >
+                        {entry.kind === 'lesson' ? '+' : '−'}
+                        {formatKurus(entry.amountKurus)}
+                      </span>
+                      <DeleteControl id={entry.id} onConfirm={() => removeEntry(entry)} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {notices.length > 0 && (
+              <section className="space-y-1">
+                <h3 className="text-xs font-medium text-muted-foreground">Veli ödeme bildirimleri</h3>
+                <ul className="divide-y rounded-md border">
+                  {notices.map((n) => (
+                    <li key={n.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm">
+                          {monthFmt.format(new Date(`${n.monthStart}T12:00:00Z`))}
+                          <span className="text-muted-foreground">
+                            {' '}
+                            · {NOTICE_STATUS_LABEL[n.status]}
+                          </span>
+                        </p>
+                        {n.note && (
+                          <p className="truncate text-xs text-muted-foreground">{n.note}</p>
+                        )}
+                      </div>
+                      <DeleteControl id={n.id} onConfirm={() => removeNotice(n)} />
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-muted-foreground">
+                  Bildirim para kaydı değildir; onaylanan bildirimin deftere yazılan tahsilatı
+                  ayrıca durur.
+                </p>
+              </section>
+            )}
+
+            {/* TEMİZLİK — ücret tanımı ve toptan silme (137). */}
+            <section className="space-y-3 border-t pt-4">
+              {row.perLessonKurus !== null && (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 text-sm">
+                    Ders ücreti: {formatKurus(row.perLessonKurus)}
+                    <p className="text-[11px] text-muted-foreground">
+                      Kaldırılırsa geçmiş tahakkuklar kalır; yeni ders eklenemez.
+                    </p>
+                  </div>
+                  {confirming === 'fee' ? (
+                    <span className="flex items-center gap-1">
+                      <Button type="button" size="xs" variant="destructive" disabled={pending} onClick={removeFee}>
+                        Kaldır
+                      </Button>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        disabled={pending}
+                        onClick={() => setConfirming(null)}
+                      >
+                        Vazgeç
+                      </Button>
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => setConfirming('fee')}
+                    >
+                      Ücret tanımını kaldır
+                    </Button>
+                  )}
                 </div>
-              </li>
-            ))}
-          </ul>
+              )}
+
+              {!purgeOpen ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="text-destructive-foreground"
+                  disabled={pending}
+                  onClick={() => setPurgeOpen(true)}
+                >
+                  <Trash2 />
+                  Tüm finans kayıtlarını temizle
+                </Button>
+              ) : (
+                <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                  <p className="text-sm">
+                    <strong>{row.fullName}</strong> için bütün dersler, tahsilatlar, veli
+                    bildirimleri ve ücret tanımı <strong>geri alınamaz</strong> şekilde silinir.
+                    Öğrenci silinmez. Test kayıtları için kullanın.
+                  </p>
+                  <Label htmlFor="purge-name" className="text-xs">
+                    Onaylamak için <span className="font-semibold">{row.fullName}</span> yazın
+                  </Label>
+                  <Input
+                    id="purge-name"
+                    autoComplete="off"
+                    value={purgeName}
+                    onChange={(e) => setPurgeName(e.target.value)}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => {
+                        setPurgeOpen(false)
+                        setPurgeName('')
+                      }}
+                    >
+                      Vazgeç
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={pending || !nameMatches}
+                      onClick={purgeAll}
+                    >
+                      Hepsini sil
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         )}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
             Kapat
           </Button>
         </DialogFooter>

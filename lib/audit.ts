@@ -43,6 +43,8 @@ export type AuditAction =
   | 'homework.approve_items'
   | 'homework.complete_manually'
   | 'homework.release_items'
+  // 137: test öğrencisinin finans kayıtlarının toptan silinmesi (SQL'de yazılır).
+  | 'finance.purge_student'
   | 'book.archive'
   // R7 §7.3: hiç atanmamış havuz kaydının kalıcı silinmesi. Atanmış
   // kaynak silinemez, arşivlenir — bu yüzden iki ayrı eylem.
@@ -113,6 +115,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework.approve_items': 'Seçili çalışmaları onayladı',
   'homework.complete_manually': 'Çalışmaları tamamlandı işaretledi',
   'homework.release_items': 'Çalışmaları aktif yükten çıkardı',
+  'finance.purge_student': 'Öğrencinin finans kayıtlarını temizledi',
   'book.archive': 'Kitap arşivledi',
   'book.delete': 'Kitap sildi (atanmamış kayıt)',
   'book.section_delete': 'Kitap bölümü sildi',
