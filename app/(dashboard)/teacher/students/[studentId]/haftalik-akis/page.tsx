@@ -132,7 +132,7 @@ export default async function WeeklyFlowPage({
     const { data: items } = await supabase
       .from('homework_items')
       .select(
-        `id, status, created_at, submitted_at, planned_for_date,
+        `id, status, created_at, submitted_at, completed_at, planned_for_date,
          homework_batches!inner(id, weekly_flow_id, created_at, title, status),
          books(id, title)`
       )
@@ -173,7 +173,18 @@ export default async function WeeklyFlowPage({
       // belgenin iki kuralını da tek sütun karşılıyor: onay ilerlemeyi
       // geriye düşürmez, iade edilen iş yeniden gönderilene kadar
       // sayılmaz.
-      const deliveredAt = r.submitted_at ? new Date(r.submitted_at as string) : null
+      //
+      // ÖĞRETMEN TAMAMLAMASI (M1.0-01 §4, kabul #10): öğretmenin "tamamlandı
+      // işaretle" dediği kalemde submitted_at BİLİNÇLİ OLARAK boş (öğrenci
+      // teslimi uydurulmaz). Yine de iş bitmiştir; Genel Bakış'ın
+      // `student_active_flow_load_view`'i onu duruma göre sayıyor. Bu ekran
+      // aynı sayıyı göstermek için tamamlanma anını kullanır — veri
+      // değişmez, yalnız sayım hizalanır.
+      const deliveredAt = r.submitted_at
+        ? new Date(r.submitted_at as string)
+        : r.status === 'completed' && r.completed_at
+          ? new Date(r.completed_at as string)
+          : null
 
       return {
         batchId: batch?.id ?? null,

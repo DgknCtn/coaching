@@ -156,12 +156,12 @@ export default async function StudentDetailPage({
       ? supabase
           .from('homework_batches')
           .select(`
-            id, title, description, due_date, status, weekly_flow_id,
+            id, title, description, due_date, due_at, status, weekly_flow_id,
             homework_items(
-              id, status, book_id, section_id,
+              id, status, book_id, section_id, submitted_at,
               books(title, tracking_mode),
               book_sections(title, order_index),
-              book_tests(order_index)
+              book_tests(order_index, title)
             )
           `)
           .eq('student_id', studentId)
@@ -1129,16 +1129,26 @@ export default async function StudentDetailPage({
                   batches={homeworkBatches.map((batch) => {
                     // Supabase iç içe select'i tek kaydı da dizi tipinde
                     // çözebiliyor; okurken tekile indiriyoruz.
-                    const items =
+                    const allItems =
                       (batch.homework_items as unknown as {
                         id: string
                         status: string
                         book_id: string | null
                         section_id: string | null
+                        submitted_at: string | null
                         books: Nested<{ title: string; tracking_mode: string }>
                         book_sections: Nested<{ title: string; order_index: number | null }>
-                        book_tests: Nested<{ order_index: number }>
+                        book_tests: Nested<{ order_index: number; title: string | null }>
                       }[]) ?? []
+                    // M1.0-01 §4: aktif ödevde kalem bazlı "aktif yükten
+                    // çıkar" yapılabiliyor. Çıkarılan (cancelled) kalem
+                    // aktif ödevin sayısına ve detayına girmez; arşivdeki
+                    // ödev ise tarihçe olarak tüm kalemleriyle görünür.
+                    const items =
+                      batch.status === 'archived'
+                        ? allItems
+                        : allItems.filter((i) => i.status !== 'cancelled')
+                    const releasedCount = allItems.length - items.length
                     const total = items.length
                     const completed = items.filter((i) => i.status === 'completed').length
                     // R6-06: detay assignment_items'tan türetilir; ödev
@@ -1178,12 +1188,38 @@ export default async function StudentDetailPage({
                       id: batch.id,
                       title: batch.title,
                       dueDate: batch.due_date,
+                      dueAt: (batch.due_at as string | null) ?? null,
                       description: batch.description,
                       completed,
                       total,
                       isOverdue: batchOverdue,
                       detail,
                       status: batch.status,
+                      releasedCount,
+                      // Sağ panel kalemleri — sıra detaydakiyle aynı.
+                      items: [...items]
+                        .sort((a, b) =>
+                          compareHomeworkItems(
+                            {
+                              sectionOrderIndex: one(a.book_sections)?.order_index ?? null,
+                              unitOrderIndex: one(a.book_tests)?.order_index ?? null,
+                            },
+                            {
+                              sectionOrderIndex: one(b.book_sections)?.order_index ?? null,
+                              unitOrderIndex: one(b.book_tests)?.order_index ?? null,
+                            }
+                          )
+                        )
+                        .map((i) => ({
+                          id: i.id,
+                          status: i.status,
+                          bookTitle: one(i.books)?.title ?? null,
+                          trackingMode: one(i.books)?.tracking_mode ?? null,
+                          sectionTitle: one(i.book_sections)?.title ?? null,
+                          unitTitle: one(i.book_tests)?.title ?? null,
+                          unitNumber: one(i.book_tests)?.order_index ?? null,
+                          submittedAt: i.submitted_at,
+                        })),
                     }
                   })}
                 />

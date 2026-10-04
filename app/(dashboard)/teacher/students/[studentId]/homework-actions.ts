@@ -165,10 +165,115 @@ export async function restoreToActiveLoadAction(
  * sayfası tazelenseydi öğrenci borcu düşmüş ödevi görmeye devam ederdi.
  */
 function revalidateStudentHomework(studentId: string) {
-  revalidatePath(`/teacher/students/${studentId}`)
+  // 'layout': kaynak detayı, Kaynak Planı ve öğrenci başlığındaki sayılar da
+  // tazelenir (M1.0-01 kabul #10 — her toplu işlemden sonra sayılar tutarlı).
+  revalidatePath(`/teacher/students/${studentId}`, 'layout')
   revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
   revalidatePath('/teacher/tasks')
   revalidatePath('/student')
   revalidatePath('/student/haftam')
+}
+
+// ============================================================
+// YAYINLANAN ÖDEVLER · SAĞ PANEL — M1.0-01 §4
+// ============================================================
+//
+// Üç işlem, üç ayrı durum (§6 "korunacak durum ayrımları"):
+//   onayla              — öğrenci teslim etmiş; teslim kaydı onaylanır.
+//   tamamlandı işaretle — öğrenci teslim etmemiş; kaynak 'teacher_manual',
+//                         submitted_at boş kalır (teslim uydurulmaz).
+//   aktif yükten çıkar  — kalem silinmez; neden/kim/zaman kalemde (135).
+//
+// Uygunluk SUNUCUDA da süzülür: RPC'ler yalnız uygun durumdaki kalemleri
+// işler, panelin gönderdiği listeye güvenmez.
+
+const itemIdsSchema = z.object({
+  studentId: uuidSchema,
+  itemIds: z.array(uuidSchema).min(1, 'En az bir çalışma seçilmeli.').max(500),
+})
+
+export async function approveItemsAction(studentId: string, itemIds: string[]) {
+  const parsed = itemIdsSchema.safeParse({ studentId, itemIds })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('approve_selected_homework_items', {
+    p_homework_item_ids: parsed.data.itemIds,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  const approved = Number((data as { approved?: number } | null)?.approved ?? 0)
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.approve_items',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { itemIds: parsed.data.itemIds, approved },
+  })
+
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true, count: approved }
+}
+
+export async function completeItemsManuallyAction(studentId: string, itemIds: string[]) {
+  const parsed = itemIdsSchema.safeParse({ studentId, itemIds })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('complete_homework_items_manually', {
+    p_item_ids: parsed.data.itemIds,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  const completed = Number((data as { completed?: number } | null)?.completed ?? 0)
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.complete_manually',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { itemIds: parsed.data.itemIds, completed, source: 'teacher_manual' },
+  })
+
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true, count: completed }
+}
+
+const releaseItemsSchema = itemIdsSchema.extend({
+  reason: z.string().trim().max(500).optional(),
+})
+
+export async function releaseItemsAction(studentId: string, itemIds: string[], reason?: string) {
+  const parsed = releaseItemsSchema.safeParse({ studentId, itemIds, reason })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('release_homework_items', {
+    p_item_ids: parsed.data.itemIds,
+    p_reason: parsed.data.reason || null,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  const result = (data ?? {}) as { released?: number; archived_batches?: number }
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.release_items',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: {
+      itemIds: parsed.data.itemIds,
+      released: result.released ?? 0,
+      archivedBatches: result.archived_batches ?? 0,
+      hasReason: Boolean(parsed.data.reason),
+    },
+  })
+
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true, count: Number(result.released ?? 0) }
 }

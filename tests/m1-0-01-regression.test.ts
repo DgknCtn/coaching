@@ -128,3 +128,43 @@ describe('§1.1 Öğrenci arşivi ve kalıcı silme (134)', () => {
     expect(fn(sql, 'restore_student')).toMatch(/v_count >= v_limit/)
   })
 })
+
+describe('§4 Yayınlanan Ödevler toplu işlem (135)', () => {
+  const sql = migration('135_homework_item_bulk_actions.sql')
+
+  it('aktif yükten çıkarma kalemi silmez; neden/kim/zaman kalemde', () => {
+    const body = fn(sql, 'release_homework_items')
+    expect(body).not.toMatch(/DELETE FROM/)
+    expect(body).toMatch(/SET status = 'cancelled'/)
+    expect(body).toMatch(/released_at = NOW\(\)/)
+    expect(body).toMatch(/released_by_profile_id = v_profile_id/)
+    expect(body).toMatch(/release_reason =/)
+    // Yalnız açık kalemler; tamamlanan iş aktif yükte değildir.
+    expect(body).toMatch(/hi\.status IN \('pending', 'pending_approval'\)/)
+  })
+
+  it('öğretmen tamamlaması kaynağı teacher_manual yazar, teslim uydurmaz', () => {
+    // Yorumlar ayıklanır: gerekçe metni sütun adlarını anıyor.
+    const body = fn(sql, 'complete_homework_items_manually').replace(/--.*$/gm, '')
+    expect(body).toMatch(/'teacher_manual'/)
+    expect(body).not.toMatch(/submitted_at/)
+    // Öğrencinin teslimi (pending_approval) öğretmen kaynağıyla ezilmez.
+    expect(body).toMatch(/AND hi\.status = 'pending'\n/)
+    expect(body).not.toMatch(/'pending_approval'/)
+  })
+
+  it('yeniden aktifleştirme iz alanlarını temizler, arşivli kaynağı açmaz', () => {
+    const body = fn(sql, 'restore_batch_to_active_load')
+    expect(body).toMatch(/released_at = NULL/)
+    expect(body).toMatch(/sba\.status <> 'archived'/)
+    expect(body).toMatch(/due_at\s+= v_flow\.due_at/)
+  })
+
+  it('her RPC çalışma alanı rolünü kalem kalem denetler', () => {
+    for (const name of ['release_homework_items', 'complete_homework_items_manually']) {
+      expect(fn(sql, name)).toMatch(
+        /NOT public\.has_workspace_role\(hi\.workspace_id, ARRAY\['owner', 'teacher'\]\)/
+      )
+    }
+  })
+})

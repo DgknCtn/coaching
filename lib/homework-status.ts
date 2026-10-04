@@ -347,6 +347,9 @@ export const TEST_STATE_VARIANT: Record<HomeworkTestState, TestStateVariant> = {
 //              Onay bekleyen iş DAHİL. Haftalık akışın temposu, günlük
 //              dağılımı ve Haftam bunu sayar: öğrencinin işi göndermesi
 //              öğretmenin ne zaman baktığına bağlı olmamalı.
+//              M1.0-01: öğretmenin "tamamlandı işaretle" dediği kalem de
+//              sayılır (submitted_at boş, status='completed'); kaynağı
+//              test_completions.source='teacher_manual' ile ayrı kalır.
 //   completed  "Tamamlanan" — öğretmen onayladı ya da tamamlandı olarak
 //              işledi. Kitap ilerlemesi ve veli özeti bunu sayar.
 //

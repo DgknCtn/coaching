@@ -1,13 +1,32 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Archive, ChevronDown, ChevronRight, Loader2, RotateCcw } from 'lucide-react'
+import {
+  Archive,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  RotateCcw,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
+import { BulkItemDrawer, type BulkDrawerItem } from '@/components/shared/bulk-item-drawer'
 import type { HomeworkDetailBook } from '@/lib/homework-detail'
-import { releaseFromActiveLoadAction, restoreToActiveLoadAction } from './homework-actions'
+import { formatDueDateTime } from '@/lib/homework-load'
+import { formatSelectedUnits } from '@/lib/book-map'
+import { formatRelativeTime } from '@/lib/student-attention'
+import {
+  approveItemsAction,
+  completeItemsManuallyAction,
+  releaseFromActiveLoadAction,
+  releaseItemsAction,
+  restoreToActiveLoadAction,
+} from './homework-actions'
 
 // YAYINLANAN ÖDEVLER — R7-06.01.
 //
@@ -31,10 +50,25 @@ import { releaseFromActiveLoadAction, restoreToActiveLoadAction } from './homewo
 // Bu yüzden ekranda da bir yıkım işlemi gibi görünmüyor — kırmızı
 // değil, nötr.
 
+/** Sağ işlem panelinin satırı (M1.0-01 §4). */
+export interface PublishedItem {
+  id: string
+  /** pending | pending_approval | completed | cancelled */
+  status: string
+  bookTitle: string | null
+  trackingMode: string | null
+  sectionTitle: string | null
+  unitTitle: string | null
+  unitNumber: number | null
+  submittedAt: string | null
+}
+
 export interface PublishedBatch {
   id: string
   title: string | null
   dueDate: string
+  /** Son teslim anı (132); eski kayıtlarda null olabilir. */
+  dueAt: string | null
   description: string | null
   completed: number
   total: number
@@ -42,6 +76,19 @@ export interface PublishedBatch {
   detail: HomeworkDetailBook[]
   /** 'archived' ise ödev aktif yükten çıkarılmış. */
   status: string
+  /** Aktif ödevden kalem bazlı çıkarılan çalışma sayısı. */
+  releasedCount: number
+  items: PublishedItem[]
+}
+
+const OPEN_STATUSES = new Set(['pending', 'pending_approval'])
+
+function itemLabel(item: PublishedItem): string {
+  if (item.unitNumber != null && item.trackingMode) {
+    const label = formatSelectedUnits([item.unitNumber], item.trackingMode)
+    if (label) return label
+  }
+  return item.unitTitle ?? 'Çalışma'
 }
 
 export function PublishedHomeworkList({
@@ -64,7 +111,9 @@ export function PublishedHomeworkList({
   const active = batches.filter(b => b.status !== 'archived')
   const released = batches.filter(b => b.status === 'archived')
 
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [panelBatch, setPanelBatch] = useState<PublishedBatch | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function toggle(id: string) {
@@ -138,22 +187,43 @@ export function PublishedHomeworkList({
                 note={batch.description}
               />
             </div>
-            {/* TEKİL İŞLEM: tek ödev için seçim kutusunu işaretleyip
-                şeride gitmek gereksiz bir adım. */}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={isPending}
-              onClick={() => release([batch.id])}
-              className="mt-3 shrink-0"
-              title="Aktif Yükten Çıkar"
-            >
-              <Archive />
-              <span className="sr-only sm:not-sr-only">Aktif Yükten Çıkar</span>
-            </Button>
+            {/* TEKİL İŞLEM (M1.0-01 §4.1): "Aktif Yükten Çıkar" tek ana
+                aksiyon olmaktan çıktı; "İşlemler" sağ paneli açar ve
+                panelde onayla / tamamlandı işaretle / aktif yükten çıkar
+                bulunur. Satırın kendisi detay aç/kapa taşıdığı için panel
+                ayrı düğmeden açılır. */}
+            <div className="mt-3 flex shrink-0 flex-col items-end gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setPanelBatch(batch)}
+                aria-haspopup="dialog"
+              >
+                İşlemler
+                <ChevronDown />
+              </Button>
+              {batch.releasedCount > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {batch.releasedCount} çalışma aktif yükten çıkarıldı
+                </span>
+              )}
+            </div>
           </li>
         ))}
       </ul>
+
+      {panelBatch && (
+        <BatchActionPanel
+          studentId={studentId}
+          batch={panelBatch}
+          onClose={() => setPanelBatch(null)}
+          onDone={() => {
+            setPanelBatch(null)
+            router.refresh()
+          }}
+        />
+      )}
 
       {released.length > 0 && (
         <ReleasedBlock
@@ -165,6 +235,104 @@ export function PublishedHomeworkList({
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Yayınlanan ödevin sağ işlem paneli (M1.0-01 §4.2–4.3).
+ *
+ * Görevler'deki onay paneliyle AYNI bileşen (BulkItemDrawer): açık
+ * çalışmaların hepsi seçili gelir, öğretmen istemediklerini çıkarır.
+ * Her düğme yalnız kendisine UYGUN seçili çalışmaları sayar:
+ *
+ *   onayla              — onay bekleyen (öğrenci teslim etmiş)
+ *   tamamlandı işaretle — bekleyen (öğrenci teslim etmemiş); kaynak
+ *                         'teacher_manual', öğrenci teslimi uydurulmaz
+ *   aktif yükten çıkar  — açık olan her çalışma; silinmez
+ */
+function BatchActionPanel({
+  studentId,
+  batch,
+  onClose,
+  onDone,
+}: {
+  studentId: string
+  batch: PublishedBatch
+  onClose: () => void
+  onDone: () => void
+}) {
+  const open = batch.items.filter(i => OPEN_STATUSES.has(i.status))
+  const statusById = new Map(open.map(i => [i.id, i.status]))
+  const completedCount = batch.items.filter(i => i.status === 'completed').length
+
+  const items: BulkDrawerItem[] = open.map(i => ({
+    id: i.id,
+    primary: [i.sectionTitle, itemLabel(i)].filter(Boolean).join(' · '),
+    secondary: i.bookTitle,
+    badge:
+      i.status === 'pending_approval'
+        ? { label: 'Teslim edildi', variant: 'info' }
+        : { label: 'Bekliyor', variant: 'neutral' },
+    meta: i.submittedAt ? formatRelativeTime(i.submittedAt) : null,
+  }))
+
+  return (
+    <BulkItemDrawer
+      key={batch.id}
+      title={batch.title ?? 'Ödev'}
+      description={`Son teslim: ${formatDueDateTime(batch.dueDate, batch.dueAt)}`}
+      items={items}
+      footnote={
+        open.length === 0
+          ? 'Bu ödevde açık çalışma kalmadı.'
+          : completedCount > 0
+            ? `${completedCount} çalışma zaten tamamlandı; listede gösterilmiyor.`
+            : null
+      }
+      actions={[
+        {
+          key: 'approve',
+          label: n => `${n} çalışmayı onayla`,
+          icon: Check,
+          eligible: id => statusById.get(id) === 'pending_approval',
+          run: async ids => {
+            const res = await approveItemsAction(studentId, ids)
+            if (res.error) return { error: res.error }
+            return { message: `${res.count ?? ids.length} çalışma onaylandı.` }
+          },
+        },
+        {
+          key: 'complete',
+          label: n => `${n} çalışmayı tamamlandı işaretle`,
+          icon: CheckCheck,
+          variant: 'outline',
+          eligible: id => statusById.get(id) === 'pending',
+          run: async ids => {
+            const res = await completeItemsManuallyAction(studentId, ids)
+            if (res.error) return { error: res.error }
+            return {
+              message: `${res.count ?? ids.length} çalışma öğretmen tarafından tamamlandı olarak işaretlendi.`,
+            }
+          },
+        },
+        {
+          key: 'release',
+          label: n => `${n} çalışmayı aktif yükten çıkar`,
+          icon: Archive,
+          variant: 'outline',
+          reasonLabel: 'Aktif yükten çıkarma nedeni',
+          run: async (ids, reason) => {
+            const res = await releaseItemsAction(studentId, ids, reason)
+            if (res.error) return { error: res.error }
+            return {
+              message: `${res.count ?? ids.length} çalışma aktif yükten çıkarıldı; kayıtlar silinmedi.`,
+            }
+          },
+        },
+      ]}
+      onClose={onClose}
+      onDone={onDone}
+    />
   )
 }
 
