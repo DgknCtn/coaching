@@ -14,7 +14,16 @@ import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
 
-export async function loginAction(email: string, password: string) {
+/** Açık yönlendirme koruması: yalnız kendi sitemiz içindeki yollar. */
+function safeInternalPath(next: string | undefined): string {
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+}
+
+/**
+ * @param next Girişten sonra gidilecek yol. Öğrenci/veli ekranı (/giris)
+ *   `/hosgeldin?giris=uye` verir: alanı olmayan davetli koç kartını görmez.
+ */
+export async function loginAction(email: string, password: string, next?: string) {
   const parsed = loginSchema.safeParse({ email, password })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
@@ -57,7 +66,7 @@ export async function loginAction(email: string, password: string) {
     detail: { method: 'password' },
   })
 
-  redirect('/')
+  redirect(safeInternalPath(next))
 }
 
 export async function registerAction(
@@ -272,8 +281,7 @@ export async function signInWithGoogleAction(next?: string) {
 
   const supabase = await createClient()
 
-  // Açık yönlendirme koruması: yalnız kendi sitemiz içindeki yollar.
-  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+  const safeNext = safeInternalPath(next)
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',

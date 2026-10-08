@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { GraduationCap, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { AuthShell } from '@/components/shared/auth-shell'
@@ -21,11 +22,19 @@ import { PendingInvitationList, type PendingInvitation } from './pending-invitat
 //   2. Yoksa rol sorulur: öğretmen alanını kurar; öğrenci/veli ise
 //      öğretmeninden link istemesi gerektiğini ve HANGİ e-postayla
 //      girdiğini görür — yanlış hesapla girdiyse fark eder.
+//   3. Öğrenci/veli girişinden (/giris) gelindiyse (`?giris=uye`) koç
+//      kartı HİÇ gösterilmez (138); yalnız küçük bir "koç musun"
+//      bağlantısı kalır. Kart gösterildiğinde de onay ekranına gider.
 // ============================================================
 
 export const dynamic = 'force-dynamic'
 
-export default async function WelcomePage() {
+export default async function WelcomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ giris?: string }>
+}) {
+  const memberEntry = (await searchParams).giris === 'uye'
   const supabase = await createClient()
   const {
     data: { user },
@@ -70,18 +79,24 @@ export default async function WelcomePage() {
       )}
 
       <div className="grid gap-3">
-        <div className="rounded-lg border p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <GraduationCap className="size-4 text-primary" /> Öğretmen / koçum
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Kendi çalışma alanını kur; öğrencilerini ve velilerini davet et.
-          </p>
-          {/* Route Handler: prefetch alanı kurmasın diye düz <a>. */}
-          <a href="/kurulum/ogretmen" className={buttonVariants({ className: 'mt-3 w-full' })}>
-            Çalışma alanımı kur
-          </a>
-        </div>
+        {!memberEntry && (
+          <div className="rounded-lg border p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <GraduationCap className="size-4 text-primary" /> Öğretmen / koçum
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Kendi çalışma alanını kur; öğrencilerini ve velilerini davet et.
+            </p>
+            {/* Onay ekranına gider; kurulum orada, açık bir tıklamayla. */}
+            <Link
+              href="/kurulum/ogretmen"
+              prefetch={false}
+              className={buttonVariants({ variant: 'outline', className: 'mt-3 w-full' })}
+            >
+              Koç olarak devam et
+            </Link>
+          </div>
+        )}
 
         <div className="rounded-lg border p-4">
           <p className="flex items-center gap-2 text-sm font-semibold">
@@ -90,10 +105,24 @@ export default async function WelcomePage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Öğretmeninden davet linki iste. Linki açıp bu hesapla kabul edebilirsin.
             {pending.length === 0 &&
-              ' Öğretmenin davetini farklı bir e-postaya gönderdiyse o hesapla gir.'}
+              ' Öğretmenin davetini farklı bir e-postaya gönderdiyse o hesapla gir.'}{' '}
+            E-postan yoksa öğretmeninden kullanıcı adı + PIN iste.
           </p>
         </div>
       </div>
+
+      {memberEntry && (
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          Koç musun?{' '}
+          <Link
+            href="/kurulum/ogretmen"
+            prefetch={false}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Kendi çalışma alanını kur
+          </Link>
+        </p>
+      )}
     </AuthShell>
   )
 }

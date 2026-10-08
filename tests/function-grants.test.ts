@@ -55,6 +55,8 @@ const ANON_IZINLI = [
   // app/giris/ogrenci/actions.ts — kullanıcı adı + PIN girişi oturumsuz.
   // Yalnız true/false döner; 5 hatada 15 dk kilit VERİTABANINDA (119).
   'verify_student_pin',
+  // app/giris/actions.ts — öğrenci VE veli girişi; 138 tabloyu profile bağladı.
+  'verify_member_pin',
   // 2) RLS politikalarından çağrılanlar
   'can_read_library',
   'can_read_student',

@@ -8,6 +8,7 @@ import { formatSessionClock, formatSessionWeekdayLong } from '@/lib/service-stru
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist'
+import { CloseWorkspaceLink } from './close-workspace-link'
 import { TrialBanner } from '@/components/shared/trial-banner'
 import { QuotaNotice } from '@/components/shared/quota-notice'
 import { MetricTiles } from '@/components/shared/metric-tiles'
@@ -400,6 +401,14 @@ export default async function TeacherDashboard() {
           firstStudentId={rows[0]?.student_id ?? null}
         />
       )}
+
+      {/* "YANLIŞLIKLA AÇTIM" (138): yalnız alan TAMAMEN boşken. Kayıt
+          ekranını kendi girişi sanan öğrencinin çıkış yolu; kural
+          (sahip, 14 gün, boş alan) veritabanında. */}
+      {bookCount.ok && homeworkCount.ok && students.ok &&
+        bookCount.data === 0 && homeworkCount.data === 0 && rows.length === 0 && (
+          <CloseWorkspaceLink />
+        )}
 
       {usage && <QuotaNotice usage={usage} />}
 

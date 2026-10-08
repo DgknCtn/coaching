@@ -72,8 +72,9 @@ export default async function RootPage() {
   //   - öğretmen niyeti belli (kayıt formu üst verisi) -> alanı kur
   //   - belli değil -> /hosgeldin: bekleyen davetler ya da rol seçimi
   //
-  // Kurulumun kendisi /kurulum/ogretmen'de (Route Handler): burası bir
-  // Server Component ve davet çerezini silemiyordu (20cd4ed).
+  // Kurulumun kendisi /kurulum/ogretmen'de: önce açık onay ekranı, sonra
+  // server action (138). Burası bir Server Component ve davet çerezini
+  // silemiyordu (20cd4ed).
   // ============================================================
   const landing = decideLanding({
     profileError: false,

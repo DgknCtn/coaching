@@ -62,7 +62,9 @@ function isPublicPath(pathname: string): boolean {
     // Supabase auth e-posta bağlantılarının döndüğü callback; oturumu burada
     // kuruyoruz, dolayısıyla giriş kontrolünden muaf olmalı.
     pathname.startsWith('/auth/') ||
-    // 10a: e-postasız öğrenci girişi (kullanıcı adı + PIN) oturumsuz açılır.
+    // Öğrenci/veli girişi (kullanıcı adı + PIN ya da davet e-postası)
+    // oturumsuz açılır. /giris/ogrenci eski adres; /giris'e yönlenir.
+    pathname === '/giris' ||
     pathname === '/giris/ogrenci' ||
     pathname.startsWith('/invite/')
   )
@@ -111,7 +113,7 @@ export async function middleware(request: NextRequest) {
   // Herkese açık rota: hiçbir ağ turu ödemeden çık. Tek istisna, giriş
   // yapmış kullanıcının /login ya da /register'a gitmesi — orada oturumun
   // var olup olmadığını bilmemiz gerekiyor.
-  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/giris'
   if (isPublicPath(pathname) && !isAuthPage) return supabaseResponse
 
   const supabase = createServerClient<Database>(

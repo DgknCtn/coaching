@@ -1,33 +1,31 @@
+'use server'
+
+import { redirect } from 'next/navigation'
 import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
-import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 
 /**
- * ÖĞRETMEN ÇALIŞMA ALANINI KUR — açık niyetle gelinen tek yer.
+ * ÖĞRETMEN ÇALIŞMA ALANINI KUR — onay ekranındaki düğme (138).
  *
- * Buraya üç yoldan gelinir:
- *   - kayıt sayfasındaki Google düğmesi (callback `next=/kurulum/ogretmen`),
- *   - e-posta doğrulaması açıkken kayıt olan öğretmenin ilk girişi
- *     (app/page.tsx, üst veride öğretmen niyeti var),
- *   - /hosgeldin'deki "Öğretmen / koçum" kartı.
+ * Önceden /kurulum/ogretmen bir GET Route Handler'dı ve adrese gelmek
+ * alanı kurmaya yetiyordu: kayıt sayfasındaki Google düğmesine ya da
+ * /hosgeldin'deki karta tıklayan öğrenci, ne olduğunu görmeden koç
+ * oldu. Artık kurulum bu aksiyonla, ekrandaki açık onaydan sonra.
  *
- * Önceden bu kod app/page.tsx'teydi ve çalışma alanı olmayan HERKES için
- * çalışıyordu; davetli öğrenci de öğretmen yapılıyordu. Ayrıca sayfa bir
- * Server Component olduğu için davet çerezini silemiyordu (20cd4ed).
- * Route Handler ikisini de çözüyor.
+ * Server action çerez silebiliyor; Route Handler'a taşınma gerekçesi
+ * (20cd4ed, Server Component çerez silemiyordu) burada da karşılanıyor.
  *
  * TEKRAR ÇAĞRILMASI ZARARSIZ: create_teacher_workspace idempotent (095);
  * alanı zaten olan kullanıcı panele döner.
  */
-export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin
+export async function setupTeacherWorkspaceAction() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) return NextResponse.redirect(new URL('/login', origin))
+  if (!user) redirect('/login')
 
   const meta = user.user_metadata as
     | {
@@ -58,13 +56,18 @@ export async function GET(request: NextRequest) {
     console.error('[kurulum] çalışma alanı kurulamadı', error)
     // /login DEĞİL: middleware oturumu olanı /login'den geri çevirir ve
     // kullanıcı döngüye girer. /erisim ne olduğunu anlatır.
-    return NextResponse.redirect(new URL('/erisim', origin))
+    redirect('/erisim')
   }
 
-  // HESAP OLUŞTURMA KAYDI: 'register' olay türü tanımlıydı ama hiçbir yer
-  // yazmıyordu; yönetimdeki "yeni kayıt" eğilimi bu satırdan besleniyor.
-  // create_teacher_workspace idempotent — tekrar çağrıda da bir satır
-  // düşer; yöntem ayrımı için detail.
+  // Bir önceki "yanlışlıkla açtım" vazgeçişi (signup_intent: 'member')
+  // açık bir yeni seçimle geri alınır; yoksa sonraki girişlerde niyet
+  // kararı tutarsız kalırdı.
+  if ((user.user_metadata as { signup_intent?: string } | undefined)?.signup_intent === 'member') {
+    await supabase.auth.updateUser({ data: { signup_intent: 'teacher' } })
+  }
+
+  // HESAP OLUŞTURMA KAYDI: yönetimdeki "yeni kayıt" eğilimi bu satırdan
+  // besleniyor. Yöntem ayrımı için detail.
   await logAuthEvent({
     type: 'register',
     profileId: user.email ? await resolveProfileIdByEmail(supabase, user.email) : null,
@@ -79,5 +82,5 @@ export async function GET(request: NextRequest) {
   // Atıf kullanıldı; aynı tarayıcıdan açılan ikinci hesap aynı partnere
   // yazılmasın.
   await clearReferralCode()
-  return NextResponse.redirect(new URL('/', origin))
+  redirect('/')
 }

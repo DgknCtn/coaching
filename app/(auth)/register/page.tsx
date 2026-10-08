@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AuthShell } from '@/components/shared/auth-shell'
-import { ShieldCheck, Sparkles } from 'lucide-react'
+import { ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { registerSchema } from '@/lib/validation'
 import { GoogleSignInBlock } from '@/components/shared/google-button'
@@ -130,6 +130,20 @@ export default function RegisterPage() {
       {/* KAYIT SAYFASI ÖĞRETMEN KAYDIDIR: Google ile gelen kullanıcı
           doğrudan alan kurulumuna gider. /login'deki Google düğmesi ise
           niyet taşımaz; alanı olmayan kullanıcı orada /hosgeldin'e düşer. */}
+      {/* KOÇ KAYDI OLDUĞU EN ÜSTTE YAZAR: öğrenci bu ekranı kendi girişi
+          sanıp koç alanı açıyordu. Google yolu ayrıca bir onay ekranından
+          geçiyor (/kurulum/ogretmen); e-posta formu zaten açık niyet. */}
+      <p className="mb-5 flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
+        <Users className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+        <span>
+          Bu kayıt <span className="font-medium">koç ve öğretmenler</span> içindir. Öğrenci ya da
+          veli misin?{' '}
+          <Link href="/giris" className="font-medium text-primary underline-offset-4 hover:underline">
+            Öğrenci/veli girişi
+          </Link>
+        </span>
+      </p>
+
       <GoogleSignInBlock
         hint="En hızlı yöntem — tek tıkla hesabınızı oluşturun."
         next="/kurulum/ogretmen"

@@ -33,6 +33,7 @@ export interface LandingInput {
  * Kullanıcı öğretmen olmak istediğini AÇIKÇA söyledi mi?
  *
  *   - `signup_intent: 'teacher'` — kayıt formu yazar (registerAction).
+ *   - `signup_intent: 'member'` — alanını kapatan kullanıcı; her şeyi ezer.
  *   - `workspace_name` anahtarı — bu alan eklenmeden ÖNCE e-postayla kayıt
  *     olup doğrulamayı bekleyen öğretmenler. Kayıt formu bu anahtarı her
  *     zaman yazıyordu; Google üst verisinde hiç yok. Anahtarın VARLIĞI
@@ -40,6 +41,11 @@ export interface LandingInput {
  */
 export function hasTeacherIntent(metadata: LandingInput['metadata']): boolean {
   if (!metadata) return false
+  // ÖNCE VAZGEÇİŞ (138): boş koç alanını "yanlışlıkla açtım" diye kapatan
+  // kullanıcı üst veride hâlâ `workspace_name` anahtarını taşıyor —
+  // Supabase üst veriden anahtar silemiyor. Bu kontrol olmasa `/` alanı
+  // hemen yeniden kurardı.
+  if (metadata.signup_intent === 'member') return false
   return metadata.signup_intent === 'teacher' || 'workspace_name' in metadata
 }
 

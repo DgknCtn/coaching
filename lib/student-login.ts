@@ -7,7 +7,7 @@ import { createHmac, randomInt } from 'node:crypto'
 // öğrenci için sistem içi bir adres kullanılıyor ve hesabın şifresi
 // SUNUCUDAKİ bir sırdan türetiliyor: PIN bir Supabase şifresi değil
 // (bkz. 119'un başlığı). PIN veritabanında bcrypt ile duruyor ve
-// verify_student_pin ile, kilitle birlikte doğrulanıyor.
+// verify_member_pin ile (138: öğrenci ve veli), kilitle birlikte doğrulanıyor.
 //
 // İKİ ORTAM DEĞİŞKENİ (ikisi de yalnız sunucuda):
 //   STUDENT_LOGIN_SECRET        uzun rastgele değer. DEĞİŞTİRİLİRSE mevcut

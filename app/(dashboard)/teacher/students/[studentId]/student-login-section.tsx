@@ -2,12 +2,16 @@ import { Section } from '@/components/shared/section'
 import { createClient } from '@/lib/supabase/server'
 import { studentLoginConfigured } from '@/lib/student-login'
 import { StudentLoginControls } from './student-login-controls'
+import type { MemberLoginRow } from './student-login-actions'
 
-// E-POSTASIZ GİRİŞ KARTI (10a).
+// GİRİŞ BİLGİLERİ KARTI (10a · 138) — öğrenci ve velileri için
+// kullanıcı adı + PIN.
 //
-// Öğrencinin e-posta ya da Google ile hesabı varsa (ve kodlu girişi
-// yoksa) hiç çizilmez: iki giriş yolu karışmasın. Kodlu giriş varsa
-// kullanıcı adı, durum ve PIN yenileme/kapatma burada.
+// Öğrenci bloğu: öğrencinin e-posta ya da Google ile hesabı varsa (ve
+// kodlu girişi yoksa) çizilmez; iki giriş yolu karışmasın.
+// Veliler bloğu: bağlı veliler listelenir; e-postayla katılmış veliye PIN
+// üretilmez, yalnız "e-postayla giriyor" yazar. Yeni veli için PIN her
+// zaman oluşturulabilir.
 
 export async function StudentLoginSection({
   studentId,
@@ -26,24 +30,31 @@ export async function StudentLoginSection({
   if (!studentLoginConfigured()) return null
 
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('student_login_code_info', { p_student_id: studentId })
+  const { data, error } = await supabase.rpc('student_member_logins', { p_student_id: studentId })
   // Migration uygulanmadıysa ya da okuma düştüyse kart gösterilmez; bu
   // bölüm isteğe bağlı bir giriş yolu, eksikliği başka bir şeyi yanıltmaz.
   if (error) return null
-  const info = ((data ?? []) as { username: string; active: boolean; locked: boolean }[])[0] ?? null
+  const rows = (data ?? []) as MemberLoginRow[]
 
-  if (hasAccount && !info) return null
+  const studentRow = rows.find((r) => r.role === 'student') ?? null
+  const showStudent = !(hasAccount && !studentRow?.has_code)
+  const parents = rows.filter((r) => r.role === 'parent')
 
   return (
     <Section
-      title="E-postasız giriş"
+      title="Giriş bilgileri"
       description={
         hasEmail
-          ? 'Öğrencinin e-postası var; davet linki de kullanılabilir. E-postasını kullanmıyorsa kullanıcı adı + PIN verin.'
-          : 'Öğrencinin e-postası yok. Kullanıcı adı ve 6 haneli PIN oluşturup öğrenciye iletin; /giris/ogrenci adresinden girer.'
+          ? 'E-postası olan davet linkiyle de katılabilir. E-posta kullanmayan öğrenci ya da veliye kullanıcı adı + PIN verin; /giris adresinden girerler.'
+          : 'Kullanıcı adı ve 6 haneli PIN oluşturup öğrenciye ya da veliye iletin; /giris adresinden girerler.'
       }
     >
-      <StudentLoginControls studentId={studentId} studentName={studentName} info={info} />
+      <StudentLoginControls
+        studentId={studentId}
+        studentName={studentName}
+        student={showStudent ? studentRow : undefined}
+        parents={parents}
+      />
     </Section>
   )
 }

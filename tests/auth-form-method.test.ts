@@ -39,7 +39,8 @@ import { join } from 'node:path'
 
 /** Kimlik bilgisi taşıyan ve GET ile gönderilmemesi gereken formlar. */
 const KIMLIK_FORMLARI = [
-  { dosya: 'app/(auth)/login/page.tsx', tasidigi: 'e-posta + şifre' },
+  { dosya: 'components/auth/email-login-form.tsx', tasidigi: 'e-posta + şifre (/login, /giris)' },
+  { dosya: 'app/giris/login-form.tsx', tasidigi: 'kullanıcı adı + PIN' },
   { dosya: 'app/(auth)/register/page.tsx', tasidigi: 'e-posta + şifre' },
   { dosya: 'app/(auth)/update-password/page.tsx', tasidigi: 'yeni şifre' },
   { dosya: 'app/invite/[token]/invite-form.tsx', tasidigi: 'e-posta + şifre' },
@@ -67,6 +68,6 @@ describe('kimlik formları · GET ile gönderilemez', () => {
   it('liste kısalmadı', () => {
     // Bir form listeden düşerse test sessizce daralır ve o dosya
     // korumasız kalır.
-    expect(KIMLIK_FORMLARI.length).toBeGreaterThanOrEqual(5)
+    expect(KIMLIK_FORMLARI.length).toBeGreaterThanOrEqual(6)
   })
 })

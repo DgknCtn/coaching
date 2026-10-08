@@ -68,8 +68,13 @@ export function Navbar() {
 
           <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
+            {/* İKİ KAPI: öğrenci "Giriş Yap"a basıp kayıt ekranına
+                geçiyor ve koç alanı açıyordu (138). */}
+            <Link href="/giris" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+              Öğrenci/Veli girişi
+            </Link>
             <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-              Giriş Yap
+              Koç girişi
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm' })}>
               {TRIAL_CTA_LABEL}
@@ -120,8 +125,11 @@ export function Navbar() {
           </nav>
           <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
             <ThemeToggle showLabel className="w-full" onToggled={() => setMobileOpen(false)} />
+            <Link href="/giris" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full' })}>
+              Öğrenci/Veli girişi
+            </Link>
             <Link href="/login" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full' })}>
-              Giriş Yap
+              Koç girişi
             </Link>
             <Link href="/register" className={buttonVariants({ size: 'sm', className: 'w-full' })}>
               {TRIAL_CTA_LABEL}

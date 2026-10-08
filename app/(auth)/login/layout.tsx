@@ -1,12 +1,9 @@
 import type { Metadata } from 'next'
 
-// Giriş sayfası 'use client' olduğu için metadata'yı kendisi veremez;
-// ince bir layout bunun tek yolu. Sayfanın kendisini sunucu bileşenine
-// çevirmek, formun tamamını yeniden yazmak demekti — kazanç yok.
 export const metadata: Metadata = {
-  title: 'Giriş Yap',
+  title: 'Koç Girişi',
   description:
-    'Öğrenci takip panelinize giriş yapın. Öğretmen, öğrenci ve veli hesapları için tek giriş.',
+    'Koç ve öğretmen paneline giriş yapın. Öğrenci ve veliler /giris adresinden girer.',
   alternates: { canonical: '/login' },
 }
 

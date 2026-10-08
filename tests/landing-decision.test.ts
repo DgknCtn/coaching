@@ -45,6 +45,15 @@ describe('decideLanding', () => {
       'welcome'
     )
   })
+
+  it('alanını "yanlışlıkla açtım" diye kapatan kullanıcı yeniden öğretmen yapılmaz (138)', () => {
+    // Üst veride workspace_name anahtarı kalır (Supabase anahtar silemez).
+    const closedMeta = { signup_intent: 'member', workspace_name: null, full_name: 'X' }
+    expect(hasTeacherIntent(closedMeta)).toBe(false)
+    expect(decideLanding({ profileError: false, hasWorkspace: false, metadata: closedMeta })).toBe(
+      'welcome'
+    )
+  })
 })
 
 describe('panelForRole', () => {

@@ -21,7 +21,7 @@ const schema = z.object({
 // hangisi olduğunu söylemek kullanıcı adlarını numaralandırmaya açardı.
 const GENERIC = 'Kullanıcı adı ya da PIN hatalı. Birkaç yanlış denemeden sonra giriş 15 dakika kilitlenir.'
 
-export async function studentCodeLoginAction(username: string, pin: string) {
+export async function memberCodeLoginAction(username: string, pin: string) {
   if (!studentLoginConfigured()) return { error: 'Bu giriş yöntemi şu an kullanılamıyor.' }
   const parsed = schema.safeParse({ username, pin })
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? GENERIC }
@@ -31,7 +31,9 @@ export async function studentCodeLoginAction(username: string, pin: string) {
   if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
 
   const supabase = await createClient()
-  const { data: ok, error } = await supabase.rpc('verify_student_pin', {
+  // Öğrenci ve veli aynı tabloda (138); rolü giriş ekranı sormuyor,
+  // girişten sonra `/` hesabın üyeliğine göre panele yönlendiriyor.
+  const { data: ok, error } = await supabase.rpc('verify_member_pin', {
     p_username: parsed.data.username,
     p_pin: parsed.data.pin,
   })
