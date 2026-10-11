@@ -33,6 +33,55 @@ export const dynamic = 'force-dynamic'
 // buraya yönlenir.
 // ============================================================
 
+// PİLOT — KOÇ BAŞINA (145, canlıya alma Faz 5.2). Yalnız sayılar.
+interface PilotRow {
+  workspace_id: string
+  workspace_name: string
+  students: number
+  teacher_active_days: number
+  members_total: number
+  members_logged_in: number
+  submitted: number
+  approved: number
+  pin_requests: number
+}
+
+const pilotColumns: Column<PilotRow>[] = [
+  {
+    key: 'name',
+    header: 'Çalışma alanı',
+    render: (r) => (
+      <Link
+        href={`/admin/calisma-alanlari/${r.workspace_id}`}
+        className="font-medium underline-offset-4 hover:underline"
+      >
+        {r.workspace_name}
+      </Link>
+    ),
+  },
+  { key: 'days', header: 'Koç aktif gün', render: (r) => <span className="tabular-nums">{r.teacher_active_days}</span> },
+  { key: 'students', header: 'Öğrenci', render: (r) => <span className="tabular-nums">{r.students}</span> },
+  {
+    key: 'members',
+    header: 'Giren öğrenci/veli',
+    // Oran, hesabı olan üyeler üzerinden: hesabı hiç verilmemiş öğrenci
+    // "girmedi" sayılmaz, o ayrı bir kurulum eksiği.
+    render: (r) => (
+      <span className="tabular-nums">
+        {r.members_logged_in} / {r.members_total}
+      </span>
+    ),
+  },
+  { key: 'submitted', header: 'Teslim', render: (r) => <span className="tabular-nums">{r.submitted}</span> },
+  { key: 'approved', header: 'Onay', render: (r) => <span className="tabular-nums">{r.approved}</span> },
+  {
+    key: 'pin',
+    header: 'PIN talebi',
+    // Yüksekse giriş akışı kafa karıştırıyor demektir.
+    render: (r) => <span className="tabular-nums">{r.pin_requests}</span>,
+  },
+]
+
 export default async function AdminUsage({
   searchParams,
 }: {
@@ -41,12 +90,16 @@ export default async function AdminUsage({
   const days = parseWindow((await searchParams).gun, 30)
   const supabase = await createClient()
 
-  const [usageRes, funnelRes] = await Promise.all([
+  const [usageRes, funnelRes, pilotRes] = await Promise.all([
     supabase.rpc('admin_feature_usage', { p_days: days }),
     supabase.rpc('admin_activation_funnel', { p_days: days }),
+    // 145: fonksiyon en fazla 90 gün kabul ediyor.
+    supabase.rpc('admin_pilot_metrics', { p_days: Math.min(days, 90) }),
   ])
   const usageR = listResult(usageRes, 'admin.feature_usage')
   const funnelR = listResult(funnelRes, 'admin.activation_funnel')
+  const pilotR = listResult(pilotRes, 'admin.pilot_metrics')
+  const pilotRows = (pilotR.ok ? pilotR.data : []) as PilotRow[]
   const usage = (usageR.ok ? usageR.data : []) as unknown as FeatureUsage[]
   const funnelRows = (funnelR.ok ? funnelR.data : []) as ActivationRow[]
 
@@ -87,6 +140,21 @@ export default async function AdminUsage({
         />
         <WindowPicker basePath="/admin/kullanim" value={days} />
       </div>
+
+      <Section
+        title="Pilot — koç başına"
+        description={`${days > 90 ? 'son 90 gün' : windowLabel}. Aktif gün: koçun iz bıraktığı günler. Giren: bu aralıkta en az bir kez giriş yapan öğrenci/veli hesabı.`}
+      >
+        {!pilotR.ok ? (
+          <SectionUnavailable title="Pilot metrikleri alınamadı" retryHref="/admin/kullanim" />
+        ) : pilotRows.length === 0 ? (
+          <EmptyState icon={Activity} title="Öğrencisi olan çalışma alanı yok" />
+        ) : (
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <DataTable columns={pilotColumns} rows={pilotRows} rowKey={(r) => r.workspace_id} />
+          </div>
+        )}
+      </Section>
 
       <Section
         title="Özellikler"

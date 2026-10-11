@@ -27,6 +27,8 @@ const CALLS: [string, Record<string, unknown>][] = [
   ['purge_auth_event_ips', {}],
   ['admin_list_workspaces', {}],
   ['admin_login_countries', { p_days: 7 }],
+  // 145 — pilot metrikleri (koç başına sayılar).
+  ['admin_pilot_metrics', { p_days: 7 }],
   // 128 — işlemler: yönetici olmayan için gerekçe/kayıt denetimine hiç gelinmez.
   ['admin_extend_trial', { p_workspace_id: ZERO, p_days: 1, p_reason: 'canlı yetki testi' }],
   ['admin_set_workspace_status', { p_workspace_id: ZERO, p_status: 'active', p_reason: 'canlı yetki testi' }],
