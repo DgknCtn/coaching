@@ -120,6 +120,8 @@ const LOCKED_TABLES = [
   // 143 — "PIN'imi unuttum" istekleri. Hangi öğrencinin/velinin hangi
   // koça bağlı olduğunu söyler; yalnız fonksiyonla okunur.
   'pin_reset_requests',
+  // 146 — AI özet kullanımı (yalnız tür ve zaman); fonksiyonla yazılır.
+  'ai_usage',
   // 101 (Haftam V2) — ÖĞRENCİNİN KENDİ YAZDIKLARI.
   //
   // `student_personal_items` bu listenin en hassas satırı: öğrencinin

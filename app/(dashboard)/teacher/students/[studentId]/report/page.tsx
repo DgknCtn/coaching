@@ -9,6 +9,8 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { listResult } from '@/lib/data-result'
 import { PrintButton } from './print-button'
+import { AiSummaryPanel } from './ai-summary-panel'
+import { aiSummariesEnabled } from '@/lib/ai/gateway'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,6 +122,15 @@ export default async function StudentReportPage({
           { label: 'Geciken çalışma', value: hwOverdue },
         ]}
       />
+
+      {/* Faz 6: yalnız AI_SUMMARIES_ENABLED + anahtar varken. Yazdırmada gizli. */}
+      {aiSummariesEnabled() && (
+        <div className="print:hidden">
+          <Section title="Yapay zekâ ile haftalık özet">
+            <AiSummaryPanel studentId={studentId} />
+          </Section>
+        </div>
+      )}
 
       <Section title="Kitap bazlı ilerleme">
       {!books.length ? (
