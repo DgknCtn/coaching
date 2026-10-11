@@ -110,6 +110,13 @@ const LOCKED_TABLES = [
   // 086 — velinin ödeme bildirimi. Tutar taşımıyor ama kimin hangi ay
   // ödeme yaptığını söylediğini taşıyor; aile mahremiyeti.
   'parent_payment_notices',
+  // 139-141 (M1.0-02) — ücretlendirme modeli, tarihsel fiyatlar, plan
+  // geçmişi ve giderler. Fiyat ve gider kiracının ticari verisi; plan
+  // geçmişi reşit olmayan öğrencinin programını taşıyor.
+  'student_finance_models',
+  'student_price_versions',
+  'session_plan_history',
+  'finance_expenses',
   // 101 (Haftam V2) — ÖĞRENCİNİN KENDİ YAZDIKLARI.
   //
   // `student_personal_items` bu listenin en hassas satırı: öğrencinin
