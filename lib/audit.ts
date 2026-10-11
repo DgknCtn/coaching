@@ -66,6 +66,11 @@ export type AuditAction =
   | 'session.outcome'
   | 'session.reschedule'
   | 'session.makeup'
+  // M1.0-02: hizmet kartı üç nokta menüsü ve elle eklenen oturum.
+  | 'service.delete'
+  | 'service.duplicate'
+  | 'service.main_contact'
+  | 'session.create'
   // Haftalık Akış (R7/05). Haftanın açılışı, kapanışı ve resmi son
   // teslimin değişmesi izlenebilir olmalı: kapanış anında çekilen
   // "zamanında teslim" fotoğrafı bir daha değişmiyor, dolayısıyla o
@@ -137,8 +142,12 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'service.update': 'Hizmet düzenini değiştirdi',
   'payment.notice': 'Veli ödeme bildirimini sonuçlandırdı',
   'session.outcome': 'Görüşme durumunu işaretledi',
-  'session.reschedule': 'Görüşmeyi erteledi',
+  'session.reschedule': 'Görüşmenin planını değiştirdi',
   'session.makeup': 'Telafi oluşturdu',
+  'service.delete': 'Kullanılmamış hizmeti sildi',
+  'service.duplicate': 'Hizmeti çoğalttı',
+  'service.main_contact': 'Ana temas hizmetini seçti',
+  'session.create': 'Oturum ekledi',
   'flow.open': 'Haftalık akış açtı',
   'flow.close': 'Haftalık akışı kapattı',
   'flow.due_change': 'Haftanın son teslimini değiştirdi',

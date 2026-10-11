@@ -449,6 +449,48 @@ REVOKE ALL ON FUNCTION public.generate_service_sessions(UUID, INTEGER, INTEGER) 
 GRANT EXECUTE ON FUNCTION public.generate_service_sessions(UUID, INTEGER, INTEGER) TO authenticated;
 
 
+-- Koç geneli haftalık ekran (M1.0-02 §4) her öğrenci için ayrı RPC
+-- çağırmasın: aktif hizmeti olan bütün öğrenciler TEK çağrıda. Yük
+-- testi bulgusu (40 eşzamanlı) gidiş-dönüş sayısının asıl maliyet
+-- olduğunu gösterdi.
+CREATE OR REPLACE FUNCTION public.generate_workspace_sessions(
+  p_workspace_id UUID,
+  p_year         INTEGER,
+  p_month        INTEGER
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_total INTEGER := 0;
+  r       RECORD;
+BEGIN
+  IF NOT public.has_workspace_role(p_workspace_id, ARRAY['owner', 'teacher']) THEN
+    RAISE EXCEPTION 'Bu işlem için yetkiniz yok.';
+  END IF;
+
+  FOR r IN
+    SELECT DISTINCT sv.student_id
+    FROM public.student_services sv
+    JOIN public.students s ON s.id = sv.student_id
+    WHERE sv.workspace_id = p_workspace_id
+      AND sv.status = 'active'
+      AND sv.cadence <> 'esnek'
+      AND s.status = 'active'
+  LOOP
+    v_total := v_total + public.generate_service_sessions(r.student_id, p_year, p_month);
+  END LOOP;
+
+  RETURN v_total;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION public.generate_workspace_sessions(UUID, INTEGER, INTEGER) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.generate_workspace_sessions(UUID, INTEGER, INTEGER) TO authenticated;
+
+
 -- ============================================================
 -- 6) Sonuç kaydı
 -- ============================================================
@@ -1097,6 +1139,7 @@ GRANT SELECT ON public.student_service_month_view TO authenticated;
 -- ROLLBACK (yalnız kolon/fonksiyon; 'ertelendi' verisi geri gelmez —
 -- plan geçmişi onun kaydıdır)
 --
+--   DROP FUNCTION IF EXISTS public.generate_workspace_sessions(UUID, INTEGER, INTEGER);
 --   DROP FUNCTION IF EXISTS public.delete_adhoc_session(UUID);
 --   DROP FUNCTION IF EXISTS public.create_adhoc_session(UUID, TIMESTAMPTZ, BOOLEAN, SMALLINT, TEXT);
 --   DROP FUNCTION IF EXISTS public.set_session_outcome_v2(UUID, TEXT, TIMESTAMPTZ, SMALLINT, NUMERIC, TEXT, TEXT);

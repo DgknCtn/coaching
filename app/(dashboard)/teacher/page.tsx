@@ -174,13 +174,15 @@ export default async function TeacherDashboard() {
     // takvimle aşağıda eleniyor — sabit bir +03:00 varsaymamak için.
     supabase
       .from('service_sessions')
-      .select('id, planned_at, actual_at, status, student_services(kind), students!inner(status)')
+      .select('id, planned_at, current_planned_at, status, student_services(kind), students!inner(status)')
       .eq('workspace_id', workspaceId)
       // M1.0-01 §1.1: arşivli öğrencinin oturumları yaklaşan temaslarda görünmez.
       .eq('students.status', 'active')
-      .in('status', ['planlandi', 'ertelendi'])
-      .gte('planned_at', new Date(Date.now() - 2 * 86_400_000).toISOString())
-      .lte('planned_at', new Date(Date.now() + 2 * 86_400_000).toISOString()),
+      // M1.0-02 (140): 'ertelendi' yok; taşınan oturum güncel planıyla
+      // 'planlandi' kalır.
+      .eq('status', 'planlandi')
+      .gte('current_planned_at', new Date(Date.now() - 2 * 86_400_000).toISOString())
+      .lte('current_planned_at', new Date(Date.now() + 2 * 86_400_000).toISOString()),
     // ÖĞRENCİ GÜNCELLEMELERİ (R8 §17A) — öğrencilerin yazdığı gün
     // notları. Pencere son 14 gün: akış bir arşiv değil, öğretmenin
     // şu anki bağlamı.
@@ -208,7 +210,7 @@ export default async function TeacherDashboard() {
   // Bugünkü temaslar: sorgu düştüyse `null` — "Bugün yok" DEĞİL.
   const todaySessions = upcoming.ok
     ? upcoming.data.filter((s) => {
-        const at = (s.actual_at ?? s.planned_at) as string | null
+        const at = (s.current_planned_at ?? s.planned_at) as string | null
         return at !== null && localDateString(new Date(at)) === today
       })
     : null

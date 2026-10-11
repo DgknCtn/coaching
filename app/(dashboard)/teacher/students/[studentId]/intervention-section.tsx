@@ -44,7 +44,7 @@ export async function InterventionSection({
       .limit(20),
     supabase
       .from('service_sessions')
-      .select('id, planned_at, actual_at, status')
+      .select('id, planned_at, current_planned_at, actual_at, status')
       .eq('workspace_id', workspaceId)
       .eq('student_id', studentId)
       .neq('status', 'iptal')
@@ -79,7 +79,7 @@ export async function InterventionSection({
 
   const sessionChoices: SessionChoice[] = (sessions.ok ? sessions.data : []).map((s) => ({
     id: s.id as string,
-    label: `${formatSessionLong((s.actual_at ?? s.planned_at) as string)} · ${
+    label: `${formatSessionLong((s.actual_at ?? s.current_planned_at ?? s.planned_at) as string)} · ${
       SESSION_STATUS_LABEL[s.status as SessionStatus] ?? s.status
     }`,
   }))

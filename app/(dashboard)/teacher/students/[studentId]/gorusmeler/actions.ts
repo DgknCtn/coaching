@@ -27,7 +27,21 @@ function revalidate(studentId: string) {
   // ekranı eski tarihi göstermemeli.
   revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
+  // M1.0-02: koç geneli haftalık ekran ve finans aynı oturumlardan beslenir.
+  revalidatePath('/teacher/gorusmeler')
+  revalidatePath('/teacher/finans')
 }
+
+const timeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Geçerli bir saat girin (örn. 20:00).')
+
+const cadenceSchema = z.enum(['haftada_1', 'haftada_2', 'esnek'])
+
+const unitSchema = z.coerce
+  .number()
+  .gt(0, 'Ders birimi sıfırdan büyük olmalı.')
+  .max(20, 'Ders birimi en fazla 20 olabilir.')
 
 const serviceSchema = z.object({
   studentId: uuidSchema,
@@ -35,10 +49,11 @@ const serviceSchema = z.object({
   participation: z.enum(['birebir', 'grup'], { message: 'Katılım biçimi seçin.' }),
   medium: z.enum(['online', 'yuz_yuze'], { message: 'Ortam seçin.' }),
   groupId: uuidSchema.optional().or(z.literal('')),
+  cadence: cadenceSchema.default('haftada_1'),
   weekday: z.coerce.number().int().min(1).max(7),
-  startTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Geçerli bir saat girin (örn. 20:00).'),
+  startTime: timeSchema,
+  weekday2: z.coerce.number().int().min(1).max(7).optional().nullable(),
+  startTime2: timeSchema.optional().nullable().or(z.literal('')),
   plannedDurationMinutes: z.coerce
     .number()
     .int()
@@ -47,6 +62,7 @@ const serviceSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir başlangıç tarihi seçin.'),
   submissionOffsetMinutes: z.coerce.number().int().min(0).max(10080).default(0),
   financeLink: z.enum(['aylik_paket', 'ders_basi', 'haric']).default('haric'),
+  defaultUnitCount: unitSchema.default(1),
 })
 
 export type ServiceInput = z.input<typeof serviceSchema>
@@ -69,8 +85,14 @@ export async function createServiceAction(input: ServiceInput) {
   if (v.participation === 'grup' && !v.groupId) {
     return { error: 'Grup hizmeti için bir grup seçin.' }
   }
+  if (v.cadence === 'haftada_2' && (!v.weekday2 || !v.startTime2)) {
+    return { error: 'Haftada 2 ritmi için ikinci gün ve saati seçin.' }
+  }
+  if (v.participation === 'grup' && v.cadence === 'esnek') {
+    return { error: 'Grup dersi esnek ritimle tanımlanamaz.' }
+  }
 
-  const { supabase, workspaceId, profile } = await getTeacherContext()
+  const { supabase, workspaceId } = await getTeacherContext()
 
   // Öğrenci gerçekten bu çalışma alanında mı? İstemciden gelen
   // workspaceId'ye asla güvenilmez; oturumdaki kullanılır.
@@ -83,20 +105,23 @@ export async function createServiceAction(input: ServiceInput) {
 
   if (!student) return { error: 'Öğrenci bulunamadı.' }
 
-  const { error } = await supabase.from('student_services').insert({
-    workspace_id: workspaceId,
-    student_id: v.studentId,
-    kind: v.kind,
-    participation: v.participation,
-    medium: v.medium,
-    group_id: v.participation === 'grup' ? v.groupId : null,
-    weekday: v.weekday,
-    start_time: v.startTime,
-    planned_duration_minutes: v.plannedDurationMinutes,
-    start_date: v.startDate,
-    submission_offset_minutes: v.submissionOffsetMinutes,
-    finance_link: v.financeLink,
-    created_by_profile_id: profile.id,
+  // 139: ritim kuralları tek yerde, RPC'de doğrulanır.
+  const { error } = await supabase.rpc('create_student_service', {
+    p_student_id: v.studentId,
+    p_kind: v.kind,
+    p_participation: v.participation,
+    p_medium: v.medium,
+    p_group_id: v.participation === 'grup' ? v.groupId || null : null,
+    p_cadence: v.cadence,
+    p_weekday: v.weekday,
+    p_start_time: v.startTime,
+    p_weekday_2: v.cadence === 'haftada_2' ? (v.weekday2 ?? null) : null,
+    p_start_time_2: v.cadence === 'haftada_2' ? v.startTime2 || null : null,
+    p_duration_minutes: v.plannedDurationMinutes,
+    p_start_date: v.startDate,
+    p_finance_link: v.financeLink,
+    p_default_unit: v.defaultUnitCount,
+    p_submission_offset: v.submissionOffsetMinutes,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -115,10 +140,12 @@ export async function createServiceAction(input: ServiceInput) {
 const serviceUpdateSchema = z.object({
   studentId: uuidSchema,
   serviceId: uuidSchema,
+  cadence: cadenceSchema,
   weekday: z.coerce.number().int().min(1).max(7),
-  startTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Geçerli bir saat girin (örn. 20:00).'),
+  startTime: timeSchema,
+  weekday2: z.coerce.number().int().min(1).max(7).optional().nullable(),
+  startTime2: timeSchema.optional().nullable().or(z.literal('')),
+  defaultUnitCount: unitSchema,
   plannedDurationMinutes: z.coerce
     .number()
     .int()
@@ -154,15 +181,23 @@ export async function updateServiceAction(input: ServiceUpdateInput) {
   if (!parsed.success) return { error: firstIssue(parsed.error) }
   const v = parsed.data
 
+  if (v.cadence === 'haftada_2' && (!v.weekday2 || !v.startTime2)) {
+    return { error: 'Haftada 2 ritmi için ikinci gün ve saati seçin.' }
+  }
+
   const { supabase, workspaceId } = await getTeacherContext()
-  const { data, error } = await supabase.rpc('update_student_service', {
+  const { data, error } = await supabase.rpc('update_student_service_v2', {
     p_service_id: v.serviceId,
+    p_cadence: v.cadence,
     p_weekday: v.weekday,
     p_start_time: v.startTime,
+    p_weekday_2: v.cadence === 'haftada_2' ? (v.weekday2 ?? null) : null,
+    p_start_time_2: v.cadence === 'haftada_2' ? v.startTime2 || null : null,
     p_duration_minutes: v.plannedDurationMinutes,
     p_effective_from: v.effectiveFrom,
     p_medium: v.medium,
     p_finance_link: v.financeLink,
+    p_default_unit: v.defaultUnitCount,
     p_submission_offset: v.submissionOffsetMinutes,
   })
 
@@ -194,13 +229,13 @@ export async function updateServiceAction(input: ServiceUpdateInput) {
 export async function setServiceStatusAction(
   studentId: string,
   serviceId: string,
-  status: 'active' | 'passive'
+  status: 'active' | 'passive' | 'archived'
 ) {
   const parsed = z
     .object({
       studentId: uuidSchema,
       serviceId: uuidSchema,
-      status: z.enum(['active', 'passive']),
+      status: z.enum(['active', 'passive', 'archived']),
     })
     .safeParse({ studentId, serviceId, status })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
@@ -219,6 +254,80 @@ export async function setServiceStatusAction(
     entityType: 'student',
     entityId: studentId,
     detail: { serviceId, status },
+  })
+  revalidate(studentId)
+  return { success: true }
+}
+
+/**
+ * Üç nokta: Ana temas yap / otomatiğe dön (serviceId = null).
+ */
+export async function setMainContactAction(studentId: string, serviceId: string | null) {
+  const parsed = z
+    .object({ studentId: uuidSchema, serviceId: uuidSchema.nullable() })
+    .safeParse({ studentId, serviceId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('set_main_contact_service', {
+    p_student_id: studentId,
+    p_service_id: serviceId,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'service.main_contact',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { serviceId },
+  })
+  revalidate(studentId)
+  return { success: true }
+}
+
+/** Üç nokta: Çoğalt — aynı kart bugünden başlayan yeni hizmet olarak. */
+export async function duplicateServiceAction(studentId: string, serviceId: string) {
+  const parsed = z
+    .object({ studentId: uuidSchema, serviceId: uuidSchema })
+    .safeParse({ studentId, serviceId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('duplicate_service', { p_service_id: serviceId })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'service.duplicate',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { serviceId },
+  })
+  revalidate(studentId)
+  return { success: true }
+}
+
+/**
+ * Üç nokta: Sil — YALNIZ hiç kullanılmamış (yanlış açılmış) hizmet.
+ * Kaydı olan hizmeti RPC reddeder; doğru yol pasife almaktır.
+ */
+export async function deleteUnusedServiceAction(studentId: string, serviceId: string) {
+  const parsed = z
+    .object({ studentId: uuidSchema, serviceId: uuidSchema })
+    .safeParse({ studentId, serviceId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { error } = await supabase.rpc('delete_unused_service', { p_service_id: serviceId })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'service.delete',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { serviceId },
   })
   revalidate(studentId)
   return { success: true }
@@ -260,6 +369,15 @@ export async function generateSessionsAction(
   return { success: true }
 }
 
+const outcomeDetailsSchema = z.object({
+  actualAtIso: z.string().optional().nullable(),
+  durationMinutes: z.coerce.number().int().min(5).max(600).optional().nullable(),
+  unitCount: unitSchema.optional().nullable(),
+  cancelReason: z.string().trim().max(300).optional().nullable(),
+})
+
+export type OutcomeDetails = z.input<typeof outcomeDetailsSchema>
+
 /**
  * Görüşme sonrası kesinleşmiş durum.
  *
@@ -272,7 +390,8 @@ export async function setSessionOutcomeAction(
   studentId: string,
   sessionId: string,
   status: 'yapildi' | 'yapilmadi' | 'iptal' | 'planlandi',
-  note?: string
+  note?: string,
+  details?: OutcomeDetails
 ) {
   const parsed = z
     .object({
@@ -280,15 +399,31 @@ export async function setSessionOutcomeAction(
       sessionId: uuidSchema,
       status: z.enum(['yapildi', 'yapilmadi', 'iptal', 'planlandi']),
       note: z.string().trim().max(500).optional().or(z.literal('')),
+      details: outcomeDetailsSchema.optional(),
     })
-    .safeParse({ studentId, sessionId, status, note })
+    .safeParse({ studentId, sessionId, status, note, details })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const d = parsed.data.details
 
+  let actualAt: string | null = null
+  if (d?.actualAtIso) {
+    const when = new Date(d.actualAtIso)
+    if (Number.isNaN(when.getTime())) return { error: 'Geçerli bir tarih ve saat girin.' }
+    actualAt = when.toISOString()
+  }
+
+  // M1.0-02 §4 Yapıldı paneli: gerçek tarih/saat, süre, ders birimi,
+  // not. Hepsi isteğe bağlı — tek tık "Yapıldı" güncel planı ve
+  // varsayılan birimi kullanır (RPC'de COALESCE).
   const { supabase, workspaceId } = await getTeacherContext()
-  const { error } = await supabase.rpc('set_session_outcome', {
+  const { error } = await supabase.rpc('set_session_outcome_v2', {
     p_session_id: sessionId,
     p_status: status,
+    p_actual_at: actualAt,
+    p_duration_minutes: d?.durationMinutes ?? null,
+    p_unit_count: d?.unitCount ?? null,
     p_note: parsed.data.note || null,
+    p_cancel_reason: d?.cancelReason || null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -307,8 +442,10 @@ export async function setSessionOutcomeAction(
 /**
  * Tek seferlik tarih/saat değişikliği.
  *
- * İLK PLANLANAN TARİH SİLİNMEZ (§7.A): RPC yalnız `actual_at` yazar.
- * Böylece öğrenci ve veli "19 Eyl 10:00 -> 20 Eyl 11:00" görebilir.
+ * İLK PLANLANAN TARİH SİLİNMEZ (§7.A): RPC (140) yalnız güncel planı
+ * değiştirir ve eski planı `session_plan_history`'ye yazar; oturumun
+ * durumu "Planlandı" kalır — "Ertelendi" artık bir sonuç değil
+ * (M1.0-02 §4).
  *
  * AKTİF HAFTALIK AKIŞ OTOMATİK TAŞINMAZ: bu oturum ana temas olsa bile
  * akışın Son Teslimi burada değişmez. O soru öğretmene ayrıca sorulur
@@ -406,7 +543,7 @@ async function proposeFlowDueMove(input: {
   const { data: serviceRows } = await supabase
     .from('student_services')
     .select(
-      'id, kind, participation, medium, weekday, start_time, start_date, status, submission_offset_minutes'
+      'id, kind, participation, medium, weekday, start_time, start_date, status, submission_offset_minutes, is_main_contact'
     )
     .eq('student_id', studentId)
     .eq('workspace_id', workspaceId)
@@ -421,6 +558,7 @@ async function proposeFlowDueMove(input: {
     startDate: s.start_date,
     status: s.status,
     submissionOffsetMinutes: s.submission_offset_minutes ?? 0,
+    isMainContact: s.is_main_contact ?? false,
   })) as ServiceLike[]
 
   // Ana temas kararı TEK yerde: deriveMainContact (Koçluk > Birebir >
@@ -506,6 +644,99 @@ export async function moveActiveFlowDueAction(
 
   revalidate(studentId)
   return { success: true }
+}
+
+/**
+ * Takvim dışı oturum: Esnek ritimli hizmetin dersi ya da ek ders
+ * (M1.0-02 §4 "Oturum ekle" / "Ek ders ekle").
+ *
+ * Ek ders aylık sabit modelde öğrencinin ek ders fiyatıyla ücretlenir
+ * (141); ders başı modelde aynı birim mantığı.
+ */
+export async function createAdhocSessionAction(input: {
+  studentId: string
+  serviceId: string
+  plannedAtIso: string
+  isExtra?: boolean
+  durationMinutes?: number | null
+  note?: string
+}) {
+  const parsed = z
+    .object({
+      studentId: uuidSchema,
+      serviceId: uuidSchema,
+      plannedAtIso: z.string().min(1, 'Tarih ve saat gerekli.'),
+      isExtra: z.boolean().optional(),
+      durationMinutes: z.coerce.number().int().min(5).max(600).optional().nullable(),
+      note: z.string().trim().max(500).optional().or(z.literal('')),
+    })
+    .safeParse(input)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const v = parsed.data
+
+  const when = new Date(v.plannedAtIso)
+  if (Number.isNaN(when.getTime())) return { error: 'Geçerli bir tarih ve saat girin.' }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase.rpc('create_adhoc_session', {
+    p_service_id: v.serviceId,
+    p_planned_at: when.toISOString(),
+    p_is_extra: v.isExtra ?? false,
+    p_duration_minutes: v.durationMinutes ?? null,
+    p_note: v.note || null,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'session.create',
+    entityType: 'student',
+    entityId: v.studentId,
+    detail: { serviceId: v.serviceId, plannedAt: when.toISOString(), isExtra: v.isExtra ?? false },
+  })
+  revalidate(v.studentId)
+  return { success: true, sessionId: data as string }
+}
+
+/** Elle eklenmiş, henüz sonuçlanmamış oturumu geri alır (yanlış tarih). */
+export async function deleteAdhocSessionAction(studentId: string, sessionId: string) {
+  const parsed = z
+    .object({ studentId: uuidSchema, sessionId: uuidSchema })
+    .safeParse({ studentId, sessionId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase } = await getTeacherContext()
+  const { error } = await supabase.rpc('delete_adhoc_session', { p_session_id: sessionId })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidate(studentId)
+  return { success: true }
+}
+
+/** Oturumun plan geçmişi — sağ panelde "İlk plan → güncel plan" zinciri. */
+export async function listSessionPlanHistoryAction(sessionId: string) {
+  const parsed = uuidSchema.safeParse(sessionId)
+  if (!parsed.success) return { error: 'Geçersiz kayıt.' }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase
+    .from('session_plan_history')
+    .select('id, old_planned_at, new_planned_at, note, changed_at')
+    .eq('session_id', sessionId)
+    .eq('workspace_id', workspaceId)
+    .order('changed_at', { ascending: true })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  return {
+    success: true,
+    rows: (data ?? []).map((r) => ({
+      id: r.id as string,
+      oldPlannedAt: r.old_planned_at as string,
+      newPlannedAt: r.new_planned_at as string,
+      note: (r.note as string | null) ?? null,
+      changedAt: r.changed_at as string,
+    })),
+  }
 }
 
 /**

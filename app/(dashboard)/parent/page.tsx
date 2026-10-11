@@ -85,7 +85,6 @@ function formatSessionMoment(iso: string): string {
 const SESSION_STATUS_LABEL: Record<string, string> = {
   planlandi: 'Planlandı',
   yapildi: 'Yapıldı',
-  ertelendi: 'Ertelendi',
   iptal: 'İptal edildi',
   yapilmadi: 'Yapılmadı',
 }
@@ -199,7 +198,7 @@ export default async function ParentPage({
         // liste görmemeli.
         supabase
           .from('student_service_session_view')
-          .select('id, planned_at, actual_at, duration_minutes, status, origin_planned_at')
+          .select('id, planned_at, current_planned_at, actual_at, duration_minutes, status, origin_planned_at')
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
           .eq('attributed_month', currentMonthStart)
@@ -489,11 +488,13 @@ export default async function ParentPage({
                 <ul className="divide-y text-sm">
                   {sessions.data.map((session) => {
                     const planned = session.planned_at as string
-                    const actual = session.actual_at as string | null
+                    // M1.0-02 (140): güncel plan ayrı kolonda; gerçekleşme
+                    // anı yalnız yapılmış oturumda dolu.
+                    const actual = ((session.actual_at ?? session.current_planned_at) as string | null) ?? null
                     // "19 Eyl 10:00 → 20 Eyl 11:00" (§7-A no.3): ilk
                     // planlanan tarih SİLİNMEZ, nihai durum yanında
                     // gösterilir. Veli neyin değiştiğini görebilmeli.
-                    const moved = actual && actual !== planned
+                    const moved = actual && new Date(actual).getTime() !== new Date(planned).getTime()
                     return (
                       <li
                         key={session.id as string}

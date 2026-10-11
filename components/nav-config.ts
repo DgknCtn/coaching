@@ -120,6 +120,10 @@ export const studentScreenLinks: NavItem[] = studentScreens.map((s) => ({
 
 export const teacherNav: NavEntry[] = [
   { href: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  // M1.0-02 §4: haftalık operasyon ekranı — "bugün kimle ne var?" bütün
+  // öğrenciler için tek tabloda. Öğrenci sayfasındaki Görüşmeler aynı
+  // bileşenin tek öğrencilik hâli.
+  { href: '/teacher/gorusmeler', label: 'Ders & Görüşmeler', icon: CalendarCheck },
   // ÖĞRENCİ İŞLERİ: öğrenciyle ilgili her ekran tek başlık altında —
   // liste, yeni kayıt, görevler ve öğrenciye özel beş ekran.
   //
