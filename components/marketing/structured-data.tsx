@@ -24,7 +24,8 @@ export function StructuredData() {
         url: siteUrl(),
         logo: absoluteUrl('/icons/icon-512.png'),
         email: BRAND.contactEmail,
-        sameAs: [`https://instagram.com/${BRAND.instagram}`],
+        // Instagram hesabı tanımlı değilse sameAs hiç yazılmaz.
+        ...(BRAND.instagram ? { sameAs: [`https://instagram.com/${BRAND.instagram}`] } : {}),
       },
       {
         '@type': 'WebSite',

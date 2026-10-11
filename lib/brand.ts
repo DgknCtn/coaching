@@ -20,12 +20,9 @@ export const BRAND = {
 
   /**
    * İletişim adresi — fiyatlandırma bölümündeki "İletişime geç" butonu ve
-   * footer bunu kullanır.
-   *
-   * DEĞİŞTİRİN: alan adı alındığında gerçek adresle güncellenmeli.
-   * Şu an yer tutucu; e-posta kutusu yoksa buton çalışmaz.
+   * footer bunu kullanır. Destek ve pilot geri bildirimi de buraya gelir.
    */
-  contactEmail: 'iletisim@iz.app',
+  contactEmail: 'info@matematiginmuhendisi.com',
 
   /**
    * WhatsApp numarası — ULUSLARARASI BİÇİMDE, YALNIZ RAKAM.
@@ -34,16 +31,16 @@ export const BRAND = {
    * burada temiz tutmak, bağlantıyı kuran her yerde ayrı ayrı
    * temizlemekten güvenli. Ekranda okunabilir hâli `phoneDisplay`.
    *
-   * DEĞİŞTİRİN: yer tutucu. Yanlış numara, kullanıcıyı tanımadığı birine
-   * yazmaya gönderir.
+   * null: henüz gerçek numara yok; footer bağlantıyı HİÇ göstermez.
+   * Yer tutucu numara, kullanıcıyı tanımadığı birine yazmaya gönderirdi.
    */
-  whatsapp: '905000000000',
+  whatsapp: null as string | null,
 
   /** İnsanın okuyacağı hâli — footer'da bu görünür. */
-  phoneDisplay: '+90 500 000 00 00',
+  phoneDisplay: null as string | null,
 
-  /** Instagram kullanıcı adı, '@' olmadan. */
-  instagram: 'iz.app',
+  /** Instagram kullanıcı adı, '@' olmadan. null: hesap yok, gösterilmez. */
+  instagram: null as string | null,
 
   /** Telif satırı için başlangıç yılı. */
   since: 2026,

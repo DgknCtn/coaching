@@ -23,27 +23,32 @@ export function Footer() {
                 e-posta bırakmak, en çok kullanılan kanalı kapatmaktı.
                 Sosyal bağlantılar rel="noopener" ile açılır. */}
             <div className="flex flex-col items-center gap-2 md:items-start">
-              <a
-                href={whatsappLink(`Merhaba, ${BRAND.name} hakkında bilgi almak istiyorum.`)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <MessageCircle className="size-4 shrink-0" aria-hidden />
-                {BRAND.phoneDisplay}
-              </a>
+              {/* Numara ya da hesap tanımlı değilse bağlantı çizilmez. */}
+              {BRAND.whatsapp && BRAND.phoneDisplay && (
+                <a
+                  href={whatsappLink(`Merhaba, ${BRAND.name} hakkında bilgi almak istiyorum.`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <MessageCircle className="size-4 shrink-0" aria-hidden />
+                  {BRAND.phoneDisplay}
+                </a>
+              )}
 
-              <a
-                href={instagramLink()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {/* lucide-react marka ikonları taşımıyor (telif); @ işareti
-                    Instagram kullanıcı adının yanında zaten anlaşılır. */}
-                <AtSign className="size-4 shrink-0" aria-hidden />
-                {BRAND.instagram}
-              </a>
+              {BRAND.instagram && (
+                <a
+                  href={instagramLink()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {/* lucide-react marka ikonları taşımıyor (telif); @ işareti
+                      Instagram kullanıcı adının yanında zaten anlaşılır. */}
+                  <AtSign className="size-4 shrink-0" aria-hidden />
+                  {BRAND.instagram}
+                </a>
+              )}
 
               <a
                 href={contactMailto(`${BRAND.name} hakkında`)}
