@@ -210,17 +210,17 @@ export default async function FinancePage({
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" render={<Link href={qs({ ay: shiftMonth(month, -1) })} />}>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href={qs({ ay: shiftMonth(month, -1) })} />}>
           <ChevronLeft className="size-4" />
           <span className="sr-only">Önceki ay</span>
         </Button>
         <span className="min-w-28 text-center font-medium">{monthLabel(month)}</span>
-        <Button size="sm" variant="outline" render={<Link href={qs({ ay: shiftMonth(month, 1) })} />}>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href={qs({ ay: shiftMonth(month, 1) })} />}>
           <ChevronRight className="size-4" />
           <span className="sr-only">Sonraki ay</span>
         </Button>
         {month !== thisMonth && (
-          <Button size="sm" variant="ghost" render={<Link href={qs({ ay: thisMonth })} />}>
+          <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={qs({ ay: thisMonth })} />}>
             Bu ay
           </Button>
         )}

@@ -387,20 +387,94 @@ export function studentOverviewNav(studentId: string): NavItem[] {
  * aktif olanı `exact` kuralına göre işaretleyebilsin — /admin her
  * yönetim adresinin öneki olduğundan onsuz hep aktif görünürdü.
  */
-export const adminNav: NavItem[] = [
-  { href: '/admin', label: 'Genel Bakış', icon: LayoutDashboard, exact: true },
-  { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2 },
-  { href: '/admin/kullanicilar', label: 'Kullanıcılar', icon: UsersRound },
-  { href: '/admin/kullanim', label: 'Kullanım', icon: Activity },
-  { href: '/admin/gelir', label: 'Gelir', icon: Wallet },
-  { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy },
-  { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library },
-  { href: '/admin/partnerler', label: 'Partnerler', icon: Users },
-  { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert },
-  { href: '/admin/sistem', label: 'Sistem', icon: Server },
-  { href: '/admin/uyum', label: 'Uyum', icon: Scale },
-  { href: '/admin/kayit', label: 'Yönetim Kaydı', icon: ScrollText },
+/**
+ * YÖNETİM MENÜSÜ — beş bölüm (Genel Bakış + dört aile).
+ *
+ * On iki sayfa tek bir yatay şeritte duruyordu: dar ekranda kayıyor,
+ * hangi sayfanın neyle ilgili olduğu okunmuyordu. Gruplar, yöneticinin
+ * aklındaki soruya göre: müşteri kim ve ne yapıyor / para / destek /
+ * platformun kendisi. Sayfa adresleri DEĞİŞMEDİ.
+ */
+export interface AdminNavLink extends NavItem {
+  /** Açılır menüde etiketin altındaki tek satır. */
+  description: string
+}
+
+export interface AdminNavSection {
+  id: string
+  label: string
+  icon: LucideIcon
+  items: AdminNavLink[]
+}
+
+export const adminNavSections: AdminNavSection[] = [
+  {
+    id: 'genel',
+    label: 'Genel Bakış',
+    icon: LayoutDashboard,
+    items: [
+      { href: '/admin', label: 'Genel Bakış', icon: LayoutDashboard, exact: true, description: 'Platformun bugünkü özeti' },
+    ],
+  },
+  {
+    id: 'musteri',
+    label: 'Müşteriler',
+    icon: Building2,
+    items: [
+      { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2, description: 'Çalışma alanları, plan ve lisans' },
+      { href: '/admin/kullanicilar', label: 'Kullanıcılar', icon: UsersRound, description: 'Hesaplar, roller ve son giriş' },
+      { href: '/admin/kullanim', label: 'Kullanım', icon: Activity, description: 'Aktivasyon ve özellik kullanımı' },
+    ],
+  },
+  {
+    id: 'gelir',
+    label: 'Gelir',
+    icon: Wallet,
+    items: [
+      { href: '/admin/gelir', label: 'Gelir', icon: Wallet, description: 'Siparişler, lisanslar, aylık gelir' },
+      { href: '/admin/partnerler', label: 'Partnerler', icon: Users, description: 'Yönlendirmeler ve komisyonlar' },
+    ],
+  },
+  {
+    id: 'destek',
+    label: 'Destek',
+    icon: LifeBuoy,
+    items: [
+      { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy, description: 'Açık talepler ve yanıtlar' },
+      { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library, description: 'Ortak kitap havuzu ve öneriler' },
+    ],
+  },
+  {
+    id: 'platform',
+    label: 'Platform',
+    icon: Server,
+    items: [
+      { href: '/admin/guvenlik', label: 'Güvenlik', icon: ShieldAlert, description: 'Giriş olayları ve şüpheli hareket' },
+      { href: '/admin/sistem', label: 'Sistem', icon: Server, description: 'Sağlık, veritabanı, zamanlanmış işler' },
+      { href: '/admin/uyum', label: 'Uyum', icon: Scale, description: 'KVKK, saklama ve silme talepleri' },
+      { href: '/admin/kayit', label: 'Yönetim Kaydı', icon: ScrollText, description: 'Yönetici işlemlerinin izi' },
+    ],
+  },
 ]
+
+/** Düz liste — aktif sayfa eşlemesi ve eski tüketiciler için. */
+export const adminNav: AdminNavLink[] = adminNavSections.flatMap((s) => s.items)
+
+/** Yol hangi bölümün hangi sayfası? (`/admin/calisma-alanlari/...` → Müşteriler) */
+export function activeAdminLink(pathname: string): { section: AdminNavSection; link: AdminNavLink } | null {
+  for (const section of adminNavSections) {
+    for (const link of section.items) {
+      if (link.exact ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`)) {
+        return { section, link }
+      }
+    }
+  }
+  if (pathname.startsWith('/admin/calisma-alanlari')) {
+    const section = adminNavSections.find((s) => s.id === 'musteri')!
+    return { section, link: section.items[0] }
+  }
+  return null
+}
 
 export const studentNav: NavItem[] = [
   { href: '/student', label: 'Ödevlerim', icon: ClipboardList, exact: true },

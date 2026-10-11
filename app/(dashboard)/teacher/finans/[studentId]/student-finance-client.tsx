@@ -104,12 +104,12 @@ export function StudentFinanceClient({
       {/* Model + ay seçici */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" render={<Link href={`?ay=${shiftMonth(month, -1)}`} />}>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`?ay=${shiftMonth(month, -1)}`} />}>
             <ChevronLeft className="size-4" />
             <span className="sr-only">Önceki ay</span>
           </Button>
           <span className="min-w-28 text-center font-medium">{monthLabel(month)}</span>
-          <Button size="sm" variant="outline" render={<Link href={`?ay=${shiftMonth(month, 1)}`} />}>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`?ay=${shiftMonth(month, 1)}`} />}>
             <ChevronRight className="size-4" />
             <span className="sr-only">Sonraki ay</span>
           </Button>
@@ -124,7 +124,7 @@ export function StudentFinanceClient({
                 }`
               : 'Ücretlendirme modeli yok'}
           </span>
-          <Button size="sm" variant="ghost" render={<Link href={`/teacher/students/${student.id}/gorusmeler`} />}>
+          <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/teacher/students/${student.id}/gorusmeler`} />}>
             <Settings2 className="size-4" />
             Hizmet Yapısı
           </Button>

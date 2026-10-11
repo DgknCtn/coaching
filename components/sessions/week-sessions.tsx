@@ -255,16 +255,16 @@ export function WeekSessions({
               </Button>
             </>
           )}
-          <Button size="sm" variant="outline" render={<Link href={prevHref} />}>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={prevHref} />}>
             <ChevronLeft className="size-4" />
             <span className="sr-only">Önceki hafta</span>
           </Button>
           {!isCurrentWeek && (
-            <Button size="sm" variant="outline" render={<Link href={currentHref} />}>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={currentHref} />}>
               Bu hafta
             </Button>
           )}
-          <Button size="sm" variant="outline" render={<Link href={nextHref} />}>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={nextHref} />}>
             <ChevronRight className="size-4" />
             <span className="sr-only">Sonraki hafta</span>
           </Button>
