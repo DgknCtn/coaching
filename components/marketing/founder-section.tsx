@@ -15,7 +15,7 @@ export function FounderSection() {
         <Quote aria-hidden className="size-8 text-primary/40" />
         <blockquote className="mt-4 space-y-4 text-lg leading-relaxed text-pretty sm:text-xl">
           <p>
-            {BRAND.name}&apos;yi bir yazılım şirketi olarak değil, bir matematik öğretmeni olarak yaptım.
+            {BRAND.name}&apos;i bir yazılım şirketi olarak değil, bir matematik öğretmeni olarak yaptım.
             Öğrencilerimin ödevlerini WhatsApp mesajlarında, kitap takibini defterde,
             velilerin sorularını telefonda kovalamaktan yorulmuştum.
           </p>
@@ -26,7 +26,7 @@ export function FounderSection() {
           </p>
         </blockquote>
         <figcaption className="mt-6 text-sm text-muted-foreground">
-          — {BRAND.name}&apos;nin kurucusu, matematik öğretmeni
+          — {BRAND.name}&apos;in Kurucu Ortağı, Matematiğin Mühendisi
         </figcaption>
       </figure>
     </section>
