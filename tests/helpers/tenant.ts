@@ -201,8 +201,15 @@ export async function signInTenant(
   // Kiracının kendi verisi. Bu sorgu BOŞ DÖNERSE test anlamsızlaşır:
   // "yabancı veri görünmüyor" iddiası, hiçbir veri görünmediğinde
   // kendiliğinden doğru olur.
+  //
+  // YALNIZ TEST ÖĞRENCİSİ SEÇİLİR. Test hesaplarından biri gerçek
+  // öğrencilerin olduğu canlı alan; çapraz kiracı testi seçilen öğrenciyi
+  // öbür hesapla GÜNCELLEMEYİ ve SİLMEYİ deniyor. İzolasyon bir gün
+  // bozulursa zarar görecek satır gerçek bir öğrenci olmamalı. Bu yüzden
+  // adı "Test" ile başlayan öğrenci aranır (örn. "Test 1"); yoksa test
+  // durur — gerçek bir öğrenciye ASLA düşmez.
   const ogrenciler = await c.select<{ id: string; full_name: string; workspace_id: string }[]>(
-    'students?select=id,full_name,workspace_id&limit=1'
+    'students?select=id,full_name,workspace_id&full_name=ilike.test*&order=full_name&limit=1'
   )
 
   if (ogrenciler.code) {
@@ -211,8 +218,9 @@ export async function signInTenant(
   const liste = Array.isArray(ogrenciler.body) ? ogrenciler.body : []
   if (liste.length === 0) {
     throw new Error(
-      `${etiket} kiracısında hiç öğrenci yok. Çapraz erişim testi, her iki ` +
-        'kiracının da EN AZ BİR öğrencisi olmadan anlamlı sonuç üretemez.'
+      `${etiket} kiracısında adı "Test" ile başlayan öğrenci yok. Çapraz erişim ` +
+        'testi her iki kiracıda bir TEST öğrencisi ister (örn. "Test 1"); ' +
+        'gerçek öğrenciler bilinçli olarak kullanılmaz.'
     )
   }
 
