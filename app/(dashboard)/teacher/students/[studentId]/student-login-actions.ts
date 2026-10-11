@@ -307,15 +307,36 @@ async function findCodeRow(
  * auth adımı düştüğünde kullanıcı adı sabitlenmiş ama adresi tutmayan
  * bir kod satırı bırakırdı.
  */
+const FOREIGN_ACCOUNT =
+  'Bu hesap başka bir çalışma alanında da kullanılıyor; kullanıcı adı + PIN\'e çevrilemez. ' +
+  'Kişi e-posta ve şifresiyle girmeye devam edebilir (şifresi yoksa "Şifremi unuttum").'
+
 async function convertToCode(ctx: TeacherCtx, studentId: string, row: MemberLoginRow): Promise<Result> {
   const service = createServiceClient()
   const { data: prof } = await service
     .from('profiles')
-    .select('auth_user_id')
+    .select('auth_user_id, is_platform_admin')
     .eq('id', row.profile_id)
     .maybeSingle()
-  const authUserId = (prof as { auth_user_id: string | null } | null)?.auth_user_id
+  const p = prof as { auth_user_id: string | null; is_platform_admin: boolean | null } | null
+  const authUserId = p?.auth_user_id
   if (!authUserId) return { error: 'Hesap bulunamadı.' }
+
+  // HESAP ELE GEÇİRMEYE KARŞI: çeviren öğretmen yeni PIN'i BİLİYOR, yani
+  // o hesapla girebilir. Hesap başka bir alanda da üyeyse (başka koçun
+  // velisi/öğrencisi) ya da öğrenci/veli dışında bir rolü varsa (kendisi
+  // de koç), çevirmek o alanların verisini bu öğretmene açardı. Yalnız
+  // TAMAMEN bu alana ait bir öğrenci/veli hesabı çevrilir.
+  if (p?.is_platform_admin) return { error: FOREIGN_ACCOUNT }
+  const { data: memberships, error: memberError } = await service
+    .from('workspace_members')
+    .select('workspace_id, role')
+    .eq('profile_id', row.profile_id)
+  if (memberError) return { error: 'Hesabın üyelikleri okunamadı; işlem yapılmadı.' }
+  const foreign = ((memberships ?? []) as { workspace_id: string; role: string }[]).some(
+    (m) => m.workspace_id !== ctx.workspaceId || (m.role !== 'student' && m.role !== 'parent')
+  )
+  if (foreign) return { error: FOREIGN_ACCOUNT }
 
   const pin = generatePin()
   for (let attempt = 0; attempt < 3; attempt++) {
