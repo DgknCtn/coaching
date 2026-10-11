@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+  convertMemberLoginAction,
   disableMemberLoginAction,
   issueParentLoginAction,
   issueStudentLoginAction,
@@ -22,53 +23,49 @@ export function StudentLoginControls({
   studentName,
   student,
   parents,
+  requested,
 }: {
   studentId: string
   studentName: string
-  /** undefined: blok çizilmez (e-postalı hesap). null: henüz hesap yok. */
-  student: MemberLoginRow | null | undefined
+  /** null: öğrencinin henüz hesabı yok. */
+  student: MemberLoginRow | null
   parents: MemberLoginRow[]
+  /** "PIN'imi unuttum" isteği açık olan hesaplar (143). */
+  requested: string[]
 }) {
   return (
     <div className="space-y-4">
-      {student !== undefined && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Öğrenci</h3>
-          <MemberCodeCard
-            studentId={studentId}
-            name={studentName}
-            row={student}
-            onIssue={() => issueStudentLoginAction(studentId)}
-            issueLabel="Kullanıcı adı + PIN oluştur"
-          />
-        </div>
-      )}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Öğrenci</h3>
+        <MemberCodeCard
+          studentId={studentId}
+          name={studentName}
+          row={student}
+          requested={!!student && requested.includes(student.profile_id)}
+          // Hesap yoksa yeni hesap açılır; e-posta/Google hesabı varsa
+          // AYNI hesap kullanıcı adı + PIN'e çevrilir.
+          onIssue={() => issueStudentLoginAction(studentId)}
+          issueLabel="Kullanıcı adı + PIN ver"
+        />
+      </div>
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold">Veliler</h3>
         {parents.length === 0 && (
           <p className="text-sm text-muted-foreground">Bu öğrenciye bağlı veli yok.</p>
         )}
-        {parents.map((p) =>
-          p.has_code ? (
-            <MemberCodeCard
-              key={p.profile_id}
-              studentId={studentId}
-              name={p.full_name}
-              row={p}
-              showName
-            />
-          ) : (
-            <p
-              key={p.profile_id}
-              className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm"
-            >
-              <Mail className="size-4 text-muted-foreground" aria-hidden />
-              <span className="font-medium">{p.full_name}</span>
-              <span className="text-muted-foreground">e-posta ya da Google ile giriyor</span>
-            </p>
-          )
-        )}
+        {parents.map((p) => (
+          <MemberCodeCard
+            key={p.profile_id}
+            studentId={studentId}
+            name={p.full_name}
+            row={p}
+            requested={requested.includes(p.profile_id)}
+            showName
+            onIssue={() => convertMemberLoginAction(studentId, p.profile_id)}
+            issueLabel="Kullanıcı adı + PIN ver"
+          />
+        ))}
         <NewParentForm studentId={studentId} />
       </div>
     </div>
@@ -80,7 +77,7 @@ export function StudentLoginControls({
 function IssuedBox({ issued }: { issued: Issued }) {
   const shareText =
     `Merhaba ${issued.name.split(' ')[0]}, İZ'e giriş bilgilerin:\n` +
-    `Adres: ${typeof window !== 'undefined' ? window.location.origin : ''}/giris\n` +
+    `Adres: ${typeof window !== 'undefined' ? window.location.origin : ''}/login\n` +
     `Kullanıcı adı: ${issued.username}\nPIN: ${issued.pin}\nPIN'ini kimseyle paylaşma.`
 
   async function copy() {
@@ -135,14 +132,17 @@ function MemberCodeCard({
   onIssue,
   issueLabel,
   showName = false,
+  requested = false,
 }: {
   studentId: string
   name: string
   row: MemberLoginRow | null
-  /** Kodu olmayan hesap için ilk oluşturma. */
+  /** Kodu olmayan hesap için ilk oluşturma ya da çevirme. */
   onIssue?: () => Promise<IssueResult>
   issueLabel?: string
   showName?: boolean
+  /** Hesap "PIN'imi unuttum" isteği bıraktı. */
+  requested?: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const [issued, setIssued] = useState<Issued | null>(null)
@@ -184,6 +184,17 @@ function MemberCodeCard({
           {!row.active && <Badge variant="neutral">Kapalı</Badge>}
           {row.active && row.locked && <Badge variant="warning">Geçici kilit (yanlış PIN)</Badge>}
           {row.active && !row.locked && <Badge variant="success">Açık</Badge>}
+          {requested && <Badge variant="warning">Yeni PIN istiyor</Badge>}
+        </p>
+      )}
+
+      {!hasCode && row && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <Mail className="size-4 text-muted-foreground" aria-hidden />
+          {showName && <span className="font-medium">{name} ·</span>}
+          <span className="text-muted-foreground">
+            E-posta ya da Google ile giriyor. Google girişi kalktı; kullanıcı adı + PIN verin.
+          </span>
         </p>
       )}
 

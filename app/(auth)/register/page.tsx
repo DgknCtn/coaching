@@ -14,7 +14,6 @@ import { AuthShell } from '@/components/shared/auth-shell'
 import { ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { registerSchema } from '@/lib/validation'
-import { GoogleSignInBlock } from '@/components/shared/google-button'
 
 // ŞEMA SUNUCUYLA ORTAK. Burada ayrı bir kopya vardı ve mesajları
 // sunucudakinden ayrışmıştı ("Ad en az 2 karakter olmalı" vs "Ad Soyad
@@ -122,32 +121,23 @@ export default function RegisterPage() {
         </p>
       }
     >
-      {/* GOOGLE FORMUN ÜSTÜNDE: en hızlı yol en görünür yerde olmalı.
-          Altta olsaydı kullanıcı e-posta/şifre alanlarını doldurmaya
-          başladıktan sonra fark ederdi. */}
       {/* "30 saniyede" KALDIRILDI: ölçülmemiş bir süre vaadi (068'in
           "10 dakika" kararıyla aynı gerekçe). */}
-      {/* KAYIT SAYFASI ÖĞRETMEN KAYDIDIR: Google ile gelen kullanıcı
-          doğrudan alan kurulumuna gider. /login'deki Google düğmesi ise
-          niyet taşımaz; alanı olmayan kullanıcı orada /hosgeldin'e düşer. */}
       {/* KOÇ KAYDI OLDUĞU EN ÜSTTE YAZAR: öğrenci bu ekranı kendi girişi
-          sanıp koç alanı açıyordu. Google yolu ayrıca bir onay ekranından
-          geçiyor (/kurulum/ogretmen); e-posta formu zaten açık niyet. */}
+          sanıp koç alanı açıyordu. Öğrenci ve veli hesap açmaz; kullanıcı
+          adını ve PIN'i öğretmeninden alır. Google ile kayıt şimdilik
+          kaldırıldı: koç yalnız e-postayla kaydolur. */}
       <p className="mb-5 flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
         <Users className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
         <span>
           Bu kayıt <span className="font-medium">koç ve öğretmenler</span> içindir. Öğrenci ya da
-          veli misin?{' '}
-          <Link href="/giris" className="font-medium text-primary underline-offset-4 hover:underline">
-            Öğrenci/veli girişi
-          </Link>
+          veliysen hesap açma; kullanıcı adını ve PIN&apos;ini öğretmeninden al ve{' '}
+          <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+            giriş ekranından
+          </Link>{' '}
+          gir.
         </span>
       </p>
-
-      <GoogleSignInBlock
-        hint="En hızlı yöntem — tek tıkla hesabınızı oluşturun."
-        next="/kurulum/ogretmen"
-      />
 
       <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">

@@ -1,4 +1,5 @@
 import { StudentLoginSection } from './student-login-section'
+import { studentLoginConfigured } from '@/lib/student-login'
 import { InterventionSection } from './intervention-section'
 import { singleResult } from '@/lib/data-result'
 import Link from 'next/link'
@@ -1234,6 +1235,12 @@ export default async function StudentDetailPage({
 
       {tab?.slug === 'veliler' && (
         <>
+          {/* TEK GİRİŞ (143): öğrenciyi ve veliyi davet etmek = kullanıcı
+              adı + PIN vermek. E-postalı davet düğmeleri yalnız PIN girişi
+              yapılandırılmamışsa (yedek yol) görünür. */}
+          {studentLoginConfigured() ? (
+            <StudentLoginSection studentId={studentId} studentName={student.full_name} />
+          ) : (
           <Section
             title="Veliler"
             action={
@@ -1300,14 +1307,7 @@ export default async function StudentDetailPage({
               </ul>
             )}
           </Section>
-
-          {/* 10a: e-postasız öğrenci için kullanıcı adı + PIN. */}
-          <StudentLoginSection
-            studentId={studentId}
-            studentName={student.full_name}
-            hasAccount={hasAccount}
-            hasEmail={Boolean(student.email)}
-          />
+          )}
 
           {invites.length > 0 && (
             <Section

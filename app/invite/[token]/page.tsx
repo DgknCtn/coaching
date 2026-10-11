@@ -5,7 +5,6 @@ import { AlertCircle } from 'lucide-react'
 import { BrandMark } from '@/components/shared/brand-mark'
 import { BRAND } from '@/lib/brand'
 import { buttonVariants } from '@/components/ui/button'
-import { GoogleSignInBlock } from '@/components/shared/google-button'
 import { maskEmail } from '@/lib/invite-accept'
 import { SwitchAccountButton } from './switch-account-button'
 
@@ -171,13 +170,8 @@ export default async function InvitePage({
             <SwitchAccountButton returnTo={`/invite/${token}`} />
           </div>
         ) : (
-          <>
-            <GoogleSignInBlock
-              label="Google ile kabul et"
-              next={`/invite/${token}/kabul`}
-            />
-            <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
-          </>
+          // Google ile kabul şimdilik kaldırıldı: yalnız e-posta + şifre.
+          <InviteForm token={token} defaultEmail={invitation.invited_email ?? ''} />
         )}
       </div>
     </div>

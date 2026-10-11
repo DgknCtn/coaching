@@ -1,7 +1,7 @@
 import { permanentRedirect } from 'next/navigation'
 
 // Eski adres (10a): öğrencilere bu bağlantı WhatsApp'la gönderilmiş
-// olabilir. Öğrenci ve veli girişi artık /giris'te.
+// olabilir. Giriş artık tek ekranda (/login).
 export default function LegacyStudentLoginPage() {
-  permanentRedirect('/giris')
+  permanentRedirect('/login')
 }

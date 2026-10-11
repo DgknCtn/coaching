@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Koç Girişi',
+  title: 'Giriş',
   description:
-    'Koç ve öğretmen paneline giriş yapın. Öğrenci ve veliler /giris adresinden girer.',
+    'Koçlar e-posta ve şifreyle, öğrenci ve veliler öğretmenin verdiği kullanıcı adı ve PIN ile giriş yapar.',
   alternates: { canonical: '/login' },
 }
 

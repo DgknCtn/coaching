@@ -28,6 +28,14 @@ import type { Database } from '@/types/database'
 //    duyuyorsa, neredeyse her zaman doğru cevap eksik bir RLS
 //    politikasıdır — servis anahtarı değil.
 //
+//    İSTİSNA 2 (tek giriş ekranı): öğretmenin, e-posta/Google ile
+//    katılmış öğrenci ya da veliyi kullanıcı adı + PIN'e çevirmesi
+//    (convertToCode, teacher/students/[studentId]/student-login-actions.ts).
+//    Başka bir kullanıcının auth adresini/şifresini değiştirmek yalnız
+//    admin API ile mümkün. Yetki ÖNCE öğretmenin oturumuyla
+//    (student_member_logins) doğrulanır; servis istemcisi yalnız o tek
+//    hesabın auth satırına ve profil adresine dokunur.
+//
 // 2. Çağıran taraf kiracıyı KENDİ doğrular. Bu istemcide `workspace_id`
 //    filtresi otomatik değildir; unutulan bir filtre, tüm kiracıların
 //    verisine dokunmak demektir.

@@ -7,6 +7,7 @@ import { getTeacherContext } from '@/lib/workspace'
 import { dbErrorToTr } from '@/lib/auth-errors'
 import { firstIssue, uuidSchema } from '@/lib/validation'
 import { generateToken, hashToken } from '@/lib/invite'
+import { createServiceClient } from '@/lib/supabase/service'
 import {
   generatePin,
   generateUsername,
@@ -173,9 +174,12 @@ export async function issueStudentLoginAction(studentId: string): Promise<Result
 
   if (existing) return renew(ctx, sid.data, existing)
 
-  // E-postayla hesabı olan öğrenciye ikinci bir hesap açılmaz.
+  // E-posta/Google ile hesabı olan öğrenciye ikinci bir hesap açılmaz;
+  // AYNI hesabın giriş yolu kullanıcı adı + PIN'e çevrilir.
   if (student.profile_id) {
-    return { error: 'Bu öğrencinin zaten bir hesabı var; e-posta ya da Google ile giriş yapıyor.' }
+    const row = logins.rows.find((r) => r.role === 'student' && r.profile_id === student.profile_id)
+    if (!row) return { error: 'Öğrencinin hesabı bulunamadı.' }
+    return convertToCode(ctx, sid.data, row)
   }
 
   return createCodeAccount(ctx, {
@@ -239,6 +243,83 @@ async function findCodeRow(
   const row = logins.rows.find((r) => r.profile_id === profileId && r.has_code)
   if (!row) return { error: 'Bu hesabın kullanıcı adı + PIN girişi yok.' }
   return { row }
+}
+
+/**
+ * E-POSTA/GOOGLE HESABINI KULLANICI ADI + PIN'E ÇEVİR.
+ *
+ * Google ile giriş kaldırıldı; o yolla katılmış öğrenci ve velinin şifresi
+ * yok. Yeni hesap açmak verisini (mesajlar, bildirimler, bağlar) geride
+ * bırakırdı. Onun yerine AYNI auth hesabının adresi sistem adresine,
+ * şifresi sunucu sırrından türetilen şifreye çevrilir — tıpkı ilk
+ * oluşturmadaki gibi. Bu, servis anahtarı gerektiren tek öğretmen
+ * eylemi (bkz. lib/supabase/service.ts, istisna 2).
+ *
+ * SIRA: önce auth hesabı, sonra kod satırı. Kod adımı düşerse hesabın
+ * kodu yoktur (has_code=false) ve öğretmen aynı düğmeyle yeniden dener;
+ * her deneme adresi yeni kullanıcı adına göre baştan yazar. Ters sıra,
+ * auth adımı düştüğünde kullanıcı adı sabitlenmiş ama adresi tutmayan
+ * bir kod satırı bırakırdı.
+ */
+async function convertToCode(ctx: TeacherCtx, studentId: string, row: MemberLoginRow): Promise<Result> {
+  const service = createServiceClient()
+  const { data: prof } = await service
+    .from('profiles')
+    .select('auth_user_id')
+    .eq('id', row.profile_id)
+    .maybeSingle()
+  const authUserId = (prof as { auth_user_id: string | null } | null)?.auth_user_id
+  if (!authUserId) return { error: 'Hesap bulunamadı.' }
+
+  const pin = generatePin()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const username = generateUsername(row.full_name)
+    const email = studentLoginEmail(username)
+
+    const { error: authError } = await service.auth.admin.updateUserById(authUserId, {
+      email,
+      password: studentLoginPassword(username),
+      email_confirm: true,
+    })
+    if (authError?.code === 'email_exists') continue
+    if (authError) return { error: `Hesap çevrilemedi: ${authError.message}` }
+
+    // Kullanıcı adı tekilliği burada da yakalanır (uniq_member_login_username).
+    const { error: codeError } = await ctx.supabase.rpc('set_member_login_code', {
+      p_profile_id: row.profile_id,
+      p_role: row.role,
+      p_username: username,
+      p_pin: pin,
+    })
+    if (codeError?.code === '23505') continue
+    if (codeError) return { error: dbErrorToTr(codeError.message) }
+
+    // Profil adresi de güncellenir: girişte profil e-postadan çözülüyor.
+    await service.from('profiles').update({ email }).eq('id', row.profile_id)
+
+    revalidatePath(`/teacher/students/${studentId}`)
+    return { success: true, username, pin, created: true }
+  }
+  return { error: 'Kullanıcı adı üretilemedi, tekrar deneyin.' }
+}
+
+/** E-posta/Google ile katılmış veli (ya da öğrenci) için kullanıcı adı + PIN. */
+export async function convertMemberLoginAction(studentId: string, profileId: string): Promise<Result> {
+  const sid = uuidSchema.safeParse(studentId)
+  const pid = uuidSchema.safeParse(profileId)
+  if (!sid.success) return { error: firstIssue(sid.error) }
+  if (!pid.success) return { error: firstIssue(pid.error) }
+  if (!studentLoginConfigured()) return { error: NOT_CONFIGURED }
+
+  const ctx = await getTeacherContext()
+  // Yetki: hesap BU öğrencinin listesinde olmalı (RPC öğretmen rolünü
+  // veritabanında doğrular).
+  const logins = await memberLogins(ctx.supabase, sid.data)
+  if ('error' in logins) return logins
+  const row = logins.rows.find((r) => r.profile_id === pid.data)
+  if (!row) return { error: 'Hesap bu öğrenciye bağlı değil.' }
+  if (row.has_code) return renew(ctx, sid.data, row)
+  return convertToCode(ctx, sid.data, row)
 }
 
 /** Veli (ya da öğrenci) için yeni PIN. */

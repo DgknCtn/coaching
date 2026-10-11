@@ -39,8 +39,8 @@ import { join } from 'node:path'
 
 /** Kimlik bilgisi taşıyan ve GET ile gönderilmemesi gereken formlar. */
 const KIMLIK_FORMLARI = [
-  { dosya: 'components/auth/email-login-form.tsx', tasidigi: 'e-posta + şifre (/login, /giris)' },
-  { dosya: 'app/giris/login-form.tsx', tasidigi: 'kullanıcı adı + PIN' },
+  { dosya: 'components/auth/unified-login-form.tsx', tasidigi: 'e-posta + şifre ya da kullanıcı adı + PIN (/login)' },
+  { dosya: 'components/auth/pin-request-form.tsx', tasidigi: 'kullanıcı adı (PIN talebi)' },
   { dosya: 'app/(auth)/register/page.tsx', tasidigi: 'e-posta + şifre' },
   { dosya: 'app/(auth)/update-password/page.tsx', tasidigi: 'yeni şifre' },
   { dosya: 'app/invite/[token]/invite-form.tsx', tasidigi: 'e-posta + şifre' },

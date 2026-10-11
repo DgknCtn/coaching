@@ -79,13 +79,7 @@ export function Footer() {
               href="/login"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Koç girişi
-            </Link>
-            <Link
-              href="/giris"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Öğrenci/Veli girişi
+              Giriş yap
             </Link>
             <Link
               href="/register"

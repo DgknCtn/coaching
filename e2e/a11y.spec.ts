@@ -30,8 +30,7 @@ const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 const PUBLIC_ROUTES = [
   { path: '/', name: 'Tanıtım sayfası' },
   { path: '/demo', name: 'Demo' },
-  { path: '/login', name: 'Koç girişi' },
-  { path: '/giris', name: 'Öğrenci/veli girişi' },
+  { path: '/login', name: 'Giriş (koç, öğrenci, veli)' },
   { path: '/register', name: 'Kayıt' },
   { path: '/gizlilik', name: 'Gizlilik metni' },
   { path: '/kosullar', name: 'Kullanım koşulları' },

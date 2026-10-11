@@ -13,6 +13,13 @@ import {
 import { checkRateLimit, rateLimitMessage } from '@/lib/rate-limit'
 import { readReferralCode, clearReferralCode, normalizeReferralCode } from '@/lib/referral'
 import { logAuthEvent, resolveProfileIdByEmail } from '@/lib/auth-audit'
+import { z } from 'zod'
+import {
+  studentLoginConfigured,
+  studentLoginEmail,
+  studentLoginPassword,
+  USERNAME_PATTERN,
+} from '@/lib/student-login'
 
 /** Açık yönlendirme koruması: yalnız kendi sitemiz içindeki yollar. */
 function safeInternalPath(next: string | undefined): string {
@@ -20,8 +27,8 @@ function safeInternalPath(next: string | undefined): string {
 }
 
 /**
- * @param next Girişten sonra gidilecek yol. Öğrenci/veli ekranı (/giris)
- *   `/hosgeldin?giris=uye` verir: alanı olmayan davetli koç kartını görmez.
+ * @param next Girişten sonra gidilecek uygulama içi yol (açık yönlendirme
+ *   korumasından geçer).
  */
 export async function loginAction(email: string, password: string, next?: string) {
   const parsed = loginSchema.safeParse({ email, password })
@@ -67,6 +74,88 @@ export async function loginAction(email: string, password: string, next?: string
   })
 
   redirect(safeInternalPath(next))
+}
+
+// ============================================================
+// TEK GİRİŞ EKRANI
+//
+// Koç, öğrenci ve veli aynı formdan girer; rol sorulmaz. Girdide `@`
+// varsa e-posta + şifre (koç ya da e-postayla katılmış üye), yoksa
+// öğretmenin verdiği kullanıcı adı + PIN. Kullanıcı adı deseni `@`
+// içeremediği için (USERNAME_PATTERN) iki yol çakışmaz.
+// ============================================================
+
+const memberCodeSchema = z.object({
+  username: z.string().trim().toLowerCase().regex(USERNAME_PATTERN, 'Kullanıcı adını kontrol et.'),
+  pin: z.string().trim().regex(/^[0-9]{6}$/, 'PIN 6 haneli olmalı.'),
+})
+
+// Kullanıcı adı yok, PIN yanlış, kilitli, giriş kapalı — hepsi AYNI mesaj:
+// hangisi olduğunu söylemek kullanıcı adlarını numaralandırmaya açardı.
+const MEMBER_GENERIC =
+  'Kullanıcı adı ya da PIN hatalı. Birkaç yanlış denemeden sonra giriş 15 dakika kilitlenir.'
+
+async function memberCodeLogin(username: string, pin: string) {
+  if (!studentLoginConfigured()) return { error: 'Geçerli bir e-posta adresi girin.' }
+  const parsed = memberCodeSchema.safeParse({ username, pin })
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? MEMBER_GENERIC }
+
+  // Uygulama düzeyinde hız sınırı; asıl kilit veritabanında (119).
+  const limit = await checkRateLimit('login', `kod:${parsed.data.username}`)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
+
+  const supabase = await createClient()
+  // Öğrenci ve veli aynı tabloda (138); girişten sonra `/` hesabın
+  // üyeliğine göre panele yönlendiriyor.
+  const { data: ok, error } = await supabase.rpc('verify_member_pin', {
+    p_username: parsed.data.username,
+    p_pin: parsed.data.pin,
+  })
+  if (error || ok !== true) {
+    // Kullanıcı adı KAYDA YAZILMAZ (girilen metin kişisel veri olabilir).
+    await logAuthEvent({ type: 'login.failed', detail: { method: 'pin' } })
+    return { error: MEMBER_GENERIC }
+  }
+
+  const email = studentLoginEmail(parsed.data.username)
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password: studentLoginPassword(parsed.data.username),
+  })
+  if (signInError) return { error: MEMBER_GENERIC }
+
+  await logAuthEvent({
+    type: 'login.success',
+    profileId: await resolveProfileIdByEmail(supabase, email),
+    detail: { method: 'pin' },
+  })
+
+  redirect('/')
+}
+
+export async function unifiedLoginAction(identifier: string, secret: string, next?: string) {
+  const id = identifier.trim()
+  if (!id) return { error: 'E-posta adresini ya da kullanıcı adını yaz.' }
+  if (id.includes('@')) return loginAction(id, secret, next)
+  return memberCodeLogin(id, secret)
+}
+
+/**
+ * "PIN'imi unuttum" — öğretmenin paneline bir istek düşer (143).
+ *
+ * Yanıt HER DURUMDA aynı: kullanıcı adı yoksa da, istek zaten açıksa da.
+ * Aksi halde bu form kullanıcı adlarının varlığını sorgulamaya yarardı.
+ */
+export async function requestPinResetAction(username: string) {
+  const parsed = memberCodeSchema.shape.username.safeParse(username)
+  if (!parsed.success) return { error: 'Kullanıcı adını kontrol et.' }
+
+  const limit = await checkRateLimit('passwordReset', `pin:${parsed.data}`)
+  if (!limit.allowed) return { error: rateLimitMessage(limit.retryAfterSeconds) }
+
+  const supabase = await createClient()
+  await supabase.rpc('request_pin_reset', { p_username: parsed.data })
+  return { success: true as const }
 }
 
 export async function registerAction(

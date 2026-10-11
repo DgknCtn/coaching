@@ -19,6 +19,7 @@ import type { MetricTile } from '@/components/shared/metric-tiles'
 import { StudentsTable, type DashboardRow } from './students-table'
 import { StudentUpdates, type StudentUpdate } from './student-updates'
 import { FollowUpList, type FollowUpStudent } from './follow-up-list'
+import { PinRequestsCard } from './pin-requests-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -413,6 +414,9 @@ export default async function TeacherDashboard() {
         )}
 
       {usage && <QuotaNotice usage={usage} />}
+
+      {/* 143: PIN'ini unutan öğrenci/veli giriş ekranından istek bırakır. */}
+      <PinRequestsCard />
 
       {/* §4'ün dört kartı. "Bu hafta tamamlanan" KALDIRILDI: belge
           "öğrenci bazında anlamlı olmadığı için toplam kart gereksiz"
