@@ -22,6 +22,8 @@ export interface OnboardingState {
   hasTerm: boolean
   hasBook: boolean
   hasStudent: boolean
+  /** Alanda en az bir aktif öğrenci ya da veli hesabı var. */
+  hasMemberLogin: boolean
   hasHomework: boolean
 }
 
@@ -65,10 +67,22 @@ export function OnboardingChecklist({
     {
       title: 'Öğrencinizi ekleyin',
       description:
-        'Öğrenci kaydı hesap değildir; öğrenci kendi panelini görsün isterseniz ayrıca davet gönderirsiniz.',
+        'Öğrenci kaydı hesap değildir; öğrenci kendi panelini görsün isterseniz bir sonraki adımda giriş verirsiniz.',
       href: '/teacher/students/new',
       cta: 'Öğrenci ekle',
       done: state.hasStudent,
+    },
+    // TEK GİRİŞ (143): öğrenciyi ve veliyi "davet etmek" = kullanıcı adı +
+    // PIN vermek. Bu adım olmadan öğrenci ve veli ürünü hiç görmüyor.
+    {
+      title: 'Öğrenciye ve veliye giriş verin',
+      description:
+        'Kullanıcı adı ve 6 haneli PIN oluşturup WhatsApp ile iletin; aynı giriş ekranından girerler.',
+      href: firstStudentId
+        ? `/teacher/students/${firstStudentId}?sekme=veliler`
+        : '/teacher/students',
+      cta: 'Giriş ver',
+      done: state.hasMemberLogin,
     },
     // DÖRDÜNCÜ ADIM ürünün "aha" anı: ilk ödev verilene kadar panel hâlâ
     // boş sayaçlardan ibaret. Liste önceden öğrenci eklenince kayboluyor
@@ -123,7 +137,7 @@ export function OnboardingChecklist({
           const isNext = index === 0
           return (
             <li
-              key={step.href}
+              key={step.title}
               className="flex flex-wrap items-start gap-x-4 gap-y-3 px-5 py-4"
             >
               <span className="mt-0.5 shrink-0">

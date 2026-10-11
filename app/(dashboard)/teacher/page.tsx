@@ -111,7 +111,7 @@ export default async function TeacherDashboard() {
   // çalışıyordu: dashboard açılışı dört ayrı gidiş-dönüş bekliyordu.
   // Yalnız öğrenci listesi RPC'ye bağımlı (aşağıya bakınız); geri kalanın
   // sırayla beklemesi için hiçbir sebep yoktu.
-  const [bookCountRes, homeworkCountRes, checkInRes] =
+  const [bookCountRes, homeworkCountRes, checkInRes, memberCountRes] =
     await Promise.all([
       // Kurulum adımları için: havuzda kaynak var mı? HEAD sayımı, satır
       // gövdesi taşınmaz.
@@ -134,12 +134,21 @@ export default async function TeacherDashboard() {
       // AŞAĞIDAKİ öğrenci listesi okuyor, o yüzden ondan önce bitmeli.
       // (student/page.tsx'te aynı kalıp kullanılıyor.)
       supabase.rpc('ensure_student_check_ins', { p_workspace_id: workspaceId }),
+      // Kurulum adımları için: öğrenciye ya da veliye giriş verilmiş mi?
+      // (kullanıcı adı + PIN ya da e-postayla katılmış aktif üye)
+      supabase
+        .from('workspace_members')
+        .select('profile_id', { count: 'exact', head: true })
+        .eq('workspace_id', workspaceId)
+        .in('role', ['student', 'parent'])
+        .eq('status', 'active'),
     ])
 
   // Kurulum kartının iki girdisi. Sayım düşerse 0 DEĞİL "bilinmiyor":
   // aksi hâlde kart, kitap eklemiş bir öğretmene "kitap ekleyin" derdi.
   const bookCount = countResult(bookCountRes, 'teacher.book_count')
   const homeworkCount = countResult(homeworkCountRes, 'teacher.homework_count')
+  const memberCount = countResult(memberCountRes, 'teacher.member_count')
 
   // RPC'nin sonucu okunmuyor ama arızası GÖRÜNMELİ: bildirim satırları
   // açılmazsa "Durum Bildirimi Bekleyen" sayısı sessizce bayat kalır.
@@ -393,12 +402,13 @@ export default async function TeacherDashboard() {
           Eksik veriyle çizilen kart, kitap ve öğrenci eklemiş bir
           öğretmene "ilk öğrencinizi ekleyin" diyordu. Yardımcı bir kartın
           bir gün görünmemesi, yanlış yönlendirmesinden iyidir. */}
-      {bookCount.ok && homeworkCount.ok && students.ok && (
+      {bookCount.ok && homeworkCount.ok && memberCount.ok && students.ok && (
         <OnboardingChecklist
           state={{
             hasTerm: !!activeTerm,
             hasBook: bookCount.data > 0,
             hasStudent: rows.length > 0,
+            hasMemberLogin: memberCount.data > 0,
             hasHomework: homeworkCount.data > 0,
           }}
           firstStudentId={rows[0]?.student_id ?? null}

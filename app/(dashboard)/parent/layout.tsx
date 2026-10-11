@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { InstallHint } from '@/components/shared/install-hint'
 import { AppSidebar } from '@/components/shared/app-sidebar'
 import { getSidebarCollapsed } from '@/lib/sidebar-prefs'
 import { getParentContext } from '@/lib/workspace'
@@ -37,6 +38,7 @@ export default async function ParentLayout({ children }: { children: React.React
         defaultCollapsed={collapsed}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
+        <InstallHint />
         {children}
       </main>
     </div>
