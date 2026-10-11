@@ -230,7 +230,8 @@ async function gorevler(ayar, o, t) {
 // Varsayılan sekme (Genel Bakış). Sayfa yalnız açık sekmenin verisini
 // çekiyor (lib/student-detail-needs.ts): 1 + 12 paralel sorgu + kitap
 // haritası (lib/book-map.ts), ardından müdahale bölümünün iki sorgusu.
-// Kapsam yükleyicileri (ogrenciKapsamlari) yalnız Kitaplar sekmesinde.
+// Kapsam yükleyicileri (_ogrenciKapsamlari) yalnız Kitaplar sekmesinde; senaryo o
+// sekmeyi gezmediği için şu an çağrılmıyor (bilinçli olarak saklanıyor).
 // ------------------------------------------------------------
 async function kitapHaritasi(ayar, o, t, S, ogrenciId) {
   const h = { headers: o.basliklar }
@@ -293,7 +294,7 @@ async function kitapHaritasi(ayar, o, t, S, ogrenciId) {
   ])
 }
 
-async function ogrenciKapsamlari(ayar, o, t, S, ogrenciId) {
+async function _ogrenciKapsamlari(ayar, o, t, S, ogrenciId) {
   const h = { headers: o.basliklar }
   const ws = `eq.${o.workspaceId}`
   const [m, a] = await Promise.all([
