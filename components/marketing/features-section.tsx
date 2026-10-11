@@ -18,7 +18,8 @@ const roles = [
       // Önceden "Kritik / Dikkat / İyi" yazıyordu; üründe olmayan bir üçlü.
       `Durum ve nedeni: ${Object.values(STATUS_LABEL).join(' / ')}`,
       'Görüşme ve ders takibi',
-      'Veli ve öğrenci davet sistemi',
+      'Finans: öğrenci başına cari hesap, ödemeler ve giderler',
+      'Öğrenciye ve veliye kullanıcı adı + PIN — e-posta gerekmez',
     ],
   },
   {
@@ -33,7 +34,8 @@ const roles = [
       'İşleri günlere kendin dağıt; gün notu ve kişisel ajanda',
       'Tek dokunuşla teslim, öğretmenin notu görünür',
       'Kitap ilerleme çubuğu',
-      'Çoklu kitap desteği',
+      'Telefonda ana ekrana eklenir, uygulama gibi açılır',
+      "PIN'ini unutursa giriş ekranından öğretmenine bildirir",
     ],
   },
   {
@@ -52,7 +54,8 @@ const roles = [
       'Geciken ödevleri panelde görme',
       'Kitap ilerleme takibi',
       'Birden fazla öğrenci desteği',
-      'Davet linki ile kolay kayıt',
+      'Ödeme yaptığını tek dokunuşla bildirme',
+      'Öğretmenin verdiği kullanıcı adı + PIN ile giriş',
     ],
   },
 ]

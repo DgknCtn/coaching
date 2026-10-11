@@ -1,65 +1,68 @@
-import { Check, X } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { BRAND } from '@/lib/brand'
+import { SectionHeading } from './section-heading'
 
-// ÖNCE / SONRA.
+// SORUN → ÇÖZÜM.
 //
 // ============================================================
-// NEDEN LİSTE, NEDEN İKİ SÜTUN
+// NEDEN EŞLEŞTİRİLMİŞ SATIRLAR
 //
-// Ürünün değeri özellik adlarıyla değil, ORTADAN KALKAN İŞLERLE
-// anlaşılıyor. Soldaki maddelerin hepsi öğretmenin bugün gerçekten
-// yaptığı şeyler; sağdakiler ürünün bugün gerçekten yaptıkları.
-// Hiçbir satır gelecekte yapılacak bir şeyi anlatmıyor.
+// Önceden iki ayrı liste vardı ("önce" ve "sonra"); okuyucu hangi
+// cevabın hangi soruna karşılık geldiğini kendisi eşleştirmek zorundaydı.
+// Artık her satır bir acı ve onu kaldıran TEK özellik.
 //
-// İkonlar emoji değil: emoji platformdan platforma farklı çiziliyor ve
-// koyu temada okunurluğu düşüyor.
+// Soldaki maddelerin hepsi öğretmenin bugün gerçekten yaşadığı şeyler;
+// sağdakilerin hepsi ürünün bugün gerçekten yaptıkları. Gelecekte
+// yapılacak bir şey anlatılmıyor.
 // ============================================================
 
-const BEFORE = [
-  "WhatsApp'ta dağılan ödevler",
-  "Excel'de tutulan öğrenci listeleri",
-  'Defterde kitap takibi',
-  '"Hocam ben ne yapacaktım?" mesajları',
-  '"Çocuğum nasıl gidiyor?" soruları',
-  'Kimin geride kaldığını fark edememe',
-]
-
-const AFTER = [
-  'Tüm öğrenciler tek ekranda',
-  'Haftalık Akış ile ödev planı',
-  'Kitap ilerleme takibi',
-  'Öğretmen onaylı ilerleme',
-  'Veli kendi panelinden takip eder',
-  'Geride kalanı nedeniyle birlikte görün',
+const PAIRS: { pain: string; fix: string }[] = [
+  {
+    pain: "Ödevler WhatsApp'ta kayboluyor",
+    fix: 'Ödev öğrencinin panelinde durur; hazır mesajı tek dokunuşla WhatsApp’a kopyalarsınız.',
+  },
+  {
+    pain: '"Hocam ben ne yapacaktım?"',
+    fix: "Öğrenci bu haftanın işini telefonundaki Haftam'da görür ve teslim eder.",
+  },
+  {
+    pain: 'Kimin geride kaldığını geç fark ediyorsunuz',
+    fix: 'Panel geride kalanı nedeniyle gösterir: geciken iş, düşen tempo, bildirimi gelmeyen öğrenci.',
+  },
+  {
+    pain: '"Çocuğum nasıl gidiyor?" mesajları',
+    fix: 'Veli kendi ekranından öğretmenin onayladığı ilerlemeyi görür.',
+  },
+  {
+    pain: "Excel'de öğrenci listesi, defterde kitap takibi",
+    fix: 'Öğrenciler, kitaplar ve sayfa/test ilerlemesi tek yerde.',
+  },
+  {
+    pain: 'Ders ücretleri ve ödemeler ayrı bir defterde',
+    fix: 'Görüşmeler, öğrenci başına cari hesap ve giderler aynı sistemde.',
+  },
 ]
 
 export function BeforeAfterSection() {
   return (
     <section className="px-6 py-20 md:py-28">
-      <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-2">
-        <div className="rounded-xl border bg-muted/30 p-6">
-          <h2 className="text-base font-semibold">{BRAND.name}&apos;den önce</h2>
-          <ul className="mt-4 space-y-2.5">
-            {BEFORE.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                <X aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive-foreground" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="mx-auto max-w-4xl">
+        <SectionHeading
+          eyebrow="Tanıdık geliyor mu?"
+          title={`${BRAND.name} bu işleri sizin yerinize toparlar.`}
+        />
 
-        <div className="rounded-xl border border-primary/30 bg-card p-6">
-          <h2 className="text-base font-semibold">{BRAND.name}&apos;den sonra</h2>
-          <ul className="mt-4 space-y-2.5">
-            {AFTER.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-sm">
-                <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success-foreground" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-12 divide-y overflow-hidden rounded-xl border bg-card">
+          {PAIRS.map((p) => (
+            <li key={p.pain} className="grid gap-2 px-5 py-4 md:grid-cols-[1fr_auto_1.3fr] md:items-center md:gap-4">
+              <p className="text-sm text-muted-foreground line-through decoration-destructive/50">
+                {p.pain}
+              </p>
+              <ArrowRight aria-hidden className="hidden size-4 text-primary md:block" />
+              <p className="text-sm font-medium">{p.fix}</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )

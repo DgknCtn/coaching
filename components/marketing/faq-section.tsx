@@ -6,7 +6,7 @@ import { SectionHeading } from './section-heading'
 // Cevaplar ürünün BUGÜN yaptığı işe göre yazıldı; söz verilen ama
 // yapılmayan bir şey yok.
 
-const FAQS: { q: string; a: string }[] = [
+export const FAQS: { q: string; a: string }[] = [
   // KART SORUSU EN BAŞTA — bilinçli. Kayıtta kart istemek, satın alma
   // kararının önündeki en büyük yeni engel. Listenin dibine koymak,
   // itirazı cevaplamak değil saklamak olurdu.
@@ -16,7 +16,15 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: 'Öğrenci ve velilerim de ücret ödeyecek mi?',
-    a: 'Hayır. Yalnızca öğretmen tarafı ücretlendirilir. Öğrenci ve veli hesapları sınırsız ve ücretsizdir; davet linkiyle katılırlar.',
+    a: 'Hayır. Yalnızca öğretmen tarafı ücretlendirilir. Öğrenci ve veli hesapları sınırsız ve ücretsizdir; onlara verdiğiniz kullanıcı adı ve PIN ile girerler.',
+  },
+  {
+    q: 'Öğrencimin e-posta adresi yok, nasıl girecek?',
+    a: "E-posta gerekmez. Öğrenci sayfasından öğrenciye ve veliye birer kullanıcı adı ve 6 haneli PIN oluşturursunuz; hazır mesajla WhatsApp'tan iletirsiniz. Herkes aynı giriş ekranından girer, rol seçmez.",
+  },
+  {
+    q: 'PIN unutulursa ne oluyor?',
+    a: `Öğrenci ya da veli giriş ekranında "PIN'imi unuttum" deyip kullanıcı adını yazar; isteği panelinizde görürsünüz. Tek tıkla yeni PIN üretirsiniz, eskisi o anda geçersiz olur. Yanlış PIN denemeleri birkaç denemeden sonra hesabı geçici olarak kilitler.`,
   },
   {
     q: 'Kitapları tek tek elle mi gireceğim?',
@@ -53,6 +61,14 @@ const FAQS: { q: string; a: string }[] = [
   {
     q: 'Aboneliği iptal etmem gerekir mi? Param geri döner mi?',
     a: `Lisans otomatik yenilenmediği için iptal edilecek yinelenen bir ödeme yok — yeni bir lisans almadığınız sürece sizden başka tahsilat yapılmaz. Ayrıca her lisans alımı için ${REFUND_DAYS} gün koşulsuz iade hakkınız var.`,
+  },
+  {
+    q: 'Ders ücretlerini ve ödemeleri de takip edebilir miyim?',
+    a: 'Evet. Görüşmeleri ve dersleri kaydedersiniz; her öğrencinin cari hesabında borç ve ödemeler görünür, giderlerinizi de aynı yerde tutarsınız. Veli ödeme yaptığını kendi ekranından tek dokunuşla bildirebilir.',
+  },
+  {
+    q: 'Hesabımı ve verilerimi silebilir miyim?',
+    a: 'Evet. Ayarlar > Veri bölümünden çalışma alanınızın ya da tek bir öğrencinin silinmesini talep edebilirsiniz. Kitap havuzunuzu dilediğiniz zaman CSV veya JSON olarak dışa aktarabilirsiniz.',
   },
   {
     q: 'Öğrenciler telefondan kullanabilir mi?',

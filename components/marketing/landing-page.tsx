@@ -1,10 +1,11 @@
 import { Navbar } from './navbar'
 import { HeroSection } from './hero-section'
-import { AudienceSection } from './audience-section'
 import { BeforeAfterSection } from './before-after-section'
 import { FeaturesSection } from './features-section'
 import { ApprovalSection } from './approval-section'
 import { ParentSection } from './parent-section'
+import { FounderSection } from './founder-section'
+import { TestimonialsSection } from './testimonials-section'
 import { HowItWorks } from './how-it-works'
 import { CommitmentsSection } from './commitments-section'
 import { PricingSection } from './pricing-section'
@@ -52,6 +53,15 @@ import { StickyCta } from './sticky-cta'
 //
 // 8. StickyCta yalnız mobilde: uzun sayfada, ikna olmuş okuyucunun
 //    basacağı bir şey her zaman ekranda olsun.
+//
+// 11 EKİM 2026 (ikna eden sürüm):
+// 9. AudienceSection SAYFADAN ÇIKTI (dosya duruyor): kitle çipleri hero'da;
+//    "bu benim için mi" sorusu ilk ekranda cevaplanıyor (madde 3'ün yerine).
+// 10. FounderSection veli bölümünden SONRA: ne yaptığını gören okuyucu
+//    şimdi "bunu kim, neden yaptı" diye sorar. Bir öğretmenin kendi
+//    öğrencileri için yaptığı ürün, sayfadaki en güçlü güven kanıtı.
+// 11. TestimonialsSection hemen ardından; yalnız gerçek ve izinli sözler
+//    (lib/testimonials.ts), liste boşken hiç çizilmez.
 // ============================================================
 
 export function LandingPage() {
@@ -59,11 +69,12 @@ export function LandingPage() {
     <div className="min-h-screen">
       <Navbar />
       <HeroSection />
-      <AudienceSection />
       <BeforeAfterSection />
       <FeaturesSection />
       <ApprovalSection />
       <ParentSection />
+      <FounderSection />
+      <TestimonialsSection />
       <HowItWorks />
       <CommitmentsSection />
       <PricingSection />

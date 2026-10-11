@@ -2,19 +2,19 @@ import { SectionHeading } from './section-heading'
 
 const steps = [
   {
-    title: 'Öğrencilerinizi ve kitaplarınızı ekleyin',
+    title: 'Kaydolun, öğrencilerinizi ve kitaplarınızı ekleyin',
     description:
-      'Öğrenci ve velilere davet linki gönderin. Kitabı içindekiler listesini yapıştırarak aktarın.',
+      'Kitabın içindekiler listesini yapıştırın; bölümler ve testler kendiliğinden çıkar.',
   },
   {
-    title: 'Haftayı açın, ödevi verin',
+    title: 'Öğrenciye ve veliye giriş verin',
     description:
-      "Kitap Haritası'ndan test, sayfa veya video seçin. Ödev haftalık akışa bağlanır, WhatsApp metni hazır gelir.",
+      "Her birine kullanıcı adı ve 6 haneli PIN oluşturun, hazır mesajla WhatsApp'tan iletin. E-posta gerekmez.",
   },
   {
-    title: 'Teslimleri onaylayın',
+    title: 'Ödevi verin, teslimi onaylayın',
     description:
-      'Kim teslim etti, kim gecikti, kim geride? Onayladığınız iş ilerlemeye sayılır; veli aynı veriyi görür.',
+      "Kitap Haritası'ndan test, sayfa veya video seçin. Öğrenci telefonundan teslim eder; onayladığınız iş ilerlemeye sayılır ve veli aynı veriyi görür.",
   },
 ]
 
@@ -28,7 +28,7 @@ export function HowItWorks() {
         <SectionHeading
           eyebrow="Nasıl çalışır"
           title="3 adımda başlayın"
-          description="Kurulum dakikalar sürüyor; ilk ödevinizi aynı gün verebilirsiniz."
+          description="İlk ödevinizi kaydolduğunuz gün verebilirsiniz."
         />
 
         <ol className="mt-14 grid gap-4 md:grid-cols-3">

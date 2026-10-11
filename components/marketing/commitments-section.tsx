@@ -39,7 +39,7 @@ const COMMITMENTS = [
   },
   {
     title: 'Veriniz size ait',
-    body: 'Her çalışma alanı veritabanı düzeyinde yalıtılmıştır. Verinizi dışa aktarabilir, silinmesini talep edebilirsiniz; reklam için kullanılmaz, satılmaz.',
+    body: 'Her çalışma alanı veritabanı düzeyinde yalıtılmıştır. Kitap havuzunuzu dışa aktarabilir, verinizin silinmesini talep edebilirsiniz; reklam için kullanılmaz, satılmaz.',
   },
   // İPTAL EDİLECEK BİR ŞEY YOK — VE BU DAHA GÜÇLÜ BİR VAAT (068).
   //

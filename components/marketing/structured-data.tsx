@@ -1,4 +1,5 @@
 import { BRAND, siteUrl, absoluteUrl } from '@/lib/brand'
+import { FAQS } from './faq-section'
 import { BASE_PER_STUDENT_MONTH_KURUS } from '@/lib/billing/pricing'
 
 /**
@@ -45,6 +46,17 @@ export function StructuredData() {
         publisher: { '@id': `${siteUrl()}/#organization` },
         offers: OFFER,
       },
+      // SSS — sayfadaki listenin AYNISI (faq-section.tsx). Arama sonucunda
+      // soru-cevap olarak görünebilir; ayrı bir kopya tutulmuyor.
+      {
+        '@type': 'FAQPage',
+        '@id': `${siteUrl()}/#faq`,
+        mainEntity: FAQS.map((f) => ({
+          '@type': 'Question',
+          name: f.q,
+          acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+      },
     ],
   }
 
@@ -54,7 +66,9 @@ export function StructuredData() {
       // İçerik tamamen sunucuda, sabit verilerden üretiliyor; kullanıcı
       // girdisi yok. JSON.stringify ayrıca `<` kaçışını gerektirmeyen
       // güvenli bir çıktı veriyor.
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }}
+      // `<` yine de kaçırılır: SSS metni ileride `</script>` içerse bile
+      // betik bloğundan çıkılamaz.
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(graph).replace(/</g, '\\u003c') }}
     />
   )
 }

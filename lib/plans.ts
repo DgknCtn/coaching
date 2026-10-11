@@ -100,6 +100,8 @@ export const PLAN_INCLUDED = [
   'Haftalık Akış, ödev takibi ve öğretmen onayı',
   "Öğrencinin kendi haftası: Haftam'da günlük plan ve teslim",
   'Öğrenci ve veli panelleri (ücretsiz, sınırsız hesap)',
+  'E-postasız giriş: öğrenciye ve veliye kullanıcı adı + PIN',
+  'Görüşme ve ders takibi, öğrenci cari hesabı ve giderler',
   'Geride kalan öğrencileri siz fark etmeden sistem fark etsin.',
   'Kitabın hangi sayfasında kaldığınızı otomatik takip edin.',
   "Ödevi WhatsApp'tan saniyeler içinde gönderin.",
