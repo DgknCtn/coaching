@@ -40,7 +40,7 @@ export const BRAND = {
   phoneDisplay: null as string | null,
 
   /** Instagram kullanıcı adı, '@' olmadan. null: hesap yok, gösterilmez. */
-  instagram: null as string | null,
+  instagram: 'matematiginmuhendisi' as string | null,
 
   /** Telif satırı için başlangıç yılı. */
   since: 2026,
