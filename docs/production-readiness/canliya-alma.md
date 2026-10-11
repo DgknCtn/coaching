@@ -2,7 +2,7 @@
 
 Son güncelleme: 11 Ekim 2026 · Canlı adres: https://www.matematiginmuhendisi.com
 
-İşaretler: ✅ tamam · ⏳ bekliyor · ⚠️ açık sorun · 🧑 kullanıcı · 🤖 kod
+İşaretler: ✅ tamam · ⏳ bekliyor · 🧑 kullanıcı · 🤖 kod
 
 ## Kararlar (11 Ekim 2026)
 - **Hedef:** ücretsiz pilot. 3-5 koç, ödeme yok, 2-4 hafta. Ücretli açılış ayrı bir kapı (Faz 7).
@@ -12,14 +12,12 @@ Son güncelleme: 11 Ekim 2026 · Canlı adres: https://www.matematiginmuhendisi.
 - **Deneme süresi** 3 gün kalıyor. Pilot koçların alanı yönetim panelinden süresiz açılacak.
 - **Giriş:** tek ekran (`/login`). Google kaldırıldı. Öğrenci ve veli, öğretmenin verdiği kullanıcı adı + PIN ile giriyor.
 
-## ⚠️ Şu anki açık sorun
-- **Vercel yeniden yayını hata veriyor** (commit `2976031`).
-  - Gelen log kesik; hatanın satırı görülmedi.
-  - En olası sebep: `NEXT_PUBLIC_APP_URL` değeri geçerli bir adres değil. Doğru değer `https://www.matematiginmuhendisi.com`: başta `https://`, sonda `/` yok, boşluk yok.
-- **Etkisi:** canlı sürüm hâlâ eski adresi kullanıyor.
-  - Canonical ve sitemap `coaching-tan-three.vercel.app` gösteriyor.
-  - "Şifremi unuttum" bağlantısı yanlış adrese gidebilir.
-- **Sonra:** yayın düzelince canonical ve sitemap'in yeni adrese geçtiği kontrol edilecek. Şifre sıfırlama e-postası ve ilk PIN verme kullanıcı tarafından denenecek.
+## Çözülen: Vercel yayını ve uygulama adresi (11 Ekim 2026)
+Yayın hatası kullanıcı tarafından giderildi. Canonical, og:url, sitemap ve robots artık
+`https://www.matematiginmuhendisi.com`; sağlık kontrolü "ok".
+- ⏳🧑 Kalan denemeler: "Şifremi unuttum" e-postası gerçek adrese gelip bağlantı www'de
+  yeni şifre ekranını açıyor mu; bir öğrenciye İLK kez PIN verme hata vermeden çalışıyor mu
+  ("Confirm email" kapalı olduğunun kanıtı).
 
 ## Faz 0 — Hesaplar ve kararlar
 - ⏳🧑 Pilot koç listesi (3-5 koç) ve başarı ölçütü.
@@ -29,8 +27,8 @@ Son güncelleme: 11 Ekim 2026 · Canlı adres: https://www.matematiginmuhendisi.
 
 ## Faz 1 — Altyapı
 - ✅ Alan adı Vercel'e bağlandı.
-- ⚠️🧑 Vercel ortam değişkenleri:
-  - `NEXT_PUBLIC_APP_URL` düzeltilip yeniden yayınlanmalı (yukarıdaki sorun).
+- ✅🧑 Vercel ortam değişkenleri:
+  - `NEXT_PUBLIC_APP_URL` = `https://www.matematiginmuhendisi.com` (doğrulandı).
   - `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` silinmeli.
   - `SMTP_*` ve `EMAIL_FROM` tanımlı olmalı.
 - ✅🧑 Supabase Auth (kullanıcı yaptı):
