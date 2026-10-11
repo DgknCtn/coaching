@@ -151,8 +151,44 @@ async function createCodeAccount(
   return { success: true, username, pin, created: true }
 }
 
+const CONSENT_REQUIRED =
+  'Önce velinin onayını aldığınızı işaretleyin: öğrenci reşit değilse verileri veli onayıyla işlenir.'
+
+/**
+ * VELİ ONAYI TEYİDİ (144). Bir öğrenci için İLK giriş bilgisi verilirken
+ * (öğrenciye ya da veliye) koç, velinin onayını aldığını teyit eder; teyit
+ * öğrenci satırına bir kez yazılır. PIN yenileme bu kapıdan geçmez.
+ */
+async function ensureGuardianConsent(
+  ctx: TeacherCtx,
+  studentId: string,
+  consent: boolean
+): Promise<{ error: string } | null> {
+  const { data, error } = await ctx.supabase
+    .from('students')
+    .select('guardian_consent_at')
+    .eq('id', studentId)
+    .eq('workspace_id', ctx.workspaceId)
+    .maybeSingle()
+  if (error) return { error: dbErrorToTr(error.message) }
+  if (!data) return { error: 'Öğrenci bulunamadı.' }
+  if ((data as { guardian_consent_at: string | null }).guardian_consent_at) return null
+  if (!consent) return { error: CONSENT_REQUIRED }
+
+  const { error: updateError } = await ctx.supabase
+    .from('students')
+    .update({
+      guardian_consent_at: new Date().toISOString(),
+      guardian_consent_by_profile_id: ctx.profile.id,
+    })
+    .eq('id', studentId)
+    .eq('workspace_id', ctx.workspaceId)
+  if (updateError) return { error: dbErrorToTr(updateError.message) }
+  return null
+}
+
 /** Öğrenci: ilk oluşturma ya da PIN yenileme. */
-export async function issueStudentLoginAction(studentId: string): Promise<Result> {
+export async function issueStudentLoginAction(studentId: string, consent = false): Promise<Result> {
   const sid = uuidSchema.safeParse(studentId)
   if (!sid.success) return { error: firstIssue(sid.error) }
   if (!studentLoginConfigured()) return { error: NOT_CONFIGURED }
@@ -173,6 +209,9 @@ export async function issueStudentLoginAction(studentId: string): Promise<Result
   const existing = logins.rows.find((r) => r.role === 'student' && r.has_code)
 
   if (existing) return renew(ctx, sid.data, existing)
+
+  const consentError = await ensureGuardianConsent(ctx, sid.data, consent)
+  if (consentError) return consentError
 
   // E-posta/Google ile hesabı olan öğrenciye ikinci bir hesap açılmaz;
   // AYNI hesabın giriş yolu kullanıcı adı + PIN'e çevrilir.
@@ -196,7 +235,11 @@ const parentNameSchema = z
   .max(100, 'Ad en fazla 100 karakter olabilir.')
 
 /** Veli: yeni bir veli hesabı + kullanıcı adı + PIN (138). */
-export async function issueParentLoginAction(studentId: string, parentName: string): Promise<Result> {
+export async function issueParentLoginAction(
+  studentId: string,
+  parentName: string,
+  consent = false
+): Promise<Result> {
   const sid = uuidSchema.safeParse(studentId)
   if (!sid.success) return { error: firstIssue(sid.error) }
   const name = parentNameSchema.safeParse(parentName)
@@ -211,6 +254,9 @@ export async function issueParentLoginAction(studentId: string, parentName: stri
     .eq('workspace_id', ctx.workspaceId)
     .maybeSingle()
   if (!student) return { error: 'Öğrenci bulunamadı.' }
+
+  const consentError = await ensureGuardianConsent(ctx, sid.data, consent)
+  if (consentError) return consentError
 
   return createCodeAccount(ctx, { role: 'parent', studentId: sid.data, fullName: name.data })
 }
@@ -304,7 +350,11 @@ async function convertToCode(ctx: TeacherCtx, studentId: string, row: MemberLogi
 }
 
 /** E-posta/Google ile katılmış veli (ya da öğrenci) için kullanıcı adı + PIN. */
-export async function convertMemberLoginAction(studentId: string, profileId: string): Promise<Result> {
+export async function convertMemberLoginAction(
+  studentId: string,
+  profileId: string,
+  consent = false
+): Promise<Result> {
   const sid = uuidSchema.safeParse(studentId)
   const pid = uuidSchema.safeParse(profileId)
   if (!sid.success) return { error: firstIssue(sid.error) }
@@ -319,6 +369,8 @@ export async function convertMemberLoginAction(studentId: string, profileId: str
   const row = logins.rows.find((r) => r.profile_id === pid.data)
   if (!row) return { error: 'Hesap bu öğrenciye bağlı değil.' }
   if (row.has_code) return renew(ctx, sid.data, row)
+  const consentError = await ensureGuardianConsent(ctx, sid.data, consent)
+  if (consentError) return consentError
   return convertToCode(ctx, sid.data, row)
 }
 

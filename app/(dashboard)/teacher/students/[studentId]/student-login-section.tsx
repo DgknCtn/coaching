@@ -25,9 +25,10 @@ export async function StudentLoginSection({
   if (!studentLoginConfigured()) return null
 
   const supabase = await createClient()
-  const [logins, requests] = await Promise.all([
+  const [logins, requests, consentRes] = await Promise.all([
     supabase.rpc('student_member_logins', { p_student_id: studentId }),
     supabase.rpc('pending_pin_reset_requests'),
+    supabase.from('students').select('guardian_consent_at').eq('id', studentId).maybeSingle(),
   ])
   // Migration uygulanmadıysa ya da okuma düştüyse kart gösterilmez; bu
   // bölüm isteğe bağlı bir giriş yolu, eksikliği başka bir şeyi yanıltmaz.
@@ -35,6 +36,11 @@ export async function StudentLoginSection({
   const rows = (logins.data ?? []) as MemberLoginRow[]
   // İstek listesi düşerse rozetler yok sayılır; kart yine çizilir.
   const requested = ((requests.data ?? []) as { profile_id: string }[]).map((r) => r.profile_id)
+  // Onay okunamazsa kutu gösterilir (güvenli taraf): sunucu zaten kayıtlı
+  // teyidi tanır ve tekrar sormaz (ensureGuardianConsent).
+  const consentGiven = Boolean(
+    (consentRes.data as { guardian_consent_at: string | null } | null)?.guardian_consent_at
+  )
 
   return (
     <Section
@@ -47,6 +53,7 @@ export async function StudentLoginSection({
         student={rows.find((r) => r.role === 'student') ?? null}
         parents={rows.filter((r) => r.role === 'parent')}
         requested={requested}
+        consentGiven={consentGiven}
       />
     </Section>
   )

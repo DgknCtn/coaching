@@ -24,6 +24,7 @@ export function StudentLoginControls({
   student,
   parents,
   requested,
+  consentGiven,
 }: {
   studentId: string
   studentName: string
@@ -32,9 +33,30 @@ export function StudentLoginControls({
   parents: MemberLoginRow[]
   /** "PIN'imi unuttum" isteği açık olan hesaplar (143). */
   requested: string[]
+  /** Veli onayı daha önce teyit edildi mi (144). */
+  consentGiven: boolean
 }) {
+  // İlk giriş bilgisi verilene kadar kutu görünür; sunucu teyidi öğrenci
+  // satırına yazınca sayfa yenilenir ve kutu bir daha çıkmaz.
+  const [consent, setConsent] = useState(false)
+
   return (
     <div className="space-y-4">
+      {!consentGiven && (
+        <label className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-subtle px-4 py-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 shrink-0 accent-primary"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">Veli onayı:</span> Velinin, öğrencinin çalışma verilerinin
+            İZ&apos;de işlenmesine onay verdiğini teyit ediyorum. (Bir kez istenir; kayıt altına alınır.)
+          </span>
+        </label>
+      )}
+
       <div className="space-y-2">
         <h3 className="text-sm font-semibold">Öğrenci</h3>
         <MemberCodeCard
@@ -44,7 +66,7 @@ export function StudentLoginControls({
           requested={!!student && requested.includes(student.profile_id)}
           // Hesap yoksa yeni hesap açılır; e-posta/Google hesabı varsa
           // AYNI hesap kullanıcı adı + PIN'e çevrilir.
-          onIssue={() => issueStudentLoginAction(studentId)}
+          onIssue={() => issueStudentLoginAction(studentId, consent)}
           issueLabel="Kullanıcı adı + PIN ver"
         />
       </div>
@@ -62,11 +84,11 @@ export function StudentLoginControls({
             row={p}
             requested={requested.includes(p.profile_id)}
             showName
-            onIssue={() => convertMemberLoginAction(studentId, p.profile_id)}
+            onIssue={() => convertMemberLoginAction(studentId, p.profile_id, consent)}
             issueLabel="Kullanıcı adı + PIN ver"
           />
         ))}
-        <NewParentForm studentId={studentId} />
+        <NewParentForm studentId={studentId} consent={consent} />
       </div>
     </div>
   )
@@ -217,7 +239,7 @@ function MemberCodeCard({
   )
 }
 
-function NewParentForm({ studentId }: { studentId: string }) {
+function NewParentForm({ studentId, consent }: { studentId: string; consent: boolean }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [pending, startTransition] = useTransition()
@@ -226,7 +248,7 @@ function NewParentForm({ studentId }: { studentId: string }) {
   function submit(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
-      const res = await issueParentLoginAction(studentId, name)
+      const res = await issueParentLoginAction(studentId, name, consent)
       if ('error' in res) {
         toast.error(res.error)
         return
