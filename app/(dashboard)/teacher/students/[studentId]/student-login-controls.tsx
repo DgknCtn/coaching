@@ -197,7 +197,7 @@ function MemberCodeCard({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border bg-card p-4">
+    <div data-testid={`login-card-${row?.role ?? 'student'}`} className="space-y-3 rounded-lg border bg-card p-4">
       {hasCode && row && (
         <p className="flex flex-wrap items-center gap-2 text-sm">
           <KeyRound className="size-4 text-muted-foreground" aria-hidden />
