@@ -3,6 +3,16 @@ import { defineConfig, devices } from '@playwright/test'
 // Uçtan uca smoke testleri. Kimlik doğrulama/DB gerektirmeyen herkese açık
 // rotaları hedefler (landing, /demo, /api/health). Çalıştırmadan önce bir
 // kez `npx playwright install chromium` gerekir.
+//
+// CANLI AKIŞLAR (e2e/giris-akisi.spec.ts) gerçek Supabase ister: yerelde
+// `.env.local` okunur ve sunucuya aktarılır. Dosya yoksa (CI) sahte
+// değerler kalır ve canlı spec kendiliğinden atlanır.
+try {
+  process.loadEnvFile('.env.local')
+} catch {
+  // .env.local yok: yalnız herkese açık smoke testleri koşar.
+}
+
 const PORT = 3100
 const baseURL = `http://localhost:${PORT}`
 

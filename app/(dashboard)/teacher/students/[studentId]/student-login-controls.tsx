@@ -114,10 +114,10 @@ function IssuedBox({ issued }: { issued: Issued }) {
   return (
     <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm">
       <p>
-        Kullanıcı adı: <span className="font-mono font-semibold">{issued.username}</span>
+        Kullanıcı adı: <span data-testid="issued-username" className="font-mono font-semibold">{issued.username}</span>
       </p>
       <p>
-        PIN: <span className="font-mono text-lg font-semibold tracking-widest">{issued.pin}</span>
+        PIN: <span data-testid="issued-pin" className="font-mono text-lg font-semibold tracking-widest">{issued.pin}</span>
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
         PIN yalnız şimdi görünür. Kişiye iletin; unutursa yeni PIN üretin.
