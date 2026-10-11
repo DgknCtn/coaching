@@ -76,7 +76,25 @@ export interface ServiceLike {
   startDate: string
   /** Son Teslimi ana temas saatinden geriye çeken opsiyonel kaydırma. */
   submissionOffsetMinutes?: number
-  status: 'active' | 'passive'
+  status: 'active' | 'passive' | 'archived'
+  /**
+   * Ritim (M1.0-02 §3, migration 139). Verilmezse 'haftada_1'.
+   * 'esnek' hizmet takvim üretmez; oturumları elle eklenir.
+   */
+  cadence?: ServiceCadence
+  /** Haftada 2 ritminde ikinci gün/saat. */
+  weekday2?: Weekday | null
+  startTime2?: string | null
+  /** Üç nokta "Ana temas yap" ile elle seçilmiş ana temas. */
+  isMainContact?: boolean
+}
+
+export type ServiceCadence = 'haftada_1' | 'haftada_2' | 'esnek'
+
+export const CADENCE_LABEL: Record<ServiceCadence, string> = {
+  haftada_1: 'Haftada 1',
+  haftada_2: 'Haftada 2',
+  esnek: 'Esnek',
 }
 
 /**
@@ -128,6 +146,11 @@ export function contactKindOf(service: ServiceLike): ContactKind {
 export function deriveMainContact(services: ServiceLike[]): ServiceLike | null {
   const active = services.filter((s) => s.status === 'active')
   if (active.length === 0) return null
+
+  // M1.0-02 §3 üç nokta "Ana temas yap": öğretmen elle seçtiyse o kazanır.
+  // Seçim kaldırılınca aşağıdaki otomatik öncelik geri gelir.
+  const pinned = active.find((s) => s.isMainContact)
+  if (pinned) return pinned
 
   return active.reduce((best, candidate) => {
     const bestRank = CONTACT_PRIORITY[contactKindOf(best)]
@@ -237,19 +260,33 @@ export function occurrencesInMonth(
 ): Date[] {
   if (service.status !== 'active') return []
 
+  // Esnek ritim takvim üretmez (140: generate_service_sessions ile aynı).
+  const cadence = service.cadence ?? 'haftada_1'
+  if (cadence === 'esnek') return []
+
+  const slots: { weekday: Weekday; startTime: string }[] = [
+    { weekday: service.weekday, startTime: service.startTime },
+  ]
+  if (cadence === 'haftada_2' && service.weekday2 && service.startTime2) {
+    slots.push({ weekday: service.weekday2, startTime: service.startTime2 })
+  }
+
   const [sy, sm, sd] = parseDate(service.startDate)
-  const { hour, minute } = parseTime(service.startTime)
   const out: Date[] = []
 
   for (let day = 1; day <= daysInMonth(year, month); day++) {
-    if (isoWeekday(year, month, day) !== service.weekday) continue
     // Başlangıç gününün kendisi dahildir.
     if (year < sy) continue
     if (year === sy && (month < sm || (month === sm && day < sd))) continue
-    out.push(zonedWallTimeToInstant(year, month, day, hour, minute))
+    const wd = isoWeekday(year, month, day)
+    for (const slot of slots) {
+      if (slot.weekday !== wd) continue
+      const { hour, minute } = parseTime(slot.startTime)
+      out.push(zonedWallTimeToInstant(year, month, day, hour, minute))
+    }
   }
 
-  return out
+  return out.sort((a, b) => a.getTime() - b.getTime())
 }
 
 /**
@@ -334,12 +371,14 @@ export function nextContact(
 // OTURUM DURUMLARI
 // ============================================================
 
-export type SessionStatus = 'planlandi' | 'yapildi' | 'ertelendi' | 'iptal' | 'yapilmadi'
+// M1.0-02 §4 (migration 140): 'ertelendi' artık bir durum DEĞİL. Tarih
+// değişikliği plan geçmişinde (`session_plan_history`) ve güncel planda
+// (`current_planned_at`) tutulur; oturumun sonucu ayrıca kaydedilir.
+export type SessionStatus = 'planlandi' | 'yapildi' | 'iptal' | 'yapilmadi'
 
 export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   planlandi: 'Planlandı',
   yapildi: 'Yapıldı',
-  ertelendi: 'Ertelendi',
   iptal: 'İptal Edildi',
   yapilmadi: 'Yapılmadı',
 }
@@ -355,7 +394,6 @@ export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
 export const SESSION_STATUS_HINT: Record<SessionStatus, string> = {
   planlandi: 'Zamanı gelmemiş veya henüz sonuçlandırılmamış oturum.',
   yapildi: 'Hizmet gerçekleşti.',
-  ertelendi: 'Eski tarih korunur, yeni tarih aynı kayda bağlıdır.',
   iptal: 'Görüşme öncesinde iptal kararı kesinleşti.',
   yapilmadi: 'Planlanan hizmet gerçekleşmedi; telafi kararı bekliyor.',
 }
@@ -366,7 +404,6 @@ export const SESSION_STATUS_VARIANT: Record<
 > = {
   planlandi: 'neutral',
   yapildi: 'success',
-  ertelendi: 'info',
   iptal: 'neutral',
   yapilmadi: 'destructive',
 }
@@ -393,16 +430,17 @@ export function isAwaitingOutcome(
 /**
  * Oturumun GEÇERLİ zamanı.
  *
- * Ertelenen oturumda gerçek olan yeni tarihtir; `planned_at` yalnız ilk
- * taahhüdün kaydı olarak durur. Sıralama ve "geçti mi" kararları bu
+ * Yapılmışsa gerçekleşme anı, değilse GÜNCEL plan; `planned_at` yalnız
+ * ilk taahhüdün kaydı olarak durur. Sıralama ve "geçti mi" kararları bu
  * fonksiyondan geçmeli — iki ekran iki farklı kolona bakarsa aynı oturum
  * birinde gecikmiş, diğerinde değil görünür.
  */
 export function effectiveSessionTime(session: {
   plannedAt: string | Date
+  currentPlannedAt?: string | Date | null
   actualAt?: string | Date | null
 }): Date {
-  const value = session.actualAt ?? session.plannedAt
+  const value = session.actualAt ?? session.currentPlannedAt ?? session.plannedAt
   return value instanceof Date ? value : new Date(value)
 }
 
@@ -509,9 +547,21 @@ export function formatSessionLong(value: string | Date | null | undefined): stri
   return sessionLongFormatter.format(d)
 }
 
-/** `Çarşamba 20:00 · 120 dk` — hizmetin haftalık düzeni. */
+/**
+ * `Çarşamba 20:00 · 120 dk` — hizmetin haftalık düzeni.
+ *
+ * Haftada 2: `Salı 20:00 + Cuma 21:00 · 30 dk`. Esnek: `Esnek · 120 dk`
+ * (varsayılan gün/saat yalnız planlama kolaylığıdır, gösterilmez).
+ */
 export function formatServiceSchedule(service: ServiceLike): string {
-  return `${WEEKDAY_LABEL[service.weekday]} ${service.startTime} · ${service.plannedDurationMinutes} dk`
+  const cadence = service.cadence ?? 'haftada_1'
+  const time = (t: string) => t.slice(0, 5)
+  if (cadence === 'esnek') return `Esnek · ${service.plannedDurationMinutes} dk`
+  const first = `${WEEKDAY_LABEL[service.weekday]} ${time(service.startTime)}`
+  if (cadence === 'haftada_2' && service.weekday2 && service.startTime2) {
+    return `${first} + ${WEEKDAY_LABEL[service.weekday2]} ${time(service.startTime2)} · ${service.plannedDurationMinutes} dk`
+  }
+  return `${first} · ${service.plannedDurationMinutes} dk`
 }
 
 /** `Online · Grup · Ders` — hizmetin üç ekseni tek satırda. */
@@ -521,4 +571,20 @@ export function formatServiceAxes(service: ServiceLike): string {
     service.participation === 'grup' ? 'Grup' : 'Birebir',
     service.kind === 'kocluk' ? 'Koçluk' : 'Ders',
   ].join(' · ')
+}
+
+// ============================================================
+// FİNANS İLİŞKİSİ (M1.0-02 §1 "DEĞİŞTİR")
+// ============================================================
+// DB değerleri 074'ten beri aynı; yalnız dil sadeleşti. Anlamı
+// öğrencinin ücretlendirme modeline göre okunur (141 sync_session_accrual):
+//   Modele dahil → Aylık Sabit'te ücret yok, Ders Başı'nda birim × fiyat
+//   Oturum başı  → her gerçekleşen oturum ayrıca ücretlenir
+//   Takip dışı   → finans kaydı oluşmaz
+export type FinanceLink = 'aylik_paket' | 'ders_basi' | 'haric'
+
+export const FINANCE_LINK_LABEL: Record<FinanceLink, string> = {
+  aylik_paket: 'Modele dahil',
+  ders_basi: 'Oturum başı',
+  haric: 'Takip dışı',
 }

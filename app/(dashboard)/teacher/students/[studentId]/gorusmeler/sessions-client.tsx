@@ -810,9 +810,7 @@ export function SessionsClient({
                                   {/* İLK TAAHHÜT GÖRÜNÜR KALIR (§7.A):
                                       ertelenmiş oturumda eski tarih
                                       silinmez, notta yazar. */}
-                                  {session.actualAt && session.status === 'ertelendi'
-                                    ? `İlk plan: ${formatSessionTime(session.plannedAt)}`
-                                    : (session.note ?? '—')}
+                                  {session.note ?? '—'}
                                 </td>
                               </tr>
                             )
