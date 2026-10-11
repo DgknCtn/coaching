@@ -389,7 +389,7 @@ function FinanceModelCard({
           <p className="mt-1 text-sm text-foreground">{summary}</p>
           {upcoming && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatDate(upcoming.validFrom)}'den itibaren: {FINANCE_MODEL_LABEL[upcoming.model]}
+              {`${formatDate(upcoming.validFrom)}'den itibaren: ${FINANCE_MODEL_LABEL[upcoming.model]}`}
             </p>
           )}
         </div>
