@@ -3,6 +3,7 @@ import { BRAND, siteUrl } from '@/lib/brand'
 import { ThemeProvider } from '@/components/shared/theme-provider'
 import { Inter } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
+import { WebAnalytics } from '@/components/shared/web-analytics'
 import './globals.css'
 
 // latin-ext, Türkçe karakterler (ğ ş ı İ ç ö ü) için zorunlu.
@@ -104,6 +105,7 @@ export default function RootLayout({
           {children}
           <Toaster richColors position="top-right" />
         </ThemeProvider>
+        <WebAnalytics />
       </body>
     </html>
   )
