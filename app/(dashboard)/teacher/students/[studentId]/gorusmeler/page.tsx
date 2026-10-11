@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { CalendarCheck, CalendarClock, Clock, Wallet } from 'lucide-react'
-import { monthPaymentLabel, monthPaymentState } from '@/lib/finance'
+import { formatKurus } from '@/lib/billing/pricing'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
@@ -16,13 +16,20 @@ import {
   weekMonths,
   weekRange,
 } from '@/lib/iso-week'
-import { monthLabel as ledgerMonthLabel } from '@/lib/finance-ledger'
+import {
+  PERIOD_STATE_LABEL,
+  monthLabel as ledgerMonthLabel,
+  periodSummary,
+  type PeriodSummary,
+} from '@/lib/finance-ledger'
+import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../../../finans/data'
 import { SessionsClient, type ArchiveMonth, type MonthSummary } from './sessions-client'
 import {
   SESSION_SELECT,
   SERVICE_SELECT,
   mapServiceRow,
   mapSessionRow,
+  findUnpricedSessions,
   monthsToGenerate,
   serviceInfo,
 } from './load'
@@ -93,7 +100,8 @@ export default async function StudentSessionsPage({
     { data: groupRows },
     { data: monthCounters },
     { data: archiveRows },
-    { data: monthFinanceRow },
+    accrualRes,
+    paymentRes,
     { data: seasonRows },
     { data: noticeRow },
     modelsRes,
@@ -133,13 +141,15 @@ export default async function StudentSessionsPage({
       .eq('workspace_id', workspaceId)
       .order('ay', { ascending: false })
       .limit(60),
-    supabase
-      .from('student_month_finance_view')
-      .select('accrued_kurus, collected_kurus, balance_kurus')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .eq('month_start', summaryMonthStart)
-      .maybeSingle(),
+    // ÖDEME DURUMU ÖĞRENCİ CARİ HESABINDAN (M1.0-02 §7): devreden borç ve
+    // fazla ödeme dahil — Finans detayıyla aynı fonksiyon (periodSummary).
+    // Finans yalnız sahibe açık; değilse hiç sorulmaz.
+    isOwner
+      ? supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('student_id', studentId).eq('workspace_id', workspaceId)
+      : Promise.resolve({ data: null }),
+    isOwner
+      ? supabase.from('finance_payments').select(PAYMENT_SELECT).eq('student_id', studentId).eq('workspace_id', workspaceId)
+      : Promise.resolve({ data: null }),
     supabase
       .from('student_season_summary_view')
       .select(
@@ -232,14 +242,34 @@ export default async function StudentSessionsPage({
       missed: Number(r.yapilmayan ?? 0),
     }))
 
-  const monthFinance = monthFinanceRow
-    ? {
-        accruedKurus: Number(monthFinanceRow.accrued_kurus ?? 0),
-        collectedKurus: Number(monthFinanceRow.collected_kurus ?? 0),
-        balanceKurus: Number(monthFinanceRow.balance_kurus ?? 0),
-      }
+  const accrualRows = (accrualRes.data ?? []) as Record<string, unknown>[]
+  const ledger: PeriodSummary | null = isOwner
+    ? periodSummary(
+        accrualRows.map(mapAccrual),
+        ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment),
+        summaryMonth
+      )
     : null
-  const paymentState = monthFinance ? monthPaymentState(monthFinance) : null
+  const paymentHint = !ledger
+    ? '—'
+    : ledger.state === 'yok'
+      ? '—'
+      : ledger.closingBalanceKurus > 0
+        ? `${PERIOD_STATE_LABEL[ledger.state]} · ${formatKurus(ledger.closingBalanceKurus)} kalan`
+        : ledger.closingBalanceKurus < 0
+          ? `${PERIOD_STATE_LABEL[ledger.state]} · ${formatKurus(-ledger.closingBalanceKurus)}`
+          : PERIOD_STATE_LABEL[ledger.state]
+
+  const unpricedIds = isOwner && finance
+    ? findUnpricedSessions({
+        sessions,
+        financeLinkByService: new Map(services.map((s) => [s.id, s.financeLink])),
+        modelsByStudent: new Map([[studentId, finance.models]]),
+        accruedSessionIds: new Set(
+          accrualRows.map((r) => r.service_session_id as string | null).filter((x): x is string => !!x)
+        ),
+      })
+    : []
 
   const weekDone = sessions.filter((s) => s.status === 'yapildi').length
   const weekAwaiting = sessions.filter((s) =>
@@ -264,8 +294,13 @@ export default async function StudentSessionsPage({
           {
             label: 'Ödeme durumu',
             value: ledgerMonthLabel(summaryMonth),
-            hint: monthPaymentLabel(paymentState) ?? '—',
-            tone: paymentState === 'paid' ? 'success' : paymentState === null ? 'default' : 'warning',
+            hint: paymentHint,
+            tone:
+              !ledger || ledger.state === 'yok'
+                ? 'default'
+                : ledger.state === 'odendi' || ledger.state === 'alacak'
+                  ? 'success'
+                  : 'warning',
             icon: Wallet,
             href: isOwner ? `/teacher/finans/${studentId}` : undefined,
           },
@@ -296,6 +331,7 @@ export default async function StudentSessionsPage({
         nextContactAt={upcoming?.at.toISOString() ?? null}
         nowIso={now.toISOString()}
         finance={finance}
+        unpricedIds={unpricedIds}
         financeHref={isOwner ? `/teacher/finans/${studentId}` : null}
         paymentNotice={
           noticeRow

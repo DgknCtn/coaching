@@ -9,6 +9,7 @@ import {
   SESSION_SELECT,
   SERVICE_SELECT,
   mapServiceRow,
+  findUnpricedSessions,
   mapSessionRow,
   monthsToGenerate,
   serviceInfo,
@@ -34,7 +35,7 @@ export default async function WeeklySessionsPage({
   const now = new Date()
   const currentWeek = isoWeekKey(now)
   const week = isValidWeekKey(hafta) ? hafta : currentWeek
-  const { supabase, workspaceId } = await getTeacherContext()
+  const { supabase, workspaceId, role } = await getTeacherContext()
 
   // Tembel üretim, çalışma alanı düzeyinde tek çağrı (140). Hata ekranı
   // durdurmaz: üretilememiş oturum, haftayı göstermemek için sebep değil.
@@ -91,6 +92,39 @@ export default async function WeeklySessionsPage({
     })
   )
 
+  // "Fiyatsız" uyarısı yalnız sahibe (finans RLS'i zaten başkasına boş döner).
+  let unpricedIds: string[] = []
+  const doneIds = sessions.filter((s) => s.status === 'yapildi').map((s) => s.id)
+  if (role === 'owner' && doneIds.length > 0) {
+    const doneStudents = Array.from(new Set(sessions.filter((s) => s.status === 'yapildi').map((s) => s.studentId)))
+    const [{ data: accrued }, { data: modelRows }] = await Promise.all([
+      supabase.from('finance_lessons').select('service_session_id').in('service_session_id', doneIds),
+      supabase
+        .from('student_finance_models')
+        .select('student_id, model, collection_timing, valid_from, created_at')
+        .in('student_id', doneStudents),
+    ])
+    const modelsByStudent = new Map<string, { model: 'aylik_sabit' | 'ders_basi'; collectionTiming: 'ay_basi' | 'ay_sonu' | 'ders_sonrasi'; validFrom: string; createdAt: string }[]>()
+    for (const m of (modelRows ?? []) as Record<string, unknown>[]) {
+      const list = modelsByStudent.get(m.student_id as string) ?? []
+      list.push({
+        model: m.model as 'aylik_sabit' | 'ders_basi',
+        collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
+        validFrom: m.valid_from as string,
+        createdAt: m.created_at as string,
+      })
+      modelsByStudent.set(m.student_id as string, list)
+    }
+    unpricedIds = findUnpricedSessions({
+      sessions,
+      financeLinkByService: new Map(
+        (serviceRows ?? []).map((r) => [r.id as string, r.finance_link as 'aylik_paket' | 'ders_basi' | 'haric'])
+      ),
+      modelsByStudent,
+      accruedSessionIds: new Set((accrued ?? []).map((r) => r.service_session_id as string)),
+    })
+  }
+
   const awaiting = sessions.filter((s) =>
     isAwaitingOutcome({ status: s.status, effectiveAt: new Date(s.currentPlannedAt) }, now)
   ).length
@@ -143,6 +177,7 @@ export default async function WeeklySessionsPage({
         isCurrentWeek={week === currentWeek}
         nowIso={now.toISOString()}
         showStudent
+        unpricedIds={unpricedIds}
         emptyHint="Esnek ritimli derslerin oturumları öğrencinin Ders & Görüşmeler sayfasından eklenir."
       />
     </div>

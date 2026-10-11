@@ -6,6 +6,8 @@
 
 import { CONTACT_KIND_LABEL, contactKindOf, type ServiceLike, type Weekday } from '@/lib/service-structure'
 import type { MakeupStatus, SessionSource } from '@/lib/session-state'
+import { accrualPriceType, modelAt, type FinanceModelVersion } from '@/lib/pricing-history'
+import { localDateString } from '@/lib/homework-status'
 import type { WeekServiceInfo } from '@/components/sessions/week-sessions'
 import type { ServiceRow, SessionRow } from './types'
 
@@ -85,4 +87,30 @@ export function monthsToGenerate(weekMonths: string[]): { year: number; month: n
     const [year, month] = m.split('-').map(Number)
     return { year, month }
   })
+}
+
+/**
+ * "Fiyatsız" oturumlar: Yapıldı işaretlenmiş, finans ilişkisi ücret
+ * gerektiriyor (141 kuralı, lib/pricing-history `accrualPriceType`) ama
+ * tahakkuk satırı yok — yani o tarihte geçerli fiyat tanımlanmamış.
+ * Sessiz kalsaydı öğretmen dersin borca yazıldığını sanırdı. Fiyat
+ * sonradan girilince backfill_missing_accruals satırı açar.
+ */
+export function findUnpricedSessions(input: {
+  sessions: SessionRow[]
+  financeLinkByService: Map<string, ServiceRow['financeLink']>
+  modelsByStudent: Map<string, FinanceModelVersion[]>
+  accruedSessionIds: Set<string>
+}): string[] {
+  const out: string[] = []
+  for (const s of input.sessions) {
+    if (s.status !== 'yapildi' || s.attended === false) continue
+    if (input.accruedSessionIds.has(s.id)) continue
+    const link = input.financeLinkByService.get(s.serviceId)
+    if (!link) continue
+    const date = localDateString(new Date(s.actualAt ?? s.currentPlannedAt))
+    const model = modelAt(input.modelsByStudent.get(s.studentId) ?? [], date)?.model ?? null
+    if (accrualPriceType(link, model, s.isExtra) !== null) out.push(s.id)
+  }
+  return out
 }

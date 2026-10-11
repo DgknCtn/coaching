@@ -94,6 +94,7 @@ export function SessionsClient({
   nextContactAt,
   nowIso,
   finance,
+  unpricedIds,
   financeHref,
   paymentNotice,
   season,
@@ -111,6 +112,7 @@ export function SessionsClient({
   nextContactAt: string | null
   nowIso: string
   finance: FinanceModelInfo | null
+  unpricedIds: string[]
   financeHref: string | null
   paymentNotice: { id: string; note: string | null; createdAt: string } | null
   season: SeasonSummary | null
@@ -215,6 +217,7 @@ export function SessionsClient({
         isCurrentWeek={week.isCurrent}
         nowIso={nowIso}
         showStudent={false}
+        unpricedIds={unpricedIds}
         summary={
           <span className="inline-flex flex-wrap items-center gap-x-2">
             {summaryLine(monthSummary)}

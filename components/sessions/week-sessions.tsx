@@ -149,6 +149,7 @@ export function WeekSessions({
   addSession,
   summary,
   emptyHint,
+  unpricedIds,
 }: {
   rows: SessionRow[]
   services: Record<string, WeekServiceInfo>
@@ -162,6 +163,11 @@ export function WeekSessions({
   addSession?: AddSessionTarget | null
   summary?: ReactNode
   emptyHint?: string
+  /**
+   * Yapıldı ama ücret doğmamış oturumlar (fiyat tanımsız). Yalnız sahip
+   * için hesaplanır; finansı göremeyen öğretmende boş gelir.
+   */
+  unpricedIds?: string[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -170,6 +176,7 @@ export function WeekSessions({
 
   const now = new Date(nowIso)
   const todayKey = dayKeyOf(now)
+  const unpriced = useMemo(() => new Set(unpricedIds ?? []), [unpricedIds])
 
   const sorted = useMemo(
     () =>
@@ -355,6 +362,15 @@ export function WeekSessions({
                         {row.groupSessionId && row.attended === false && (
                           <span className="ml-1 text-xs text-muted-foreground">Katılmadı</span>
                         )}
+                        {unpriced.has(row.id) && (
+                          <Badge
+                            variant="warning"
+                            className="ml-1"
+                            title="Bu tarihte geçerli fiyat yok; ders finansa yansımadı. Hizmet Modeli'nden fiyat girin."
+                          >
+                            Fiyatsız
+                          </Badge>
+                        )}
                       </td>
                       <td className="hidden px-3 py-2 align-top text-xs text-muted-foreground lg:table-cell">
                         {service ? FINANCE_LINK_LABEL[service.financeLink] : '—'}
@@ -392,6 +408,7 @@ export function WeekSessions({
       <SessionDetailPanel
         row={detail}
         service={detail ? services[detail.serviceId] : undefined}
+        unpriced={detail ? unpriced.has(detail.id) : false}
         onClose={() => setDetailId(null)}
       />
 
@@ -448,16 +465,26 @@ function RowMenu({
 function SessionDetailPanel({
   row,
   service,
+  unpriced,
   onClose,
 }: {
   row: SessionRow | null
   service: WeekServiceInfo | undefined
+  unpriced: boolean
   onClose: () => void
 }) {
   return (
     <Drawer open={row !== null} onOpenChange={(next) => !next && onClose()}>
       <DrawerContent className="max-w-lg">
-        {row && <SessionDetailBody key={row.id + row.status + row.currentPlannedAt} row={row} service={service} onClose={onClose} />}
+        {row && (
+          <SessionDetailBody
+            key={row.id + row.status + row.currentPlannedAt}
+            row={row}
+            service={service}
+            unpriced={unpriced}
+            onClose={onClose}
+          />
+        )}
       </DrawerContent>
     </Drawer>
   )
@@ -466,10 +493,12 @@ function SessionDetailPanel({
 function SessionDetailBody({
   row,
   service,
+  unpriced,
   onClose,
 }: {
   row: SessionRow
   service: WeekServiceInfo | undefined
+  unpriced: boolean
   onClose: () => void
 }) {
   const router = useRouter()
@@ -607,6 +636,13 @@ function SessionDetailBody({
             </span>
           )}
         </div>
+
+        {unpriced && (
+          <p className="rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-xs text-warning-foreground">
+            Bu ders finansa yansımadı: gerçekleşme tarihinde geçerli bir fiyat yok. Öğrencinin Hizmet
+            Modeli&apos;nden fiyat girildiğinde eksik tahakkuk kendiliğinden açılır.
+          </p>
+        )}
 
         {/* PLAN — ilk plan, güncel plan ve geçmiş (§4 "Plan ve gerçekleşme ayrılacak") */}
         <section className="space-y-2">
