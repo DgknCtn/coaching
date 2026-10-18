@@ -25,6 +25,7 @@
 // zaten o işin tek sahibi ve orada "başka hiçbir dosya kendi aralık
 // mantığını kurmamalıdır" yazıyor.
 
+import type { AcademicTask } from '@/lib/academic-tasks'
 import { formatRanges, rangesFromPages, type PageRange } from './page-ranges'
 
 export interface HaftamWork {
@@ -77,6 +78,8 @@ export interface HaftamDay {
   /** O güne planlanmış tekil çalışma sayısı. */
   planned: number
   cards: HaftamCard[]
+  /** M1.0-03: o güne yerleştirilmiş akademik görevler (kitap dışı iş). */
+  tasks?: AcademicTask[]
   dayNote: string | null
   personalItems: HaftamPersonalItem[]
 }

@@ -51,9 +51,12 @@ describe('hedef menü yapısı (doküman §2)', () => {
   it('üst seviye sıra dokümandaki hedef sırayla aynı', () => {
     // Doküman §2: "Genel Bakış | Haftalık Akış | Ödevler | Kaynaklar |
     // Akademik Akış | Görüşmeler | Koruma Havuzu | Rapor | Diğer"
+    // M1.0-03 (18.10.2026): "Dersler" Haftalık Akış'ın ardına eklendi —
+    // ders, kaynaksız da yaşayan ana akademik alan.
     expect(TABS.map((t) => t.label)).toEqual([
       'Genel Bakış',
       'Haftalık Akış',
+      'Dersler',
       'Ödevler',
       'Kaynaklar',
       'Akademik Akış',

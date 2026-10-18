@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge'
 import { PACE_BAND_LABEL, type PaceBand } from '@/lib/weekly-flow'
 import { counterLabel } from '@/lib/homework-status'
 import type { HaftamCard, HaftamDay } from '@/lib/haftam'
+import type { AcademicTask } from '@/lib/academic-tasks'
 import { DayColumn } from './day-column'
-import { UnplannedStrip } from './unplanned-strip'
+import { WeekPool } from './week-pool'
 
 // HAFTAM — etkileşim katmanı (R7-06.03, R8'de V2).
 //
@@ -50,6 +51,12 @@ export interface HaftamView {
   pace: { startingPerDay: number; requiredPerDay: number; band: PaceBand } | null
   days: HaftamDay[]
   unplanned: HaftamCard[]
+  /** M1.0-03: havuzdaki akademik görevler (günü seçilmemiş). */
+  poolTasks: AcademicTask[]
+  /** Öğretmenin verdiği akademik görevler: tamamlanan / toplam. */
+  taskSummary: { teacherDone: number; teacherTotal: number }
+  flowId: string
+  courses: { id: string; name: string }[]
 }
 
 const BAND_VARIANT: Record<PaceBand, 'success' | 'warning' | 'destructive'> = {
@@ -98,6 +105,13 @@ export function HaftamClient({ view }: { view: HaftamView }) {
             hint="Teslim edilmeyen"
             emphasis={view.remaining > 0}
           />
+          {view.taskSummary.teacherTotal > 0 && (
+            <SummaryStat
+              value={view.taskSummary.teacherDone}
+              label={`/ ${view.taskSummary.teacherTotal} görev`}
+              hint="Akademik görevler"
+            />
+          )}
 
           {view.pace && (
             <div className="min-w-40">
@@ -144,7 +158,8 @@ export function HaftamClient({ view }: { view: HaftamView }) {
           bağlantılar yalnız gezinme. */}
       {(() => {
         const todayCol = view.days.find(d => d.date === view.today)
-        const unplannedCount = view.unplanned.length
+        const unplannedCount =
+          view.unplanned.length + view.poolTasks.filter(t => t.status !== 'done').length
         if (!todayCol && unplannedCount === 0) return null
         return (
           <nav aria-label="Hızlı erişim" className="flex flex-wrap gap-2">
@@ -161,21 +176,35 @@ export function HaftamClient({ view }: { view: HaftamView }) {
                 href="#planlanmamislar"
                 className="rounded-md border bg-card px-3 py-1.5 text-sm hover:bg-muted"
               >
-                Planlanmamışlar · {unplannedCount}
+                Havuz · {unplannedCount}
               </a>
             )}
           </nav>
         )
       })()}
 
+      {/* BU HAFTANIN HAVUZU (M1.0-03 §7) — günlerin ÜSTÜNDE: plan yayınlanınca
+          çalışmalar önce buraya düşer, öğrenci haftasına kendisi dağıtır. */}
+      <WeekPool
+        cards={view.unplanned}
+        tasks={view.poolTasks}
+        days={view.days}
+        today={view.today}
+        currentFlowId={view.flowId}
+        courses={view.courses}
+      />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {view.days.map(day => (
-          <DayColumn key={day.date} day={day} days={view.days} />
+          <DayColumn
+            key={day.date}
+            day={day}
+            days={view.days}
+            today={view.today}
+            currentFlowId={view.flowId}
+          />
         ))}
       </div>
-
-      {/* PLANLANMAMIŞLAR (§6) — haftanın en altında, tam genişlikte. */}
-      <UnplannedStrip cards={view.unplanned} days={view.days} />
     </div>
   )
 }

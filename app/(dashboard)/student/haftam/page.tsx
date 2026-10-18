@@ -13,6 +13,8 @@ import { compareHomeworkItems, localDateString } from '@/lib/homework-status'
 import { groupIntoCards, sortCardsForDay, type HaftamWork } from '@/lib/haftam'
 import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
 import { HaftamClient, type HaftamView } from './haftam-client'
+import { loadStudentCourses, loadStudentTasks } from '@/lib/academic-tasks-load'
+import type { AcademicTask } from '@/lib/academic-tasks'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,6 +98,21 @@ export default async function HaftamPage() {
   const startsAt = new Date(flow.starts_at as string)
   const dueAt = new Date(flow.due_at as string)
   const now = new Date()
+
+  // HAFTA GEÇİŞİ (M1.0-03 P0 8, 10): açık tarihsiz görevler aktif haftaya
+  // geçer, gün ataması temizlenir. İdempotent; cron olmadığı için ekran
+  // açılırken. Hata ekranı durdurmaz — görevler eski haftasından da okunur.
+  const roll = await supabase.rpc('roll_open_tasks_to_flow', { p_student_id: student.id })
+  if (roll.error) console.error('[haftam] görev devri yapılamadı:', roll.error.message)
+
+  // AKADEMİK GÖREVLER: bu haftanınkiler + önceki haftadan açık kalanlar.
+  const [allTasks, courses] = await Promise.all([
+    loadStudentTasks(supabase, { studentId: student.id, statuses: ['open', 'done'] }),
+    loadStudentCourses(supabase, { studentId: student.id }),
+  ])
+  const tasks: AcademicTask[] = allTasks.filter(
+    t => t.weeklyFlowId === flow.id || t.status === 'open'
+  )
 
   // Haftanın yükü: yalnız BU akışa bağlı, aktif partilerin kalemleri.
   // `hb.status='active'` süzgeci, aktif yükten çıkarılmış ödevin
@@ -300,6 +317,7 @@ export default async function HaftamPage() {
       delivered: d.delivered,
       planned: plannedByDay.get(d.date) ?? 0,
       cards: sortCardsForDay(groupIntoCards(works.filter(w => w.plannedForDate === d.date))),
+      tasks: tasks.filter(t => t.plannedForDate === d.date),
       dayNote: dayNoteByDate.get(d.date) ?? null,
       personalItems: personalItems
         .filter(p => (p.item_date as string) === d.date)
@@ -313,6 +331,17 @@ export default async function HaftamPage() {
     // güne koymadığı resmi çalışmalar. Haftanın en altında, tam
     // genişlikte durur.
     unplanned: groupIntoCards(works.filter(w => w.plannedForDate === null)),
+    // Bu Haftanın Havuzu (M1.0-03 §7): günü olmayan ya da haftanın
+    // penceresi dışında kalmış görevler.
+    poolTasks: tasks.filter(
+      t => t.plannedForDate === null || !daily.days.some(d => d.date === t.plannedForDate)
+    ),
+    taskSummary: {
+      teacherDone: tasks.filter(t => t.createdByRole === 'teacher' && t.status === 'done').length,
+      teacherTotal: tasks.filter(t => t.createdByRole === 'teacher').length,
+    },
+    flowId: flow.id as string,
+    courses: courses.filter(c => c.active).map(c => ({ id: c.scopeId, name: c.name })),
   }
 
   return (

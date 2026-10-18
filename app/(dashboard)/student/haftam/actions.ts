@@ -447,3 +447,129 @@ export async function deletePersonalItemAction(itemId: string) {
   revalidateHaftam()
   return { success: true }
 }
+
+// ============================================================
+// AKADEMİK GÖREVLER — öğrenci tarafı (M1.0-03 §7-§8, 148)
+//
+// Tamamlandı tiki öğrencinin BEYANIDIR; öğretmen onayı yoktur. Güne
+// yerleştirmek yalnız `planned_for_date`'i değiştirir, teslimi değil.
+// Yetki kuralları (öğretmen görevi silinemez, takibe alınan kendi görevi
+// silinemez) RPC'de.
+// ============================================================
+
+/** Görevi bir güne koyar; null → havuza geri döner. */
+export async function setTaskPlanDateAction(taskId: string, date: string | null) {
+  const parsed = uuidSchema.safeParse(taskId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const planDate = date === null || date === '' ? null : normalizeDayDate(date)
+  if (date !== null && date !== '' && planDate === null) return { error: 'Geçersiz tarih.' }
+
+  if (planDate !== null) {
+    const ctx = await assertDateInActiveFlow(planDate)
+    if ('error' in ctx) return { error: ctx.error }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_academic_task_plan_date', { p_task_id: parsed.data, p_date: planDate })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+export async function setTaskDoneAction(taskId: string, done: boolean) {
+  const parsed = uuidSchema.safeParse(taskId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_academic_task_done', { p_task_id: parsed.data, p_done: done === true })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+export async function toggleChecklistItemAction(itemId: string, done: boolean) {
+  const parsed = uuidSchema.safeParse(itemId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('toggle_checklist_item', { p_item_id: parsed.data, p_done: done === true })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+/** Süre hedefi: haftalık toplam dakika (85/120). */
+export async function setTaskMinutesAction(taskId: string, minutes: number) {
+  const parsed = uuidSchema.safeParse(taskId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 6000) return { error: 'Geçerli bir dakika girin.' }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_academic_task_minutes', { p_task_id: parsed.data, p_minutes: minutes })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+/**
+ * Öğrencinin kendi çalışması: "[+ Çalışma ekle…]" (§8). Tarihsiz ve açık
+ * doğar; tek uygun ders varsa istemci otomatik eşler, yoksa ders sorar.
+ */
+export async function addOwnTaskAction(input: {
+  scopeId: string
+  kind: 'gorev' | 'checklist' | 'sure'
+  title: string
+  targetMinutes?: number | null
+  checklist?: string[]
+}) {
+  const scope = uuidSchema.safeParse(input.scopeId)
+  if (!scope.success) return { error: 'Ders seçin.' }
+  const title = (input.title ?? '').trim()
+  if (!title || title.length > 300) return { error: 'Çalışma metni 1-300 karakter olmalı.' }
+  if (!['gorev', 'checklist', 'sure'].includes(input.kind)) return { error: 'Geçersiz tür.' }
+  if (input.kind === 'sure' && !(input.targetMinutes && input.targetMinutes > 0)) {
+    return { error: 'Süre için dakika girin.' }
+  }
+
+  const { student } = await getStudentContext()
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('create_academic_task', {
+    p_student_id: student.id,
+    p_scope_id: scope.data,
+    p_kind: input.kind,
+    p_title: title,
+    p_target_minutes: input.kind === 'sure' ? input.targetMinutes : null,
+    p_checklist: input.kind === 'checklist' ? (input.checklist ?? []).slice(0, 30) : null,
+    p_undated: true,
+    p_due_at: null,
+    p_publish: false,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+export async function updateOwnTaskAction(taskId: string, title: string) {
+  const parsed = uuidSchema.safeParse(taskId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const text = (title ?? '').trim()
+  if (!text || text.length > 300) return { error: 'Çalışma metni 1-300 karakter olmalı.' }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('update_academic_task', {
+    p_task_id: parsed.data,
+    p_title: text,
+    p_target_minutes: null,
+    p_undated: null,
+    p_due_at: null,
+    p_clear_due: false,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}
+
+export async function deleteOwnTaskAction(taskId: string) {
+  const parsed = uuidSchema.safeParse(taskId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('delete_academic_task', { p_task_id: parsed.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+  revalidateHaftam()
+  return { success: true }
+}

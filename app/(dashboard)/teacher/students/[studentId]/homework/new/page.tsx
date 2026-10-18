@@ -16,6 +16,8 @@ import { localClock } from '@/lib/homework-load'
 import { Button } from '@/components/ui/button'
 import { HomeworkBuilder } from './homework-builder'
 import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
+import { loadStudentTasks } from '@/lib/academic-tasks-load'
+import { loadCoursesData } from '../../dersler/load'
 
 // Sorgu hatası boş sonuca çevrilmez; teacher/error.tsx hata sınırına gider.
 function orThrow<T>(r: QueryResult<T>): T {
@@ -175,7 +177,17 @@ export default async function NewHomeworkPage({
     draftTestIds = draftItems.map(i => i.book_test_id)
   }
 
-  if (books.length === 0) {
+  // M1.0-03 ORTAK SEPET: kitap seçimleri ve akademik görevler aynı
+  // haftalık planda. Görev taslakları öğretmene özel (148).
+  const [draftTasks, coursesData] = await Promise.all([
+    loadStudentTasks(supabase, { studentId, statuses: ['draft'], createdByProfileId: profile.id }),
+    loadCoursesData(supabase, { workspaceId, studentId }),
+  ])
+  const courses = coursesData.courses.filter(c => c.active).map(c => ({ id: c.scopeId, name: c.name }))
+
+  // Kitabı olmayan öğrenciye de görev planı yayınlanabilir: ekran yalnız
+  // ne kitap ne ders varsa boş durumu gösterir.
+  if (books.length === 0 && courses.length === 0 && draftTasks.length === 0) {
     return (
       <div className="mx-auto max-w-2xl p-6">
         <div className="mb-4 flex items-center gap-2">
@@ -216,6 +228,8 @@ export default async function NewHomeworkPage({
         initialTitle={draft?.title ?? ''}
         initialNote={draft?.note ?? ''}
         keepActiveTopicIds={[...keepActiveTopicIds]}
+        draftTasks={draftTasks}
+        courses={courses}
       />
     </div>
   )

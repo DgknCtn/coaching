@@ -9,7 +9,8 @@ import { WEEKDAY_SHORT_LABEL, type Weekday } from '@/lib/service-structure'
 import { WorkCard } from './work-card'
 import { DayNote } from './day-note'
 import { PersonalItems } from './personal-items'
-import { setPlanDatesAction } from './actions'
+import { setPlanDatesAction, setTaskPlanDateAction } from './actions'
+import { TaskCard, TASK_DRAG_TYPE } from './task-card'
 
 // GÜN SÜTUNU (§2, §4).
 //
@@ -51,7 +52,17 @@ export function shortDate(date: string): string {
   return `${Number(day)} ${MONTHS[Number(month)]}`
 }
 
-export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) {
+export function DayColumn({
+  day,
+  days,
+  today,
+  currentFlowId,
+}: {
+  day: HaftamDay
+  days: HaftamDay[]
+  today: string
+  currentFlowId: string
+}) {
   const [isDragOver, setDragOver] = useState(false)
   const [, startTransition] = useTransition()
 
@@ -59,10 +70,10 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
   // başlık "2 çalışma · 1 kaldı" gibi kendi kendini yalanlayan bir satır
   // üretiyordu: soldaki sayı kalemleri, sağdaki kartları sayıyordu. Kart
   // bir görüntüleme birimi (§7); öğrencinin saydığı şey çalışmadır.
-  const openCount = day.cards.reduce(
-    (n, card) => n + card.works.filter(w => !w.submitted).length,
-    0
-  )
+  const tasks = day.tasks ?? []
+  const openCount =
+    day.cards.reduce((n, card) => n + card.works.filter(w => !w.submitted).length, 0) +
+    tasks.filter(t => t.status !== 'done').length
   const isSunday = day.weekday === 7
 
   // ============================================================
@@ -78,6 +89,20 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
   function handleDrop(event: React.DragEvent) {
     event.preventDefault()
     setDragOver(false)
+
+    // M1.0-03: akademik görev bütün olarak taşınır; teslimi değişmez.
+    const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE)
+    if (taskId) {
+      startTransition(async () => {
+        const res = await setTaskPlanDateAction(taskId, day.date)
+        if (res?.error) {
+          toast.error(res.error)
+          return
+        }
+        toast.success(`${WEEKDAY_SHORT_LABEL[day.weekday as Weekday]} gününe taşındı.`)
+      })
+      return
+    }
 
     const raw = event.dataTransfer.getData('application/x-haftam-items')
     if (!raw) return
@@ -123,7 +148,7 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
           {shortDate(day.date)} {WEEKDAY_SHORT_LABEL[day.weekday as Weekday]}
         </p>
         <p className="text-[11px] text-muted-foreground">
-          {day.planned} çalışma · {openCount} kaldı
+          {day.planned + tasks.length} çalışma · {openCount} kaldı
         </p>
       </div>
 
@@ -132,12 +157,28 @@ export function DayColumn({ day, days }: { day: HaftamDay; days: HaftamDay[] }) 
         <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Öğretmeninin verdikleri
         </h3>
-        {day.cards.length === 0 ? (
+        {day.cards.length === 0 && tasks.length === 0 ? (
           <p className="rounded-md border border-dashed px-2 py-3 text-center text-[11px] text-muted-foreground">
             Bu güne çalışma koymadın
           </p>
         ) : (
-          day.cards.map(card => <WorkCard key={card.key} card={card} days={days} />)
+          <>
+            {tasks
+              .filter(t => t.status !== 'done')
+              .map(t => (
+                <TaskCard key={t.id} task={t} days={days} today={today} currentFlowId={currentFlowId} />
+              ))}
+            {day.cards.map(card => <WorkCard key={card.key} card={card} days={days} />)}
+            {/* Tamamlanan görev günden kaybolmaz: altta, soluk (§8). */}
+            {tasks.some(t => t.status === 'done') && (
+              <p className="pt-1 text-[11px] text-muted-foreground">Tamamlananlar</p>
+            )}
+            {tasks
+              .filter(t => t.status === 'done')
+              .map(t => (
+                <TaskCard key={t.id} task={t} days={days} today={today} currentFlowId={currentFlowId} />
+              ))}
+          </>
         )}
       </section>
 

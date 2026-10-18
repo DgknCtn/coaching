@@ -98,3 +98,5 @@ Bu maddeler şimdi yapılmayacak, yalnız listelendi:
 
 ## Canlıya uygulanan migration'lar (bu çalışma)
 143 PIN talepleri · 144 veli onayı · 145 pilot metrikleri · 146 AI kotası — hepsi ✅.
+147 Finans TEST 01-02 hızlı tahsil — ✅ (19.10.2026, kod `f05d238`).
+148 M1.0-03 dersler / akademik görevler — ⏳🧑 SQL Editor'de uygulanacak; kod (dal `m1-0-03-akademik-gorevler`) 148'SİZ çalışmaz (Haftam görev tablosunu okur), önce migration sonra dağıtım.

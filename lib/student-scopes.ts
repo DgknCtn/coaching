@@ -25,6 +25,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // akışı henüz kurulmamış bir alana atanmış kaynak HİÇBİR ekranda
 // görünmezdi. Bu, düzelttiğimiz §4.4 tutarsızlığının (bekleyen kaynak
 // envanterden kayboluyor) yeni bir kopyası olurdu.
+//
+//   3. M1.0-03 Ders Havuzu (student_courses, 148): öğretmenin açıkça
+//      eklediği dersler — kaynağı da akışı da olmayan "11. Sınıf Coğrafya"
+//      ancak böyle görünür. Pasif ders yalnız bu kaynaktan gelmez; o
+//      alana atanmış kitap varsa alan Kitaplar'da görünmeye devam eder
+//      (kitap "Alan atanmamış"a düşmesin).
 
 export interface StudentScope {
   id: string
@@ -44,7 +50,7 @@ export async function loadStudentScopes(
   supabase: SupabaseClient,
   { workspaceId, studentId }: { workspaceId: string; studentId: string }
 ): Promise<StudentScope[]> {
-  const [{ data: flowRows }, { data: assignmentRows }] = await Promise.all([
+  const [{ data: flowRows }, { data: assignmentRows }, { data: courseRows }] = await Promise.all([
     supabase
       .from('student_curriculum_items')
       .select('scope_id')
@@ -58,6 +64,11 @@ export async function loadStudentScopes(
       // Arşivlenen kaynağın alanı aktif planda boş bir blok doğurmasın.
       .neq('status', 'archived')
       .not('scope_id', 'is', null),
+    supabase
+      .from('student_courses')
+      .select('scope_id, active')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId),
   ])
 
   const scopeIds = new Set<string>()
@@ -66,6 +77,9 @@ export async function loadStudentScopes(
   }
   for (const row of (assignmentRows ?? []) as { scope_id: string | null }[]) {
     if (row.scope_id) scopeIds.add(row.scope_id)
+  }
+  for (const row of (courseRows ?? []) as { scope_id: string; active: boolean }[]) {
+    if (row.active) scopeIds.add(row.scope_id)
   }
 
   if (scopeIds.size === 0) return []

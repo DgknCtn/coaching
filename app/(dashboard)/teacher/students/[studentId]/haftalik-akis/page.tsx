@@ -1,3 +1,5 @@
+import { loadStudentTasks } from '@/lib/academic-tasks-load'
+import { FollowUpSummary } from './follow-up-summary'
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { deriveMainContact, type ServiceLike } from '@/lib/service-structure'
@@ -113,6 +115,15 @@ export default async function WeeklyFlowPage({
     .order('due_at', { ascending: false })
 
   const activeFlow = (flows ?? []).find(f => f.status === 'active') ?? null
+
+  // M1.0-03: açık tarihsiz görevler aktif haftaya devredilir (idempotent).
+  if (activeFlow) {
+    const roll = await supabase.rpc('roll_open_tasks_to_flow', { p_student_id: studentId })
+    if (roll.error) console.error('[haftalik-akis] görev devri yapılamadı:', roll.error.message)
+  }
+  const academicTasks = activeFlow
+    ? await loadStudentTasks(supabase, { studentId, statuses: ['open', 'done'] })
+    : []
 
   // Öğretmen henüz hafta açmadıysa, açarsa kapanışın ne olacağını
   // GÖSTEREBİLMEK için ana temastan öneri üretilir. Yazılmaz — öneri
@@ -366,6 +377,16 @@ export default async function WeeklyFlowPage({
       }}
       anchorServiceId={anchorService?.id ?? null}
       suggestedDueAt={suggested?.dueAt.toISOString() ?? null}
+      followUp={
+        view ? (
+          <FollowUpSummary
+            studentId={studentId}
+            tasks={academicTasks}
+            flowId={view.id}
+            books={{ delivered: view.delivered, total: view.total }}
+          />
+        ) : null
+      }
     />
   )
 }

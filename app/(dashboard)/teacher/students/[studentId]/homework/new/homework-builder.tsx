@@ -55,6 +55,10 @@ import { TempoStrip } from '@/components/shared/tempo-strip'
 import { formatUnitCount, unitLabel } from '@/lib/unit-labels'
 import { ProgressSummary } from '@/components/shared/progress-summary'
 import { cn } from '@/lib/utils'
+import { planSummary, type AcademicTask } from '@/lib/academic-tasks'
+import { publishDraftTasksAction } from '../../dersler/actions'
+import { TeacherTaskList } from '@/components/academic/teacher-task-list'
+import { BulkPasteDialog } from '@/components/academic/bulk-paste-dialog'
 
 // Tek Kitap Haritası — öğretmenin kaynak üzerindeki ana çalışma yüzeyi
 // (R7 / R6-03 güncellemesi).
@@ -120,6 +124,14 @@ interface Props {
   } | null
   /** Bölüm satırı menüsündeki "Aktif Tut" toggle'ının yönü için (041). */
   keepActiveTopicIds: string[]
+  /**
+   * M1.0-03 ORTAK SEPET: öğretmenin bu öğrenci için taslak akademik
+   * görevleri. Kitap seçimleri istemcide, görevler sunucuda (148) durur;
+   * Planı Yayınla ikisini birlikte yayınlar.
+   */
+  draftTasks: AcademicTask[]
+  /** Toplu Yapıştır için öğrencinin aktif dersleri. */
+  courses: { id: string; name: string }[]
 }
 
 export function HomeworkBuilder({
@@ -137,6 +149,8 @@ export function HomeworkBuilder({
   initialNote,
   activeFlow,
   keepActiveTopicIds,
+  draftTasks,
+  courses,
 }: Props) {
   // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
   const keepActiveTopicSet = useMemo(() => new Set(keepActiveTopicIds), [keepActiveTopicIds])
@@ -504,34 +518,58 @@ export function HomeworkBuilder({
     }
   }
 
+  // Sepet boş değilse yayınlanabilir: kitap çalışması, akademik görev ya
+  // da ikisi birden (M1.0-03 §5 — tek haftalık plan).
+  const hasWork = selectedTests.length > 0 || draftTasks.length > 0
+  const plan = planSummary(selectedTests.length, draftTasks)
+
   function handleSubmit() {
-    if (!dueDate || selectedTests.length === 0) return
+    if (!dueDate || !hasWork) return
     setServerError(null)
     startTransition(async () => {
-      const result = await createHomeworkBatchAction(
-        workspaceId,
-        termId,
-        studentId,
-        dueDate,
-        title || undefined,
-        toHomeworkItems(selectedTests),
-        note || undefined,
-        effectiveDueAt?.toISOString()
-      )
-      if (result?.error) {
-        setServerError(result.error)
-        return
+      let result: Awaited<ReturnType<typeof createHomeworkBatchAction>> | null = null
+      if (selectedTests.length > 0) {
+        result = await createHomeworkBatchAction(
+          workspaceId,
+          termId,
+          studentId,
+          dueDate,
+          title || undefined,
+          toHomeworkItems(selectedTests),
+          note || undefined,
+          effectiveDueAt?.toISOString()
+        )
+        if (result?.error) {
+          setServerError(result.error)
+          return
+        }
+        // Yayınlanan plan taslakta durmamalı.
+        await enqueueDraft(() => clearWeeklyPlanDraftAction(workspaceId, studentId))
+        // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
+        // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
+        // zorunluluk değil.
+        setBasketIds(new Set())
+        clearMapSelection()
+        setTitle('')
+        setNote('')
       }
-      // Yayınlanan plan taslakta durmamalı.
-      await enqueueDraft(() => clearWeeklyPlanDraftAction(workspaceId, studentId))
-      // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
-      // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
-      // zorunluluk değil.
-      setBasketIds(new Set())
-      clearMapSelection()
-      setTitle('')
-      setNote('')
-      toast.success('Plan yayınlandı. Harita güncellendi.')
+
+      // Akademik görevler plan son teslimini varsayılan alır; satır
+      // istisnası (farklı tarih, tarihsiz) korunur (148).
+      if (draftTasks.length > 0) {
+        const published = await publishDraftTasksAction(studentId, effectiveDueAt?.toISOString() ?? null)
+        if (published.error) {
+          if (!result) {
+            setServerError(published.error)
+            return
+          }
+          toast.error(`Kitap çalışmaları yayınlandı; görevler yayınlanamadı: ${published.error}`)
+        }
+      }
+
+      toast.success(
+        result ? 'Plan yayınlandı. Harita güncellendi.' : 'Görevler öğrencinin haftasına yayınlandı.'
+      )
       // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
       // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
       // artmadığını bilmeden ekranda eksik sayı görürdü.
@@ -632,7 +670,7 @@ export function HomeworkBuilder({
           <Button
             size="sm"
             onClick={handleSubmit}
-            disabled={isPending || selectedTests.length === 0 || !dueDate}
+            disabled={isPending || !hasWork || !dueDate}
           >
             {isPending ? <Loader2 className="animate-spin" /> : <Send />}
             Planı Yayınla
@@ -726,9 +764,37 @@ export function HomeworkBuilder({
           <div className="hidden space-y-3 lg:block">
             {activeBook && (
               <>
+                <BulkActionPanel
+                  // M1.0-03 §6: bar haritanın HEMEN ÜSTÜNDE açılır, seçim
+                  // yokken hiç görünmez; göz ve fare hareketi kısalır.
+                  className="top-2 bottom-auto shadow-md"
+                  book={activeBook}
+                  selectedIds={mapSelection}
+                  onClearSelection={clearMapSelection}
+                  onAssign={addToBasket}
+                  onComplete={(ids, studiedOn) =>
+                    completeUnitsManuallyAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                      studiedOn,
+                    }).then(reportBulk('tamamlandı olarak işlendi'))
+                  }
+                  onApprove={ids =>
+                    approveUnitsAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                    }).then(reportBulk('onaylandı'))
+                  }
+                  onRevert={ids =>
+                    revertUnitsAction(studentId, activeBook.bookId, {
+                      assignmentId: activeBook.assignmentId,
+                      unitIds: ids,
+                    }).then(reportBulk('geri alındı'))
+                  }
+                />
                 <p className="text-xs text-muted-foreground">
                   Çalışmaları seçmek durumlarını değiştirmez. Değişiklik yalnız
-                  aşağıdaki panelden bir işlem uyguladığınızda gerçekleşir.
+                  seçim barından bir işlem uyguladığınızda gerçekleşir.
                 </p>
                 <BookMapGrid
                   book={activeBook}
@@ -740,31 +806,6 @@ export function HomeworkBuilder({
                   onSelectRange={selectRange}
                   studentId={studentId}
                   keepActiveTopicIds={keepActiveTopicSet}
-                />
-                <BulkActionPanel
-                  book={activeBook}
-                  selectedIds={mapSelection}
-                  onClearSelection={clearMapSelection}
-                  onAssign={addToBasket}
-                  onComplete={(ids, studiedOn) =>
-                    completeUnitsManuallyAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                      studiedOn,
-                    }).then(reportBulk('tamamlandı olarak işlendi'))
-                  }
-                  onApprove={ids =>
-                    approveUnitsAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                    }).then(reportBulk('onaylandı'))
-                  }
-                  onRevert={ids =>
-                    revertUnitsAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                    }).then(reportBulk('geri alındı'))
-                  }
                 />
               </>
             )}
@@ -823,7 +864,7 @@ export function HomeworkBuilder({
           <div className="flex max-h-full flex-col overflow-hidden rounded-xl border bg-card">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
               <div className="flex min-w-0 items-center gap-1.5">
-                <h2 className="truncate text-sm font-semibold">Yeni Ödev Planı</h2>
+                <h2 className="truncate text-sm font-semibold">Haftalık Çalışma Planı</h2>
                 <Info className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               </div>
               <button
@@ -842,14 +883,21 @@ export function HomeworkBuilder({
                 çıkarmada yeniden hesaplanır. WhatsApp metni aynı özeti
                 kullanır (lib/homework-load.ts). */}
             <div className="shrink-0 space-y-0.5 px-4 pt-3 text-xs" aria-live="polite">
+              {/* Farklı birimler tek anlamsız toplamda birleşmez (M1.0-03 §5). */}
               <p>
                 <span className="font-semibold tabular-nums">
-                  Toplam: {loadSummary.total} çalışma
+                  Kitap çalışmaları: {loadSummary.total}
                 </span>
                 <span className="text-muted-foreground">
                   {' '}· {groupedSelection.length} kitap
                 </span>
               </p>
+              {(plan.taskCount > 0 || plan.minutes > 0) && (
+                <p className="tabular-nums">
+                  <span className="font-semibold">Akademik görevler: {plan.taskCount}</span>
+                  {plan.minutes > 0 && <span className="text-muted-foreground"> · Süre hedefi {plan.minutes} dk</span>}
+                </p>
+              )}
               {loadSummary.total > 0 && (
                 <p className="tabular-nums text-muted-foreground">
                   {formatBreakdown(loadSummary)}
@@ -877,7 +925,7 @@ export function HomeworkBuilder({
             {panelOpen && (
               <>
                 {selectedTests.length === 0 ? (
-                  <p className="px-4 py-4 text-xs text-muted-foreground">
+                  <p className={cn('px-4 py-4 text-xs text-muted-foreground', draftTasks.length > 0 && 'hidden')}>
                     Haritadan çalışma seçip &quot;Ödeve Ekle&quot; deyin. Kitap
                     değiştirdiğinizde ve sayfayı yenilediğinizde plan korunur.
                   </p>
@@ -925,6 +973,21 @@ export function HomeworkBuilder({
                     ))}
                   </div>
                 )}
+
+                <div className="max-h-64 shrink-0 overflow-y-auto border-t px-4 py-3">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium">Akademik görevler</span>
+                    {courses.length > 0 && (
+                      <BulkPasteDialog studentId={studentId} courses={courses} triggerLabel="Yapıştır" />
+                    )}
+                  </div>
+                  <TeacherTaskList
+                    studentId={studentId}
+                    tasks={draftTasks}
+                    showCourse
+                    emptyText="Dersler ekranından Enter ile ya da Toplu Yapıştır ile eklenir."
+                  />
+                </div>
 
                 <div className="shrink-0 space-y-3 overflow-y-auto border-t px-4 py-3">
                   <div className="space-y-1.5">
@@ -1089,7 +1152,7 @@ export function HomeworkBuilder({
                   <Button
                     className="w-full"
                     onClick={handleSubmit}
-                    disabled={isPending || selectedTests.length === 0 || !dueDate}
+                    disabled={isPending || !hasWork || !dueDate}
                   >
                     {isPending ? <Loader2 className="animate-spin" /> : <Send />}
                     Planı Yayınla

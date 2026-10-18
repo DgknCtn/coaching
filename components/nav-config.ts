@@ -254,6 +254,9 @@ export function studentTabs(studentId: string): LinkTab[] {
   return [
     { key: 'genel', label: 'Genel Bakış', href: base },
     { key: 'haftalik-akis', label: 'Haftalık Akış', href: screen('haftalik-akis') },
+    // M1.0-03: ders kaynakların başlığı değil, ana akademik alan — kaynağı
+    // olmayan ders de görev ve süre hedefi taşır.
+    { key: 'dersler', label: 'Dersler', href: screen('dersler') },
     {
       key: 'odevler',
       label: 'Ödevler',

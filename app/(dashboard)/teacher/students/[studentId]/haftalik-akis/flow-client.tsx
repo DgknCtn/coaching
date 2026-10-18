@@ -159,6 +159,7 @@ export function FlowClient({
   checkInSchedule,
   anchorServiceId,
   suggestedDueAt,
+  followUp,
 }: {
   studentId: string
   studentName: string
@@ -170,6 +171,8 @@ export function FlowClient({
   checkInSchedule: { intervalDays: number; isActive: boolean }
   anchorServiceId: string | null
   suggestedDueAt: string | null
+  /** M1.0-03 §9: kitap + görev + süre hedefi + öğrencinin kendi işi tek özette. */
+  followUp?: React.ReactNode
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -277,6 +280,8 @@ export function FlowClient({
           Ödev Planlama
         </Button>
       </div>
+
+      {flow && followUp}
 
       {!flow ? (
         <Card>
