@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { deriveMainContact, nextContact, type ServiceLike } from '@/lib/service-structure'
 import { isAwaitingOutcome } from '@/lib/service-structure'
+import { buildMonthSummary } from '@/lib/session-state'
 import {
   isoWeekKey,
   isValidWeekKey,
@@ -20,6 +21,7 @@ import {
   PERIOD_STATE_LABEL,
   monthLabel as ledgerMonthLabel,
   periodSummary,
+  sessionPaymentStates,
   type PeriodSummary,
 } from '@/lib/finance-ledger'
 import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../../../finans/data'
@@ -31,6 +33,7 @@ import {
   mapSessionRow,
   findUnpricedSessions,
   monthsToGenerate,
+  quickCollectSessionIds,
   serviceInfo,
 } from './load'
 import type { FinanceModelInfo } from './types'
@@ -213,22 +216,20 @@ export default async function StudentSessionsPage({
     : null
 
   // §5 "Aylık hizmet özeti": Ders 3/5 yapıldı · Koçluk 2/5 · Telafi 1 bekliyor · Ek ders 1.
-  const counters = (monthCounters ?? []) as {
-    kind: 'ders' | 'kocluk'
-    planlanan: number
-    yapilan: number
-    ek_ders: number | null
-    telafi_bekleyen: number | null
-  }[]
-  const monthSummary: MonthSummary = {
-    monthLabel: ledgerMonthLabel(summaryMonth),
-    dersDone: counters.filter((c) => c.kind === 'ders').reduce((n, c) => n + Number(c.yapilan ?? 0), 0),
-    dersPlanned: counters.filter((c) => c.kind === 'ders').reduce((n, c) => n + Number(c.planlanan ?? 0), 0),
-    koclukDone: counters.filter((c) => c.kind === 'kocluk').reduce((n, c) => n + Number(c.yapilan ?? 0), 0),
-    koclukPlanned: counters.filter((c) => c.kind === 'kocluk').reduce((n, c) => n + Number(c.planlanan ?? 0), 0),
-    makeupPending: counters.reduce((n, c) => n + Number(c.telafi_bekleyen ?? 0), 0),
-    extra: counters.reduce((n, c) => n + Number(c.ek_ders ?? 0), 0),
-  }
+  // Esnek ritimli hizmette payda yok (lib/session-state buildMonthSummary).
+  const flexibleIds = new Set(services.filter((s) => s.cadence === 'esnek').map((s) => s.id))
+  const monthSummary: MonthSummary = buildMonthSummary(
+    ledgerMonthLabel(summaryMonth),
+    ((monthCounters ?? []) as Record<string, unknown>[]).map((c) => ({
+      kind: c.kind as 'ders' | 'kocluk',
+      flexible: flexibleIds.has(c.service_id as string),
+      planlanan: Number(c.planlanan ?? 0),
+      yapilan: Number(c.yapilan ?? 0),
+      bekleyen: Number(c.bekleyen ?? 0),
+      ek_ders: c.ek_ders == null ? null : Number(c.ek_ders),
+      telafi_bekleyen: c.telafi_bekleyen == null ? null : Number(c.telafi_bekleyen),
+    }))
+  )
 
   const archive: ArchiveMonth[] = ((archiveRows ?? []) as { ay: string; planlanan: number; yapilan: number; yapilmayan: number }[])
     .filter((r) => r.ay !== summaryMonthStart)
@@ -243,13 +244,22 @@ export default async function StudentSessionsPage({
     }))
 
   const accrualRows = (accrualRes.data ?? []) as Record<string, unknown>[]
+  const ledgerAccruals = accrualRows.map(mapAccrual)
+  const ledgerPayments = ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment)
   const ledger: PeriodSummary | null = isOwner
-    ? periodSummary(
-        accrualRows.map(mapAccrual),
-        ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment),
-        summaryMonth
-      )
+    ? periodSummary(ledgerAccruals, ledgerPayments, summaryMonth)
     : null
+  // Satırdaki "1.750 TL tahsil edildi / bekliyor": cari hesabın FIFO dağıtımı.
+  const money = isOwner
+    ? Object.fromEntries(sessionPaymentStates(ledgerAccruals, ledgerPayments))
+    : {}
+  const quickCollectIds = isOwner && finance
+    ? quickCollectSessionIds({
+        sessions,
+        serviceById: new Map(services.map((s) => [s.id, s])),
+        modelsByStudent: new Map([[studentId, finance.models]]),
+      })
+    : []
   const paymentHint = !ledger
     ? '—'
     : ledger.state === 'yok'
@@ -332,6 +342,8 @@ export default async function StudentSessionsPage({
         nowIso={now.toISOString()}
         finance={finance}
         unpricedIds={unpricedIds}
+        quickCollectIds={quickCollectIds}
+        money={money}
         financeHref={isOwner ? `/teacher/finans/${studentId}` : null}
         paymentNotice={
           noticeRow

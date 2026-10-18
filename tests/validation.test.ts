@@ -55,10 +55,15 @@ describe('studentSchema', () => {
     expect(studentSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false)
   })
 
-  it('rejects missing phone', () => {
-    const r = studentSchema.safeParse({ ...valid, phone: '' })
+  it('accepts missing phone (Finans TEST 01-02: telefon isteğe bağlı)', () => {
+    expect(studentSchema.safeParse({ ...valid, phone: '' }).success).toBe(true)
+    expect(studentSchema.safeParse({ ...valid, phone: undefined }).success).toBe(true)
+  })
+
+  it('rejects a too-short phone when one is given', () => {
+    const r = studentSchema.safeParse({ ...valid, phone: '123' })
     expect(r.success).toBe(false)
-    if (!r.success) expect(firstIssue(r.error)).toContain('Telefon numarası zorunlu')
+    if (!r.success) expect(firstIssue(r.error)).toContain('en az 7')
   })
 
   it('accepts phone in any human format', () => {

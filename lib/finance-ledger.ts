@@ -200,3 +200,27 @@ export function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number)
   return `${MONTHS_TR[m - 1]} ${y}`
 }
+
+export interface SessionPaymentState {
+  amountKurus: number
+  paidKurus: number
+}
+
+/**
+ * Ders & Görüşmeler satırındaki "1.750 TL tahsil edildi / bekliyor"
+ * (Finans TEST 01). Tahsilat derse bağlanmaz; cari hesabın FIFO
+ * dağıtımında o oturumun tahakkukuna düşen kısım okunur (karar
+ * 19.10.2026). Veli toplu havale yapsa da satırlar doğru kapanır.
+ */
+export function sessionPaymentStates(
+  accruals: (LedgerAccrual & { sessionId: string | null })[],
+  payments: LedgerPayment[]
+): Map<string, SessionPaymentState> {
+  const { paidByAccrual } = allocatePayments(accruals, payments)
+  const out = new Map<string, SessionPaymentState>()
+  for (const a of accruals) {
+    if (!a.sessionId || a.amountKurus <= 0) continue
+    out.set(a.sessionId, { amountKurus: a.amountKurus, paidKurus: paidByAccrual.get(a.id) ?? 0 })
+  }
+  return out
+}

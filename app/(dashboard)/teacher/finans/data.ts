@@ -21,6 +21,8 @@ export interface AccrualRow extends LedgerAccrual {
   rateKurus: number | null
   note: string | null
   auto: boolean
+  /** Görüşmeden doğan satırın kaynak oturumu (otomatik tahakkuk). */
+  sessionId: string | null
 }
 
 export interface PaymentRow extends LedgerPayment {
@@ -54,6 +56,7 @@ export function mapAccrual(r: Row): AccrualRow {
     rateKurus: r.rate_kurus == null ? null : Number(r.rate_kurus),
     note: (r.note as string | null) ?? null,
     auto: r.service_session_id != null,
+    sessionId: (r.service_session_id as string | null) ?? null,
   }
 }
 

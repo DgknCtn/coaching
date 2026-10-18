@@ -14,19 +14,20 @@ import { Badge } from '@/components/ui/badge'
 import { Section } from '@/components/shared/section'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MetricTiles } from '@/components/shared/metric-tiles'
-import { WeekSessions, type WeekServiceInfo } from '@/components/sessions/week-sessions'
+import { WeekSessions, type SessionMoney, type WeekServiceInfo } from '@/components/sessions/week-sessions'
 import {
   FINANCE_LINK_LABEL,
   formatServiceAxes,
   formatServiceSchedule,
   formatSessionTime,
 } from '@/lib/service-structure'
-import { formatUnits } from '@/lib/session-state'
+import { formatUnits, monthSummaryLine, type MonthSummary } from '@/lib/session-state'
 import { ServiceStructureDrawer, type DrawerStudent } from './service-structure-drawer'
 import { resolvePaymentNoticeAction } from './actions'
 import type { FinanceModelInfo, ServiceRow, SessionRow } from './types'
 
 export type { ServiceRow, SessionRow } from './types'
+export type { MonthSummary } from '@/lib/session-state'
 
 export interface SeasonSummary {
   birebirDersCount: number
@@ -53,26 +54,6 @@ export interface ArchiveMonth {
   missed: number
 }
 
-/** §5 "Aylık hizmet özeti" — paket hakkı değil, ayın planlanan/gerçekleşen durumu. */
-export interface MonthSummary {
-  monthLabel: string
-  dersDone: number
-  dersPlanned: number
-  koclukDone: number
-  koclukPlanned: number
-  makeupPending: number
-  extra: number
-}
-
-function summaryLine(s: MonthSummary): string {
-  const parts: string[] = []
-  if (s.dersPlanned > 0) parts.push(`Ders ${s.dersDone}/${s.dersPlanned} yapıldı`)
-  if (s.koclukPlanned > 0) parts.push(`Koçluk ${s.koclukDone}/${s.koclukPlanned} yapıldı`)
-  if (s.makeupPending > 0) parts.push(`Telafi ${s.makeupPending} bekliyor`)
-  if (s.extra > 0) parts.push(`Ek ders ${s.extra}`)
-  return parts.length ? `${s.monthLabel}: ${parts.join(' · ')}` : `${s.monthLabel}: planlanmış hizmet yok`
-}
-
 /**
  * Ders & Görüşmeler — öğrenci sayfasının etkileşim katmanı (M1.0-02).
  *
@@ -95,6 +76,8 @@ export function SessionsClient({
   nowIso,
   finance,
   unpricedIds,
+  quickCollectIds,
+  money,
   financeHref,
   paymentNotice,
   season,
@@ -113,6 +96,8 @@ export function SessionsClient({
   nowIso: string
   finance: FinanceModelInfo | null
   unpricedIds: string[]
+  quickCollectIds: string[]
+  money: Record<string, SessionMoney>
   financeHref: string | null
   paymentNotice: { id: string; note: string | null; createdAt: string } | null
   season: SeasonSummary | null
@@ -218,9 +203,12 @@ export function SessionsClient({
         nowIso={nowIso}
         showStudent={false}
         unpricedIds={unpricedIds}
+        quickCollectIds={quickCollectIds}
+        money={money}
+        financeDetail={financeHref !== null}
         summary={
           <span className="inline-flex flex-wrap items-center gap-x-2">
-            {summaryLine(monthSummary)}
+            {monthSummaryLine(monthSummary)}
             {financeHref && (
               <Link href={financeHref} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
                 <Wallet className="size-3" />

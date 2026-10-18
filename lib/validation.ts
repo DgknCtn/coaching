@@ -100,16 +100,14 @@ export const LESSON_TYPE_OPTIONS: { value: string; label: string }[] = [
 
 export const GRADE_LEVELS = ['9. Sınıf', '10. Sınıf', '11. Sınıf', '12. Sınıf', 'Mezun', 'Diğer'] as const
 
-// E-POSTA VE TELEFON ZORUNLU.
+// TELEFON VE E-POSTA İSTEĞE BAĞLI (Finans TEST 01-02, 17.10.2026).
 //
-// İkisi de opsiyoneldi ve pratikte boş kalıyordu: öğrenciyi panele davet
-// etmek e-posta ister, veliye ulaşmak telefon. İletişim bilgisi olmayan
-// bir öğrenci kaydı, koçun kayıt sırasında kazandığı beş saniyeyi
-// sonradan aramakla fazlasıyla geri ödettiriyor.
+// Telefon bir süre zorunluydu; öğrenci açmayı iletişim bilgisine bağlamak
+// kaydı engelliyordu. İletişim bilgisi ancak ilgili özellik (davet,
+// WhatsApp) kullanılacağında istenir.
 //
 // TELEFONA BİÇİM DAYATILMAZ: "0532...", "+90 532...", dahili numara —
-// hepsi geçerli girişler. Zorunlu olan bilginin VAR OLMASI, belli bir
-// kalıba uyması değil.
+// hepsi geçerli girişler. Yazılırsa en az 7 karakter olmalı.
 //
 // VERİTABANINDA NOT NULL YOK: mevcut kayıtların bir kısmı boş ve onları
 // migration ile reddetmek uygulanmış bir geçmişi kırardı. Bu bir ürün
@@ -123,8 +121,10 @@ export const studentSchema = z.object({
   phone: z
     .string()
     .trim()
-    .min(7, 'Telefon numarası zorunlu.')
-    .max(30, 'Telefon numarası çok uzun.'),
+    .min(7, 'Telefon numarası en az 7 karakter olmalı.')
+    .max(30, 'Telefon numarası çok uzun.')
+    .optional()
+    .or(z.literal('')),
   gradeLevel: z.string().trim().max(30).optional().or(z.literal('')),
   examType: z.enum(EXAM_TYPES, { message: 'Geçersiz hazırlık programı.' }).optional().or(z.literal('')),
   lessonType: z.enum(LESSON_TYPES, { message: 'Geçersiz çalışma modeli.' }).optional().or(z.literal('')),

@@ -19,6 +19,9 @@ import { dbErrorToTr } from '@/lib/auth-errors'
 import { logAudit } from '@/lib/audit'
 import { deriveMainContact, type ServiceLike } from '@/lib/service-structure'
 import { shouldAskToMoveDue } from '@/lib/weekly-flow'
+import { sessionPaymentStates } from '@/lib/finance-ledger'
+import { localDateString } from '@/lib/homework-status'
+import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../../../finans/data'
 
 function revalidate(studentId: string) {
   revalidatePath(`/teacher/students/${studentId}/gorusmeler`)
@@ -377,6 +380,75 @@ const outcomeDetailsSchema = z.object({
 })
 
 export type OutcomeDetails = z.input<typeof outcomeDetailsSchema>
+
+/**
+ * "Yapıldı + Tahsil Edildi" — Finans TEST 01 hızlı akışı.
+ *
+ * Normal olan tek tık: modal yok; planlanan tarih, süre, varsayılan birim
+ * ve geçerli ücret kullanılır. Gerçekleşme + tahakkuk + tahsilat tek
+ * işlemde (147 complete_session_and_collect); fiyat yoksa hiçbiri yazılmaz.
+ */
+export async function markDoneAndCollectAction(studentId: string, sessionId: string) {
+  const parsed = z.object({ studentId: uuidSchema, sessionId: uuidSchema }).safeParse({ studentId, sessionId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId } = await getTeacherContext()
+  const { data, error } = await supabase.rpc('complete_session_and_collect', { p_session_id: sessionId })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'session.outcome',
+    entityType: 'student',
+    entityId: studentId,
+    detail: { sessionId, status: 'yapildi', collected: true },
+  })
+  revalidate(studentId)
+  return { success: true, amountKurus: Number(data ?? 0) }
+}
+
+/**
+ * "Yalnız Yapıldı" denmiş dersin sonradan tahsili: o dersin FIFO'da
+ * kapanmamış kısmı kadar nakit tahsilat. Tutar sunucuda yeniden
+ * hesaplanır — istemcinin gördüğü sayı bayat olabilir.
+ */
+export async function collectSessionAction(studentId: string, sessionId: string) {
+  const parsed = z.object({ studentId: uuidSchema, sessionId: uuidSchema }).safeParse({ studentId, sessionId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { supabase, workspaceId, role } = await getTeacherContext()
+  if (role !== 'owner') return { error: 'Bu işlemi yalnız çalışma alanı sahibi yapabilir.' }
+
+  const [accrualRes, paymentRes] = await Promise.all([
+    supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('student_id', studentId).eq('workspace_id', workspaceId),
+    supabase.from('finance_payments').select(PAYMENT_SELECT).eq('student_id', studentId).eq('workspace_id', workspaceId),
+  ])
+  if (accrualRes.error || paymentRes.error) return { error: 'Finans kayıtları okunamadı.' }
+
+  const accruals = ((accrualRes.data ?? []) as Record<string, unknown>[]).map(mapAccrual)
+  const state = sessionPaymentStates(
+    accruals,
+    ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment)
+  ).get(sessionId)
+  if (!state) return { error: 'Bu dersin tahakkuku yok; önce Yapıldı işaretleyin ve fiyatı kontrol edin.' }
+  const remaining = state.amountKurus - state.paidKurus
+  if (remaining <= 0) return { error: 'Bu ders zaten tahsil edilmiş.' }
+
+  const lesson = accruals.find((a) => a.sessionId === sessionId)!
+  const { error } = await supabase.rpc('add_finance_payment_v2', {
+    p_student_id: studentId,
+    p_paid_on: localDateString(new Date()),
+    p_amount_kurus: remaining,
+    p_method: 'nakit',
+    p_account: null,
+    p_applies_to_month: `${lesson.date.slice(0, 7)}-01`,
+    p_note: 'Ders sonrası tahsilat',
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidate(studentId)
+  return { success: true, amountKurus: remaining }
+}
 
 /**
  * Görüşme sonrası kesinleşmiş durum.

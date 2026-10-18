@@ -25,6 +25,7 @@ import {
   type PriceVersion,
 } from '@/lib/pricing-history'
 import { formatUnits } from '@/lib/session-state'
+import { isoWeekKeyOfDate } from '@/lib/iso-week'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -288,25 +289,39 @@ export function StudentFinanceClient({
                     {m.type === 'payment' ? '+' : ''}
                     {formatKurus(m.amount)}
                   </span>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Kaydı sil"
-                    disabled={isPending}
-                    onClick={() => {
-                      const auto = m.type === 'lesson' && (m.row as AccrualRow).auto
-                      const monthly = m.type === 'lesson' && (m.row as AccrualRow).kind === 'aylik'
-                      const msg = monthly
-                        ? 'Bu ayın sabit ücreti sıfırlansın mı? (Satır silinmez; yeniden üretilmesin diye 0 TL olarak kalır.)'
-                        : auto
-                          ? 'Bu tahakkuk bir oturumdan otomatik geldi; oturum yeniden işaretlenirse geri yazılır. Silinsin mi?'
+                  {m.type === 'lesson' && (m.row as AccrualRow).auto ? (
+                    // Görüşmeden doğan tahakkuk kaynağında düzeltilir (Finans
+                    // TEST 01-02 P1; 147 delete_finance_entry de reddeder).
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/teacher/students/${student.id}/gorusmeler?hafta=${isoWeekKeyOfDate(m.date)}`}
+                        />
+                      }
+                    >
+                      Görüşmeyi aç
+                    </Button>
+                  ) : (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Kaydı sil"
+                      disabled={isPending}
+                      onClick={() => {
+                        const monthly = m.type === 'lesson' && (m.row as AccrualRow).kind === 'aylik'
+                        const msg = monthly
+                          ? 'Bu ayın sabit ücreti sıfırlansın mı? (Satır silinmez; yeniden üretilmesin diye 0 TL olarak kalır.)'
                           : 'Kayıt silinsin mi?'
-                      if (!window.confirm(msg)) return
-                      run(() => deleteFinanceEntryAction(m.type, m.id), 'Kayıt güncellendi.')
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                        if (!window.confirm(msg)) return
+                        run(() => deleteFinanceEntryAction(m.type, m.id), 'Kayıt güncellendi.')
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}

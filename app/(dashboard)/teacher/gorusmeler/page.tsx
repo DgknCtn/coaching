@@ -2,7 +2,10 @@ import { CalendarCheck, CalendarClock, Clock, RotateCcw } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
 import { MetricTiles } from '@/components/shared/metric-tiles'
-import { WeekSessions } from '@/components/sessions/week-sessions'
+import { WeekSessions, type SessionMoney } from '@/components/sessions/week-sessions'
+import { sessionPaymentStates } from '@/lib/finance-ledger'
+import type { FinanceModelVersion } from '@/lib/pricing-history'
+import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../finans/data'
 import { isAwaitingOutcome } from '@/lib/service-structure'
 import { isoWeekKey, isValidWeekKey, shiftWeek, weekLabel, weekMonths, weekRange } from '@/lib/iso-week'
 import {
@@ -12,6 +15,7 @@ import {
   findUnpricedSessions,
   mapSessionRow,
   monthsToGenerate,
+  quickCollectSessionIds,
   serviceInfo,
 } from '../students/[studentId]/gorusmeler/load'
 
@@ -92,36 +96,53 @@ export default async function WeeklySessionsPage({
     })
   )
 
-  // "Fiyatsız" uyarısı yalnız sahibe (finans RLS'i zaten başkasına boş döner).
+  // Finans yalnız sahibe (finans RLS'i zaten başkasına boş döner):
+  // "Fiyatsız" uyarısı, satırdaki tahsil durumu ve hızlı tahsil akışı.
   let unpricedIds: string[] = []
-  const doneIds = sessions.filter((s) => s.status === 'yapildi').map((s) => s.id)
-  if (role === 'owner' && doneIds.length > 0) {
-    const doneStudents = Array.from(new Set(sessions.filter((s) => s.status === 'yapildi').map((s) => s.studentId)))
-    const [{ data: accrued }, { data: modelRows }] = await Promise.all([
-      supabase.from('finance_lessons').select('service_session_id').in('service_session_id', doneIds),
+  let quickCollectIds: string[] = []
+  const money: Record<string, SessionMoney> = {}
+  const weekStudents = Array.from(new Set(sessions.map((s) => s.studentId)))
+  if (role === 'owner' && weekStudents.length > 0) {
+    const [{ data: accrualRows }, { data: paymentRows }, { data: modelRows }] = await Promise.all([
+      supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('workspace_id', workspaceId).in('student_id', weekStudents),
+      supabase.from('finance_payments').select(PAYMENT_SELECT).eq('workspace_id', workspaceId).in('student_id', weekStudents),
       supabase
         .from('student_finance_models')
         .select('student_id, model, collection_timing, valid_from, created_at')
-        .in('student_id', doneStudents),
+        .in('student_id', weekStudents),
     ])
-    const modelsByStudent = new Map<string, { model: 'aylik_sabit' | 'ders_basi'; collectionTiming: 'ay_basi' | 'ay_sonu' | 'ders_sonrasi'; validFrom: string; createdAt: string }[]>()
+    const modelsByStudent = new Map<string, FinanceModelVersion[]>()
     for (const m of (modelRows ?? []) as Record<string, unknown>[]) {
       const list = modelsByStudent.get(m.student_id as string) ?? []
       list.push({
-        model: m.model as 'aylik_sabit' | 'ders_basi',
-        collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
+        model: m.model as FinanceModelVersion['model'],
+        collectionTiming: m.collection_timing as FinanceModelVersion['collectionTiming'],
         validFrom: m.valid_from as string,
         createdAt: m.created_at as string,
       })
       modelsByStudent.set(m.student_id as string, list)
     }
+    const accruals = ((accrualRows ?? []) as Record<string, unknown>[]).map(mapAccrual)
+    const payments = ((paymentRows ?? []) as Record<string, unknown>[]).map(mapPayment)
+    // FIFO öğrenci başına: bir öğrencinin ödemesi diğerinin dersini kapatmaz.
+    for (const studentId of weekStudents) {
+      const states = sessionPaymentStates(
+        accruals.filter((x) => x.studentId === studentId),
+        payments.filter((x) => x.studentId === studentId)
+      )
+      for (const [id, state] of states) money[id] = state
+    }
+    const services = (serviceRows ?? []).map((r) => mapServiceRow(r as Record<string, unknown>, groupNames))
     unpricedIds = findUnpricedSessions({
       sessions,
-      financeLinkByService: new Map(
-        (serviceRows ?? []).map((r) => [r.id as string, r.finance_link as 'aylik_paket' | 'ders_basi' | 'haric'])
-      ),
+      financeLinkByService: new Map(services.map((x) => [x.id, x.financeLink])),
       modelsByStudent,
-      accruedSessionIds: new Set((accrued ?? []).map((r) => r.service_session_id as string)),
+      accruedSessionIds: new Set(accruals.map((x) => x.sessionId).filter((x): x is string => !!x)),
+    })
+    quickCollectIds = quickCollectSessionIds({
+      sessions,
+      serviceById: new Map(services.map((x) => [x.id, x])),
+      modelsByStudent,
     })
   }
 
@@ -178,6 +199,9 @@ export default async function WeeklySessionsPage({
         nowIso={now.toISOString()}
         showStudent
         unpricedIds={unpricedIds}
+        quickCollectIds={quickCollectIds}
+        money={money}
+        financeDetail={role === 'owner'}
         emptyHint="Esnek ritimli derslerin oturumları öğrencinin Ders & Görüşmeler sayfasından eklenir."
       />
     </div>

@@ -53,7 +53,7 @@ export async function createStudentAction(
     primary_teacher_profile_id: profile.id,
     full_name: v.fullName,
     email: v.email || null,
-    phone: v.phone,
+    phone: v.phone || null,
     grade_level: v.gradeLevel || null,
     exam_type: v.examType || null,
     lesson_type: v.lessonType || null,
@@ -135,7 +135,7 @@ export async function updateStudentAction(
     .update({
       full_name: v.fullName,
       email: v.email || null,
-      phone: v.phone,
+      phone: v.phone || null,
       grade_level: v.gradeLevel || null,
       exam_type: v.examType || null,
       lesson_type: v.lessonType || null,

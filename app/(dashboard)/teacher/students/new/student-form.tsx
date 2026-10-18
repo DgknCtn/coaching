@@ -27,8 +27,10 @@ const schema = z.object({
   email: z.string().email('Geçerli e-posta').optional().or(z.literal('')),
   phone: z
     .string()
-    .min(7, 'Telefon numarası zorunlu.')
-    .max(30, 'Telefon numarası çok uzun.'),
+    .min(7, 'Telefon numarası en az 7 karakter olmalı.')
+    .max(30, 'Telefon numarası çok uzun.')
+    .optional()
+    .or(z.literal('')),
   gradeLevel: z.string().optional(),
   examType: z.string().optional(),
   lessonType: z.string().optional(),
@@ -186,7 +188,9 @@ export function StudentForm({ defaultValues, mode = 'create', studentId }: Props
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Telefon *</Label>
+              <Label htmlFor="phone">
+                Telefon <span className="text-muted-foreground">(boş bırakılabilir)</span>
+              </Label>
               <Input id="phone" type="tel" placeholder="05xx xxx xx xx" {...register('phone')} />
               {/* Telefonun hata mesajı hiç render edilmiyordu: alan
                   reddedilirse kullanıcı formun neden gönderilmediğini

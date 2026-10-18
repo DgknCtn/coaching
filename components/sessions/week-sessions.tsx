@@ -22,11 +22,14 @@ import {
 } from '@/lib/session-state'
 import { dayKeyOf } from '@/lib/iso-week'
 import { APP_TIME_ZONE } from '@/lib/homework-status'
+import { formatKurus } from '@/lib/billing/pricing'
 import {
+  collectSessionAction,
   createAdhocSessionAction,
   createMakeupSessionAction,
   deleteAdhocSessionAction,
   listSessionPlanHistoryAction,
+  markDoneAndCollectAction,
   moveActiveFlowDueAction,
   rescheduleSessionAction,
   setGroupSessionOutcomeAction,
@@ -87,6 +90,12 @@ export interface WeekServiceInfo {
   financeLink: FinanceLink
   defaultUnitCount: number
   plannedDurationMinutes: number
+}
+
+/** Oturumun tahakkuku ve FIFO'da ona düşen tahsilat (yalnız sahip). */
+export interface SessionMoney {
+  amountKurus: number
+  paidKurus: number
 }
 
 export interface AddSessionTarget {
@@ -150,6 +159,9 @@ export function WeekSessions({
   summary,
   emptyHint,
   unpricedIds,
+  quickCollectIds,
+  money,
+  financeDetail,
 }: {
   rows: SessionRow[]
   services: Record<string, WeekServiceInfo>
@@ -168,6 +180,15 @@ export function WeekSessions({
    * için hesaplanır; finansı göremeyen öğretmende boş gelir.
    */
   unpricedIds?: string[]
+  /**
+   * "Yapıldı + Tahsil Edildi" hızlı akışı açık oturumlar (ders başı +
+   * ders sonrası tahsilat; Finans TEST 01). Yalnız sahip için dolu.
+   */
+  quickCollectIds?: string[]
+  /** Oturum id → tahakkuk/tahsil; satırda "1.750 TL bekliyor". */
+  money?: Record<string, SessionMoney>
+  /** Sahip: üç noktada "Finans detayını aç". */
+  financeDetail?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -177,6 +198,7 @@ export function WeekSessions({
   const now = new Date(nowIso)
   const todayKey = dayKeyOf(now)
   const unpriced = useMemo(() => new Set(unpricedIds ?? []), [unpricedIds])
+  const quickCollect = useMemo(() => new Set(quickCollectIds ?? []), [quickCollectIds])
 
   const sorted = useMemo(
     () =>
@@ -216,6 +238,31 @@ export function WeekSessions({
       return
     }
     run(() => setSessionOutcomeAction(row.studentId, row.id, 'yapildi'), 'Yapıldı olarak kaydedildi.')
+  }
+
+  // Normal olan tek tık: modal yok (Finans TEST 01 ürün ilkesi).
+  function markDoneAndCollect(row: SessionRow) {
+    startTransition(async () => {
+      const r = await markDoneAndCollectAction(row.studentId, row.id)
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success(`Yapıldı · ${formatKurus(r.amountKurus ?? 0)} tahsil edildi.`)
+      router.refresh()
+    })
+  }
+
+  function collect(row: SessionRow) {
+    startTransition(async () => {
+      const r = await collectSessionAction(row.studentId, row.id)
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success(`${formatKurus(r.amountKurus ?? 0)} tahsil edildi.`)
+      router.refresh()
+    })
   }
 
   function markOutcome(row: SessionRow, status: 'yapilmadi' | 'iptal') {
@@ -306,6 +353,9 @@ export function WeekSessions({
                   )
                   const display = sessionDisplayStatus(row)
                   const isToday = g.key === todayKey
+                  const fast = quickCollect.has(row.id)
+                  const cash = row.status === 'yapildi' ? money?.[row.id] : undefined
+                  const due = cash ? cash.amountKurus - cash.paidKurus : 0
                   return (
                     <tr
                       key={row.id}
@@ -371,13 +421,41 @@ export function WeekSessions({
                             Fiyatsız
                           </Badge>
                         )}
+                        {cash && (
+                          <span
+                            className={cn(
+                              'ml-1 text-xs whitespace-nowrap tabular-nums',
+                              due > 0 ? 'text-warning-foreground' : 'text-success'
+                            )}
+                          >
+                            {due > 0
+                              ? `| ${formatKurus(cash.amountKurus)} bekliyor${cash.paidKurus > 0 ? ` · ${formatKurus(due)} kalan` : ''}`
+                              : `| ${formatKurus(cash.amountKurus)} tahsil edildi`}
+                          </span>
+                        )}
                       </td>
                       <td className="hidden px-3 py-2 align-top text-xs text-muted-foreground lg:table-cell">
                         {service ? FINANCE_LINK_LABEL[service.financeLink] : '—'}
                       </td>
                       <td className="px-3 py-2 align-top">
                         <div className="flex items-center justify-end gap-1">
-                          {row.status === 'planlandi' && (
+                          {row.status === 'planlandi' && fast && (
+                            <>
+                              <Button
+                                size="xs"
+                                variant={awaiting ? 'default' : 'outline'}
+                                disabled={isPending}
+                                onClick={() => markDoneAndCollect(row)}
+                              >
+                                <Check className="size-3.5" />
+                                Yapıldı + Tahsil Edildi
+                              </Button>
+                              <Button size="xs" variant="ghost" disabled={isPending} onClick={() => markDone(row)}>
+                                Yalnız Yapıldı
+                              </Button>
+                            </>
+                          )}
+                          {row.status === 'planlandi' && !fast && (
                             <Button
                               size="xs"
                               variant={awaiting ? 'default' : 'outline'}
@@ -388,9 +466,15 @@ export function WeekSessions({
                               Yapıldı
                             </Button>
                           )}
+                          {fast && cash && due > 0 && (
+                            <Button size="xs" variant="outline" disabled={isPending} onClick={() => collect(row)}>
+                              Tahsil edildi
+                            </Button>
+                          )}
                           <RowMenu
                             row={row}
                             disabled={isPending}
+                            financeHref={financeDetail ? `/teacher/finans/${row.studentId}` : null}
                             onOpenDetail={() => setDetailId(row.id)}
                             onOutcome={(s) => markOutcome(row, s)}
                           />
@@ -412,7 +496,10 @@ export function WeekSessions({
         onClose={() => setDetailId(null)}
       />
 
-      {addSession && (
+      {/* Yalnız açıkken mount: hizmet listesi sayfa yenilenince değişebilir
+          (ör. hizmet aynı sayfada aktifleştirildi); kalıcı mount ilk render'daki
+          boş serviceId'yi saklıyor ve "Hizmet seçin" hatası veriyordu (TEST 02). */}
+      {addSession && addOpen && (
         <AddSessionDialog
           mode={addOpen}
           target={addSession}
@@ -426,11 +513,14 @@ export function WeekSessions({
 function RowMenu({
   row,
   disabled,
+  financeHref,
   onOpenDetail,
   onOutcome,
 }: {
   row: SessionRow
   disabled: boolean
+  /** Finansal istisnalar (tutar, tahsilat tarihi, tahsilatı kaldırma) orada. */
+  financeHref: string | null
   onOpenDetail: () => void
   onOutcome: (status: 'yapilmadi' | 'iptal') => void
 }) {
@@ -444,15 +534,21 @@ function RowMenu({
       >
         <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-56">
         {open && !row.groupSessionId && (
           <DropdownMenuItem onClick={onOpenDetail}>Planı değiştir</DropdownMenuItem>
         )}
         {open && <DropdownMenuItem onClick={() => onOutcome('yapilmadi')}>Yapılmadı</DropdownMenuItem>}
         {open && <DropdownMenuItem onClick={() => onOutcome('iptal')}>İptal edildi</DropdownMenuItem>}
         {open && <DropdownMenuSeparator />}
+        <DropdownMenuItem onClick={onOpenDetail}>Gerçekleşme detayını düzenle</DropdownMenuItem>
         <DropdownMenuItem onClick={onOpenDetail}>Not ekle</DropdownMenuItem>
-        <DropdownMenuItem onClick={onOpenDetail}>Detayı aç</DropdownMenuItem>
+        {financeHref && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href={financeHref} />}>Finans detayını aç</DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -973,7 +1069,11 @@ function AddSessionDialog({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [serviceId, setServiceId] = useState(target.services[0]?.id ?? '')
+  const [pickedServiceId, setServiceId] = useState(target.services[0]?.id ?? '')
+  // Seçili id listede yoksa ilk hizmete düş — <select> görsel olarak zaten onu gösterir.
+  const serviceId = target.services.some((s) => s.id === pickedServiceId)
+    ? pickedServiceId
+    : (target.services[0]?.id ?? '')
   const [when, setWhen] = useState(() => {
     const d = new Date()
     d.setMinutes(0, 0, 0)
@@ -984,8 +1084,12 @@ function AddSessionDialog({
 
   function submit() {
     const at = new Date(when)
-    if (!serviceId || Number.isNaN(at.getTime())) {
-      toast.error('Hizmet ve tarih seçin.')
+    if (!serviceId) {
+      toast.error('Hizmet seçin.')
+      return
+    }
+    if (!when || Number.isNaN(at.getTime())) {
+      toast.error('Tarih ve saati tam girin.')
       return
     }
     startTransition(async () => {

@@ -114,3 +114,26 @@ export function findUnpricedSessions(input: {
   }
   return out
 }
+
+/**
+ * "Yapıldı + Tahsil Edildi" hızlı akışının açık olduğu oturumlar
+ * (Finans TEST 01): birebir, oturum başı ücretlenen hizmet ve dersin
+ * tarihinde "ders başı + ders sonrası tahsilat" modeli. Diğer modellerde
+ * tahsilat ay başı/sonu toplu yapılır; satırda tek "Yapıldı" kalır.
+ */
+export function quickCollectSessionIds(input: {
+  sessions: SessionRow[]
+  serviceById: Map<string, { financeLink: ServiceRow['financeLink']; participation: ServiceRow['participation'] }>
+  modelsByStudent: Map<string, FinanceModelVersion[]>
+}): string[] {
+  const out: string[] = []
+  for (const s of input.sessions) {
+    if (s.groupSessionId || (s.status !== 'planlandi' && s.status !== 'yapildi')) continue
+    const svc = input.serviceById.get(s.serviceId)
+    if (!svc || svc.participation !== 'birebir' || svc.financeLink !== 'ders_basi') continue
+    const date = localDateString(new Date(s.actualAt ?? s.currentPlannedAt))
+    const model = modelAt(input.modelsByStudent.get(s.studentId) ?? [], date)
+    if (model?.model === 'ders_basi' && model.collectionTiming === 'ders_sonrasi') out.push(s.id)
+  }
+  return out
+}
