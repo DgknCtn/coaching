@@ -1,5 +1,6 @@
 import { Activity, Building2, Scale, ScrollText, Server, UsersRound,
   BookOpen,
+  Newspaper,
   CalendarCheck,
   CalendarDays,
   CalendarRange,
@@ -445,6 +446,18 @@ export const adminNavSections: AdminNavSection[] = [
     items: [
       { href: '/admin/talepler', label: 'Destek Talepleri', icon: LifeBuoy, description: 'Açık talepler ve yanıtlar' },
       { href: '/admin/kutuphane', label: 'Kütüphane', icon: Library, description: 'Ortak kitap havuzu ve öneriler' },
+    ],
+  },
+  {
+    // İÇERİK AYRI BİR BÖLÜM: blog mevcut dört ailenin (müşteri / gelir /
+    // destek / platform) hiçbirine ait değil. "Platform"un altına
+    // konsaydı sağlık, güvenlik ve KVKK sayfalarının yanında bir
+    // pazarlama aracı durur, bölümün anlamı bulanıklaşırdı.
+    id: 'icerik',
+    label: 'İçerik',
+    icon: Newspaper,
+    items: [
+      { href: '/admin/blog', label: 'Blog', icon: Newspaper, description: 'Yazılar, kategoriler ve yayın durumu' },
     ],
   },
   {

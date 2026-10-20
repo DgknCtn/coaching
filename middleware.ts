@@ -43,6 +43,17 @@ function isPublicPath(pathname: string): boolean {
     // /login'e 307 dönüyordu. Sonuç: WhatsApp'ta paylaşılan her bağlantı
     // görselsiz görünüyordu — görsel isteğini atan Meta/X sunucusunun
     // oturumu yok ve olamaz da.
+    // BLOG: ÖNEK EŞLEŞMESİ ŞART, TAM EŞLEŞME YETMEZ.
+    //
+    // Bu dosyadaki diğer tüm public yollar tam eşleşme ('/gizlilik' gibi)
+    // çünkü hepsi tek bir sayfa. Blog ise /blog ve /blog/<adres> olmak
+    // üzere SINIRSIZ sayıda adres. Yalnız '/blog' yazılsaydı her YAZI
+    // oturumsuz ziyaretçi için /login'e 307 dönerdi — yani blogun
+    // tamamı erişilemez olurdu ve ana sayfa çalıştığı için bu fark
+    // edilmezdi. Aynı hata bu dosyada bir kez /opengraph-image ile
+    // yaşandı (aşağıdaki not).
+    pathname === '/blog' ||
+    pathname.startsWith('/blog/') ||
     pathname === '/opengraph-image' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||

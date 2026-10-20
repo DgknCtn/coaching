@@ -41,6 +41,28 @@ test('demo page is publicly accessible', async ({ page }) => {
   await expect(page.locator('body')).toBeVisible()
 })
 
+// BLOG OTURUMSUZ ERİŞİLEBİLİR OLMAK ZORUNDA.
+//
+// middleware.ts'teki isPublicPath() diğer tüm public yollar için TAM
+// eşleşme kullanıyor; blog ise önek eşleşmesi gerektiriyor
+// ('/blog' + '/blog/<slug>'). Yalnız '/blog' yazılırsa liste çalışır,
+// her YAZI /login'e 307 döner — ve liste çalıştığı için bu fark
+// edilmez. Bu test iki yolu birden denetliyor.
+test('blog list is publicly accessible', async ({ page }) => {
+  await page.goto('/blog')
+  expect(page.url()).toContain('/blog')
+  expect(page.url()).not.toContain('/login')
+  await expect(page.locator('h1')).toBeVisible()
+})
+
+test('blog post path is not gated by auth', async ({ page }) => {
+  // Var olmayan bir slug: beklenen sonuç 404, /login'e YÖNLENDİRME DEĞİL.
+  // 404 görmek middleware'in yolu public saydığını kanıtlıyor.
+  const response = await page.goto('/blog/olmayan-bir-yazi-adresi')
+  expect(page.url()).not.toContain('/login')
+  expect(response?.status()).toBe(404)
+})
+
 test('protected route redirects anonymous user to login', async ({ page }) => {
   await page.goto('/teacher')
   await expect(page).toHaveURL(/\/login/)

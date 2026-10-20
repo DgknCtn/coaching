@@ -64,6 +64,17 @@ export function Navbar() {
             >
               Demo
             </Link>
+            {/* BLOG: bu dosyada bağlantılar İKİ KEZ yazılı (masaüstü ve
+                mobil) — tek bir NAV_LINKS dizisi yok. Yeni bir bağlantı
+                eklerken ikisini birden güncellemek gerekiyor; yalnız
+                birini güncellemek mobilde ya da masaüstünde eksik menü
+                demek ve dar ekranda test edilmediği için fark edilmez. */}
+            <Link
+              href="/blog"
+              className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Blog
+            </Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -117,6 +128,14 @@ export function Navbar() {
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               Demo
+            </Link>
+            {/* Masaüstü bloğunun eşi — yukarıdaki nota bakın. */}
+            <Link
+              href="/blog"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Blog
             </Link>
           </nav>
           <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">

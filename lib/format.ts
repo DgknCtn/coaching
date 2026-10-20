@@ -3,6 +3,8 @@
 // Üç yönetim sayfası da satır içi `toLocaleDateString('tr-TR')`
 // çağırıyordu; göreli zaman ("5 dk önce") için hiçbir şey yoktu.
 
+import { APP_TIME_ZONE } from '@/lib/homework-status'
+
 /** `04.09.2026` — tabloda ve kartlarda kullanılan kısa biçim. */
 export function formatDateTr(value: string | Date | null | undefined): string {
   if (!value) return '—'
@@ -22,6 +24,36 @@ export function formatDateTimeTr(value: string | Date | null | undefined): strin
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+  })
+}
+
+/**
+ * `12 Ekim 2026` — blog yazılarının yayın tarihi.
+ *
+ * ============================================================
+ * NEDEN AYRI BİR BİÇİM VE NEDEN SAAT DİLİMİ AÇIKÇA YAZILI
+ *
+ * `formatDateTr` yönetim tablosu için: `12.10.2026` dar bir hücreye
+ * sığıyor. Bir yazının altında ise okunur tarih bekleniyor ve "12 Ekim"
+ * ile "12.10" aynı şey değil — ikincisi arayüzü değil veritabanını
+ * andırıyor.
+ *
+ * SAAT DİLİMİ: `formatDateTr` zaman dilimi vermiyor, yani sunucunun
+ * diliminde biçimlendiriyor. Vercel'de sunucu UTC; Türkiye UTC+3.
+ * Gece yarısından sonra yayınlanan bir yazı ziyaretçiye BİR GÜN ÖNCE
+ * yayınlanmış görünürdü. Takvim mantığının tek dilim kaynağı
+ * lib/homework-status.ts'teki APP_TIME_ZONE ve burada da o kullanılıyor.
+ * ============================================================
+ */
+export function formatLongDateTr(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   })
 }
 
