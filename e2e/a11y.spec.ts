@@ -30,6 +30,12 @@ const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 const PUBLIC_ROUTES = [
   { path: '/', name: 'Tanıtım sayfası' },
   { path: '/demo', name: 'Demo' },
+  // Blog LİSTESİ burada. Yazı DETAYI yok: adres veritabanındaki bir
+  // slug'a bağlı ve bu testler kimlik/veri olmadan koşuyor. Yazı
+  // detayının tipografisi liste kartıyla aynı token'ları kullanıyor,
+  // ama kendi başına denetlenmesi için yayınlanmış sabit bir örnek
+  // yazı gerekir — ayrı bir iş.
+  { path: '/blog', name: 'Blog listesi' },
   { path: '/login', name: 'Giriş (koç, öğrenci, veli)' },
   { path: '/register', name: 'Kayıt' },
   { path: '/gizlilik', name: 'Gizlilik metni' },

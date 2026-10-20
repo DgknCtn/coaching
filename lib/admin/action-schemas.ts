@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BLOG_CATEGORIES } from '@/lib/blog-categories'
 
 // YÖNETİM İŞLEMİ ŞEMALARI (128). Sınırlar veritabanındakilerle AYNI —
 // asıl denetim RPC'de; bu katman yanlış girdiyi ağa çıkmadan yakalar ve
@@ -53,6 +54,84 @@ export const deleteCleanupSchema = z.object({
   reason,
 })
 
+// ============================================================
+// 149 — BLOG YAZILARI
+//
+// SINIRLAR 149_blog.sql'deki CHECK KISITLARIYLA BİREBİR AYNI ve bu
+// eşitlik tests/blog-action-schemas.test.ts ile korunuyor. Ayrışırlarsa
+// kullanıcı alan düzeyinde Türkçe bir mesaj yerine "İşlem
+// tamamlanamadı" görür (dbErrorToTr, Postgres'in CHECK ihlali
+// mesajını generic mesaja indiriyor) — yani hatanın hangi alanda
+// olduğu ekranda HİÇ görünmez.
+//
+// GEREKÇE (`reason`) YALNIZ DURUM VE SİLME ŞEMALARINDA: taslak
+// kaydetmek yönetim kaydına girmiyor (149'un karar bloğu). Her
+// kaydetmede 10 karakter gerekçe istemek, bir yazıyı yazarken on kez
+// gerekçe yazdırmak demekti.
+// ============================================================
+
+/** Boş metin NULL'a iner: form boş string gönderiyor, veritabanı NULL bekliyor. */
+const optionalText = (min: number, max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${label} en fazla ${max} karakter olabilir.`)
+    .refine((v) => v === '' || v.length >= min, `${label} en az ${min} karakter olmalı.`)
+    .optional()
+    .or(z.literal(''))
+
+export const blogPostSchema = z.object({
+  // Yeni yazıda yok; düzenlemede var.
+  id: uuid.optional(),
+
+  slug: z
+    .string()
+    .trim()
+    .min(3, 'Adres en az 3 karakter olmalı.')
+    .max(120, 'Adres en fazla 120 karakter olabilir.')
+    .regex(
+      /^[a-z0-9]+(-[a-z0-9]+)*$/,
+      'Adres yalnız küçük harf, rakam ve tire içerebilir; tireyle başlayıp bitemez.'
+    ),
+
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Başlık en az 3 karakter olmalı.')
+    .max(200, 'Başlık en fazla 200 karakter olabilir.'),
+
+  excerpt: z
+    .string()
+    .trim()
+    .min(20, 'Özet en az 20 karakter olmalı.')
+    .max(400, 'Özet en fazla 400 karakter olabilir.'),
+
+  content: z
+    .string()
+    .trim()
+    .min(50, 'İçerik en az 50 karakter olmalı.')
+    .max(60000, 'İçerik en fazla 60000 karakter olabilir.'),
+
+  category: z.enum(BLOG_CATEGORIES, { message: 'Geçerli bir kategori seçin.' }),
+
+  seoTitle: optionalText(3, 70, 'Arama başlığı'),
+  seoDescription: optionalText(20, 160, 'Arama açıklaması'),
+})
+
+export const blogStatusSchema = z.object({
+  id: uuid,
+  status: z.enum(['draft', 'published'], { message: 'Geçersiz yayın durumu.' }),
+  reason,
+})
+
+export const blogDeleteSchema = z.object({
+  id: uuid,
+  // Yıkıcı işlem: yazının başlığı AYNEN yazılmalı (136'nın kalıbı).
+  // Yanlış satırda açılmış bir diyaloğu refleksle onaylamayı önler.
+  confirm: z.string().trim().min(1, 'Onay metnini yazın.').max(200),
+  reason,
+})
+
 /** İlk hatanın metni — diyalog tek satır gösteriyor. */
 export function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Girdi geçersiz.'
@@ -76,6 +155,10 @@ export const ADMIN_ACTION_LABEL: Record<string, string> = {
   'workspace.delete': 'Çalışma alanı kalıcı silindi',
   'partner.delete': 'Partner silindi',
   'user.delete': 'Kullanıcı silindi',
+  // 149:
+  'blog.publish': 'Blog yazısı yayınlandı',
+  'blog.unpublish': 'Blog yazısı geri çekildi',
+  'blog.delete': 'Blog yazısı silindi',
 }
 
 export function adminActionLabel(action: string): string {

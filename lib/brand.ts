@@ -99,6 +99,9 @@ export function absoluteUrl(path: string): string {
 export const PUBLIC_ROUTES = [
   { path: '/', priority: 1, changeFrequency: 'weekly' as const },
   { path: '/demo', priority: 0.8, changeFrequency: 'monthly' as const },
+  // Blog LİSTESİ burada; yazıların kendisi app/sitemap.ts'te
+  // veritabanından okunuyor (statik bir listeye yazılamazlar).
+  { path: '/blog', priority: 0.9, changeFrequency: 'weekly' as const },
   { path: '/login', priority: 0.5, changeFrequency: 'yearly' as const },
   { path: '/register', priority: 0.7, changeFrequency: 'yearly' as const },
   { path: '/gizlilik', priority: 0.3, changeFrequency: 'yearly' as const },
