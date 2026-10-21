@@ -153,10 +153,12 @@ export function WeekSessions({
   nextHref,
   currentHref,
   isCurrentWeek,
+  hideWeekNav,
   nowIso,
   showStudent,
   addSession,
   summary,
+  emptyTitle,
   emptyHint,
   unpricedIds,
   quickCollectIds,
@@ -170,10 +172,21 @@ export function WeekSessions({
   nextHref: string
   currentHref: string
   isCurrentWeek: boolean
+  /**
+   * M1.0-04 EKLE: "genel bekleyen telafiler" görünümü hafta kavramı
+   * TAŞIMIYOR (tüm zamanlardaki bekleyen kararları listeliyor) — ‹ ›
+   * "Bu hafta" gezinmesi orada anlamsız. VARSAYILAN false: iki mevcut
+   * çağıran (öğrenci sayfası + bu sayfanın haftalık görünümü)
+   * ETKİLENMEZ. `prevHref`/`nextHref`/`currentHref` yine de ZORUNLU
+   * kalıyor — bu modda çağıran taraf boş string geçer, render edilmez.
+   */
+  hideWeekNav?: boolean
   nowIso: string
   showStudent: boolean
   addSession?: AddSessionTarget | null
   summary?: ReactNode
+  /** Varsayılan "Bu hafta planlanmış oturum yok" — hafta kavramı taşımayan görünümlerde geçersiz kılınır. */
+  emptyTitle?: string
   emptyHint?: string
   /**
    * Yapıldı ama ücret doğmamış oturumlar (fiyat tanımsız). Yalnız sahip
@@ -302,19 +315,23 @@ export function WeekSessions({
               </Button>
             </>
           )}
-          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={prevHref} />}>
-            <ChevronLeft className="size-4" />
-            <span className="sr-only">Önceki hafta</span>
-          </Button>
-          {!isCurrentWeek && (
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={currentHref} />}>
-              Bu hafta
-            </Button>
+          {!hideWeekNav && (
+            <>
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={prevHref} />}>
+                <ChevronLeft className="size-4" />
+                <span className="sr-only">Önceki hafta</span>
+              </Button>
+              {!isCurrentWeek && (
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href={currentHref} />}>
+                  Bu hafta
+                </Button>
+              )}
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={nextHref} />}>
+                <ChevronRight className="size-4" />
+                <span className="sr-only">Sonraki hafta</span>
+              </Button>
+            </>
           )}
-          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={nextHref} />}>
-            <ChevronRight className="size-4" />
-            <span className="sr-only">Sonraki hafta</span>
-          </Button>
         </div>
       </header>
 
@@ -322,7 +339,7 @@ export function WeekSessions({
         <div className="p-4">
           <EmptyState
             icon={CalendarPlus}
-            title="Bu hafta planlanmış oturum yok"
+            title={emptyTitle ?? 'Bu hafta planlanmış oturum yok'}
             description={emptyHint ?? 'Haftalık ritimli hizmetlerin oturumları takvimden otomatik üretilir.'}
           />
         </div>

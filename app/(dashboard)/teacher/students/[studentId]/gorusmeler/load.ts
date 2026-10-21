@@ -137,3 +137,30 @@ export function quickCollectSessionIds(input: {
   }
   return out
 }
+
+/**
+ * FİN-01 (M1.0-04): "Ders Başı + Ders sonrası" finans modeli tanımlıyken
+ * bir hizmet "Takip dışı" (finance_link='haric') kalırsa, o hizmetin
+ * oturumları hızlı tahsilat akışına hiç girmiyor (quickCollectSessionIds)
+ * ve "fiyatsız" uyarı listesine de düşmüyor (accrualPriceType 'haric' için
+ * bilerek null döner — bkz. lib/pricing-history.ts). Sonuç: öğretmen hiçbir
+ * uyarı görmeden "neden hızlı tahsilat çıkmıyor?" diye kalıyordu — iki
+ * bağımsız "finans ilişkisi" kavramı (hizmet seviyesi financeLink ve
+ * öğrenci seviyesi finans modeli) sessizce ayrışmıştı.
+ *
+ * Bu fonksiyon o çelişkiyi tespit eder; görünür bir uyarı ÜRETMEZ, yalnız
+ * hangi hizmetlerin çeliştiğini döner — rozet çağıran arayüzde basılır.
+ */
+export function financeLinkMismatchServiceIds(input: {
+  services: ServiceRow[]
+  models: FinanceModelVersion[]
+  today: string
+}): string[] {
+  const current = modelAt(input.models, input.today)
+  if (!current || current.model !== 'ders_basi' || current.collectionTiming !== 'ders_sonrasi') {
+    return []
+  }
+  return input.services
+    .filter((s) => s.status === 'active' && s.financeLink === 'haric')
+    .map((s) => s.id)
+}

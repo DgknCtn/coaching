@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Clock, Settings2, Users, Wallet } from 'lucide-react'
+import { Clock, Settings2, TriangleAlert, Users, Wallet } from 'lucide-react'
 import { formatKurus } from '@/lib/billing/pricing'
 import { formatMinutes, parseLiraToKurus } from '@/lib/finance'
 import { Button } from '@/components/ui/button'
@@ -16,12 +16,11 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { WeekSessions, type SessionMoney, type WeekServiceInfo } from '@/components/sessions/week-sessions'
 import {
-  FINANCE_LINK_LABEL,
   formatServiceAxes,
   formatServiceSchedule,
   formatSessionTime,
 } from '@/lib/service-structure'
-import { formatUnits, monthSummaryLine, type MonthSummary } from '@/lib/session-state'
+import { monthSummaryLine, type MonthSummary } from '@/lib/session-state'
 import { ServiceStructureDrawer, type DrawerStudent } from './service-structure-drawer'
 import { resolvePaymentNoticeAction } from './actions'
 import type { FinanceModelInfo, ServiceRow, SessionRow } from './types'
@@ -69,6 +68,8 @@ export function SessionsClient({
   sessions,
   groups,
   week,
+  weekStats,
+  nextWeekPreview,
   monthSummary,
   archive,
   mainContactId,
@@ -76,6 +77,7 @@ export function SessionsClient({
   nowIso,
   finance,
   unpricedIds,
+  financeMismatchIds,
   quickCollectIds,
   money,
   financeHref,
@@ -89,6 +91,10 @@ export function SessionsClient({
   sessions: SessionRow[]
   groups: { id: string; name: string }[]
   week: { title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
+  /** T04-04: tek kompakt özet — eskiden ayrı "Bu hafta"/"Yapıldı"/"Durum bekliyor" kartlarıydı. */
+  weekStats: { done: number; total: number; awaiting: number }
+  /** EKLE: "Salı 18:00 Birebir Ders 60 dk · Cuma ..." — plan yoksa null. */
+  nextWeekPreview: string | null
   monthSummary: MonthSummary
   archive: ArchiveMonth[]
   mainContactId: string | null
@@ -96,6 +102,8 @@ export function SessionsClient({
   nowIso: string
   finance: FinanceModelInfo | null
   unpricedIds: string[]
+  /** FİN-01: öğrenci "Ders Başı + Ders sonrası" finans modelindeyken "Takip dışı" kalan hizmetler. */
+  financeMismatchIds: string[]
   quickCollectIds: string[]
   money: Record<string, SessionMoney>
   financeHref: string | null
@@ -120,78 +128,24 @@ export function SessionsClient({
     })
   }
 
+  // T04-04/05 (M1.0-04): ekranın odağı "bu hafta ne oldu" olmalı —
+  // hizmet sözleşmesi ve finans ayrıntısı bunun önüne geçmemeli (canlı
+  // test bulgusu). Bu yüzden sıra artık: 1) Haftalık Takvim, 2) tek
+  // kompakt oturum özeti, 3) veli bildirimi (varsa, actionable), 4)
+  // Hizmet Yapısı — artık kart-içi-kart grid değil, tek/iki satırlık
+  // özet + Düzenle. "Bu hafta"/"Yapıldı"/"Durum bekliyor" diye AYRI
+  // büyük kartlara gerek yok (belgenin kendi ifadesi) — eskiden
+  // page.tsx'teki 4'lü MetricTiles bunları ayrı ayrı gösteriyordu;
+  // "Durum güncellenmedi" uyarısı zaten WeekSessions'ın kendi
+  // satırlarında rozet olarak görünüyor, ayrı bir sayaç tekrar ediyordu.
+  // ÖDEME DURUMU KARTI TAMAMEN KALDIRILDI: öğrenciyle ekran açıkken
+  // fiyat/bakiye gereksiz görünüyordu; Finans detayı WeekSessions'ın
+  // kendi özet satırında bağlantı olarak zaten var.
+  const weekPercent = weekStats.total > 0 ? Math.round((weekStats.done / weekStats.total) * 100) : 0
+
   return (
     <div className="space-y-6">
-      {/* ---------------- Hizmet Yapısı · özet (§3) ---------------- */}
-      <Section
-        title="Hizmet Yapısı"
-        description="Bu öğrenciyle çalışma düzeni. Gün ve saat haftalık planlama için varsayılandır."
-        variant="card"
-        action={
-          <Button size="sm" variant="outline" onClick={() => setStructureOpen(true)}>
-            <Settings2 className="size-4" />
-            Düzenle
-          </Button>
-        }
-      >
-        {active.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="Aktif hizmet yok"
-            description="Öğrencinin ders ve koçluk düzenini tanımlayın. Haftalık Akış bu düzenden beslenir."
-            action={{ label: 'Hizmet Ekle', onClick: () => setStructureOpen(true) }}
-          />
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {active.map((service) => (
-              <li key={service.id} className="rounded-lg border border-border bg-card p-3 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">
-                      {formatServiceAxes(service)}
-                      {service.groupName && <span className="text-muted-foreground"> · {service.groupName}</span>}
-                    </p>
-                    <p className="mt-0.5 text-muted-foreground">{formatServiceSchedule(service)}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {FINANCE_LINK_LABEL[service.financeLink]} · {formatUnits(service.defaultUnitCount)}
-                    </p>
-                  </div>
-                  {service.id === mainContactId && <Badge variant="info">Ana temas</Badge>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        {nextContactAt && (
-          <p className="mt-3 text-xs text-muted-foreground">Sıradaki temas: {formatSessionTime(nextContactAt)}</p>
-        )}
-      </Section>
-
-      <ServiceStructureDrawer
-        open={structureOpen}
-        onOpenChange={setStructureOpen}
-        student={student}
-        services={services}
-        groups={groups}
-        mainContactId={mainContactId}
-        finance={finance}
-      />
-
-      {/* VELİ BİLDİRİMİ (§8) — para kaydı değil; tutar girilirse tahsilat doğar. */}
-      {paymentNotice && (
-        <PaymentNoticeCard
-          notice={paymentNotice}
-          disabled={isPending}
-          onResolve={(status, amountKurus) =>
-            run(
-              () => resolvePaymentNoticeAction(studentId, paymentNotice.id, status, amountKurus),
-              status === 'confirmed' ? 'Bildirim onaylandı.' : 'Bildirim reddedildi.'
-            )
-          }
-        />
-      )}
-
-      {/* ---------------- Hafta (§4) ---------------- */}
+      {/* ---------------- Hafta (§4) — artık EN ÜSTTE ---------------- */}
       <WeekSessions
         rows={sessions}
         services={serviceInfo}
@@ -229,6 +183,113 @@ export function SessionsClient({
             ? 'Esnek ritimli hizmetin oturumlarını "Oturum ekle" ile girin.'
             : undefined
         }
+      />
+
+      {/* ---------------- Kompakt oturum özeti (T04-04) ---------------- */}
+      <MetricTiles
+        className="sm:grid-cols-1 xl:grid-cols-1 max-w-xs"
+        metrics={[
+          {
+            label: 'Oturumlar',
+            value: `${weekStats.done}/${weekStats.total}`,
+            progress: weekPercent,
+            tone: weekStats.awaiting > 0 ? 'warning' : weekStats.done === weekStats.total && weekStats.total > 0 ? 'success' : 'default',
+            hint: weekStats.awaiting > 0 ? `${weekStats.awaiting} sonuç bekliyor` : 'yapıldı',
+          },
+        ]}
+      />
+
+      {/* ---------------- Gelecek hafta özeti (EKLE) ---------------- */}
+      {nextWeekPreview && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Gelecek hafta:</span> {nextWeekPreview}
+        </p>
+      )}
+
+      {/* VELİ BİLDİRİMİ (§8) — para kaydı değil; tutar girilirse tahsilat doğar. */}
+      {paymentNotice && (
+        <PaymentNoticeCard
+          notice={paymentNotice}
+          disabled={isPending}
+          onResolve={(status, amountKurus) =>
+            run(
+              () => resolvePaymentNoticeAction(studentId, paymentNotice.id, status, amountKurus),
+              status === 'confirmed' ? 'Bildirim onaylandı.' : 'Bildirim reddedildi.'
+            )
+          }
+        />
+      )}
+
+      {/* ---------------- Hizmet Yapısı · KOMPAKT özet (T04-04) ---------------- */}
+      <Section
+        title="Hizmet Yapısı"
+        description="Bu öğrenciyle çalışma düzeni."
+        variant="card"
+        action={
+          <Button size="sm" variant="outline" onClick={() => setStructureOpen(true)}>
+            <Settings2 className="size-4" />
+            Düzenle
+          </Button>
+        }
+      >
+        {active.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Aktif hizmet yok"
+            description="Öğrencinin ders ve koçluk düzenini tanımlayın. Haftalık Akış bu düzenden beslenir."
+            action={{ label: 'Hizmet Ekle', onClick: () => setStructureOpen(true) }}
+          />
+        ) : (
+          // Eskiden her hizmet bordured bir kart-içi-kart grid'indeydi
+          // (sm:grid-cols-2) ve finans ilişkisi + birim detayı da
+          // satırda duruyordu — sayfanın en üstünde ciddi yer
+          // kaplıyordu. Detay zaten ayrı bir çekmecede (Düzenle); bu
+          // özet yalnız "kiminle, ne zaman" sorusuna tek satırda
+          // cevap verir.
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+            {active.map((service) => (
+              <li key={service.id} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <span className="font-medium text-foreground">{formatServiceAxes(service)}</span>
+                {service.groupName && <span>· {service.groupName}</span>}
+                <span>· {formatServiceSchedule(service)}</span>
+                {service.id === mainContactId && <Badge variant="info">Ana temas</Badge>}
+                {financeMismatchIds.includes(service.id) && (
+                  // FİN-01: öğrencinin finans modeli "Ders Başı + Ders
+                  // sonrası" iken bu hizmet "Takip dışı" kaldığı için
+                  // hızlı tahsilat (Yapıldı + Tahsil Edildi) BU HİZMETTE
+                  // çalışmayacak. Eskiden bu çelişki tamamen sessizdi —
+                  // buton sessizce çıkmıyordu, kullanıcı sebebini hiç
+                  // göremiyordu (bkz. load.ts financeLinkMismatchServiceIds).
+                  // Tıklanabilir: "Düzenle" çekmecesini açar, aynı
+                  // Section'ın üst köşesindeki butonla aynı hedefe gider.
+                  <button
+                    type="button"
+                    onClick={() => setStructureOpen(true)}
+                    title="Ders başı hızlı tahsilat bu hizmette çalışmayacak. Düzenlemek için tıklayın."
+                  >
+                    <Badge variant="warning" className="gap-1">
+                      <TriangleAlert className="size-3" />
+                      Takip dışı
+                    </Badge>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {nextContactAt && (
+          <p className="mt-2 text-xs text-muted-foreground">Sıradaki temas: {formatSessionTime(nextContactAt)}</p>
+        )}
+      </Section>
+
+      <ServiceStructureDrawer
+        open={structureOpen}
+        onOpenChange={setStructureOpen}
+        student={student}
+        services={services}
+        groups={groups}
+        mainContactId={mainContactId}
+        finance={finance}
       />
 
       {/* ---------------- Geçmiş aylar ---------------- */}

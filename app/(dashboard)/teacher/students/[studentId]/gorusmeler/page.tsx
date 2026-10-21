@@ -1,29 +1,23 @@
 import { notFound } from 'next/navigation'
-import { CalendarCheck, CalendarClock, Clock, Wallet } from 'lucide-react'
-import { formatKurus } from '@/lib/billing/pricing'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
-import { MetricTiles } from '@/components/shared/metric-tiles'
 import { deriveMainContact, nextContact, type ServiceLike } from '@/lib/service-structure'
 import { isAwaitingOutcome } from '@/lib/service-structure'
 import { buildMonthSummary } from '@/lib/session-state'
+import { localDateString } from '@/lib/homework-status'
 import {
   isoWeekKey,
   isValidWeekKey,
   isoWeekKeyOfDate,
   shiftWeek,
   weekDays,
-  weekLabel,
+  weekDateRangeLabel,
   weekMonths,
   weekRange,
 } from '@/lib/iso-week'
-import {
-  PERIOD_STATE_LABEL,
-  monthLabel as ledgerMonthLabel,
-  periodSummary,
-  sessionPaymentStates,
-  type PeriodSummary,
-} from '@/lib/finance-ledger'
+import { academicWeekNumber, academicWeekLabel } from '@/lib/weekly-flow'
+import { buildNextWeekPreview } from '@/lib/next-week-preview'
+import { monthLabel as ledgerMonthLabel, sessionPaymentStates } from '@/lib/finance-ledger'
 import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../../../finans/data'
 import { SessionsClient, type ArchiveMonth, type MonthSummary } from './sessions-client'
 import {
@@ -32,6 +26,7 @@ import {
   mapServiceRow,
   mapSessionRow,
   findUnpricedSessions,
+  financeLinkMismatchServiceIds,
   monthsToGenerate,
   quickCollectSessionIds,
   serviceInfo,
@@ -79,8 +74,14 @@ export default async function StudentSessionsPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  // TEMBEL ÜRETİM: haftanın dokunduğu her ay. Hata sayfayı durdurmaz.
-  for (const { year, month } of monthsToGenerate(weekMonths(week))) {
+  // EKLE (M1.0-04): gelecek hafta özeti için gelecek haftanın da
+  // tembel üretimi gerekiyor — ay sınırındaysa iki ayrı ay dokunabilir.
+  const nextWeek = shiftWeek(week, 1)
+
+  // TEMBEL ÜRETİM: bu hafta VE gelecek haftanın dokunduğu her ay
+  // (tekrarsız). Hata sayfayı durdurmaz.
+  const monthsTouched = new Set([...weekMonths(week), ...weekMonths(nextWeek)])
+  for (const { year, month } of monthsToGenerate([...monthsTouched])) {
     const { error } = await supabase.rpc('generate_service_sessions', {
       p_student_id: studentId,
       p_year: year,
@@ -92,6 +93,7 @@ export default async function StudentSessionsPage({
   }
 
   const { from, to } = weekRange(week)
+  const nextWeekRange = weekRange(nextWeek)
   // Haftanın ayı ISO kuralıyla Perşembe'nin ayıdır.
   const summaryMonth = weekDays(week)[3].slice(0, 7)
   const summaryMonthStart = `${summaryMonth}-01`
@@ -109,6 +111,8 @@ export default async function StudentSessionsPage({
     { data: noticeRow },
     modelsRes,
     pricesRes,
+    { data: firstFlowRow },
+    { data: nextWeekSessionRows },
   ] = await Promise.all([
     supabase
       .from('student_services')
@@ -184,6 +188,31 @@ export default async function StudentSessionsPage({
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
       : Promise.resolve({ data: null }),
+    // T04-02: akademik hafta numarası İÇİN öğrencinin EN ESKİ
+    // weekly_flows.starts_at'i. Satırlar asla silinmediği için
+    // (kabul #12) bu değer kronolojik olarak sabittir — hiç akış
+    // açılmadıysa boş gelir, "N. Hafta" hiç gösterilmez (bkz.
+    // lib/weekly-flow.ts academicWeekNumber).
+    supabase
+      .from('weekly_flows')
+      .select('starts_at')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .order('starts_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    // EKLE: gelecek hafta özeti için gelecek haftanın oturumları.
+    // Aynı SESSION_SELECT/mapSessionRow kullanılıyor — ayrı bir dar
+    // sorgu, aynı satır şeklini iki kez tanımlamaktan daha kırılgan
+    // olurdu (bir kolon eklenince biri unutulabilirdi).
+    supabase
+      .from('student_service_session_view')
+      .select(SESSION_SELECT)
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .gte('current_planned_at', nextWeekRange.from.toISOString())
+      .lt('current_planned_at', nextWeekRange.to.toISOString())
+      .order('current_planned_at'),
   ])
 
   const groupNames = new Map((groupRows ?? []).map((g) => [g.id as string, g.name as string]))
@@ -246,9 +275,6 @@ export default async function StudentSessionsPage({
   const accrualRows = (accrualRes.data ?? []) as Record<string, unknown>[]
   const ledgerAccruals = accrualRows.map(mapAccrual)
   const ledgerPayments = ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment)
-  const ledger: PeriodSummary | null = isOwner
-    ? periodSummary(ledgerAccruals, ledgerPayments, summaryMonth)
-    : null
   // Satırdaki "1.750 TL tahsil edildi / bekliyor": cari hesabın FIFO dağıtımı.
   const money = isOwner
     ? Object.fromEntries(sessionPaymentStates(ledgerAccruals, ledgerPayments))
@@ -260,15 +286,11 @@ export default async function StudentSessionsPage({
         modelsByStudent: new Map([[studentId, finance.models]]),
       })
     : []
-  const paymentHint = !ledger
-    ? '—'
-    : ledger.state === 'yok'
-      ? '—'
-      : ledger.closingBalanceKurus > 0
-        ? `${PERIOD_STATE_LABEL[ledger.state]} · ${formatKurus(ledger.closingBalanceKurus)} kalan`
-        : ledger.closingBalanceKurus < 0
-          ? `${PERIOD_STATE_LABEL[ledger.state]} · ${formatKurus(-ledger.closingBalanceKurus)}`
-          : PERIOD_STATE_LABEL[ledger.state]
+  // T04-05: "Ödeme Durumu" kartı bu ekrandan TAMAMEN kaldırıldı —
+  // öğrenciyle ders ekranı açıkken fiyat/bakiye gereksiz görünüyordu.
+  // Period summary (`periodSummary`/`PERIOD_STATE_LABEL`) artık burada
+  // hiç hesaplanmıyor; finans yalnız `/teacher/finans/${studentId}`de
+  // yaşıyor (link WeekSessions'ın özet satırında zaten var).
 
   const unpricedIds = isOwner && finance
     ? findUnpricedSessions({
@@ -281,6 +303,17 @@ export default async function StudentSessionsPage({
       })
     : []
 
+  // FİN-01: yalnız sahip görebiliyor — finans modeli zaten yalnız ona
+  // açık (139 RLS). Öğretmen rolünde finans verisi hiç gelmediği için
+  // bu kontrol de hiç çalışmaz; bu BİLİNÇLİ — öğretmen finansı
+  // göremiyorsa uyarıyı da göremez, bug değil.
+  const financeMismatchIds = isOwner && finance
+    ? financeLinkMismatchServiceIds({ services, models: finance.models, today: localDateString(now) })
+    : []
+
+  // T04-04: tek kompakt özet için üçü — eskiden ayrı ayrı büyük
+  // kartlardı ("Bu hafta", "Yapıldı", "Durum bekliyor").
+  const weekTotal = sessions.filter((s) => s.status !== 'iptal').length
   const weekDone = sessions.filter((s) => s.status === 'yapildi').length
   const weekAwaiting = sessions.filter((s) =>
     isAwaitingOutcome({ status: s.status, effectiveAt: new Date(s.currentPlannedAt) }, now)
@@ -288,33 +321,25 @@ export default async function StudentSessionsPage({
 
   const infoById = Object.fromEntries(services.map((s) => [s.id, serviceInfo(s)]))
 
+  // EKLE: gelecek hafta özeti — iptal hariç, sıralı, tek satır.
+  const nextWeekPreview = buildNextWeekPreview(
+    ((nextWeekSessionRows ?? []) as Record<string, unknown>[]).map((r) => mapSessionRow(r)),
+    infoById
+  )
+
+  // T04-02: takvim yılı hafta numarası ("43. Hafta") yerine öğrenciye
+  // özel akademik hafta. Takip hiç başlamadıysa (akış hiç açılmadıysa)
+  // ya da görüntülenen hafta takipten ÖNCEYSE numara yok, yalnız tarih
+  // aralığı gösterilir — "numarasız gerçek" "yanlış sayı"dan iyidir.
+  const firstFlowStartedAt = (firstFlowRow?.starts_at as string | undefined) ?? null
+  const academicWeek = firstFlowStartedAt ? academicWeekNumber(firstFlowStartedAt, week) : null
+  const weekTitle = academicWeek !== null ? academicWeekLabel(academicWeek, week) : weekDateRangeLabel(week)
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
       <PageHeader
         title="Ders & Görüşmeler"
         subtitle="Bu hafta ne planlandı, ne yapıldı, ne telafi bekliyor."
-      />
-
-      <MetricTiles
-        className="xl:grid-cols-4"
-        metrics={[
-          { label: 'Bu hafta', value: sessions.filter((s) => s.status !== 'iptal').length, hint: 'oturum', icon: CalendarClock },
-          { label: 'Yapıldı', value: weekDone, tone: 'success', icon: CalendarCheck },
-          { label: 'Durum bekliyor', value: weekAwaiting, tone: weekAwaiting > 0 ? 'warning' : 'default', icon: Clock },
-          {
-            label: 'Ödeme durumu',
-            value: ledgerMonthLabel(summaryMonth),
-            hint: paymentHint,
-            tone:
-              !ledger || ledger.state === 'yok'
-                ? 'default'
-                : ledger.state === 'odendi' || ledger.state === 'alacak'
-                  ? 'success'
-                  : 'warning',
-            icon: Wallet,
-            href: isOwner ? `/teacher/finans/${studentId}` : undefined,
-          },
-        ]}
       />
 
       <SessionsClient
@@ -329,12 +354,14 @@ export default async function StudentSessionsPage({
         sessions={sessions}
         groups={(groupRows ?? []).map((g) => ({ id: g.id as string, name: g.name as string }))}
         week={{
-          title: weekLabel(week),
+          title: weekTitle,
           prevHref: `?hafta=${shiftWeek(week, -1)}`,
           nextHref: `?hafta=${shiftWeek(week, 1)}`,
           currentHref: `?hafta=${currentWeek}`,
           isCurrent: week === currentWeek,
         }}
+        weekStats={{ done: weekDone, total: weekTotal, awaiting: weekAwaiting }}
+        nextWeekPreview={nextWeekPreview}
         monthSummary={monthSummary}
         archive={archive}
         mainContactId={mainContact?.id ?? null}
@@ -342,6 +369,7 @@ export default async function StudentSessionsPage({
         nowIso={now.toISOString()}
         finance={finance}
         unpricedIds={unpricedIds}
+        financeMismatchIds={financeMismatchIds}
         quickCollectIds={quickCollectIds}
         money={money}
         financeHref={isOwner ? `/teacher/finans/${studentId}` : null}
