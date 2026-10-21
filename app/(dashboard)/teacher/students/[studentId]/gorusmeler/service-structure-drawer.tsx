@@ -146,14 +146,25 @@ export function ServiceStructureDrawer({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showPassive, setShowPassive] = useState(false)
 
-  function run(action: () => Promise<{ error?: string; success?: boolean }>, ok: string) {
+  /**
+   * `ok` genelde sabit bir metin; ama bazı eylemlerin başarı mesajı
+   * SONUCA bağlı (örn. "Hizmet aktifleştirildi." / "Hizmet yeniden
+   * aktifleştirildi." — ilk aktivasyon mu değil mi `setServiceStatusAction`in
+   * döndürdüğü `wasFirstActivation`dan belli oluyor). Fonksiyon kabul
+   * etmek, mevcut sabit-metinli çağrıları ETKİLEMİYOR — hepsi aynı
+   * kalıyor.
+   */
+  function run<R extends { error?: string; success?: boolean }>(
+    action: () => Promise<R>,
+    ok: string | ((result: R) => string)
+  ) {
     startTransition(async () => {
       const result = await action()
       if (result?.error) {
         toast.error(result.error)
         return
       }
-      toast.success(ok)
+      toast.success(typeof ok === 'function' ? ok(result) : ok)
       router.refresh()
     })
   }
@@ -265,7 +276,13 @@ export function ServiceStructureDrawer({
                           onClick={() =>
                             run(
                               () => setServiceStatusAction(student.id, service.id, 'active'),
-                              'Hizmet yeniden aktifleştirildi.'
+                              // M1.0-04 dil düzeltmesi: pasif taslak hizmet İLK
+                              // KEZ aktifleşiyorsa "yeniden" demek yanlış —
+                              // kullanıcı geçmişte bu hizmeti hiç çalıştırmadı.
+                              (result) =>
+                                result.wasFirstActivation
+                                  ? 'Hizmet aktifleştirildi.'
+                                  : 'Hizmet yeniden aktifleştirildi.'
                             )
                           }
                         >

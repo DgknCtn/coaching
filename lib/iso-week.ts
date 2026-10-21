@@ -110,27 +110,47 @@ const MONTHS_TR = [
 ]
 
 /**
+ * Yalnız tarih aralığı — hafta numarası YOK.
+ *
+ * `5–11 Ekim 2026` / ay sınırında `28 Eylül – 4 Ekim 2026` / yıl
+ * sınırında `29 Aralık 2025 – 4 Ocak 2026`.
+ *
+ * M1.0-04 (T04-02) için `weekLabel()`'den çıkarıldı: Ders & Görüşmeler
+ * ekranı artık takvim yılı hafta numarası ("43. Hafta") yerine
+ * öğrenciye özel akademik hafta sayısını gösteriyor
+ * (`lib/weekly-flow.ts`teki `academicWeekLabel`) — ama tarih aralığı
+ * biçimi AYNI kalmalı, iki yerde ayrı ayrı yazılmasın diye buraya
+ * taşındı. `weekLabel()`'in kendi davranışı DEĞİŞMEDİ, yalnız bu
+ * fonksiyonu çağırır hâle geldi.
+ */
+export function weekDateRangeLabel(key: string): string {
+  const days = weekDays(key)
+  const [ys, ms, ds] = days[0].split('-').map(Number)
+  const [ye, me, de] = days[6].split('-').map(Number)
+
+  if (ys !== ye) {
+    return `${ds} ${MONTHS_TR[ms - 1]} ${ys} – ${de} ${MONTHS_TR[me - 1]} ${ye}`
+  }
+  if (ms !== me) {
+    return `${ds} ${MONTHS_TR[ms - 1]} – ${de} ${MONTHS_TR[me - 1]} ${ye}`
+  }
+  return `${ds}–${de} ${MONTHS_TR[me - 1]} ${ye}`
+}
+
+/**
  * `41. Hafta · 5–11 Ekim 2026`
- * Ay sınırında: `40. Hafta · 28 Eylül – 4 Ekim 2026`
- * Yıl sınırında: `1. Hafta · 29 Aralık 2025 – 4 Ocak 2026`
+ *
+ * Takvim yılı ISO hafta numarası — "43. Hafta" gibi öğrenciye anlamsız
+ * gelen değer BİLE BİLE burada kalıyor: bu fonksiyon yalnız TÜM
+ * öğrencilerin aynı anda göründüğü genel ekranda kullanılıyor
+ * (`teacher/gorusmeler/page.tsx`), orada öğrenciye özel bir sayı
+ * anlamlı olamaz (her öğrencinin akademik haftası farklı).
  */
 export function weekLabel(key: string): string {
   const m = KEY_RE.exec(key)
   if (!m) return key
   const week = Number(m[2])
-  const days = weekDays(key)
-  const [ys, ms, ds] = days[0].split('-').map(Number)
-  const [ye, me, de] = days[6].split('-').map(Number)
-
-  let range: string
-  if (ys !== ye) {
-    range = `${ds} ${MONTHS_TR[ms - 1]} ${ys} – ${de} ${MONTHS_TR[me - 1]} ${ye}`
-  } else if (ms !== me) {
-    range = `${ds} ${MONTHS_TR[ms - 1]} – ${de} ${MONTHS_TR[me - 1]} ${ye}`
-  } else {
-    range = `${ds}–${de} ${MONTHS_TR[me - 1]} ${ye}`
-  }
-  return `${week}. Hafta · ${range}`
+  return `${week}. Hafta · ${weekDateRangeLabel(key)}`
 }
 
 /** Bir anın düştüğü Istanbul takvim günü — haftalık tabloda gruplama için. */

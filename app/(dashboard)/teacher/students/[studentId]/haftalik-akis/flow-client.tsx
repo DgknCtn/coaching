@@ -198,11 +198,23 @@ export function FlowClient({
   const [editingDue, setEditingDue] = useState(false)
   const [dueInput, setDueInput] = useState(flow ? toLocalInput(flow.dueAt) : '')
 
+  // T04-01 (M1.0-04): ANA TEMAS ARTIK ZORUNLU DEĞİL.
+  //
+  // Zod şeması, server action ve RPC'de (open_weekly_flow) zaten
+  // `anchorServiceId` opsiyoneldi — zorunluluk yalnız bu bileşendeki
+  // istemci tarafı kapıydı (`disabled={!suggestedDueAt}` + hata toast'ı).
+  // Düzenli hizmeti olmayan bir öğrencide öğretmen artık kapanış
+  // tarihini ELLE seçip haftayı yine başlatabiliyor — aynı
+  // `editingDue`/`dueInput` kalıbıyla simetrik bir mini form.
+  const [openingCustomDue, setOpeningCustomDue] = useState(false)
+  const [customDueInput, setCustomDueInput] = useState(() =>
+    toLocalInput(new Date(Date.now() + 7 * 86_400_000).toISOString())
+  )
+
   function openFlow() {
     if (!suggestedDueAt) {
-      toast.error(
-        'Ana temas tanımlı değil. Haftanın kapanışını üretebilmek için önce Görüşmeler ekranından hizmet ekleyin.'
-      )
+      // Ana temas yok: otomatik kapanış üretilemiyor, elle seçim formu açılır.
+      setOpeningCustomDue(true)
       return
     }
     startTransition(async () => {
@@ -218,6 +230,32 @@ export function FlowClient({
         return
       }
       toast.success('Haftalık akış açıldı.')
+      router.refresh()
+    })
+  }
+
+  function openFlowWithCustomDue() {
+    const iso = new Date(customDueInput).toISOString()
+    if (Number.isNaN(new Date(customDueInput).getTime())) {
+      toast.error('Geçerli bir tarih/saat seçin.')
+      return
+    }
+    startTransition(async () => {
+      const r = await openWeeklyFlowAction({
+        studentId,
+        startsAt: new Date().toISOString(),
+        dueAt: iso,
+        // Elle seçildiği için 'custom' — ana temas sonradan tanımlansa
+        // bile bu haftanın kapanışını kendiliğinden değiştirmez (§4'teki
+        // 'custom' kuralıyla aynı gerekçe).
+        dueSource: 'custom',
+      })
+      if (r?.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success('Haftalık akış açıldı.')
+      setOpeningCustomDue(false)
       router.refresh()
     })
   }
@@ -296,16 +334,41 @@ export function FlowClient({
                 </>
               ) : (
                 <>
-                  Ana temas tanımlı olmadığı için haftanın kapanışı üretilemiyor.
-                  Önce Görüşmeler ekranından düzenli bir hizmet tanımlayın — akışın
-                  ritmi oradan gelir.
+                  Düzenli bir hizmet (ana temas) tanımlı değil; haftanın kapanışı
+                  otomatik üretilemiyor. Kapanış tarihini elle seçerek yine de
+                  haftayı başlatabilirsiniz.
                 </>
               )}
             </p>
-            <Button onClick={openFlow} disabled={isPending || !suggestedDueAt}>
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-              Haftalık akışı aç
-            </Button>
+
+            {!suggestedDueAt && openingCustomDue && (
+              <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/30 p-3">
+                <div className="space-y-1">
+                  <Label htmlFor="custom-due">Son teslim</Label>
+                  <Input
+                    id="custom-due"
+                    type="datetime-local"
+                    value={customDueInput}
+                    onChange={e => setCustomDueInput(e.target.value)}
+                    className="w-56"
+                  />
+                </div>
+                <Button onClick={openFlowWithCustomDue} disabled={isPending}>
+                  {isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                  Başlat
+                </Button>
+                <Button variant="ghost" onClick={() => setOpeningCustomDue(false)} disabled={isPending}>
+                  Vazgeç
+                </Button>
+              </div>
+            )}
+
+            {(suggestedDueAt || !openingCustomDue) && (
+              <Button onClick={openFlow} disabled={isPending}>
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                Haftalık akışı aç
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (

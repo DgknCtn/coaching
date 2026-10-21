@@ -19,6 +19,7 @@
 import type { ServiceLike } from '@/lib/service-structure'
 import { defaultSubmissionDeadline } from '@/lib/service-structure'
 import { APP_TIME_ZONE, localDateString } from '@/lib/homework-status'
+import { isoWeekKeyOfDate, weekMonday, weekDateRangeLabel } from '@/lib/iso-week'
 
 // ============================================================
 // RESMİ KAPANIŞ
@@ -571,4 +572,59 @@ export function checkInDue(input: {
   }
 
   return { due: false, reason: null }
+}
+
+// ============================================================
+// AKADEMİK HAFTA NUMARASI (M1.0-04, T04-02)
+// ============================================================
+
+/**
+ * Öğrenciye özel "N. Hafta" sayısı — takvim yılının ISO hafta
+ * numarasının ("43. Hafta") yerini alıyor.
+ *
+ * NEDEN BU TASARIM (ve neden daha karmaşık bir alternatif ELENDİ):
+ * canlı test belgesindeki örnek şunu gösteriyor — *"1. Hafta ders +
+ * takip, 2. Hafta yalnız ders, 3. Hafta plan yok, 4. Hafta ders +
+ * takip."* Haftalık Akış o hafta hiç açılmamış/kapalı olsa BİLE (3.
+ * Hafta) numara kaybolmuyor. Yani sayaç, weekly_flows satırlarının o
+ * hafta açık olup olmamasına bağlı DEĞİL — öğrencinin İLK "Haftalık
+ * Takibi Başlat"tan itibaren KESİNTİSİZ ilerleyen bir takvim-haftası
+ * sayacı. Bu yüzden `weekly_flows`e ayrı bir "sıra" sütunu ya da
+ * zaman-aralığı eşleştirmesi GEREKMİYOR: yalnız en eski akışın
+ * `starts_at`'i (asla silinmediği, kronolojik olarak sabit kaldığı
+ * için güvenilir bir çapa) ile görüntülenen haftanın farkı yeterli.
+ *
+ * T04-03'ü de otomatik sağlıyor: hesap yalnız `weekly_flows.starts_at`
+ * kullanıyor, `student_services.start_date`'e hiç dokunmuyor — bir
+ * hizmetin başlangıç tarihi değişse bile geçmiş hafta numaraları
+ * değişmez.
+ *
+ * `firstFlowStartedAt`, öğrencinin EN ESKİ `weekly_flows.starts_at`
+ * değeri (çağıran taraf `ORDER BY starts_at ASC LIMIT 1` ile getirir).
+ * Görüntülenen hafta, takip başlamadan ÖNCEYSE `null` döner — numara
+ * gösterilmez, yalnız tarih aralığı.
+ */
+export function academicWeekNumber(
+  firstFlowStartedAt: string | Date,
+  weekKey: string
+): number | null {
+  const firstInstant =
+    firstFlowStartedAt instanceof Date ? firstFlowStartedAt : new Date(firstFlowStartedAt)
+  if (Number.isNaN(firstInstant.getTime())) return null
+
+  // Istanbul takvimine göre hangi haftaya düştüğü — modülün geri
+  // kalanıyla aynı zon kuralı (bkz. dosya başı yorumu, iso-week.ts).
+  const firstWeekKey = isoWeekKeyOfDate(localDateString(firstInstant))
+
+  const firstMondayMs = Date.parse(`${weekMonday(firstWeekKey)}T00:00:00Z`)
+  const targetMondayMs = Date.parse(`${weekMonday(weekKey)}T00:00:00Z`)
+
+  const diffWeeks = Math.round((targetMondayMs - firstMondayMs) / (7 * 86_400_000))
+  if (diffWeeks < 0) return null
+  return diffWeeks + 1
+}
+
+/** `3. Hafta · 19-25 Ekim 2026` — `weekDateRangeLabel` ile aynı tarih biçimi. */
+export function academicWeekLabel(weekNo: number, weekKey: string): string {
+  return `${weekNo}. Hafta · ${weekDateRangeLabel(weekKey)}`
 }

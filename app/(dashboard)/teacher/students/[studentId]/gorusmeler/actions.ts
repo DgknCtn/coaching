@@ -244,7 +244,11 @@ export async function setServiceStatusAction(
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { supabase, workspaceId } = await getTeacherContext()
-  const { error } = await supabase.rpc('set_service_status', {
+  // 150: RPC artık hizmeti İLK KEZ mi aktifleştirdiğimizi (activated_at
+  // IS NULL anı) BOOLEAN olarak döndürüyor — arayüz "Hizmet
+  // aktifleştirildi." / "Hizmet yeniden aktifleştirildi." ayrımını
+  // buradan yapıyor.
+  const { data, error } = await supabase.rpc('set_service_status', {
     p_service_id: serviceId,
     p_status: status,
   })
@@ -259,7 +263,7 @@ export async function setServiceStatusAction(
     detail: { serviceId, status },
   })
   revalidate(studentId)
-  return { success: true }
+  return { success: true, wasFirstActivation: Boolean(data) }
 }
 
 /**
