@@ -15,6 +15,7 @@ import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
 import { buildHomeworkDetail, type HomeworkDetailItem } from '@/lib/homework-detail'
 import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
 import { monthPaymentLabel, type MonthPaymentState } from '@/lib/finance'
+import { CONTACT_KIND_LABEL, contactKindOf, type ServiceLike } from '@/lib/service-structure'
 import { allOk, listResult, singleResult } from '@/lib/data-result'
 import { parentStatusBanner } from '@/lib/parent-status'
 import { SectionUnavailable } from '@/components/shared/section-unavailable'
@@ -131,6 +132,7 @@ export default async function ParentPage({
         weeklyRes,
         teacherRes,
         sessionsRes,
+        servicesRes,
         countersRes,
         noticeRes,
         paymentRes,
@@ -198,11 +200,21 @@ export default async function ParentPage({
         // liste görmemeli.
         supabase
           .from('student_service_session_view')
-          .select('id, planned_at, current_planned_at, actual_at, duration_minutes, status, origin_planned_at')
+          // service_id M1.0-05 için: veli özetinde "5 Ekim · Online
+          // Matematik · 1 ders · ✓ Yapıldı" biçimindeki hizmet adı
+          // bağlanabilsin diye (tutar yine gösterilmiyor, 066 korunur).
+          .select(
+            'id, planned_at, current_planned_at, actual_at, duration_minutes, status, origin_planned_at, service_id'
+          )
           .eq('student_id', studentId)
           .eq('workspace_id', workspaceId)
           .eq('attributed_month', currentMonthStart)
           .order('planned_at'),
+        supabase
+          .from('student_services')
+          .select('id, kind, participation, medium')
+          .eq('student_id', studentId)
+          .eq('workspace_id', workspaceId),
         supabase
           .from('student_service_month_view')
           .select('planlanan, yapilan')
@@ -232,6 +244,7 @@ export default async function ParentPage({
       const weekly = singleResult(weeklyRes, 'parent.weekly_summary')
       const teacher = singleResult(teacherRes, 'parent.teacher_name')
       const sessions = listResult(sessionsRes, 'parent.month_sessions')
+      const services = listResult(servicesRes, 'parent.services')
       const counters = listResult(countersRes, 'parent.month_counters')
       const notice = singleResult(noticeRes, 'parent.payment_notice')
       const payment = singleResult(paymentRes, 'parent.payment_state')
@@ -276,6 +289,17 @@ export default async function ParentPage({
         batches,
         weekly,
         sessions,
+        // M1.0-05: oturum satırında hizmet adı görünsün ("5 Ekim · Online
+        // Birebir Ders · ..."). Tutar YİNE gösterilmiyor (066) — bu yalnız
+        // hangi hizmetin hangi oturumu olduğunu söylüyor.
+        serviceLabelByServiceId: services.ok
+          ? Object.fromEntries(
+              services.data.map(s => [
+                s.id as string,
+                `${s.medium === 'yuz_yuze' ? 'Yüz yüze' : 'Online'} ${CONTACT_KIND_LABEL[contactKindOf(s as unknown as ServiceLike)]}`,
+              ])
+            )
+          : {},
         batchSummary,
         monthCounts,
         // Ödeme rozeti ve bildirim düğmesi için. Bu iki sorgu düşerse
@@ -334,6 +358,7 @@ export default async function ParentPage({
           batches,
           weekly,
           sessions,
+          serviceLabelByServiceId,
           batchSummary,
           monthCounts,
           teacherName,
@@ -495,6 +520,12 @@ export default async function ParentPage({
                     // planlanan tarih SİLİNMEZ, nihai durum yanında
                     // gösterilir. Veli neyin değiştiğini görebilmeli.
                     const moved = actual && new Date(actual).getTime() !== new Date(planned).getTime()
+                    // M1.0-05: "5 Ekim · Online Birebir Ders · ..." — tutar
+                    // hâlâ yok (066), yalnız hangi hizmetin oturumu olduğu
+                    // ekleniyor. Etiket bulunamazsa (silinmiş/pasif hizmet)
+                    // sessizce atlanır, uydurma bir ad gösterilmez.
+                    const serviceLabel =
+                      serviceLabelByServiceId[session.service_id as string] ?? null
                     return (
                       <li
                         key={session.id as string}
@@ -510,6 +541,9 @@ export default async function ParentPage({
                             </>
                           ) : (
                             formatSessionMoment(planned)
+                          )}
+                          {serviceLabel && (
+                            <span className="text-muted-foreground"> · {serviceLabel}</span>
                           )}
                           {session.duration_minutes != null && (
                             <span className="text-muted-foreground">

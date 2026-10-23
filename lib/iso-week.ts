@@ -98,6 +98,27 @@ export function shiftWeek(key: string, delta: number): IsoWeekKey {
   return isoWeekKeyOfDate(toDateStr(new Date(monday + delta * 7 * 86_400_000)))
 }
 
+/**
+ * M1.0-05 — bir ayın haftaları (ters yön: `weekMonths` zaten var).
+ *
+ * Haftanın PAZARTESİSİ bu ayda olmalı — salt bir günü ay içine denk
+ * gelen sınır haftaları (çoğu ÖNCEKİ aya ait) "bu ayın haftası"
+ * SAYILMAZ. PDF'in kendi örneği de bunu doğruluyor: "Kasım 1. Hafta"
+ * 2 Kasım Pazartesi'yle başlıyor, 26 Ekim Pazartesi'siyle değil — o
+ * hafta Ekim'in son haftası sayılıyor, Kasım'ın ilki değil.
+ */
+export function monthWeeks(monthKey: string): IsoWeekKey[] {
+  let cursor = isoWeekKeyOfDate(`${monthKey}-01`)
+  if (weekMonday(cursor).slice(0, 7) !== monthKey) cursor = shiftWeek(cursor, 1)
+
+  const out: IsoWeekKey[] = []
+  while (weekMonday(cursor).slice(0, 7) === monthKey) {
+    out.push(cursor)
+    cursor = shiftWeek(cursor, 1)
+  }
+  return out
+}
+
 /** Haftanın dokunduğu takvim ayları ('YYYY-MM'); ay sınırındaki haftada iki. */
 export function weekMonths(key: string): string[] {
   const days = weekDays(key)

@@ -117,9 +117,11 @@ function serviceSummary(service: ServiceRow): string {
     service.cadence === 'esnek'
       ? `Esnek · ${service.plannedDurationMinutes} dk`
       : `${CADENCE_LABEL[service.cadence]} · varsayılan ${formatServiceSchedule(service)}`
-  return [rhythm, FINANCE_LINK_LABEL[service.financeLink], `${formatUnits(service.defaultUnitCount)}`].join(
-    ' · '
-  )
+  return [
+    rhythm,
+    FINANCE_LINK_LABEL[service.financeLink],
+    `${formatUnits(service.defaultUnitCount, service.kind)}`,
+  ].join(' · ')
 }
 
 export function ServiceStructureDrawer({

@@ -1,14 +1,14 @@
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { PageHeader } from '@/components/shared/page-header'
-import { deriveMainContact, nextContact, type ServiceLike } from '@/lib/service-structure'
+import { contactKindOf, deriveMainContact, nextContact, type ServiceLike } from '@/lib/service-structure'
 import { isAwaitingOutcome } from '@/lib/service-structure'
 import { buildMonthSummary } from '@/lib/session-state'
 import { localDateString } from '@/lib/homework-status'
 import {
   isoWeekKey,
   isValidWeekKey,
-  isoWeekKeyOfDate,
+  monthWeeks,
   shiftWeek,
   weekDays,
   weekDateRangeLabel,
@@ -17,7 +17,8 @@ import {
 } from '@/lib/iso-week'
 import { academicWeekNumber, academicWeekLabel } from '@/lib/weekly-flow'
 import { buildNextWeekPreview } from '@/lib/next-week-preview'
-import { monthLabel as ledgerMonthLabel, sessionPaymentStates } from '@/lib/finance-ledger'
+import { buildMonthWeekRows, monthColumnsFor, type MonthServiceLike } from '@/lib/month-sessions'
+import { monthLabel as ledgerMonthLabel, isValidMonth, shiftMonth, sessionPaymentStates } from '@/lib/finance-ledger'
 import { ACCRUAL_SELECT, PAYMENT_SELECT, mapAccrual, mapPayment } from '../../../finans/data'
 import { SessionsClient, type ArchiveMonth, type MonthSummary } from './sessions-client'
 import {
@@ -33,11 +34,14 @@ import {
 } from './load'
 import type { FinanceModelInfo } from './types'
 
-// DERS & GÖRÜŞMELER V1 — öğrenci sayfası (M1.0-02 §4).
+// DERS & GÖRÜŞMELER V1 — öğrenci sayfası (M1.0-02 §4, M1.0-05 aylık görünüm).
 //
-// "Bu hafta gerçekte ne oldu?" Ana görünüm ISO hafta merkezlidir
-// (?hafta=2026-W41, varsayılan bu hafta). Ay arşivi ve sezon özeti alt
-// bölümde kalır.
+// VARSAYILAN GÖRÜNÜM ARTIK AY (M1.0-05): "?hafta=" YOKSA ay görünümü
+// açılır (?ay=2026-11, varsayılan bu ay) — ay içindeki haftalar satır,
+// hizmet türü sütun olur (lib/month-sessions.ts). "?hafta=" VARSA eski
+// haftalık operasyon ekranı (WeekSessions) AÇILIR — reschedule, telafi
+// kararı, iptal gibi daha seyrek işlemler orada tam donanımlı kalır; ay
+// görünümündeki her satırın "Bu haftaya git" bağlantısı oraya gider.
 //
 // SINIR: burası hizmetin GERÇEĞİNİ tutar. Para toplamı Finans'ta.
 
@@ -53,17 +57,9 @@ export default async function StudentSessionsPage({
   const { studentId } = await params
   const { hafta, ay } = await searchParams
   const now = new Date()
-  const currentWeek = isoWeekKey(now)
-
-  // Eski ?ay=YYYY-MM bağlantıları ayın ilk haftasına düşer.
-  const week =
-    isValidWeekKey(hafta)
-      ? hafta
-      : ay && /^\d{4}-(0[1-9]|1[0-2])$/.test(ay)
-        ? isoWeekKeyOfDate(`${ay}-01`)
-        : currentWeek
 
   const { supabase, workspaceId, role } = await getTeacherContext()
+  const isOwner = role === 'owner'
 
   const { data: student } = await supabase
     .from('students')
@@ -74,36 +70,53 @@ export default async function StudentSessionsPage({
 
   if (!student || student.status === 'archived') notFound()
 
-  // EKLE (M1.0-04): gelecek hafta özeti için gelecek haftanın da
-  // tembel üretimi gerekiyor — ay sınırındaysa iki ayrı ay dokunabilir.
-  const nextWeek = shiftWeek(week, 1)
-
-  // TEMBEL ÜRETİM: bu hafta VE gelecek haftanın dokunduğu her ay
-  // (tekrarsız). Hata sayfayı durdurmaz.
-  const monthsTouched = new Set([...weekMonths(week), ...weekMonths(nextWeek)])
-  for (const { year, month } of monthsToGenerate([...monthsTouched])) {
-    const { error } = await supabase.rpc('generate_service_sessions', {
-      p_student_id: studentId,
-      p_year: year,
-      p_month: month,
-    })
-    if (error) {
-      console.error('[gorusmeler] oturum üretilemedi:', JSON.stringify({ studentId, year, month, message: error.message }))
-    }
+  const studentMeta = {
+    id: studentId,
+    name: student.full_name as string,
+    meta: [student.grade_level, student.exam_type].filter(Boolean).join(' · ') || null,
   }
 
-  const { from, to } = weekRange(week)
-  const nextWeekRange = weekRange(nextWeek)
-  // Haftanın ayı ISO kuralıyla Perşembe'nin ayıdır.
-  const summaryMonth = weekDays(week)[3].slice(0, 7)
-  const summaryMonthStart = `${summaryMonth}-01`
-  const isOwner = role === 'owner'
+  if (isValidWeekKey(hafta)) {
+    return (
+      <WeekView
+        studentId={studentId}
+        student={studentMeta}
+        week={hafta}
+        now={now}
+        isOwner={isOwner}
+      />
+    )
+  }
 
+  const currentMonth = localDateString(now).slice(0, 7)
+  const month = isValidMonth(ay) ? ay : currentMonth
+
+  return (
+    <MonthView
+      studentId={studentId}
+      student={studentMeta}
+      month={month}
+      currentMonth={currentMonth}
+      now={now}
+      isOwner={isOwner}
+    />
+  )
+}
+
+interface StudentMeta {
+  id: string
+  name: string
+  meta: string | null
+}
+
+/** İki görünümün paylaştığı, aralıktan bağımsız sorgular + hesaplar. */
+async function loadShared(
+  supabase: Awaited<ReturnType<typeof getTeacherContext>>['supabase'],
+  { studentId, workspaceId, isOwner, summaryMonthStart }: { studentId: string; workspaceId: string; isOwner: boolean; summaryMonthStart: string }
+) {
   const [
     { data: serviceRows },
-    { data: sessionRows },
     { data: groupRows },
-    { data: monthCounters },
     { data: archiveRows },
     accrualRes,
     paymentRes,
@@ -112,7 +125,6 @@ export default async function StudentSessionsPage({
     modelsRes,
     pricesRes,
     { data: firstFlowRow },
-    { data: nextWeekSessionRows },
   ] = await Promise.all([
     supabase
       .from('student_services')
@@ -122,14 +134,6 @@ export default async function StudentSessionsPage({
       .order('status')
       .order('weekday'),
     supabase
-      .from('student_service_session_view')
-      .select(SESSION_SELECT)
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .gte('current_planned_at', from.toISOString())
-      .lt('current_planned_at', to.toISOString())
-      .order('current_planned_at'),
-    supabase
       .from('student_groups')
       .select('id, name')
       .eq('workspace_id', workspaceId)
@@ -137,20 +141,11 @@ export default async function StudentSessionsPage({
       .order('name'),
     supabase
       .from('student_service_month_view')
-      .select('service_id, kind, participation, planlanan, yapilan, bekleyen, yapilmayan, ek_ders, telafi_bekleyen')
-      .eq('student_id', studentId)
-      .eq('workspace_id', workspaceId)
-      .eq('ay', summaryMonthStart),
-    supabase
-      .from('student_service_month_view')
       .select('ay, planlanan, yapilan, yapilmayan')
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .order('ay', { ascending: false })
       .limit(60),
-    // ÖDEME DURUMU ÖĞRENCİ CARİ HESABINDAN (M1.0-02 §7): devreden borç ve
-    // fazla ödeme dahil — Finans detayıyla aynı fonksiyon (periodSummary).
-    // Finans yalnız sahibe açık; değilse hiç sorulmaz.
     isOwner
       ? supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('student_id', studentId).eq('workspace_id', workspaceId)
       : Promise.resolve({ data: null }),
@@ -173,7 +168,6 @@ export default async function StudentSessionsPage({
       .eq('month_start', summaryMonthStart)
       .eq('status', 'pending')
       .maybeSingle(),
-    // Ücretlendirme yalnız sahibe (139 RLS). Sahip değilse hiç sorulmaz.
     isOwner
       ? supabase
           .from('student_finance_models')
@@ -189,10 +183,7 @@ export default async function StudentSessionsPage({
           .eq('workspace_id', workspaceId)
       : Promise.resolve({ data: null }),
     // T04-02: akademik hafta numarası İÇİN öğrencinin EN ESKİ
-    // weekly_flows.starts_at'i. Satırlar asla silinmediği için
-    // (kabul #12) bu değer kronolojik olarak sabittir — hiç akış
-    // açılmadıysa boş gelir, "N. Hafta" hiç gösterilmez (bkz.
-    // lib/weekly-flow.ts academicWeekNumber).
+    // weekly_flows.starts_at'i (satırlar asla silinmez, kronolojik sabit).
     supabase
       .from('weekly_flows')
       .select('starts_at')
@@ -201,10 +192,136 @@ export default async function StudentSessionsPage({
       .order('starts_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
-    // EKLE: gelecek hafta özeti için gelecek haftanın oturumları.
-    // Aynı SESSION_SELECT/mapSessionRow kullanılıyor — ayrı bir dar
-    // sorgu, aynı satır şeklini iki kez tanımlamaktan daha kırılgan
-    // olurdu (bir kolon eklenince biri unutulabilirdi).
+  ])
+
+  const groupNames = new Map((groupRows ?? []).map(g => [g.id as string, g.name as string]))
+  const services = (serviceRows ?? []).map(r => mapServiceRow(r as Record<string, unknown>, groupNames))
+
+  const finance: FinanceModelInfo | null = isOwner
+    ? {
+        models: ((modelsRes.data ?? []) as Record<string, unknown>[]).map(m => ({
+          id: m.id as string,
+          model: m.model as 'aylik_sabit' | 'ders_basi',
+          collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
+          validFrom: m.valid_from as string,
+          createdAt: m.created_at as string,
+        })),
+        prices: ((pricesRes.data ?? []) as Record<string, unknown>[]).map(p => ({
+          id: p.id as string,
+          priceType: p.price_type as 'aylik' | 'ek_ders' | 'ders_basi',
+          amountKurus: Number(p.amount_kurus),
+          validFrom: p.valid_from as string,
+          createdAt: p.created_at as string,
+        })),
+      }
+    : null
+
+  const archive: ArchiveMonth[] = ((archiveRows ?? []) as { ay: string; planlanan: number; yapilan: number; yapilmayan: number }[])
+    .filter(r => r.ay !== summaryMonthStart)
+    .slice(0, 12)
+    .map(r => ({
+      month: r.ay.slice(0, 7),
+      label: ledgerMonthLabel(r.ay.slice(0, 7)),
+      // M1.0-05: arşivden eski bir aya geçiş artık o ayın GÖRÜNÜMÜNE
+      // gider (eskiden ilk haftasına).
+      monthParam: r.ay.slice(0, 7),
+      planned: Number(r.planlanan ?? 0),
+      done: Number(r.yapilan ?? 0),
+      missed: Number(r.yapilmayan ?? 0),
+    }))
+
+  const accrualRows = (accrualRes.data ?? []) as Record<string, unknown>[]
+  const ledgerAccruals = accrualRows.map(mapAccrual)
+  const ledgerPayments = ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment)
+  const money = isOwner ? Object.fromEntries(sessionPaymentStates(ledgerAccruals, ledgerPayments)) : {}
+
+  const season =
+    seasonRows
+      ? {
+          birebirDersCount: Number(seasonRows.birebir_ders_count ?? 0),
+          birebirDersMinutes: Number(seasonRows.birebir_ders_minutes ?? 0),
+          grupDersCount: Number(seasonRows.grup_ders_count ?? 0),
+          grupDersMinutes: Number(seasonRows.grup_ders_minutes ?? 0),
+          koclukCount: Number(seasonRows.kocluk_count ?? 0),
+          koclukMinutes: Number(seasonRows.kocluk_minutes ?? 0),
+          totalCount: Number(seasonRows.total_count ?? 0),
+          totalMinutes: Number(seasonRows.total_minutes ?? 0),
+          accruedKurus: seasonRows.accrued_kurus == null ? null : Number(seasonRows.accrued_kurus),
+          collectedKurus: seasonRows.collected_kurus == null ? null : Number(seasonRows.collected_kurus),
+          balanceKurus: seasonRows.balance_kurus == null ? null : Number(seasonRows.balance_kurus),
+        }
+      : null
+
+  const paymentNotice = noticeRow
+    ? { id: noticeRow.id as string, note: (noticeRow.note as string | null) ?? null, createdAt: noticeRow.created_at as string }
+    : null
+
+  const firstFlowStartedAt = (firstFlowRow?.starts_at as string | undefined) ?? null
+
+  return {
+    services,
+    groupRows: groupRows ?? [],
+    finance,
+    archive,
+    accrualRows,
+    money,
+    season,
+    paymentNotice,
+    firstFlowStartedAt,
+  }
+}
+
+async function WeekView({
+  studentId,
+  student,
+  week,
+  now,
+  isOwner,
+}: {
+  studentId: string
+  student: StudentMeta
+  week: string
+  now: Date
+  isOwner: boolean
+}) {
+  const { supabase, workspaceId } = await getTeacherContext()
+  const currentWeek = isoWeekKey(now)
+  const nextWeek = shiftWeek(week, 1)
+
+  const monthsTouched = new Set([...weekMonths(week), ...weekMonths(nextWeek)])
+  for (const { year, month } of monthsToGenerate([...monthsTouched])) {
+    const { error } = await supabase.rpc('generate_service_sessions', { p_student_id: studentId, p_year: year, p_month: month })
+    if (error) {
+      console.error('[gorusmeler] oturum üretilemedi:', JSON.stringify({ studentId, year, month, message: error.message }))
+    }
+  }
+
+  const { from, to } = weekRange(week)
+  const nextWeekRange = weekRange(nextWeek)
+  const summaryMonth = weekDays(week)[3].slice(0, 7)
+  const summaryMonthStart = `${summaryMonth}-01`
+
+  const [
+    { services, groupRows, finance, archive, accrualRows, money, season, paymentNotice, firstFlowStartedAt },
+    { data: sessionRows },
+    { data: monthCounters },
+    { data: nextWeekSessionRows },
+  ] = await Promise.all([
+    loadShared(supabase, { studentId, workspaceId, isOwner, summaryMonthStart }),
+    supabase
+      .from('student_service_session_view')
+      .select(SESSION_SELECT)
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .gte('current_planned_at', from.toISOString())
+      .lt('current_planned_at', to.toISOString())
+      .order('current_planned_at'),
+    supabase
+      .from('student_service_month_view')
+      .select('service_id, kind, participation, planlanan, yapilan, bekleyen, yapilmayan, ek_ders, telafi_bekleyen')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .eq('ay', summaryMonthStart),
     supabase
       .from('student_service_session_view')
       .select(SESSION_SELECT)
@@ -215,41 +332,14 @@ export default async function StudentSessionsPage({
       .order('current_planned_at'),
   ])
 
-  const groupNames = new Map((groupRows ?? []).map((g) => [g.id as string, g.name as string]))
-  const services = (serviceRows ?? []).map((r) => mapServiceRow(r as Record<string, unknown>, groupNames))
-  const sessions = (sessionRows ?? []).map((r) => mapSessionRow(r as Record<string, unknown>))
-
+  const sessions = (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
   const mainContact = deriveMainContact(services as ServiceLike[])
-  const upcoming = nextContact(
-    (services as ServiceLike[]).filter((s) => s.status === 'active'),
-    now
-  )
+  const upcoming = nextContact((services as ServiceLike[]).filter(s => s.status === 'active'), now)
 
-  const finance: FinanceModelInfo | null = isOwner
-    ? {
-        models: ((modelsRes.data ?? []) as Record<string, unknown>[]).map((m) => ({
-          id: m.id as string,
-          model: m.model as 'aylik_sabit' | 'ders_basi',
-          collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
-          validFrom: m.valid_from as string,
-          createdAt: m.created_at as string,
-        })),
-        prices: ((pricesRes.data ?? []) as Record<string, unknown>[]).map((p) => ({
-          id: p.id as string,
-          priceType: p.price_type as 'aylik' | 'ek_ders' | 'ders_basi',
-          amountKurus: Number(p.amount_kurus),
-          validFrom: p.valid_from as string,
-          createdAt: p.created_at as string,
-        })),
-      }
-    : null
-
-  // §5 "Aylık hizmet özeti": Ders 3/5 yapıldı · Koçluk 2/5 · Telafi 1 bekliyor · Ek ders 1.
-  // Esnek ritimli hizmette payda yok (lib/session-state buildMonthSummary).
-  const flexibleIds = new Set(services.filter((s) => s.cadence === 'esnek').map((s) => s.id))
+  const flexibleIds = new Set(services.filter(s => s.cadence === 'esnek').map(s => s.id))
   const monthSummary: MonthSummary = buildMonthSummary(
     ledgerMonthLabel(summaryMonth),
-    ((monthCounters ?? []) as Record<string, unknown>[]).map((c) => ({
+    ((monthCounters ?? []) as Record<string, unknown>[]).map(c => ({
       kind: c.kind as 'ders' | 'kocluk',
       flexible: flexibleIds.has(c.service_id as string),
       planlanan: Number(c.planlanan ?? 0),
@@ -260,108 +350,53 @@ export default async function StudentSessionsPage({
     }))
   )
 
-  const archive: ArchiveMonth[] = ((archiveRows ?? []) as { ay: string; planlanan: number; yapilan: number; yapilmayan: number }[])
-    .filter((r) => r.ay !== summaryMonthStart)
-    .slice(0, 12)
-    .map((r) => ({
-      month: r.ay.slice(0, 7),
-      label: ledgerMonthLabel(r.ay.slice(0, 7)),
-      weekParam: isoWeekKeyOfDate(r.ay),
-      planned: Number(r.planlanan ?? 0),
-      done: Number(r.yapilan ?? 0),
-      missed: Number(r.yapilmayan ?? 0),
-    }))
-
-  const accrualRows = (accrualRes.data ?? []) as Record<string, unknown>[]
-  const ledgerAccruals = accrualRows.map(mapAccrual)
-  const ledgerPayments = ((paymentRes.data ?? []) as Record<string, unknown>[]).map(mapPayment)
-  // Satırdaki "1.750 TL tahsil edildi / bekliyor": cari hesabın FIFO dağıtımı.
-  const money = isOwner
-    ? Object.fromEntries(sessionPaymentStates(ledgerAccruals, ledgerPayments))
-    : {}
   const quickCollectIds = isOwner && finance
-    ? quickCollectSessionIds({
-        sessions,
-        serviceById: new Map(services.map((s) => [s.id, s])),
-        modelsByStudent: new Map([[studentId, finance.models]]),
-      })
+    ? quickCollectSessionIds({ sessions, serviceById: new Map(services.map(s => [s.id, s])), modelsByStudent: new Map([[studentId, finance.models]]) })
     : []
-  // T04-05: "Ödeme Durumu" kartı bu ekrandan TAMAMEN kaldırıldı —
-  // öğrenciyle ders ekranı açıkken fiyat/bakiye gereksiz görünüyordu.
-  // Period summary (`periodSummary`/`PERIOD_STATE_LABEL`) artık burada
-  // hiç hesaplanmıyor; finans yalnız `/teacher/finans/${studentId}`de
-  // yaşıyor (link WeekSessions'ın özet satırında zaten var).
-
   const unpricedIds = isOwner && finance
     ? findUnpricedSessions({
         sessions,
-        financeLinkByService: new Map(services.map((s) => [s.id, s.financeLink])),
+        financeLinkByService: new Map(services.map(s => [s.id, s.financeLink])),
         modelsByStudent: new Map([[studentId, finance.models]]),
-        accruedSessionIds: new Set(
-          accrualRows.map((r) => r.service_session_id as string | null).filter((x): x is string => !!x)
-        ),
+        accruedSessionIds: new Set(accrualRows.map(r => r.service_session_id as string | null).filter((x): x is string => !!x)),
       })
     : []
-
-  // FİN-01: yalnız sahip görebiliyor — finans modeli zaten yalnız ona
-  // açık (139 RLS). Öğretmen rolünde finans verisi hiç gelmediği için
-  // bu kontrol de hiç çalışmaz; bu BİLİNÇLİ — öğretmen finansı
-  // göremiyorsa uyarıyı da göremez, bug değil.
   const financeMismatchIds = isOwner && finance
     ? financeLinkMismatchServiceIds({ services, models: finance.models, today: localDateString(now) })
     : []
 
-  // T04-04: tek kompakt özet için üçü — eskiden ayrı ayrı büyük
-  // kartlardı ("Bu hafta", "Yapıldı", "Durum bekliyor").
-  const weekTotal = sessions.filter((s) => s.status !== 'iptal').length
-  const weekDone = sessions.filter((s) => s.status === 'yapildi').length
-  const weekAwaiting = sessions.filter((s) =>
-    isAwaitingOutcome({ status: s.status, effectiveAt: new Date(s.currentPlannedAt) }, now)
-  ).length
+  const weekTotal = sessions.filter(s => s.status !== 'iptal').length
+  const weekDone = sessions.filter(s => s.status === 'yapildi').length
+  const weekAwaiting = sessions.filter(s => isAwaitingOutcome({ status: s.status, effectiveAt: new Date(s.currentPlannedAt) }, now)).length
 
-  const infoById = Object.fromEntries(services.map((s) => [s.id, serviceInfo(s)]))
+  const infoById = Object.fromEntries(services.map(s => [s.id, serviceInfo(s)]))
+  const nextWeekPreview = buildNextWeekPreview(((nextWeekSessionRows ?? []) as Record<string, unknown>[]).map(r => mapSessionRow(r)), infoById)
 
-  // EKLE: gelecek hafta özeti — iptal hariç, sıralı, tek satır.
-  const nextWeekPreview = buildNextWeekPreview(
-    ((nextWeekSessionRows ?? []) as Record<string, unknown>[]).map((r) => mapSessionRow(r)),
-    infoById
-  )
-
-  // T04-02: takvim yılı hafta numarası ("43. Hafta") yerine öğrenciye
-  // özel akademik hafta. Takip hiç başlamadıysa (akış hiç açılmadıysa)
-  // ya da görüntülenen hafta takipten ÖNCEYSE numara yok, yalnız tarih
-  // aralığı gösterilir — "numarasız gerçek" "yanlış sayı"dan iyidir.
-  const firstFlowStartedAt = (firstFlowRow?.starts_at as string | undefined) ?? null
   const academicWeek = firstFlowStartedAt ? academicWeekNumber(firstFlowStartedAt, week) : null
   const weekTitle = academicWeek !== null ? academicWeekLabel(academicWeek, week) : weekDateRangeLabel(week)
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
-      <PageHeader
-        title="Ders & Görüşmeler"
-        subtitle="Bu hafta ne planlandı, ne yapıldı, ne telafi bekliyor."
-      />
-
+      <PageHeader title="Ders & Görüşmeler" subtitle="Bu hafta ne planlandı, ne yapıldı, ne telafi bekliyor." />
       <SessionsClient
         studentId={studentId}
-        student={{
-          id: studentId,
-          name: student.full_name as string,
-          meta: [student.grade_level, student.exam_type].filter(Boolean).join(' · ') || null,
-        }}
+        student={student}
         services={services}
         serviceInfo={infoById}
         sessions={sessions}
-        groups={(groupRows ?? []).map((g) => ({ id: g.id as string, name: g.name as string }))}
-        week={{
-          title: weekTitle,
-          prevHref: `?hafta=${shiftWeek(week, -1)}`,
-          nextHref: `?hafta=${shiftWeek(week, 1)}`,
-          currentHref: `?hafta=${currentWeek}`,
-          isCurrent: week === currentWeek,
+        groups={groupRows.map(g => ({ id: g.id as string, name: g.name as string }))}
+        view={{
+          mode: 'week',
+          week: {
+            title: weekTitle,
+            prevHref: `?hafta=${shiftWeek(week, -1)}`,
+            nextHref: `?hafta=${shiftWeek(week, 1)}`,
+            currentHref: `?hafta=${currentWeek}`,
+            isCurrent: week === currentWeek,
+          },
+          weekStats: { done: weekDone, total: weekTotal, awaiting: weekAwaiting },
+          nextWeekPreview,
         }}
-        weekStats={{ done: weekDone, total: weekTotal, awaiting: weekAwaiting }}
-        nextWeekPreview={nextWeekPreview}
         monthSummary={monthSummary}
         archive={archive}
         mainContactId={mainContact?.id ?? null}
@@ -373,32 +408,160 @@ export default async function StudentSessionsPage({
         quickCollectIds={quickCollectIds}
         money={money}
         financeHref={isOwner ? `/teacher/finans/${studentId}` : null}
-        paymentNotice={
-          noticeRow
-            ? {
-                id: noticeRow.id as string,
-                note: (noticeRow.note as string | null) ?? null,
-                createdAt: noticeRow.created_at as string,
-              }
-            : null
-        }
-        season={
-          seasonRows
-            ? {
-                birebirDersCount: Number(seasonRows.birebir_ders_count ?? 0),
-                birebirDersMinutes: Number(seasonRows.birebir_ders_minutes ?? 0),
-                grupDersCount: Number(seasonRows.grup_ders_count ?? 0),
-                grupDersMinutes: Number(seasonRows.grup_ders_minutes ?? 0),
-                koclukCount: Number(seasonRows.kocluk_count ?? 0),
-                koclukMinutes: Number(seasonRows.kocluk_minutes ?? 0),
-                totalCount: Number(seasonRows.total_count ?? 0),
-                totalMinutes: Number(seasonRows.total_minutes ?? 0),
-                accruedKurus: seasonRows.accrued_kurus == null ? null : Number(seasonRows.accrued_kurus),
-                collectedKurus: seasonRows.collected_kurus == null ? null : Number(seasonRows.collected_kurus),
-                balanceKurus: seasonRows.balance_kurus == null ? null : Number(seasonRows.balance_kurus),
-              }
-            : null
-        }
+        paymentNotice={paymentNotice}
+        season={season}
+      />
+    </div>
+  )
+}
+
+async function MonthView({
+  studentId,
+  student,
+  month,
+  currentMonth,
+  now,
+  isOwner,
+}: {
+  studentId: string
+  student: StudentMeta
+  month: string
+  currentMonth: string
+  now: Date
+  isOwner: boolean
+}) {
+  const { supabase, workspaceId } = await getTeacherContext()
+  const weekKeys = monthWeeks(month)
+  const summaryMonthStart = `${month}-01`
+
+  // TEMBEL ÜRETİM: ayın gösterdiği HER haftanın dokunduğu takvim ayı
+  // (sınır haftaları iki aya dokunabilir, bkz. weekMonths).
+  const monthsTouched = new Set(weekKeys.flatMap(w => weekMonths(w)))
+  for (const { year, month: m } of monthsToGenerate([...monthsTouched])) {
+    const { error } = await supabase.rpc('generate_service_sessions', { p_student_id: studentId, p_year: year, p_month: m })
+    if (error) {
+      console.error('[gorusmeler] oturum üretilemedi:', JSON.stringify({ studentId, year, month: m, message: error.message }))
+    }
+  }
+
+  const monthFrom = weekRange(weekKeys[0]).from
+  const monthTo = weekRange(weekKeys[weekKeys.length - 1]).to
+
+  const [
+    { services, groupRows, finance, archive, accrualRows, money, season, paymentNotice, firstFlowStartedAt },
+    { data: sessionRows },
+    { data: monthCounters },
+  ] = await Promise.all([
+    loadShared(supabase, { studentId, workspaceId, isOwner, summaryMonthStart }),
+    supabase
+      .from('student_service_session_view')
+      .select(SESSION_SELECT)
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .gte('current_planned_at', monthFrom.toISOString())
+      .lt('current_planned_at', monthTo.toISOString())
+      .order('current_planned_at'),
+    supabase
+      .from('student_service_month_view')
+      .select('service_id, kind, participation, planlanan, yapilan, bekleyen, yapilmayan, ek_ders, telafi_bekleyen')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .eq('ay', summaryMonthStart),
+  ])
+
+  const sessions = (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
+  const mainContact = deriveMainContact(services as ServiceLike[])
+  const upcoming = nextContact((services as ServiceLike[]).filter(s => s.status === 'active'), now)
+
+  const flexibleIds = new Set(services.filter(s => s.cadence === 'esnek').map(s => s.id))
+  const monthSummary: MonthSummary = buildMonthSummary(
+    ledgerMonthLabel(month),
+    ((monthCounters ?? []) as Record<string, unknown>[]).map(c => ({
+      kind: c.kind as 'ders' | 'kocluk',
+      flexible: flexibleIds.has(c.service_id as string),
+      planlanan: Number(c.planlanan ?? 0),
+      yapilan: Number(c.yapilan ?? 0),
+      bekleyen: Number(c.bekleyen ?? 0),
+      ek_ders: c.ek_ders == null ? null : Number(c.ek_ders),
+      telafi_bekleyen: c.telafi_bekleyen == null ? null : Number(c.telafi_bekleyen),
+    }))
+  )
+
+  const quickCollectIds = isOwner && finance
+    ? quickCollectSessionIds({ sessions, serviceById: new Map(services.map(s => [s.id, s])), modelsByStudent: new Map([[studentId, finance.models]]) })
+    : []
+  const unpricedIds = isOwner && finance
+    ? findUnpricedSessions({
+        sessions,
+        financeLinkByService: new Map(services.map(s => [s.id, s.financeLink])),
+        modelsByStudent: new Map([[studentId, finance.models]]),
+        accruedSessionIds: new Set(accrualRows.map(r => r.service_session_id as string | null).filter((x): x is string => !!x)),
+      })
+    : []
+  const financeMismatchIds = isOwner && finance
+    ? financeLinkMismatchServiceIds({ services, models: finance.models, today: localDateString(now) })
+    : []
+
+  const infoById = Object.fromEntries(services.map(s => [s.id, serviceInfo(s)]))
+
+  // M1.0-05: sütunlar (Birebir Ders / Grup Dersi / Koçluk) yalnız bu
+  // öğrencinin AKTİF hizmeti olan türler için açılır (Örnek A tek
+  // sütun, Örnek B iki sütun — PDF).
+  const activeServices: MonthServiceLike[] = services
+    .filter(s => s.status === 'active')
+    .map(s => ({ contactKind: contactKindOf(s as unknown as ServiceLike) }))
+  const columns = monthColumnsFor(activeServices)
+
+  const serviceContactById = new Map(
+    services.map(s => [s.id, { contactKind: contactKindOf(s as unknown as ServiceLike) }])
+  )
+  const weekRows = buildMonthWeekRows(month, ledgerMonthLabel(month).split(' ')[0], sessions, serviceContactById)
+
+  // "Öğrenciyle N. Hafta" — her satır için akışın kendi akademik hafta
+  // numarası (lib/weekly-flow.ts), takvim yılı hafta numarası DEĞİL.
+  const academicWeekLabelByWeekKey: Record<string, string | null> = {}
+  for (const weekKey of weekKeys) {
+    const n = firstFlowStartedAt ? academicWeekNumber(firstFlowStartedAt, weekKey) : null
+    academicWeekLabelByWeekKey[weekKey] = n !== null ? `Öğrenciyle ${n}. Hafta` : null
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
+      <PageHeader title="Ders & Görüşmeler" subtitle="Bu ay ne planlandı, ne yapıldı, ne telafi bekliyor." />
+      <SessionsClient
+        studentId={studentId}
+        student={student}
+        services={services}
+        serviceInfo={infoById}
+        sessions={sessions}
+        groups={groupRows.map(g => ({ id: g.id as string, name: g.name as string }))}
+        view={{
+          mode: 'month',
+          month: {
+            title: ledgerMonthLabel(month),
+            prevHref: `?ay=${shiftMonth(month, -1)}`,
+            nextHref: `?ay=${shiftMonth(month, 1)}`,
+            currentHref: `?ay=${currentMonth}`,
+            isCurrent: month === currentMonth,
+          },
+          weekRows,
+          columns,
+          academicWeekLabelByWeekKey,
+          hasAnyService: activeServices.length > 0,
+        }}
+        monthSummary={monthSummary}
+        archive={archive}
+        mainContactId={mainContact?.id ?? null}
+        nextContactAt={upcoming?.at.toISOString() ?? null}
+        nowIso={now.toISOString()}
+        finance={finance}
+        unpricedIds={unpricedIds}
+        financeMismatchIds={financeMismatchIds}
+        quickCollectIds={quickCollectIds}
+        money={money}
+        financeHref={isOwner ? `/teacher/finans/${studentId}` : null}
+        paymentNotice={paymentNotice}
+        season={season}
       />
     </div>
   )
