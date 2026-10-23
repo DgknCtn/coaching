@@ -10,11 +10,13 @@ import {
   convertSectionToSubsectionsAction,
   deleteSubsectionAction,
   renameSubsectionAction,
+  setSectionTopicsAction,
   setSubsectionTestRangeAction,
 } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TopicMultiSelect, type TopicOption } from '@/components/shared/topic-multi-select'
 
 // R7-03: bölümün alt bölümleri.
 //
@@ -36,6 +38,7 @@ export interface SubsectionRow {
   testStart: number | null
   testEnd: number | null
   testCount: number
+  topicIds: string[]
 }
 
 export function SubsectionList({
@@ -45,6 +48,8 @@ export function SubsectionList({
   sectionTestCount,
   usedTestCount,
   hasProgress,
+  topics,
+  topicsFiltered,
 }: {
   bookId: string
   sectionId: string
@@ -54,6 +59,8 @@ export function SubsectionList({
   /** Bu testlerden kaçı ödevde veya tamamlama kaydında kullanılmış. */
   usedTestCount: number
   hasProgress: boolean
+  topics: TopicOption[]
+  topicsFiltered: boolean
 }) {
   const router = useRouter()
   const [title, setTitle] = useState('')
@@ -154,6 +161,8 @@ export function SubsectionList({
           bookId={bookId}
           subsection={sub}
           hasProgress={hasProgress}
+          topics={topics}
+          topicsFiltered={topicsFiltered}
         />
       ))}
 
@@ -243,15 +252,23 @@ function SubsectionRowForm({
   bookId,
   subsection,
   hasProgress,
+  topics,
+  topicsFiltered,
 }: {
   bookId: string
   subsection: SubsectionRow
   hasProgress: boolean
+  topics: TopicOption[]
+  topicsFiltered: boolean
 }) {
   const router = useRouter()
   const [title, setTitle] = useState(subsection.title)
   const [start, setStart] = useState(subsection.testStart ? String(subsection.testStart) : '')
   const [end, setEnd] = useState(subsection.testEnd ? String(subsection.testEnd) : '')
+  // M1.0-06: alt bölüm düzeyinde müfredat eşlemesi — SectionRowForm'daki
+  // (book-edit-form.tsx) aynı desen. setSectionTopicsAction herhangi bir
+  // section_id için çalışır, alt bölüm için ayrı bir action gerekmiyor.
+  const [topicIds, setTopicIds] = useState<string[]>(subsection.topicIds)
   const [isPending, startTransition] = useTransition()
 
   const count = testCountFromRange(Number(start) || null, Number(end) || null)
@@ -259,6 +276,9 @@ function SubsectionRowForm({
   const rangeChanged =
     (Number(start) || 0) !== (subsection.testStart ?? 0) ||
     (Number(end) || 0) !== (subsection.testEnd ?? 0)
+  const topicsChanged =
+    topicIds.length !== subsection.topicIds.length ||
+    topicIds.some(id => !subsection.topicIds.includes(id))
 
   function save() {
     startTransition(async () => {
@@ -282,6 +302,13 @@ function SubsectionRowForm({
         if (r?.error) {
           toast.error(r.error)
           router.refresh()
+          return
+        }
+      }
+      if (topicsChanged) {
+        const r = await setSectionTopicsAction(bookId, subsection.id, topicIds)
+        if (r?.error) {
+          toast.error(r.error)
           return
         }
       }
@@ -354,7 +381,11 @@ function SubsectionRowForm({
         </p>
       </div>
 
-      <Button size="sm" disabled={isPending || (!titleChanged && !rangeChanged)} onClick={save}>
+      <Button
+        size="sm"
+        disabled={isPending || (!titleChanged && !rangeChanged && !topicsChanged)}
+        onClick={save}
+      >
         {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
         Kaydet
       </Button>
@@ -368,6 +399,16 @@ function SubsectionRowForm({
           Bu kaynakta ilerleme var; aralık değiştirilemez. Ad değiştirilebilir.
         </p>
       )}
+
+      <div className="basis-full space-y-1.5">
+        <Label className="text-xs">Müfredat konuları</Label>
+        <TopicMultiSelect
+          topics={topics}
+          selectedIds={topicIds}
+          onChange={setTopicIds}
+          filtered={topicsFiltered}
+        />
+      </div>
     </div>
   )
 }

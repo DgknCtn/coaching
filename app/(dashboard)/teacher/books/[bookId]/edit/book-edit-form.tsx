@@ -814,6 +814,8 @@ function SectionRowForm({
           sectionTestCount={section.testCount}
           usedTestCount={section.usedTestCount}
           hasProgress={hasProgress}
+          topics={topics}
+          topicsFiltered={topicsFiltered}
         />
       )}
 

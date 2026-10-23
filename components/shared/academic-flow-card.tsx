@@ -65,7 +65,7 @@ export function AcademicFlowCard({
         // kart doğal yerleşimdir"). Dar ekranda tek sütuna iner.
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {scopes.map(s => (
-            <ScopeRow key={s.scopeId} scope={s} />
+            <ScopeRow key={s.scopeId} studentId={studentId} scope={s} />
           ))}
         </ul>
       )}
@@ -73,14 +73,29 @@ export function AcademicFlowCard({
   )
 }
 
-function ScopeRow({ scope }: { scope: FlowScopeSummary }) {
+function ScopeRow({
+  studentId,
+  scope,
+}: {
+  studentId: string
+  scope: FlowScopeSummary
+}) {
   const delta = flowDeltaLabel(scope.weeksDelta)
   const behind = scope.weeksDelta !== null && scope.weeksDelta < 0
 
   return (
     <li className="rounded-md border px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="truncate text-sm font-medium">{scope.scopeName}</p>
+        {/* `?scope=` İLE: Genel Bakış'tan bu dersin akışına tıklandığında
+            Müfredat Akışı sayfası doğru sekmede açılsın — eksik scope
+            parametresi önceden sayfayı scopes[0]'a (başka bir derse)
+            düşürüyordu (M1.0-06 P0 bug'ının bir kök nedeni). */}
+        <Link
+          href={`/teacher/students/${studentId}/curriculum?scope=${scope.scopeId}`}
+          className="truncate text-sm font-medium hover:underline"
+        >
+          {scope.scopeName}
+        </Link>
         {delta && (
           <span
             className={cn(

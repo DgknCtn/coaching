@@ -13,7 +13,9 @@ import {
   resizeItem,
   setPassed,
   splitItem,
+  flowWeekRangeLabel,
   summarizeFlow,
+  topicTimePosition,
   type FlowItem,
 } from '@/lib/curriculum-flow'
 
@@ -443,5 +445,65 @@ describe('mergeWithNext · konu birleştirme', () => {
     const once = ornekAkis()
     expect(mergeWithNext(once, 'i3')).toEqual(once)
     expect(mergeWithNext(once, 'yok')).toEqual(once)
+  })
+})
+
+describe('topicTimePosition — M1.0-06 Zaman sütunu', () => {
+  const block: Pick<FlowItem, 'startDate' | 'endDate'> = {
+    startDate: '2026-10-05',
+    endDate: '2026-10-18',
+  }
+
+  it('bugün başlangıçtan önceyse Sırada', () => {
+    expect(topicTimePosition(block, '2026-10-04')).toBe('upcoming')
+  })
+
+  it('bugün başlangıç gününe eşitse Şu an (sınır dahil)', () => {
+    expect(topicTimePosition(block, '2026-10-05')).toBe('current')
+  })
+
+  it('bugün aralığın ortasındaysa Şu an', () => {
+    expect(topicTimePosition(block, '2026-10-10')).toBe('current')
+  })
+
+  it('bugün bitiş gününe eşitse hâlâ Şu an (sınır dahil)', () => {
+    expect(topicTimePosition(block, '2026-10-18')).toBe('current')
+  })
+
+  it('bugün bitişten sonraysa Geçti', () => {
+    expect(topicTimePosition(block, '2026-10-19')).toBe('passed')
+  })
+
+  it('passed=true olsa da yalnız takvime bakar — ilerlemeden bağımsız', () => {
+    // MA-08 ile çelişmez: bu fonksiyon "öğrenildi" demiyor, salt tarih
+    // karşılaştırması yapıyor. item.passed alanı hiç girdi olarak
+    // alınmıyor (tip imzası da bunu zorunlu kılıyor).
+    const gelecekteBasliyor = { startDate: '2099-01-01', endDate: '2099-01-14' }
+    expect(topicTimePosition(gelecekteBasliyor, '2026-10-10')).toBe('upcoming')
+  })
+})
+
+describe('flowWeekRangeLabel — M1.0-06 Plan sütunu', () => {
+  it('akışın ilk bloğu 1. haftadan başlar', () => {
+    const flow = ornekAkis()
+    expect(flowWeekRangeLabel(flow, flow[0])).toBe('1-2. hf')
+  })
+
+  it('devam bloğu doğru hafta aralığını gösterir', () => {
+    const flow = ornekAkis()
+    // i2 = Fonksiyonlar, 2+2 hafta sonra başlıyor, 3 hafta sürüyor -> 5-7
+    expect(flowWeekRangeLabel(flow, flow[2])).toBe('5-7. hf')
+  })
+
+  it('tek haftalık blokta tek sayı gösterir', () => {
+    const flow = buildFlowFromTemplate(
+      [{ name: 'A', durationWeeks: 2 }, { name: 'B', durationWeeks: 1 }],
+      '2026-09-01'
+    )
+    expect(flowWeekRangeLabel(flow, flow[1])).toBe('3. hf')
+  })
+
+  it('boş listede boş string döner', () => {
+    expect(flowWeekRangeLabel([], { startDate: '2026-09-01', endDate: '2026-09-07' })).toBe('')
   })
 })

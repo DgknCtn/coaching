@@ -143,6 +143,12 @@ export default async function BookEditPage({
         testStart: sub.test_start ?? null,
         testEnd: sub.test_end ?? null,
         testCount: (sub.book_tests ?? []).length,
+        // M1.0-06: Alt Bölüm'de de müfredat eşlemesi yapılabilsin diye
+        // (üst Bölüm eşlemesi, testler alt bölümdeyse hiç işe yaramıyordu
+        // — book_tests.section_id her zaman yaprağı gösterir, 047).
+        // Veri zaten üstteki book_sections sorgusunda embed geliyor,
+        // yalnız buraya kadar taşınmıyordu.
+        topicIds: (sub.book_section_topics ?? []).map((t) => t.topic_id),
       })),
       // R6-17 etiketleri artık düzenlenmiyor; yalnız eski kayıtlarda
       // Parça'ya taşınabilsin diye okunur ipucu olarak gösteriliyor.
