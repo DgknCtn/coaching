@@ -288,6 +288,11 @@ describe('telafi durum makinesi (§5)', () => {
       .toBe('Telafi planlandı')
     expect(formatUnits(1.5)).toBe('1,5 ders')
     expect(formatUnits(2)).toBe('2 ders')
+    // M1.0-05: Koçluk kullanıcı dilinde "görüşme" — iç 0,5/1/1,5/2 birim
+    // altyapısına dokunulmuyor, yalnız gösterim kelimesi değişiyor.
+    expect(formatUnits(1, 'kocluk')).toBe('1 görüşme')
+    expect(formatUnits(1.5, 'kocluk')).toBe('1,5 görüşme')
+    expect(formatUnits(1, 'ders')).toBe('1 ders')
   })
 })
 

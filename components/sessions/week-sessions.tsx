@@ -86,6 +86,8 @@ export interface WeekServiceInfo {
   id: string
   /** "Koçluk", "Ders", "Grup Dersi · 12 AYT" */
   label: string
+  /** M1.0-05: birim gösterimi için ("1 ders" / "1 görüşme") — formatUnits. */
+  kind: 'ders' | 'kocluk'
   participation: 'birebir' | 'grup'
   financeLink: FinanceLink
   defaultUnitCount: number
@@ -137,11 +139,11 @@ function planText(row: SessionRow): string {
   return `${from} → ${to}`
 }
 
-function actualText(row: SessionRow): string {
+function actualText(row: SessionRow, kind: 'ders' | 'kocluk'): string {
   if (row.status !== 'yapildi') return '—'
   const parts = [row.actualAt ? formatSessionClock(row.actualAt) : null]
   if (row.durationMinutes) parts.push(`${row.durationMinutes} dk`)
-  if (row.unitCount != null) parts.push(formatUnits(row.unitCount))
+  if (row.unitCount != null) parts.push(formatUnits(row.unitCount, kind))
   return parts.filter(Boolean).join(' · ')
 }
 
@@ -418,7 +420,7 @@ export function WeekSessions({
                         )}
                       </td>
                       <td className="hidden px-3 py-2 align-top whitespace-nowrap tabular-nums text-muted-foreground md:table-cell">
-                        {actualText(row)}
+                        {actualText(row, service?.kind ?? 'ders')}
                       </td>
                       <td className="px-3 py-2 align-top">
                         {awaiting ? (
@@ -627,6 +629,9 @@ function SessionDetailBody({
   )
   const initialUnit = String(row.unitCount ?? service?.defaultUnitCount ?? 1)
   const [unit, setUnit] = useState(initialUnit)
+  // M1.0-05: Koçluk kullanıcı dilinde "görüşme" — iç 0,5/1/1,5/2 birim
+  // altyapısı aynı kalıyor, yalnız bu formun etiketleri değişiyor.
+  const unitWord = service?.kind === 'kocluk' ? 'görüşme' : 'ders'
   const [note, setNote] = useState(row.note ?? '')
   const [cancelReason, setCancelReason] = useState(row.cancelReason ?? '')
   const [newPlan, setNewPlan] = useState(() => toLocalInputValue(planDate))
@@ -666,7 +671,7 @@ function SessionDetailBody({
 
   function saveDone() {
     if (!Number.isFinite(unitNumber) || unitNumber <= 0) {
-      toast.error('Geçerli bir ders birimi girin.')
+      toast.error(`Geçerli bir ${unitWord} birimi girin.`)
       return
     }
     const when = new Date(doneAt)
@@ -772,7 +777,7 @@ function SessionDetailBody({
             {row.status === 'yapildi' && (
               <>
                 <dt className="text-muted-foreground">Gerçekleşme</dt>
-                <dd>{actualText(row)}</dd>
+                <dd>{actualText(row, service?.kind ?? 'ders')}</dd>
               </>
             )}
           </dl>
@@ -845,8 +850,8 @@ function SessionDetailBody({
               </div>
             </div>
             <div className="space-y-1">
-              <span className="text-xs font-medium">Ders birimi</span>
-              <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Ders birimi">
+              <span className="text-xs font-medium capitalize">{unitWord} birimi</span>
+              <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={`${unitWord} birimi`}>
                 {presets.map((p) => (
                   <Button
                     key={p}
@@ -870,7 +875,7 @@ function SessionDetailBody({
                 </Button>
                 {customUnit && (
                   <Input
-                    aria-label="Özel ders birimi"
+                    aria-label={`Özel ${unitWord} birimi`}
                     inputMode="decimal"
                     className="h-7 w-20"
                     value={unit}

@@ -96,7 +96,9 @@ export default async function StudentFinancePage({
       .eq('workspace_id', workspaceId),
     supabase
       .from('student_services')
-      .select('id, kind, participation, medium')
+      // finance_link + status M1.0-05 için: "aylik_paket" hizmeti aylık
+      // sabit tahakkukun etiketi olarak kullanılıyor (aşağıda).
+      .select('id, kind, participation, medium, finance_link, status')
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId),
     supabase
@@ -123,10 +125,21 @@ export default async function StudentFinancePage({
   )
   const sessionService = new Map((sessionRows ?? []).map((s) => [s.id as string, s.service_id as string]))
 
+  // M1.0-05: aylık sabit tahakkuk YALNIZ para satırı olmasın — mümkünse
+  // ilgili hizmete bağlansın. "aylik_paket" olarak işaretli, aktif ve TEK
+  // olan hizmet varsa etiketi oradan gelir; birden fazla ya da sıfırsa
+  // (hangi hizmete ait olduğu belirsiz) genel "Aylık sabit" etiketi kalır
+  // — var olmayan bir kesinliği uydurmamak için.
+  const aylikPaketServices = (serviceRows ?? []).filter(
+    (s) => s.finance_link === 'aylik_paket' && s.status === 'active'
+  )
+  const aylikPaketServiceId =
+    aylikPaketServices.length === 1 ? (aylikPaketServices[0].id as string) : null
+
   const accruals = (accrualRows ?? []).map((r) => {
     const base = mapAccrual(r as Record<string, unknown>)
     const sid = r.service_session_id as string | null
-    const svc = sid ? sessionService.get(sid) : undefined
+    const svc = sid ? sessionService.get(sid) : aylikPaketServiceId && base.kind === 'aylik' ? aylikPaketServiceId : undefined
     return { ...base, serviceLabel: svc ? (serviceLabel.get(svc) ?? null) : null }
   })
 

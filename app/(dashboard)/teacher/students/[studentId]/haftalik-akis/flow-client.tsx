@@ -211,16 +211,37 @@ export function FlowClient({
     toLocalInput(new Date(Date.now() + 7 * 86_400_000).toISOString())
   )
 
+  // M1.0-05: Takip başlangıcı GEÇMİŞ TARİH olabilmeli — amaç, mevcut
+  // (önceden kayıtlı) öğrencileri "bugün başlamış gibi" göstermeden
+  // sisteme taşımak. Varsayılan "şimdi"dir; öğretmen isterse değiştirir.
+  // Hafta numarası (lib/weekly-flow.ts academicWeekNumber) bu akışın en
+  // eski weekly_flows.starts_at'inden türediği için ek bir değişiklik
+  // gerekmiyor — geçmiş bir tarih seçilince doğru geçmiş hafta otomatik
+  // hesaplanır.
+  const [editingStartsAt, setEditingStartsAt] = useState(false)
+  const [startsAtInput, setStartsAtInput] = useState(() => toLocalInput(new Date().toISOString()))
+
+  function resolveStartsAt(): string | null {
+    const iso = new Date(startsAtInput).toISOString()
+    if (Number.isNaN(new Date(startsAtInput).getTime())) return null
+    return iso
+  }
+
   function openFlow() {
     if (!suggestedDueAt) {
       // Ana temas yok: otomatik kapanış üretilemiyor, elle seçim formu açılır.
       setOpeningCustomDue(true)
       return
     }
+    const startsAtIso = resolveStartsAt()
+    if (!startsAtIso) {
+      toast.error('Geçerli bir takip başlangıç tarihi seçin.')
+      return
+    }
     startTransition(async () => {
       const r = await openWeeklyFlowAction({
         studentId,
-        startsAt: new Date().toISOString(),
+        startsAt: startsAtIso,
         dueAt: suggestedDueAt,
         dueSource: 'anchor',
         anchorServiceId: anchorServiceId ?? undefined,
@@ -240,10 +261,15 @@ export function FlowClient({
       toast.error('Geçerli bir tarih/saat seçin.')
       return
     }
+    const startsAtIso = resolveStartsAt()
+    if (!startsAtIso) {
+      toast.error('Geçerli bir takip başlangıç tarihi seçin.')
+      return
+    }
     startTransition(async () => {
       const r = await openWeeklyFlowAction({
         studentId,
-        startsAt: new Date().toISOString(),
+        startsAt: startsAtIso,
         dueAt: iso,
         // Elle seçildiği için 'custom' — ana temas sonradan tanımlansa
         // bile bu haftanın kapanışını kendiliğinden değiştirmez (§4'teki
@@ -340,6 +366,37 @@ export function FlowClient({
                 </>
               )}
             </p>
+
+            {/* M1.0-05: geçmiş tarihli takip başlangıcı. Varsayılan "şimdi",
+                öğretmen mevcut öğrenciyi taşırken geçmiş bir tarih seçebilir. */}
+            {editingStartsAt ? (
+              <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/30 p-3">
+                <div className="space-y-1">
+                  <Label htmlFor="starts-at">Takip başlangıcı</Label>
+                  <Input
+                    id="starts-at"
+                    type="datetime-local"
+                    value={startsAtInput}
+                    onChange={e => setStartsAtInput(e.target.value)}
+                    className="w-56"
+                  />
+                </div>
+                <Button variant="ghost" onClick={() => setEditingStartsAt(false)} disabled={isPending}>
+                  Tamam
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Takip başlangıcı: <strong>{formatSessionLong(resolveStartsAt() ?? new Date().toISOString())}</strong>{' '}
+                <button
+                  type="button"
+                  onClick={() => setEditingStartsAt(true)}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Değiştir
+                </button>
+              </p>
+            )}
 
             {!suggestedDueAt && openingCustomDue && (
               <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/30 p-3">

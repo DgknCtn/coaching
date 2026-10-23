@@ -70,10 +70,12 @@ export function mapSessionRow(r: Row, studentName?: string): SessionRow {
 
 /** Tablonun hizmet etiketi: "Koçluk", "Birebir Ders", "Grup Dersi · 12 AYT". */
 export function serviceInfo(service: ServiceRow): WeekServiceInfo {
-  const kind = CONTACT_KIND_LABEL[contactKindOf(service as ServiceLike)]
+  const kindLabel = CONTACT_KIND_LABEL[contactKindOf(service as ServiceLike)]
   return {
     id: service.id,
-    label: service.groupName ? `${kind} · ${service.groupName}` : kind,
+    label: service.groupName ? `${kindLabel} · ${service.groupName}` : kindLabel,
+    // M1.0-05: birim gösterimi için ("1 ders" / "1 görüşme") — formatUnits.
+    kind: service.kind,
     participation: service.participation,
     financeLink: service.financeLink,
     defaultUnitCount: service.defaultUnitCount,

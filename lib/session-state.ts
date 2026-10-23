@@ -39,10 +39,16 @@ export type SessionSource = 'takvim' | 'elle' | 'telafi'
 /** Yapıldı panelinin hazır birimleri; "Özel" serbest giriş. */
 export const UNIT_PRESETS = [0.5, 1, 1.5, 2] as const
 
-export function formatUnits(units: number | null | undefined): string {
+/**
+ * M1.0-05: Koçluk kullanıcı dilinde "1 görüşme" — iç 0,5/1/1,5/2 birim
+ * altyapısı (UNIT_PRESETS) DOKUNULMADAN kalıyor, yalnız gösterim kelimesi
+ * hizmet türüne göre değişiyor. `kind` verilmezse (çoğu çağrı yeri zaten
+ * ders/ek_ders'e özgü) eski davranış ("ders") korunur.
+ */
+export function formatUnits(units: number | null | undefined, kind: 'ders' | 'kocluk' = 'ders'): string {
   if (units == null) return '—'
   const text = Number.isInteger(units) ? String(units) : units.toFixed(2).replace(/0$/, '').replace('.', ',')
-  return `${text} ders`
+  return `${text} ${kind === 'kocluk' ? 'görüşme' : 'ders'}`
 }
 
 export function deriveMakeupStatus(input: {

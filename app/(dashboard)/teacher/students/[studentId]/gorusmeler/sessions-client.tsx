@@ -15,6 +15,8 @@ import { Section } from '@/components/shared/section'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { WeekSessions, type SessionMoney, type WeekServiceInfo } from '@/components/sessions/week-sessions'
+import { MonthSessions } from '@/components/sessions/month-sessions'
+import type { MonthColumnKind, MonthWeekRow } from '@/lib/month-sessions'
 import {
   formatServiceAxes,
   formatServiceSchedule,
@@ -46,12 +48,36 @@ export interface SeasonSummary {
 export interface ArchiveMonth {
   month: string
   label: string
-  /** O ayın ilk haftası — arşivden haftalık görünüme atlamak için. */
-  weekParam: string
+  /** M1.0-05: arşivden geçmiş bir aya atlamak için — o ayın GÖRÜNÜMÜ açılır. */
+  monthParam: string
   planned: number
   done: number
   missed: number
 }
+
+/**
+ * M1.0-05 — görünüm iki moddan biri: AY (varsayılan) ya da HAFTA (bir
+ * satırın "Bu haftaya git" bağlantısından gelinen, tam donanımlı
+ * işlem ekranı). İki mod aynı anda açık OLAMAZ — sayfa hangi mod
+ * olduğuna `?hafta=`/`?ay=` parametresine bakarak sunucuda karar verir.
+ */
+export type SessionsView =
+  | {
+      mode: 'week'
+      week: { title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
+      /** T04-04: tek kompakt özet — eskiden ayrı "Bu hafta"/"Yapıldı"/"Durum bekliyor" kartlarıydı. */
+      weekStats: { done: number; total: number; awaiting: number }
+      /** "Salı 18:00 Birebir Ders 60 dk · Cuma ..." — plan yoksa null. */
+      nextWeekPreview: string | null
+    }
+  | {
+      mode: 'month'
+      month: { title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
+      weekRows: MonthWeekRow[]
+      columns: MonthColumnKind[]
+      academicWeekLabelByWeekKey: Record<string, string | null>
+      hasAnyService: boolean
+    }
 
 /**
  * Ders & Görüşmeler — öğrenci sayfasının etkileşim katmanı (M1.0-02).
@@ -67,9 +93,7 @@ export function SessionsClient({
   serviceInfo,
   sessions,
   groups,
-  week,
-  weekStats,
-  nextWeekPreview,
+  view,
   monthSummary,
   archive,
   mainContactId,
@@ -90,11 +114,7 @@ export function SessionsClient({
   serviceInfo: Record<string, WeekServiceInfo>
   sessions: SessionRow[]
   groups: { id: string; name: string }[]
-  week: { title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
-  /** T04-04: tek kompakt özet — eskiden ayrı "Bu hafta"/"Yapıldı"/"Durum bekliyor" kartlarıydı. */
-  weekStats: { done: number; total: number; awaiting: number }
-  /** EKLE: "Salı 18:00 Birebir Ders 60 dk · Cuma ..." — plan yoksa null. */
-  nextWeekPreview: string | null
+  view: SessionsView
   monthSummary: MonthSummary
   archive: ArchiveMonth[]
   mainContactId: string | null
@@ -128,82 +148,118 @@ export function SessionsClient({
     })
   }
 
-  // T04-04/05 (M1.0-04): ekranın odağı "bu hafta ne oldu" olmalı —
-  // hizmet sözleşmesi ve finans ayrıntısı bunun önüne geçmemeli (canlı
-  // test bulgusu). Bu yüzden sıra artık: 1) Haftalık Takvim, 2) tek
-  // kompakt oturum özeti, 3) veli bildirimi (varsa, actionable), 4)
-  // Hizmet Yapısı — artık kart-içi-kart grid değil, tek/iki satırlık
-  // özet + Düzenle. "Bu hafta"/"Yapıldı"/"Durum bekliyor" diye AYRI
-  // büyük kartlara gerek yok (belgenin kendi ifadesi) — eskiden
-  // page.tsx'teki 4'lü MetricTiles bunları ayrı ayrı gösteriyordu;
-  // "Durum güncellenmedi" uyarısı zaten WeekSessions'ın kendi
-  // satırlarında rozet olarak görünüyor, ayrı bir sayaç tekrar ediyordu.
-  // ÖDEME DURUMU KARTI TAMAMEN KALDIRILDI: öğrenciyle ekran açıkken
-  // fiyat/bakiye gereksiz görünüyordu; Finans detayı WeekSessions'ın
-  // kendi özet satırında bağlantı olarak zaten var.
-  const weekPercent = weekStats.total > 0 ? Math.round((weekStats.done / weekStats.total) * 100) : 0
+  // M1.0-05: varsayılan görünüm artık AY — bir satırın kendi haftasına
+  // dair tüm ayrıntı (reschedule, telafi kararı, iptal) hâlâ HAFTA
+  // modunda (WeekSessions, değişmedi) kalıyor; her ay satırının "Bu
+  // haftaya git" bağlantısı oraya gider. Büyük "Oturumlar x/y" kartı ve
+  // "Gelecek hafta" satırı AY modunda YOK (PDF: "kaldırılabilir" —
+  // ay zaten tüm haftaları gösterdiği için ikisi de ölü bilgi
+  // olurdu); HAFTA modunda (tek haftaya odaklanıldığında) ikisi de
+  // hâlâ anlamlı, bu yüzden o moddan kaldırılmadı.
+  const weekPercent =
+    view.mode === 'week' && view.weekStats.total > 0
+      ? Math.round((view.weekStats.done / view.weekStats.total) * 100)
+      : 0
 
   return (
     <div className="space-y-6">
-      {/* ---------------- Hafta (§4) — artık EN ÜSTTE ---------------- */}
-      <WeekSessions
-        rows={sessions}
-        services={serviceInfo}
-        weekTitle={week.title}
-        prevHref={week.prevHref}
-        nextHref={week.nextHref}
-        currentHref={week.currentHref}
-        isCurrentWeek={week.isCurrent}
-        nowIso={nowIso}
-        showStudent={false}
-        unpricedIds={unpricedIds}
-        quickCollectIds={quickCollectIds}
-        money={money}
-        financeDetail={financeHref !== null}
-        summary={
-          <span className="inline-flex flex-wrap items-center gap-x-2">
-            {monthSummaryLine(monthSummary)}
-            {financeHref && (
-              <Link href={financeHref} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
-                <Wallet className="size-3" />
-                Finans detayı
-              </Link>
-            )}
-          </span>
-        }
-        addSession={{
-          studentId,
-          services: active
-            .filter((s) => s.participation === 'birebir')
-            .map((s) => serviceInfo[s.id])
-            .filter(Boolean),
-        }}
-        emptyHint={
-          active.some((s) => s.cadence === 'esnek')
-            ? 'Esnek ritimli hizmetin oturumlarını "Oturum ekle" ile girin.'
-            : undefined
-        }
-      />
+      {view.mode === 'week' ? (
+        <>
+          {/* ---------------- Hafta (§4) — artık EN ÜSTTE ---------------- */}
+          <WeekSessions
+            rows={sessions}
+            services={serviceInfo}
+            weekTitle={view.week.title}
+            prevHref={view.week.prevHref}
+            nextHref={view.week.nextHref}
+            currentHref={view.week.currentHref}
+            isCurrentWeek={view.week.isCurrent}
+            nowIso={nowIso}
+            showStudent={false}
+            unpricedIds={unpricedIds}
+            quickCollectIds={quickCollectIds}
+            money={money}
+            financeDetail={financeHref !== null}
+            summary={
+              <span className="inline-flex flex-wrap items-center gap-x-2">
+                {monthSummaryLine(monthSummary)}
+                {financeHref && (
+                  <Link href={financeHref} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+                    <Wallet className="size-3" />
+                    Finans detayı
+                  </Link>
+                )}
+              </span>
+            }
+            addSession={{
+              studentId,
+              services: active
+                .filter((s) => s.participation === 'birebir')
+                .map((s) => serviceInfo[s.id])
+                .filter(Boolean),
+            }}
+            emptyHint={
+              active.some((s) => s.cadence === 'esnek')
+                ? 'Esnek ritimli hizmetin oturumlarını "Oturum ekle" ile girin.'
+                : undefined
+            }
+          />
 
-      {/* ---------------- Kompakt oturum özeti (T04-04) ---------------- */}
-      <MetricTiles
-        className="sm:grid-cols-1 xl:grid-cols-1 max-w-xs"
-        metrics={[
-          {
-            label: 'Oturumlar',
-            value: `${weekStats.done}/${weekStats.total}`,
-            progress: weekPercent,
-            tone: weekStats.awaiting > 0 ? 'warning' : weekStats.done === weekStats.total && weekStats.total > 0 ? 'success' : 'default',
-            hint: weekStats.awaiting > 0 ? `${weekStats.awaiting} sonuç bekliyor` : 'yapıldı',
-          },
-        ]}
-      />
+          {/* ---------------- Kompakt oturum özeti (T04-04) ---------------- */}
+          <MetricTiles
+            className="sm:grid-cols-1 xl:grid-cols-1 max-w-xs"
+            metrics={[
+              {
+                label: 'Oturumlar',
+                value: `${view.weekStats.done}/${view.weekStats.total}`,
+                progress: weekPercent,
+                tone:
+                  view.weekStats.awaiting > 0
+                    ? 'warning'
+                    : view.weekStats.done === view.weekStats.total && view.weekStats.total > 0
+                      ? 'success'
+                      : 'default',
+                hint: view.weekStats.awaiting > 0 ? `${view.weekStats.awaiting} sonuç bekliyor` : 'yapıldı',
+              },
+            ]}
+          />
 
-      {/* ---------------- Gelecek hafta özeti (EKLE) ---------------- */}
-      {nextWeekPreview && (
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Gelecek hafta:</span> {nextWeekPreview}
-        </p>
+          {/* ---------------- Gelecek hafta özeti (EKLE) ---------------- */}
+          {view.nextWeekPreview && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Gelecek hafta:</span> {view.nextWeekPreview}
+            </p>
+          )}
+        </>
+      ) : (
+        /* ---------------- Ay (M1.0-05) — varsayılan görünüm ---------------- */
+        <MonthSessions
+          weeks={view.weekRows}
+          columns={view.columns}
+          sessions={sessions}
+          monthTitle={view.month.title}
+          prevHref={view.month.prevHref}
+          nextHref={view.month.nextHref}
+          currentHref={view.month.currentHref}
+          isCurrentMonth={view.month.isCurrent}
+          nowIso={nowIso}
+          unpricedIds={unpricedIds}
+          quickCollectIds={quickCollectIds}
+          money={money}
+          academicWeekLabelByWeekKey={view.academicWeekLabelByWeekKey}
+          hasAnyService={view.hasAnyService}
+          summary={
+            <span className="inline-flex flex-wrap items-center gap-x-2">
+              {monthSummaryLine(monthSummary)}
+              {financeHref && (
+                <Link href={financeHref} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+                  <Wallet className="size-3" />
+                  Finans detayı
+                </Link>
+              )}
+            </span>
+          }
+        />
       )}
 
       {/* VELİ BİLDİRİMİ (§8) — para kaydı değil; tutar girilirse tahsilat doğar. */}
@@ -309,7 +365,7 @@ export function SessionsClient({
                 {archive.map((m) => (
                   <tr key={m.month} className="border-b border-border last:border-0">
                     <td className="px-3 py-2">
-                      <Link href={`?hafta=${m.weekParam}`} className="hover:underline">
+                      <Link href={`?ay=${m.monthParam}`} className="hover:underline">
                         {m.label}
                       </Link>
                     </td>

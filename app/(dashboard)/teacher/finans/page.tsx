@@ -276,10 +276,12 @@ export default async function FinancePage({
                   <tr className="border-b border-border text-xs text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">Öğrenci</th>
                     <th className="px-3 py-2 text-left font-medium">Model</th>
-                    <th className="hidden px-3 py-2 text-right font-medium md:table-cell">Devreden</th>
+                    <th className="hidden px-3 py-2 text-right font-medium md:table-cell">Önceki açık</th>
                     <th className="px-3 py-2 text-right font-medium">Dönem</th>
                     <th className="px-3 py-2 text-right font-medium">Tahsil</th>
-                    <th className="px-3 py-2 text-right font-medium">Kalan</th>
+                    {/* M1.0-05: "Kalan" TOPLAM CARİ BORCU (closingBalanceKurus)
+                        gösteriyor — ismi bunu söylesin. */}
+                    <th className="px-3 py-2 text-right font-medium">Toplam açık bakiye</th>
                     <th className="px-3 py-2 text-left font-medium">Durum</th>
                   </tr>
                 </thead>

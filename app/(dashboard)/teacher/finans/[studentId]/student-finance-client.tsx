@@ -163,8 +163,11 @@ export function StudentFinanceClient({
         )}
 
         {summary.carriedInKurus !== 0 && (
+          // M1.0-05: "Dönem toplamı", "Önceki dönemden açık" ve "Toplam açık
+          // bakiye" NET ayrışsın — hesap değişmiyor (periodSummary), yalnız
+          // etiket PDF'in istediği üçlüyle uyumlu hâle geldi.
           <p className="mb-3 text-sm text-muted-foreground">
-            Önceki dönemlerden devreden:{' '}
+            Önceki dönemden açık:{' '}
             <span className="font-medium tabular-nums text-foreground">
               {summary.carriedInKurus < 0
                 ? `${formatKurus(-summary.carriedInKurus)} alacak`
@@ -191,12 +194,27 @@ export function StudentFinanceClient({
                 {lines.map((l) => {
                   const paid = allocation.paidByAccrual.get(l.id) ?? 0
                   const state =
-                    l.amountKurus === 0 ? '—' : paid >= l.amountKurus ? 'Ödendi' : paid > 0 ? `Kısmi (${formatKurus(paid)})` : 'Açık'
+                    l.amountKurus === 0
+                      ? '—'
+                      : paid >= l.amountKurus
+                        ? 'Ödendi'
+                        : paid > 0
+                          // M1.0-05: "Kısmi (600 TL)" belirsizdi — hem ödenen
+                          // hem açık tutar somut görünsün.
+                          ? `${formatKurus(paid)} ödendi · ${formatKurus(l.amountKurus - paid)} açık`
+                          : 'Açık'
                   return (
                     <tr key={l.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2 tabular-nums">{dateTr(l.date)}</td>
                       <td className="px-3 py-2">
-                        {l.kind === 'ders' && l.serviceLabel ? l.serviceLabel : ACCRUAL_KIND_LABEL[l.kind]}
+                        {l.kind === 'ders' && l.serviceLabel
+                          ? l.serviceLabel
+                          : // M1.0-05: aylık sabit tahakkuk yalnız para
+                            // satırı olmasın — bağlı olduğu hizmet biliniyorsa
+                            // (tek "aylik_paket" hizmet varsa) adı eklenir.
+                            l.kind === 'aylik' && l.serviceLabel
+                            ? `${ACCRUAL_KIND_LABEL[l.kind]} · ${l.serviceLabel}`
+                            : ACCRUAL_KIND_LABEL[l.kind]}
                         {l.kind === 'ek_ders' && l.rateKurus != null && (
                           <span className="text-muted-foreground"> · {formatUnits(l.unitCount)} × {formatKurus(l.rateKurus)}</span>
                         )}
@@ -230,7 +248,9 @@ export function StudentFinanceClient({
             <dd className="font-medium tabular-nums">{formatKurus(summary.periodCollectedKurus)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted-foreground">{summary.closingBalanceKurus < 0 ? 'Alacak (fazla ödeme)' : 'Kalan'}</dt>
+            <dt className="text-xs text-muted-foreground">
+              {summary.closingBalanceKurus < 0 ? 'Alacak (fazla ödeme)' : 'Toplam açık bakiye'}
+            </dt>
             <dd className="flex items-center gap-2 font-medium tabular-nums">
               {formatKurus(Math.abs(summary.closingBalanceKurus))}
               <Badge variant={summary.state === 'odendi' ? 'success' : summary.state === 'alacak' ? 'info' : summary.state === 'yok' ? 'neutral' : 'warning'}>
