@@ -124,6 +124,61 @@ export function deriveFlowStatuses(
   return out
 }
 
+/**
+ * M1.0-06 — "Zaman" sütunu: Geçti / Şu an / Sırada.
+ *
+ * `deriveFlowStatus`'tan BİLEREK AYRI bir fonksiyon: o ilerleme-farkında
+ * (eğitmen "Geçildi" işaretlemeden `current` sonsuza dek kalır, MA-08).
+ * Bu fonksiyon SALT TAKVİM KONUMU — `passed`/ilerlemeden tamamen
+ * bağımsız, yalnız bugünün planlanan aralığa göre nerede olduğunu
+ * okutur. "Müfredat zamanı 'konu öğrenildi' anlamına gelmez" (M1.0-06) —
+ * bu yüzden `item.passed` buraya hiç girmez.
+ */
+export type TopicTimePosition = 'passed' | 'current' | 'upcoming'
+
+export const TIME_POSITION_LABEL: Record<TopicTimePosition, string> = {
+  passed: 'Geçti',
+  current: 'Şu an',
+  upcoming: 'Sırada',
+}
+
+export function topicTimePosition(
+  item: Pick<FlowItem, 'startDate' | 'endDate'>,
+  today?: string
+): TopicTimePosition {
+  const day = today ?? todayDateString()
+  if (day < item.startDate) return 'upcoming'
+  if (day > item.endDate) return 'passed'
+  return 'current'
+}
+
+/**
+ * M1.0-06 — "Plan" sütunu: "2-3. hf" / tek haftalık blokta "13. hf".
+ *
+ * Akışın kendi İLK bloğunun başlangıcı 1. hafta sayılır — `insertItem`'in
+ * zaten yaptığı aynı varsayım (yeni ilk blok `items[0].startDate`'i
+ * referans alır). Harici bir "takip başlangıcı" kavramına (weekly-flow.ts
+ * academicWeekNumber) bağlı DEĞİL: bu salt akışın kendi iç sırasıdır.
+ */
+export function flowWeekRangeLabel(
+  items: Pick<FlowItem, 'startDate' | 'endDate'>[],
+  item: Pick<FlowItem, 'startDate' | 'endDate'>
+): string {
+  if (items.length === 0) return ''
+  const firstStart = items.reduce(
+    (min, i) => (i.startDate < min ? i.startDate : min),
+    items[0].startDate
+  )
+  const weekOf = (date: string): number => {
+    const ms =
+      Date.parse(`${date}T00:00:00Z`) - Date.parse(`${firstStart}T00:00:00Z`)
+    return Math.floor(ms / (7 * 24 * 60 * 60 * 1000)) + 1
+  }
+  const startWeek = weekOf(item.startDate)
+  const endWeek = weekOf(item.endDate)
+  return startWeek === endWeek ? `${startWeek}. hf` : `${startWeek}-${endWeek}. hf`
+}
+
 // ============================================================
 // Tarih aritmetiği
 //

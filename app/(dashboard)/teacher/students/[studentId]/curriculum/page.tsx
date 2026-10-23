@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getTeacherContext } from '@/lib/workspace'
 import { loadOpenWorkTopicIds } from '@/lib/open-work'
+import { loadTopicCoverage, type TopicCoverage } from '@/lib/curriculum-book-coverage'
 import { PageHeader } from '@/components/shared/page-header'
 import type { FlowItem } from '@/lib/curriculum-flow'
 import {
@@ -83,8 +84,27 @@ export default async function StudentCurriculumPage({
     itemCount: one(t.curriculum_template_items)?.count ?? 0,
   }))
 
-  const activeScopeId =
-    rawScope && scopes.some(s => s.id === rawScope) ? rawScope : (scopes[0]?.id ?? null)
+  // `?scope=` eksikse (ör. Genel Bakış'tan scope'suz bir linkle gelindiyse)
+  // scopes[0]'a değil, AKIŞI OLAN ilk scope'a düşülür — aksi halde
+  // öğretmen doğru derste şablon uygulamış olsa da ekran flowsuz başka bir
+  // dersin sekmesinde açılabilir ("Bu derste henüz akış yok" yanlış mesajı,
+  // M1.0-06 P0 bug'ının kök nedeni).
+  let activeScopeId =
+    rawScope && scopes.some(s => s.id === rawScope) ? rawScope : null
+
+  if (!activeScopeId && scopes.length > 0) {
+    const { data: scopesWithFlowRows } = await supabase
+      .from('student_curriculum_items')
+      .select('scope_id')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .limit(500)
+    const scopesWithFlow = new Set(
+      (scopesWithFlowRows ?? []).map(r => r.scope_id as string),
+    )
+    activeScopeId =
+      scopes.find(s => scopesWithFlow.has(s.id))?.id ?? scopes[0]?.id ?? null
+  }
 
   let initialItems: FlowItem[] = []
   // "İşleniyor" durumu için: konuda açık ödev kalemi var mı? Koruma Havuzu
@@ -92,13 +112,17 @@ export default async function StudentCurriculumPage({
   let openWorkTopicIds: string[] = []
 
   if (activeScopeId) {
-    const { data: itemRows } = await supabase
+    const { data: itemRows, error: itemsError } = await supabase
       .from('student_curriculum_items')
       .select('id, topic_id, start_date, end_date, passed_at, note, topics(name)')
       .eq('student_id', studentId)
       .eq('workspace_id', workspaceId)
       .eq('scope_id', activeScopeId)
       .order('sort_order')
+
+    if (itemsError) {
+      console.error('student_curriculum_items yüklenemedi', itemsError)
+    }
 
     initialItems = (
       (itemRows ?? []) as unknown as {
@@ -130,6 +154,15 @@ export default async function StudentCurriculumPage({
     ]
   }
 
+  // M1.0-06: "Kitap kapsamı" / "Son temas" sütunları. Sunucu bileşeninden
+  // istemciye Map geçirilemez — düz nesneye çevrilir.
+  const topicCoverageMap = await loadTopicCoverage(supabase, {
+    workspaceId,
+    studentId,
+    topicIds: initialItems.map(i => i.topicId).filter((t): t is string => !!t),
+  })
+  const topicCoverage: Record<string, TopicCoverage> = Object.fromEntries(topicCoverageMap)
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 md:p-8">
       <PageHeader
@@ -149,6 +182,7 @@ export default async function StudentCurriculumPage({
         templates={templates}
         initialItems={initialItems}
         openWorkTopicIds={openWorkTopicIds}
+        topicCoverage={topicCoverage}
       />
     </div>
   )

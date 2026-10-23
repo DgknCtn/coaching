@@ -40,12 +40,15 @@ export default async function BookSubsectionsPage({
     .from('books')
     // Gömmeler düzenleme ekranıyla aynı: kullanılmış test sayısı
     // olmadan dönüştürme düğmesinin açık mı kapalı mı olacağı
-    // bilinemez (076).
+    // bilinemez (076). book_section_topics gömmesi M1.0-06 için — Alt
+    // Bölüm'de de müfredat eşlemesi yapılabilsin diye (edit/page.tsx ile
+    // aynı desen).
     .select(`
-      id, title, status, tracking_mode,
+      id, title, status, tracking_mode, subject, level_exam,
       book_sections(
         id, title, order_index, parent_section_id, test_start, test_end,
-        book_tests(id, homework_items(id), test_completions(id))
+        book_tests(id, homework_items(id), test_completions(id)),
+        book_section_topics(topic_id)
       )
     `)
     .eq('id', bookId)
@@ -55,6 +58,56 @@ export default async function BookSubsectionsPage({
   if (!book || book.status === 'archived') notFound()
 
   const isPageBook = book.tracking_mode === 'page'
+
+  // M1.0-06: müfredat listesi — edit/page.tsx ile AYNI filtre/kaçış yolu
+  // (R7-02 §8). Burada da kitabın Ders + Seviye/Sınav bilgisine göre
+  // daraltılır; hiçbir kapsam eşleşmezse workspace'in tüm kapsamlarına
+  // düşülür (eşlemeyi imkânsız kılmamak için).
+  let scopeQuery = supabase
+    .from('academic_scopes')
+    .select('id, name, subject, level_exam')
+    .eq('workspace_id', workspaceId)
+    .eq('active', true)
+
+  if (book.subject) {
+    scopeQuery = scopeQuery.or(`subject.is.null,subject.eq.${book.subject}`)
+  }
+  if (book.level_exam) {
+    scopeQuery = scopeQuery.or(`level_exam.is.null,level_exam.eq.${book.level_exam}`)
+  }
+
+  const { data: scopeRows } = await scopeQuery
+  let scopes = scopeRows ?? []
+
+  const filtered = scopes.length > 0
+  if (!filtered) {
+    const { data: allScopes } = await supabase
+      .from('academic_scopes')
+      .select('id, name, subject, level_exam')
+      .eq('workspace_id', workspaceId)
+      .eq('active', true)
+    scopes = allScopes ?? []
+  }
+
+  const scopeIds = scopes.map(s => s.id)
+  const scopeNameById = new Map(scopes.map(s => [s.id, s.name]))
+
+  const { data: topicRows } = scopeIds.length
+    ? await supabase
+        .from('topics')
+        .select('id, name, scope_id')
+        .eq('workspace_id', workspaceId)
+        .eq('active', true)
+        .in('scope_id', scopeIds)
+        .order('sort_order')
+        .order('name')
+    : { data: [] }
+
+  const topics = (topicRows ?? []).map(t => ({
+    id: t.id,
+    name: t.name,
+    scopeName: scopeNameById.get(t.scope_id) ?? 'Kapsam',
+  }))
 
   const allSections = (book.book_sections ?? []).slice().sort(
     (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
@@ -91,6 +144,7 @@ export default async function BookSubsectionsPage({
           testStart: sub.test_start,
           testEnd: sub.test_end,
           testCount: testsOf(sub).length,
+          topicIds: (sub.book_section_topics ?? []).map(t => t.topic_id),
         })
       ),
     }))
@@ -165,6 +219,8 @@ export default async function BookSubsectionsPage({
                   // false yazılmıyor: bu ekrana sonradan da gelinebilir
                   // ve o zaman değer gerçeği söylemeli.
                   hasProgress={sections.some(s => s.usedTestCount > 0)}
+                  topics={topics}
+                  topicsFiltered={filtered}
                 />
               </CardContent>
             </Card>

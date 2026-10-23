@@ -17,9 +17,11 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
   FLOW_STATUS_LABEL,
+  TIME_POSITION_LABEL,
   deriveFlowStatuses,
   durationWeeks,
   flowItemKey,
+  flowWeekRangeLabel,
   mergeWithNext,
   insertItem,
   moveItem,
@@ -28,9 +30,11 @@ import {
   setPassed,
   splitItem,
   summarizeFlow,
+  topicTimePosition,
   type FlowItem,
   type FlowStatus,
 } from '@/lib/curriculum-flow'
+import { formatBookCoverage, type TopicCoverage } from '@/lib/curriculum-book-coverage'
 import { todayDateString } from '@/lib/homework-status'
 import {
   assignCurriculumTemplateAction,
@@ -151,6 +155,8 @@ interface Props {
   initialItems: FlowItem[]
   /** Açık çalışması olan konular — "İşleniyor" durumu (lib/open-work.ts). */
   openWorkTopicIds: string[]
+  /** M1.0-06: "Kitap kapsamı" / "Son temas" — topicId -> kapsam özeti. */
+  topicCoverage: Record<string, TopicCoverage>
 }
 
 function formatDate(value: string): string {
@@ -186,6 +192,7 @@ export function CurriculumFlowEditor({
   templates,
   initialItems,
   openWorkTopicIds,
+  topicCoverage,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -224,6 +231,9 @@ export function CurriculumFlowEditor({
       : selected?.passed
         ? 100
         : 0
+  // M1.0-06: "Kitap kapsamı" / "Son temas" — konu id'siz (henüz kaydedilmemiş)
+  // satırlarda kapsam da yok, henüz hiçbir kitap bölümü ona bağlanamamıştır.
+  const selectedCoverage = selected?.topicId ? topicCoverage[selected.topicId] : undefined
   const scopeTemplates = templates.filter(t => t.scopeId === activeScopeId)
 
   function update(next: FlowItem[]) {
@@ -434,9 +444,16 @@ export function CurriculumFlowEditor({
                   <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
                     <th className="px-3 py-2 font-medium">#</th>
                     <th className="px-3 py-2 font-medium">Konu</th>
+                    {/* M1.0-06: "2-3. hf" gibi akışın kendi iç hafta sırası
+                        — Başlangıç/Bitiş (tarih) sütunlarının yerini almaz,
+                        PDF'in istediği hızlı-okunur biçim ek olarak durur. */}
+                    <th className="px-3 py-2 font-medium">Plan</th>
                     <th className="px-3 py-2 font-medium">Süre</th>
                     <th className="px-3 py-2 font-medium">Başlangıç</th>
                     <th className="px-3 py-2 font-medium">Bitiş</th>
+                    {/* M1.0-06: salt takvim konumu — "Geçti" demek konu
+                        öğrenildi demek değildir, deriveFlowStatus'tan ayrı. */}
+                    <th className="px-3 py-2 font-medium">Zaman</th>
                     <th className="px-3 py-2" />
                   </tr>
                 </thead>
@@ -481,6 +498,9 @@ export function CurriculumFlowEditor({
                           />
                           </span>
                         </td>
+                        <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
+                          {flowWeekRangeLabel(items, item)}
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">
                             <input
@@ -510,6 +530,9 @@ export function CurriculumFlowEditor({
                         </td>
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.startDate)}</td>
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.endDate)}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {TIME_POSITION_LABEL[topicTimePosition(item, today)]}
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-end">
                             <FlowRowMenu
@@ -554,6 +577,24 @@ export function CurriculumFlowEditor({
                   value: `%${selectedProgress} (${
                     selectedWeek === null ? 0 : Math.max(0, selectedWeek - 1)
                   }/${durationWeeks(selected)} hafta)`,
+                },
+                {
+                  // M1.0-06: salt takvim konumu, ilerlemeden bağımsız —
+                  // "Müfredat zamanı 'konu öğrenildi' anlamına gelmez".
+                  label: 'Zaman',
+                  value: TIME_POSITION_LABEL[topicTimePosition(selected, today)],
+                },
+                {
+                  label: 'Kitap kapsamı',
+                  value: formatBookCoverage(selectedCoverage?.sources ?? []),
+                },
+                {
+                  label: 'Son temas',
+                  value: selectedCoverage?.lastContactDate ? (
+                    formatDate(selectedCoverage.lastContactDate)
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  ),
                 },
                 {
                   label: 'Not',
