@@ -17,10 +17,12 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import {
   FLOW_STATUS_LABEL,
-  TIME_POSITION_LABEL,
+  FLOW_ROW_STATUS_LABEL,
   deriveFlowStatuses,
   durationWeeks,
   flowItemKey,
+  flowRowStatus,
+  flowWeekPosition,
   flowWeekRangeLabel,
   mergeWithNext,
   insertItem,
@@ -30,8 +32,8 @@ import {
   setPassed,
   splitItem,
   summarizeFlow,
-  topicTimePosition,
   type FlowItem,
+  type FlowRowStatus,
   type FlowStatus,
 } from '@/lib/curriculum-flow'
 import { formatBookCoverage, type TopicCoverage } from '@/lib/curriculum-book-coverage'
@@ -47,8 +49,6 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { EmptyState } from '@/components/shared/empty-state'
 import { DetailPanel } from '@/components/shared/detail-panel'
 import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
-import { FlowTimeline } from '@/components/shared/flow-timeline'
-import { Legend } from '@/components/shared/legend'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,10 +89,19 @@ const STATUS_BADGE: Record<FlowStatus, 'success' | 'info' | 'warning' | 'neutral
 
 const STATUS_ORDER: FlowStatus[] = ['passed', 'in_progress', 'current', 'soon', 'later']
 
-const LEGEND_ENTRIES = STATUS_ORDER.map(status => ({
-  label: FLOW_STATUS_LABEL[status],
-  className: STATUS_DOT[status],
-}))
+/**
+ * M1.0-06 EK REVİZYON — tablodaki TEK görünür durum göstergesi
+ * ("ZAMAN" sütunu). Eski STATUS_DOT'tan bilerek ayrı: o hâlâ "Akış
+ * özeti" kartı ve detay panelinin üst rozeti için kullanılıyor
+ * (İşleniyor/Yaklaşan dahil 5 durum); bu ise PDF'in 4 değerine
+ * sadeleştirilmiş, satırda dot+GÖRÜNÜR metin olarak duran gösterge.
+ */
+const ROW_STATUS_DOT: Record<FlowRowStatus, string> = {
+  completed: 'bg-success-border',
+  passed: 'bg-warning-border',
+  current: 'bg-primary',
+  upcoming: 'bg-muted-foreground/40',
+}
 
 // Ekranın kuralları, altta tek paragraf yerine madde madde. Metinler
 // R5.2'nin davranışını anlatır; bir kuralı değiştirirken buradaki karşılığı
@@ -234,7 +243,18 @@ export function CurriculumFlowEditor({
   // M1.0-06: "Kitap kapsamı" / "Son temas" — konu id'siz (henüz kaydedilmemiş)
   // satırlarda kapsam da yok, henüz hiçbir kitap bölümü ona bağlanamamıştır.
   const selectedCoverage = selected?.topicId ? topicCoverage[selected.topicId] : undefined
+  // Seçili konuda açık (tamamlanmamış) ödev var mı — tablo satırından
+  // kalkan "İşleniyor" sinyali artık yalnız burada yaşıyor.
+  const selectedHasOpenWork = !!(selected?.topicId && activeTopicIds.has(selected.topicId))
   const scopeTemplates = templates.filter(t => t.scopeId === activeScopeId)
+  const activeScopeName = scopes.find(s => s.id === activeScopeId)?.name ?? null
+
+  // M1.0-06 EK REVİZYON — "Öğrenci planı: N/M. hafta" + "Şu an: ..." özeti.
+  // Hiçbir konu bugünün tarihine denk gelmiyorsa (boşluk, henüz başlamadı,
+  // akış tamamen bitti) "Şu an" satırı hiç basılmaz — uydurma bir konu
+  // göstermek yanıltıcı olurdu.
+  const weekPosition = useMemo(() => flowWeekPosition(items, today), [items, today])
+  const currentFlowItem = items.find(i => flowRowStatus(i, today) === 'current') ?? null
 
   function update(next: FlowItem[]) {
     setItems(next)
@@ -363,6 +383,25 @@ export function CurriculumFlowEditor({
         </div>
       </div>
 
+      {/* M1.0-06 EK REVİZYON — Gantt kalkınca ekranın tepesine taşınan
+          özet: "hangi derste, bugün kaçıncı haftadayız, şu an hangi
+          konudayız". Tablo tek ana görünüm olduğu için bu iki satır
+          çizelgenin verdiği "nerede olduğumuz" hissinin yerini tutuyor. */}
+      {weekPosition && (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+          {activeScopeName && <h2 className="font-medium">{activeScopeName}</h2>}
+          <p className="text-xs text-muted-foreground">
+            Öğrenci planı: {weekPosition.current} / {weekPosition.total}. hafta
+          </p>
+        </div>
+      )}
+      {currentFlowItem && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Şu an:</span> {currentFlowItem.name}{' '}
+          ({flowWeekRangeLabel(items, currentFlowItem)})
+        </p>
+      )}
+
       {/* Şablon opsiyoneldir: akış sıfırdan da kurulabilir. */}
       {scopeTemplates.length > 0 && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3">
@@ -423,21 +462,11 @@ export function CurriculumFlowEditor({
           )}
         >
           <div className="min-w-0 space-y-3">
-            <Legend entries={LEGEND_ENTRIES} />
-
-            {/* Çizelgede blok sürüklenebilir: taşıma ve süre değişimi
-                zincirleme etkiyi CANLI gösterir (bkz. flow-timeline.tsx
-                başlığı). Aynı işlemler satır menüsünde de duruyor —
-                sürükleme tek yol değil. */}
-            <FlowTimeline
-              items={items}
-              today={today}
-              statuses={statuses}
-              selectedId={selectedId}
-              onSelect={item => setSelectedId(item.id ?? null)}
-              onChange={update}
-            />
-
+            {/* M1.0-06 EK REVİZYON: büyük Gantt/zaman çizelgesi (eski
+                FlowTimeline) kaldırıldı — 42 konu/48 hafta gibi uzun
+                akışlarda tek okunabilir zemin bu tablo. Taşıma/süre
+                zincirleme etkisi satır üç-nokta menüsünden ve "Süre"
+                input'undan yönetilmeye devam ediyor. */}
             <div className="overflow-hidden rounded-lg border bg-card">
               <table className="w-full text-sm">
                 <thead>
@@ -460,7 +489,6 @@ export function CurriculumFlowEditor({
                 <tbody className="divide-y">
                   {items.map((item, index) => {
                     const key = flowItemKey(item, index)
-                    const status = statuses.get(key) ?? 'later'
                     const weeks = durationWeeks(item)
 
                     return (
@@ -475,16 +503,10 @@ export function CurriculumFlowEditor({
                           {index + 1}
                         </td>
                         <td className="px-3 py-2">
-                          {/* Durum kolonu kaldırıldı: nokta konunun yanında
-                              durur (referans tasarım). Renk tek başına anlam
-                              taşımasın diye title/sr-only karşılığı var. */}
-                          <span className="flex items-center gap-2">
-                          <span
-                            title={FLOW_STATUS_LABEL[status]}
-                            className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[status])}
-                          >
-                            <span className="sr-only">{FLOW_STATUS_LABEL[status]}</span>
-                          </span>
+                          {/* M1.0-06 EK REVİZYON: konu adının yanındaki durum
+                              noktası kaldırıldı — satırın TEK durum
+                              göstergesi artık "Zaman" sütunu (dot + görünür
+                              metin birlikte). */}
                           <input
                             value={item.name}
                             onChange={e =>
@@ -496,7 +518,6 @@ export function CurriculumFlowEditor({
                             }
                             className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none hover:border-input focus-visible:border-ring"
                           />
-                          </span>
                         </td>
                         <td className="px-3 py-2 text-xs tabular-nums text-muted-foreground">
                           {flowWeekRangeLabel(items, item)}
@@ -530,8 +551,19 @@ export function CurriculumFlowEditor({
                         </td>
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.startDate)}</td>
                         <td className="px-3 py-2 text-xs tabular-nums">{formatDate(item.endDate)}</td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {TIME_POSITION_LABEL[topicTimePosition(item, today)]}
+                        <td className="px-3 py-2 text-xs">
+                          {(() => {
+                            const rowStatus = flowRowStatus(item, today)
+                            return (
+                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                <span
+                                  aria-hidden
+                                  className={cn('size-2 shrink-0 rounded-full', ROW_STATUS_DOT[rowStatus])}
+                                />
+                                {FLOW_ROW_STATUS_LABEL[rowStatus]}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-end">
@@ -579,10 +611,20 @@ export function CurriculumFlowEditor({
                   }/${durationWeeks(selected)} hafta)`,
                 },
                 {
-                  // M1.0-06: salt takvim konumu, ilerlemeden bağımsız —
-                  // "Müfredat zamanı 'konu öğrenildi' anlamına gelmez".
+                  // M1.0-06 EK REVİZYON: tablodaki "Zaman" sütunuyla AYNI
+                  // kaynak (flowRowStatus) — ikisi hiçbir zaman çelişmesin.
                   label: 'Zaman',
-                  value: TIME_POSITION_LABEL[topicTimePosition(selected, today)],
+                  value: FLOW_ROW_STATUS_LABEL[flowRowStatus(selected, today)],
+                },
+                {
+                  // Satırdan kalkan "İşleniyor" sinyali burada yaşamaya
+                  // devam ediyor — kaybolmadı, yalnız yer değiştirdi.
+                  label: 'Açık çalışma',
+                  value: selectedHasOpenWork ? (
+                    'Var'
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  ),
                 },
                 {
                   label: 'Kitap kapsamı',

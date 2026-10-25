@@ -85,16 +85,28 @@ export function formatBreakdown(summary: LoadSummary): string {
 }
 
 /**
- * Sepet kartı ile WhatsApp'ın paylaştığı satırlar:
- *   Toplam: 85 çalışma
- *   60 sayfa · 25 test
+ * M1.0-06 EK REVİZYON — WhatsApp metninin "Toplam" satırı.
+ *
+ * TEK türse ("hepsi sayfa" ya da "hepsi test") aynı sayı iki kez
+ * söylenmesin diye TEK satır: "Toplam: 22 sayfa" (eskiden "Toplam: 22
+ * çalışma" + ayrı "22 sayfa" satırı aynı 22'yi tekrarlıyordu — PDF'in
+ * şikayeti buydu). KARMA türse toplam + dağılım aynı satırda parantezle:
+ * "Toplam: 61 çalışma (50 sayfa · 11 test)".
+ *
+ *   Toplam: 85 çalışma (60 sayfa · 25 test)
  *   Günlük ort.: ~15 çalışma
+ *
+ * "Günlük ort." satırı DEĞİŞMEDİ: tek türde bile hep "çalışma" der
+ * (PDF'in kendi "İSTENEN GÖSTERİM" örneği de böyle) — kasıtlı.
  */
 export function formatLoadLines(summary: LoadSummary): string[] {
   if (summary.total === 0) return []
-  const lines = [`Toplam: ${summary.total.toLocaleString('tr-TR')} çalışma`]
   const breakdown = formatBreakdown(summary)
-  if (breakdown) lines.push(breakdown)
+  const totalLine =
+    summary.breakdown.length === 1
+      ? `Toplam: ${breakdown}`
+      : `Toplam: ${summary.total.toLocaleString('tr-TR')} çalışma (${breakdown})`
+  const lines = [totalLine]
   if (summary.dailyAverage !== null && summary.daysLeft !== null && summary.daysLeft >= 0) {
     lines.push(`Günlük ort.: ~${summary.dailyAverage.toLocaleString('tr-TR')} çalışma`)
   }

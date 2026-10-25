@@ -13,6 +13,8 @@ import {
   resizeItem,
   setPassed,
   splitItem,
+  flowRowStatus,
+  flowWeekPosition,
   flowWeekRangeLabel,
   summarizeFlow,
   topicTimePosition,
@@ -505,5 +507,50 @@ describe('flowWeekRangeLabel — M1.0-06 Plan sütunu', () => {
 
   it('boş listede boş string döner', () => {
     expect(flowWeekRangeLabel([], { startDate: '2026-09-01', endDate: '2026-09-07' })).toBe('')
+  })
+})
+
+describe('flowRowStatus — M1.0-06 Ek Revizyon: tek görünür durum göstergesi', () => {
+  const block = { startDate: '2026-10-05', endDate: '2026-10-18' }
+
+  it('passed=true her zaman "completed" döner, takvimden bağımsız', () => {
+    // Plan tarihi henüz gelmemiş olsa bile öğretmen elle işaretlediyse
+    // "Tamamlandı" gösterilmeli — PDF'in "öğretmen işaretlemedikçe
+    // otomatik Tamamlandı sayılmaz" kuralının TERSİ değil, tamamlayıcısı:
+    // işaretlendiyse takvim ne derse desin "Tamamlandı" kazanır.
+    expect(flowRowStatus({ ...block, passed: true }, '2099-01-01')).toBe('completed')
+    expect(flowRowStatus({ ...block, passed: true }, '2020-01-01')).toBe('completed')
+  })
+
+  it('passed=false iken salt takvime (topicTimePosition) düşer', () => {
+    expect(flowRowStatus({ ...block, passed: false }, '2026-10-04')).toBe('upcoming')
+    expect(flowRowStatus({ ...block, passed: false }, '2026-10-10')).toBe('current')
+    expect(flowRowStatus({ ...block, passed: false }, '2026-10-19')).toBe('passed')
+  })
+})
+
+describe('flowWeekPosition — M1.0-06 Ek Revizyon: "Öğrenci planı: N/M. hafta"', () => {
+  it('PDF örneği: 48 haftalık akışta bugün 10. haftadaysa 10/48 döner', () => {
+    const flow = buildFlowFromTemplate(
+      [
+        { name: 'A', durationWeeks: 9 }, // 1-9
+        { name: 'B', durationWeeks: 3 }, // 10-12 — PDF'teki "Benzerlik II"
+        { name: 'C', durationWeeks: 36 }, // 13-48
+      ],
+      '2026-08-24' // PDF'teki "Üçgende Açılar" başlangıcı
+    )
+    expect(flow[1].startDate).toBe('2026-10-26') // B'nin ilk günü — 9 hafta sonra
+    const pos = flowWeekPosition(flow, '2026-10-26')
+    expect(pos).toEqual({ current: 10, total: 48 })
+  })
+
+  it('boş listede null döner', () => {
+    expect(flowWeekPosition([], '2026-10-19')).toBeNull()
+  })
+
+  it('bugün akış bitmeden önceyse current < total olur', () => {
+    const flow = buildFlowFromTemplate([{ name: 'A', durationWeeks: 4 }], '2026-09-01')
+    const pos = flowWeekPosition(flow, '2026-09-08')
+    expect(pos!.current).toBeLessThan(pos!.total)
   })
 })

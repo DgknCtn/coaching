@@ -14,7 +14,6 @@ import { todayDateString } from '@/lib/homework-status'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ExplainerCards, type ExplainerCard } from '@/components/shared/explainer-cards'
-import { FlowTimeline } from '@/components/shared/flow-timeline'
 import { Legend } from '@/components/shared/legend'
 import { LinkTabs } from '@/components/shared/link-tabs'
 import { cn } from '@/lib/utils'
@@ -30,10 +29,9 @@ import { cn } from '@/lib/utils'
 // lib/open-work.ts. İki ekranın farklı şey söylemesi (birinde "İşleniyor",
 // diğerinde "Zamanı Geldi") kabul edilemez.
 //
-// DÜZENLEME YOK: FlowTimeline'a onChange verilmez → sürükleme kapalı;
-// satır menüsü, taşıma, süre kontrolü hiç render edilmez. Akış eğitmenin
-// planıdır (R5.2 §4.4); öğrenci onu okur, değiştirmez. RLS de yalnız
-// SELECT veriyor (046) — arayüz o sınırın aynısını çiziyor.
+// DÜZENLEME YOK: satır menüsü, taşıma, süre kontrolü hiç render edilmez.
+// Akış eğitmenin planıdır (R5.2 §4.4); öğrenci onu okur, değiştirmez.
+// RLS de yalnız SELECT veriyor (046) — arayüz o sınırın aynısını çiziyor.
 
 export const dynamic = 'force-dynamic'
 
@@ -209,8 +207,9 @@ export default async function StudentCurriculumPage({
             </p>
           </div>
 
-          {/* onChange YOK: sürükleme ve düzenleme kapalı. */}
-          <FlowTimeline items={items} today={today} statuses={statuses} />
+          {/* M1.0-06 EK REVİZYON: büyük Gantt/zaman çizelgesi (eski
+              FlowTimeline) kaldırıldı — uzun akışlarda tek okunabilir
+              zemin bu liste; dot + görünür metin zaten aşağıda var. */}
 
           {/* Tablo yerine sade liste: öğrenci düzenleme yapmıyor, bu yüzden
               süre/tarih girdisi ve satır menüsü gerekmiyor. */}
