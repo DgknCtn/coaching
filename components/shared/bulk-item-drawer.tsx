@@ -151,18 +151,23 @@ export function BulkItemDrawer({
               const checked = !excluded.has(item.id)
               return (
                 <li key={item.id}>
-                  <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted/40">
+                  {/* M1.0-06 EK REVİZYON: satır artık kırpılmıyor — uzun
+                      kitap/bölüm/sayfa metni tek satırda `truncate` ile
+                      kesildiği için hangi sayfanın seçildiği okunamıyordu.
+                      `items-start` metin 2 satıra sarınca checkbox/rozet/meta
+                      üstte hizalı kalsın diye. */}
+                  <label className="flex cursor-pointer items-start gap-2.5 px-3 py-2 text-sm hover:bg-muted/40">
                     <input
                       type="checkbox"
-                      className="size-4 shrink-0"
+                      className="mt-0.5 size-4 shrink-0"
                       checked={checked}
                       disabled={isPending}
                       onChange={() => toggle(item.id)}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{item.primary}</span>
+                      <span className="block break-words">{item.primary}</span>
                       {item.secondary && (
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block break-words text-xs text-muted-foreground">
                           {item.secondary}
                         </span>
                       )}

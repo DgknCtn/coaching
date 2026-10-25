@@ -153,6 +153,61 @@ export function topicTimePosition(
 }
 
 /**
+ * M1.0-06 EK REVİZYON — satırın TEK görünür durum göstergesi.
+ *
+ * PDF'in 4 değeri (Tamamlandı/Geçti/Şu an/Sırada) birebir: `item.passed`
+ * true ise (öğretmen elle "Geçildi" işaretledi) 'completed', değilse
+ * salt takvime göre `topicTimePosition`. "İşleniyor"/"Yaklaşan" artık
+ * bu göstergeye girmiyor — liste bağlamı gerektiren o sinyaller
+ * (`deriveFlowStatuses`) "Akış özeti" kartında ve seçili konunun detay
+ * panelinde ayrı yaşamaya devam ediyor, kaybolmadı.
+ */
+export type FlowRowStatus = 'completed' | TopicTimePosition
+
+export const FLOW_ROW_STATUS_LABEL: Record<FlowRowStatus, string> = {
+  completed: 'Tamamlandı',
+  passed: 'Geçti',
+  current: 'Şu an',
+  upcoming: 'Sırada',
+}
+
+export function flowRowStatus(
+  item: Pick<FlowItem, 'startDate' | 'endDate' | 'passed'>,
+  today?: string
+): FlowRowStatus {
+  return item.passed ? 'completed' : topicTimePosition(item, today)
+}
+
+/**
+ * M1.0-06 EK REVİZYON — "Öğrenci planı: N/M. hafta" özeti.
+ *
+ * `flowWeekRangeLabel` ile AYNI taban (ilk öğenin başlangıcı 1. hafta).
+ * `current` bugünün bu tabana göre hafta numarası; `total` akıştaki en
+ * geç biten öğenin bitiş hafta numarası. Akış boşsa null — basılacak
+ * bir özet yok.
+ */
+export function flowWeekPosition(
+  items: Pick<FlowItem, 'startDate' | 'endDate'>[],
+  today?: string
+): { current: number; total: number } | null {
+  if (items.length === 0) return null
+  const day = today ?? todayDateString()
+  const firstStart = items.reduce(
+    (min, i) => (i.startDate < min ? i.startDate : min),
+    items[0].startDate
+  )
+  const lastEnd = items.reduce(
+    (max, i) => (i.endDate > max ? i.endDate : max),
+    items[0].endDate
+  )
+  const weekOf = (date: string): number => {
+    const ms = Date.parse(`${date}T00:00:00Z`) - Date.parse(`${firstStart}T00:00:00Z`)
+    return Math.floor(ms / (7 * 24 * 60 * 60 * 1000)) + 1
+  }
+  return { current: weekOf(day), total: weekOf(lastEnd) }
+}
+
+/**
  * M1.0-06 — "Plan" sütunu: "2-3. hf" / tek haftalık blokta "13. hf".
  *
  * Akışın kendi İLK bloğunun başlangıcı 1. hafta sayılır — `insertItem`'in

@@ -29,9 +29,9 @@ describe('summarizeLoad (M1.0-01 §2)', () => {
     ])
     expect(s.daysLeft).toBe(6)
     expect(s.dailyAverage).toBe(15)
+    // M1.0-06 EK REVİZYON: karma türde toplam + dağılım AYNI satırda.
     expect(formatLoadLines(s)).toEqual([
-      'Toplam: 85 çalışma',
-      '60 sayfa · 25 test',
+      'Toplam: 85 çalışma (60 sayfa · 25 test)',
       'Günlük ort.: ~15 çalışma',
     ])
   })
@@ -54,7 +54,9 @@ describe('summarizeLoad (M1.0-01 §2)', () => {
   it('teslim yoksa günlük ortalama satırı oluşmaz', () => {
     const s = summarizeLoad(units(3, 0), null, NOW)
     expect(s.dailyAverage).toBeNull()
-    expect(formatLoadLines(s)).toEqual(['Toplam: 3 çalışma', '3 sayfa'])
+    // M1.0-06 EK REVİZYON: tek türde "3 çalışma" + "3 sayfa" aynı sayıyı
+    // iki kez söylemiyor — tek satır.
+    expect(formatLoadLines(s)).toEqual(['Toplam: 3 sayfa'])
   })
 
   it('boş sepette satır üretmez', () => {
@@ -67,7 +69,12 @@ describe('summarizeLoad (M1.0-01 §2)', () => {
       '2026-10-10',
       NOW
     )
-    expect(formatLoadLines(s)[1]).toBe('1 test · 2 deneme')
+    // M1.0-06 EK REVİZYON: karma dağılım artık "Toplam" satırının İÇİNDE
+    // parantezle; ayrı bir kırılım satırı yok, ikinci satır "Günlük ort.".
+    expect(formatLoadLines(s)).toEqual([
+      'Toplam: 3 çalışma (1 test · 2 deneme)',
+      'Günlük ort.: ~1 çalışma',
+    ])
   })
 })
 
@@ -114,13 +121,14 @@ describe('WhatsApp hedef metni (M1.0-01 §3)', () => {
 
   it('teslim gün+saat, toplam, kırılım ve günlük ortalama sepetle aynı', () => {
     const text = buildShareText(base)
-    expect(text.split('\n').slice(0, 10)).toEqual([
+    const loadLines = formatLoadLines(load)
+    expect(text.split('\n').slice(0, 5 + loadLines.length + 2)).toEqual([
       'Merhaba Dünya,',
       '',
       'Bu haftaki çalışmaların:',
       '',
       'Teslim: 10 Ekim 2026 Cumartesi · 18:00 (6 gün sonra)',
-      ...formatLoadLines(load),
+      ...loadLines,
       '',
       'Parkur 10. Sınıf Matematik · 29 sayfa',
     ])
