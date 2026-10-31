@@ -40,6 +40,8 @@ import { PAYMENT_METHODS } from '@/lib/finance'
 export interface FinanceActionResult {
   error?: string
   success?: boolean
+  /** Eksik tahakkuk tamamlamada açılan satır sayısı (H04 bildirimi). */
+  backfilled?: number
 }
 
 /** Kuruş: negatif olamaz, tam sayı olmalı, saçma büyüklükte olamaz. */
@@ -398,6 +400,11 @@ const financeModelSchema = z
     validFrom: isoDate,
     mainAmountKurus: kurusSchema,
     extraAmountKurus: kurusSchema.nullable().optional(),
+    /**
+     * İz V2 H04: verilirse bu tarihli MEVCUT sürümün tarihi validFrom'a
+     * düzeltilir (yeni sürüm açılmaz). Verilmezse validFrom yeni dönemdir.
+     */
+    correctFrom: isoDate.nullable().optional(),
   })
   .refine(
     (v) =>
@@ -424,6 +431,19 @@ export async function setFinanceModelAction(
   if (!ctx) return DENIED
 
   const supabase = await createClient()
+
+  // H04: tarih düzeltmesi önce mevcut sürümü taşır; ardından değerler aynı
+  // tarihe yazılır (set_finance_model aynı gün için upsert eder) — sonuçta
+  // o tarihte TEK sürüm olur, fiyat geçmişine yeni satır eklenmez.
+  if (v.correctFrom && v.correctFrom !== v.validFrom) {
+    const { error: correctError } = await supabase.rpc('correct_finance_model_date', {
+      p_student_id: v.studentId,
+      p_old_from: v.correctFrom,
+      p_new_from: v.validFrom,
+    })
+    if (correctError) return { error: dbErrorToTr(correctError.message) }
+  }
+
   const { error } = await supabase.rpc('set_finance_model', {
     p_student_id: v.studentId,
     p_model: v.model,
@@ -435,7 +455,9 @@ export async function setFinanceModelAction(
   if (error) return { error: dbErrorToTr(error.message) }
 
   // Eksik tahakkukları tamamla; hata ekranı durdurmaz, model kaydedildi.
-  const { error: backfillError } = await supabase.rpc('backfill_missing_accruals', {
+  // Yalnız tahakkuku OLMAYAN gerçekleşmiş oturumlara satır açar (141) —
+  // var olan tahakkuk yeniden fiyatlanmaz, mükerrer satır oluşmaz.
+  const { data: backfilled, error: backfillError } = await supabase.rpc('backfill_missing_accruals', {
     p_student_id: v.studentId,
   })
   if (backfillError) {
@@ -443,7 +465,7 @@ export async function setFinanceModelAction(
   }
 
   revalidateFinance(v.studentId)
-  return { success: true }
+  return { success: true, backfilled: Number(backfilled ?? 0) }
 }
 
 const priceVersionSchema = z.object({

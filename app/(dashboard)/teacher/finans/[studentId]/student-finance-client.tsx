@@ -26,6 +26,7 @@ import {
 } from '@/lib/pricing-history'
 import { formatUnits } from '@/lib/session-state'
 import { isoWeekKeyOfDate } from '@/lib/iso-week'
+import { formatIsoDayDate } from '@/lib/service-structure'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,8 +43,8 @@ import {
 } from '../actions'
 import type { AccrualRow, ExpenseRow, PaymentRow } from '../data'
 import { ExpensePanel } from '../expense-panel'
+import { ParentSummaryButton } from './parent-summary-dialog'
 
-const dateTr = (iso: string) => iso.split('-').reverse().join('.')
 
 export function StudentFinanceClient({
   student,
@@ -125,6 +126,8 @@ export function StudentFinanceClient({
                 }`
               : 'Ücretlendirme modeli yok'}
           </span>
+          {/* İz V2 R09: aynı cari hesabın paylaşılabilir özeti. */}
+          <ParentSummaryButton studentName={student.name} today={today} accruals={accruals} payments={payments} />
           <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/teacher/students/${student.id}/gorusmeler`} />}>
             <Settings2 className="size-4" />
             Hizmet Yapısı
@@ -205,7 +208,8 @@ export function StudentFinanceClient({
                           : 'Açık'
                   return (
                     <tr key={l.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 tabular-nums">{dateTr(l.date)}</td>
+                      {/* İz V2 R08: "13 Ekim Salı" — yıl dönem başlığında. */}
+                      <td className="px-3 py-2 whitespace-nowrap tabular-nums">{formatIsoDayDate(l.date)}</td>
                       <td className="px-3 py-2">
                         {l.kind === 'ders' && l.serviceLabel
                           ? l.serviceLabel
@@ -264,7 +268,7 @@ export function StudentFinanceClient({
           <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
             {monthPayments.map((p) => (
               <li key={p.id}>
-                {dateTr(p.date)} · +{formatKurus(p.amountKurus)} · {PAYMENT_METHOD_LABEL[p.method] ?? p.method}
+                {formatIsoDayDate(p.date)} · +{formatKurus(p.amountKurus)} · {PAYMENT_METHOD_LABEL[p.method] ?? p.method}
                 {p.account && ` · ${p.account}`}
                 {p.appliesToMonth && ` · ${monthLabel(p.appliesToMonth.slice(0, 7))} dönemine`}
               </li>
@@ -300,7 +304,7 @@ export function StudentFinanceClient({
                       : `${ACCRUAL_KIND_LABEL[(m.row as AccrualRow).kind]}${(m.row as AccrualRow).auto ? ' · otomatik' : ''}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {dateTr(m.date)}
+                    {formatIsoDayDate(m.date, true)}
                     {m.row.note ? ` · ${m.row.note}` : ''}
                   </p>
                 </div>

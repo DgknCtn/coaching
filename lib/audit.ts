@@ -43,6 +43,8 @@ export type AuditAction =
   | 'homework.approve_items'
   | 'homework.complete_manually'
   | 'homework.release_items'
+  | 'homework.carry_items'
+  | 'weekly_flow.transition'
   // 137: test öğrencisinin finans kayıtlarının toptan silinmesi (SQL'de yazılır).
   | 'finance.purge_student'
   | 'book.archive'
@@ -120,6 +122,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework.approve_items': 'Seçili çalışmaları onayladı',
   'homework.complete_manually': 'Çalışmaları tamamlandı işaretledi',
   'homework.release_items': 'Çalışmaları aktif yükten çıkardı',
+  'homework.carry_items': 'Açık çalışmaları haftaya devretti',
+  'weekly_flow.transition': 'Haftayı kapatıp yeni haftayı açtı',
   'finance.purge_student': 'Öğrencinin finans kayıtlarını temizledi',
   'book.archive': 'Kitap arşivledi',
   'book.delete': 'Kitap sildi (atanmamış kayıt)',

@@ -432,6 +432,9 @@ function FinanceModelCard({
           initialTiming={current?.collectionTiming ?? 'ay_sonu'}
           initialMain={mainPrice}
           initialExtra={extraPrice}
+          // H04: düzenlenen sürümün kayıtlı tarihi; 2000-01-01 "başlangıçtan"
+          // demektir ve düzeltilecek bir tarih değildir.
+          currentValidFrom={current && current.validFrom !== '2000-01-01' ? current.validFrom : null}
           onDone={() => setEditing(false)}
         />
       )}
@@ -506,6 +509,7 @@ function FinanceModelForm({
   initialTiming,
   initialMain,
   initialExtra,
+  currentValidFrom,
   onDone,
 }: {
   studentId: string
@@ -513,6 +517,7 @@ function FinanceModelForm({
   initialTiming: CollectionTiming
   initialMain: number | null
   initialExtra: number | null
+  currentValidFrom: string | null
   onDone: () => void
 }) {
   const router = useRouter()
@@ -521,7 +526,16 @@ function FinanceModelForm({
   const [timing, setTiming] = useState<CollectionTiming>(initialTiming)
   const [main, setMain] = useState(initialMain != null ? kurusToInput(initialMain) : '')
   const [extra, setExtra] = useState(initialExtra != null ? kurusToInput(initialExtra) : '')
-  const [validFrom, setValidFrom] = useState(() => `${todayDateString().slice(0, 7)}-01`)
+  // H04: form kayıtlı sürümün tarihiyle açılır. Eskiden her açılışta ayın
+  // 1'i geliyordu; tarih değiştirilince yanında YENİ sürüm doğuyor, başlık
+  // eski sürümü göstermeye devam ediyordu.
+  const [validFrom, setValidFrom] = useState(
+    () => currentValidFrom ?? `${todayDateString().slice(0, 7)}-01`
+  )
+  // Tarih değişince ne olacağı AÇIKÇA seçilir: düzelt (varsayılan) ya da
+  // yeni dönem ekle (fiyat geçmişine yeni satır).
+  const [dateMode, setDateMode] = useState<'correct' | 'new'>('correct')
+  const dateChanged = currentValidFrom !== null && validFrom !== currentValidFrom
 
   const timingOptions = TIMING_OPTIONS[model].map((value) => ({
     value,
@@ -552,12 +566,27 @@ function FinanceModelForm({
         validFrom,
         mainAmountKurus: mainKurus,
         extraAmountKurus: model === 'aylik_sabit' ? extraKurus : null,
+        correctFrom: dateChanged && dateMode === 'correct' ? currentValidFrom : null,
       })
       if (r.error) {
         toast.error(r.error)
         return
       }
-      toast.success('Hizmet modeli kaydedildi.')
+      const backfillNote =
+        r.backfilled && r.backfilled > 0
+          ? ` Fiyatsız kalmış ${r.backfilled} oturuma tahakkuk açıldı; mevcut tahakkuklar değişmedi.`
+          : ' Mevcut tahakkuklar değişmedi.'
+      if (dateChanged && dateMode === 'correct') {
+        toast.success(
+          `Geçerlilik tarihi ${formatDate(currentValidFrom!)} → ${formatDate(validFrom)} olarak düzeltildi; fiyat geçmişine yeni satır eklenmedi.${backfillNote}`
+        )
+      } else if (dateChanged) {
+        toast.success(
+          `${formatDate(validFrom)}'den geçerli yeni dönem eklendi (fiyat geçmişine yeni satır). ${formatDate(currentValidFrom!)} sürümü korunuyor.${backfillNote}`
+        )
+      } else {
+        toast.success(`Hizmet modeli kaydedildi.${backfillNote}`)
+      }
       onDone()
       router.refresh()
     })
@@ -600,6 +629,41 @@ function FinanceModelForm({
           <Input id="fmFrom" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
         </div>
       </div>
+      {dateChanged && (
+        <fieldset className="space-y-1.5 rounded-md border border-border bg-background p-2.5 text-xs">
+          <legend className="px-1 font-medium">Tarih değişikliği</legend>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="fmDateMode"
+              className="mt-0.5 accent-primary"
+              checked={dateMode === 'correct'}
+              onChange={() => setDateMode('correct')}
+            />
+            <span>
+              <span className="font-medium">Tarihi düzelt</span> — kayıtlı {formatDate(currentValidFrom!)} sürümü{' '}
+              {formatDate(validFrom)} tarihine taşınır. Yeni fiyat geçmişi satırı eklenmez.
+            </span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input
+              type="radio"
+              name="fmDateMode"
+              className="mt-0.5 accent-primary"
+              checked={dateMode === 'new'}
+              onChange={() => setDateMode('new')}
+            />
+            <span>
+              <span className="font-medium">Yeni dönem ekle</span> — {formatDate(currentValidFrom!)} sürümü kalır;{' '}
+              {formatDate(validFrom)}&apos;den itibaren ayrı bir sürüm (fiyat geçmişine yeni satır) açılır.
+            </span>
+          </label>
+          <p className="text-muted-foreground">
+            Mevcut tahakkuklar yeniden fiyatlanmaz ve çoğalmaz; yalnız tahakkuku olmayan gerçekleşmiş
+            oturumlar tamamlanır.
+          </p>
+        </fieldset>
+      )}
       <p className="text-xs text-muted-foreground">
         {model === 'aylik_sabit'
           ? 'Aylık tutar her ay bir kez tahakkuk eder. "Modele dahil" ders ve koçluklar ayrıca ücret üretmez; ek ders, ek ders fiyatıyla ücretlenir.'

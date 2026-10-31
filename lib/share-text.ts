@@ -45,6 +45,21 @@ export interface ShareBook {
   videoTasks?: string[]
 }
 
+/**
+ * Kitap dışı akademik görev (M1.0-03) — İz V2 H01.
+ *
+ * Kitapsız plan da paylaşılabilmeli: yalnız görev içeren haftanın mesajı
+ * boş kalıyor, kopyalama düğmesi pasif duruyordu. Görevler kitapların
+ * ARDINDAN, mevcut düzenin diliyle ("• ders · iş") tek blokta yazılır.
+ */
+export interface ShareTask {
+  scopeName: string
+  title: string
+  kind: 'gorev' | 'checklist' | 'sure'
+  targetMinutes?: number | null
+  checklist?: string[]
+}
+
 export interface ShareTextInput {
   studentName: string
   /** ISO tarih (YYYY-MM-DD); yoksa "—" yazılır. */
@@ -54,6 +69,8 @@ export interface ShareTextInput {
   /** Sepetteki yük özeti — sepet kartıyla AYNI nesne (lib/homework-load.ts). */
   load?: LoadSummary | null
   books: ShareBook[]
+  /** Akademik görevler (İz V2 H01). Boşsa çıktıya hiçbir şey eklenmez. */
+  tasks?: ShareTask[]
   /**
    * Ödev notu (R6-05) — isteğe bağlı insan bağlamı.
    *
@@ -152,6 +169,7 @@ export function buildShareText({
   dueAt,
   load,
   books,
+  tasks,
   note,
   today,
 }: ShareTextInput): string {
@@ -187,6 +205,18 @@ export function buildShareText({
     lines.push('', heading, ...sectionLines, ...videoLines)
   }
 
+  if (tasks && tasks.length > 0) {
+    lines.push('', 'Akademik görevler')
+    for (const task of tasks) {
+      const minutes =
+        task.kind === 'sure' && task.targetMinutes && !/\bdk\b/iu.test(task.title)
+          ? ` (${task.targetMinutes} dk)`
+          : ''
+      lines.push(`• ${task.scopeName} · ${task.title}${minutes}`)
+      for (const item of task.checklist ?? []) lines.push(`   – ${item}`)
+    }
+  }
+
   // Not, ödev listesinin ARDINDAN gelir (#38): önce ne yapılacağı, sonra
   // nasıl yapılacağına dair bağlam.
   const trimmedNote = note?.trim()
@@ -218,4 +248,55 @@ export function buildFollowUpMessage(studentName: string): string {
     `Bu hafta planında bir aksama mı oldu, her şey yolunda mı? ` +
     `Buradan kısaca bilgi verirsen planı ona göre düzenleyelim.`
   )
+}
+
+// ============================================================
+// YAYIMLANMIŞ KALEMLERDEN KİTAP > BÖLÜM GRUPLAMASI — İz V2 R04
+//
+// Ödev Planlama sepeti kendi gruplamasını yapıyor (seçim anı). Yayımlanan
+// haftanın GÜNCEL mesajı ise veritabanındaki kalemlerden üretilir; aynı
+// kitap > bölüm hiyerarşisi ve aynı deterministik bölüm sırası (en küçük
+// birim numarası, R7-06.07) burada kurulur. Aynı kalem iki kez gelirse
+// (ör. iki partide aynı test) BİR kez yazılır.
+// ============================================================
+export interface PublishedShareUnit {
+  bookId: string
+  bookTitle: string
+  trackingMode: string
+  sectionId: string
+  sectionTitle: string
+  unitNumber: number
+}
+
+export function groupPublishedUnits(units: PublishedShareUnit[]): ShareBook[] {
+  const byBook = new Map<
+    string,
+    { bookTitle: string; trackingMode: string; sections: Map<string, ShareSection> }
+  >()
+  const seen = new Set<string>()
+  for (const u of units) {
+    const key = `${u.bookId}:${u.sectionId}:${u.unitNumber}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const book = byBook.get(u.bookId) ?? {
+      bookTitle: u.bookTitle,
+      trackingMode: u.trackingMode,
+      sections: new Map<string, ShareSection>(),
+    }
+    const section = book.sections.get(u.sectionId) ?? { title: u.sectionTitle, units: [] }
+    section.units.push(u.unitNumber)
+    book.sections.set(u.sectionId, section)
+    byBook.set(u.bookId, book)
+  }
+  return [...byBook.values()].map(book => {
+    const sections = [...book.sections.values()]
+      .map(s => ({ ...s, units: [...s.units].sort((a, b) => a - b) }))
+      .sort((a, b) => Math.min(...a.units) - Math.min(...b.units))
+    return {
+      bookTitle: book.bookTitle,
+      trackingMode: book.trackingMode,
+      unitCount: sections.reduce((n, s) => n + s.units.length, 0),
+      sections,
+    }
+  })
 }

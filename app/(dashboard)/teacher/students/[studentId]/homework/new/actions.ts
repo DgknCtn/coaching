@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { homeworkBatchSchema, firstIssue, uuidSchema } from '@/lib/validation'
@@ -187,4 +188,76 @@ export async function retryAttachBatchToFlowAction(studentId: string, batchId: s
   revalidatePath(`/teacher/students/${parsedStudent.data}/haftalik-akis`)
   revalidatePath('/teacher')
   return { success: true, flowWarning: result.warning }
+}
+
+// ============================================================
+// HAFTA GEÇİŞİ — İz V2 R04
+//
+// "Yeni haftaya geçilecekse Ödev Planlama'dan ayrılmadan küçük bir onayla
+// önceki haftayı kapatma ve yeni haftaya yayınlama yapılabilsin. Yeni
+// haftaya aktarılacak açık işler ayrıca seçilsin."
+//
+// Kapatma AYRI çağrılmaz: open_weekly_flow açık haftayı aynı işlemde
+// kapatıp fotoğrafını çeker (077) — iki çağrı arasında hata çıkarsa
+// öğrenci haftasız kalırdı. Seçilen açık işler ardından carry ile yeni
+// haftaya kopyalanır (152). Ödevin kendisini yayınlamak istemcinin
+// mevcut yolundan devam eder; yeni hafta artık aktif olduğu için parti
+// ve görevler oraya bağlanır.
+// ============================================================
+
+const startWeekSchema = z.object({
+  studentId: uuidSchema,
+  dueAt: z.string().min(1, 'Son teslim gerekli.'),
+  dueSource: z.enum(['anchor', 'custom']),
+  anchorServiceId: uuidSchema.nullable(),
+  carryItemIds: z.array(uuidSchema).max(500),
+})
+
+export async function startNewWeekAction(input: z.input<typeof startWeekSchema>) {
+  const parsed = startWeekSchema.safeParse(input)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const v = parsed.data
+
+  const dueAt = new Date(v.dueAt)
+  const now = new Date()
+  if (Number.isNaN(dueAt.getTime()) || dueAt <= now) {
+    return { error: 'Yeni haftanın son teslimi ileri bir tarih olmalı.' }
+  }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data: flowId, error } = await supabase.rpc('open_weekly_flow', {
+    p_student_id: v.studentId,
+    p_starts_at: now.toISOString(),
+    p_due_at: dueAt.toISOString(),
+    p_due_source: v.dueSource,
+    p_anchor_service_id: v.anchorServiceId,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  let carried = 0
+  let carryError: string | null = null
+  if (v.carryItemIds.length > 0) {
+    const carry = await supabase.rpc('carry_homework_items', {
+      p_item_ids: v.carryItemIds,
+      p_target: 'current',
+    })
+    // Hafta açıldı; devir düşerse yayın durmaz ama öğretmene söylenir.
+    if (carry.error) carryError = dbErrorToTr(carry.error.message)
+    else carried = Number((carry.data as { carried?: number } | null)?.carried ?? 0)
+  }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'weekly_flow.transition',
+    entityType: 'student',
+    entityId: v.studentId,
+    detail: { flowId, dueAt: v.dueAt, carryItemIds: v.carryItemIds, carried },
+  })
+
+  revalidatePath(`/teacher/students/${v.studentId}`, 'layout')
+  revalidatePath('/teacher')
+  revalidatePath('/student/haftam')
+  return { success: true, flowId: flowId as string, carried, carryError }
 }

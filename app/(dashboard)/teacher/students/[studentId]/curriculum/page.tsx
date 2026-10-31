@@ -176,6 +176,14 @@ export default async function StudentCurriculumPage({
       />
 
       <CurriculumFlowEditor
+        // H02 (İz V2): editör listeyi kendi state'inde tutuyor. Ders
+        // değişince (?scope=) ya da şablon/kayıt sonrası refresh'te aynı
+        // örnek yaşamaya devam ederse ÖNCEKİ dersin listesi ekranda kalıyordu
+        // (AYT Fizik seçiliyken matematik akışı). Anahtar ders + kayıtlı
+        // satırların imzası: veri değişince editör sıfırdan kurulur.
+        key={`${activeScopeId ?? 'none'}:${initialItems
+          .map(i => `${i.id}@${i.startDate}~${i.endDate}${i.passed ? '+' : ''}`)
+          .join('|')}`}
         studentId={studentId}
         scopes={scopes}
         activeScopeId={activeScopeId}

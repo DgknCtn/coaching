@@ -277,3 +277,51 @@ export async function releaseItemsAction(studentId: string, itemIds: string[], r
   revalidateStudentHomework(parsed.data.studentId)
   return { success: true, count: Number(result.released ?? 0) }
 }
+
+// ============================================================
+// DEVİR — İz V2 R03 (migration 152)
+// ============================================================
+//
+// "Bu haftaya devret": yalnız bekleyen (teslim edilmemiş) kalemler aktif
+// haftada yeni bir partiye kopyalanır; kaynak kalem 'Devredildi' olarak
+// kapanır, silinmez. "Gelecek haftaya devret": hafta henüz yok — kalem
+// işaretlenir, hafta geçişinde önceden seçili gelir.
+
+const carrySchema = itemIdsSchema.extend({
+  target: z.enum(['current', 'next']),
+})
+
+export async function carryItemsAction(
+  studentId: string,
+  itemIds: string[],
+  target: 'current' | 'next'
+) {
+  const parsed = carrySchema.safeParse({ studentId, itemIds, target })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc('carry_homework_items', {
+    p_item_ids: parsed.data.itemIds,
+    p_target: parsed.data.target,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  const result = (data ?? {}) as { carried?: number; requested?: number; skipped?: number }
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework.carry_items',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { itemIds: parsed.data.itemIds, target: parsed.data.target, ...result },
+  })
+
+  revalidateStudentHomework(parsed.data.studentId)
+  return {
+    success: true,
+    carried: Number(result.carried ?? 0),
+    requested: Number(result.requested ?? 0),
+    skipped: Number(result.skipped ?? 0),
+  }
+}

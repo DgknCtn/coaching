@@ -255,6 +255,13 @@ export function CurriculumFlowEditor({
   // göstermek yanıltıcı olurdu.
   const weekPosition = useMemo(() => flowWeekPosition(items, today), [items, today])
   const currentFlowItem = items.find(i => flowRowStatus(i, today) === 'current') ?? null
+  const savedRange = useMemo(() => {
+    if (initialItems.length === 0) return null
+    return {
+      start: initialItems.reduce((m, i) => (i.startDate < m ? i.startDate : m), initialItems[0].startDate),
+      end: initialItems.reduce((m, i) => (i.endDate > m ? i.endDate : m), initialItems[0].endDate),
+    }
+  }, [initialItems])
 
   function update(next: FlowItem[]) {
     setItems(next)
@@ -295,11 +302,13 @@ export function CurriculumFlowEditor({
 
   function applyTemplate() {
     if (!templateId) return
-    const varOlan = items.length > 0
+    // Uyarı KAYITLI akışa bakar; kaydedilmemiş ekran listesine değil.
+    const varOlan = initialItems.length > 0
     if (
       varOlan &&
       !window.confirm(
-        'Bu derste zaten bir akış var. Geçilmemiş konular şablondan yeniden kurulacak; ' +
+        `${activeScopeName ?? 'Bu ders'} için kayıtlı bir akış var (${initialItems.length} konu). ` +
+          'Geçilmemiş konular şablondan yeniden kurulacak; ' +
           'Geçildi işaretli konular korunacak. Devam edilsin mi?'
       )
     ) {
@@ -402,12 +411,25 @@ export function CurriculumFlowEditor({
         </p>
       )}
 
+      {/* H02 (İz V2): MEVCUT ATANMIŞ AKIŞ şablon alanından ayrı durur.
+          Kayıtlı (sunucudan gelen) satırlardan okunur — ekrandaki
+          kaydedilmemiş düzenleme bu kutuyu değiştirmez. */}
+      {initialItems.length > 0 && savedRange && (
+        <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+          <span className="font-medium text-foreground">Mevcut atanmış akış:</span>{' '}
+          {activeScopeName ?? 'Seçili ders'} · {initialItems.length} konu · kayıtlı tarihler{' '}
+          <span className="tabular-nums">
+            {formatDate(savedRange.start)} – {formatDate(savedRange.end)}
+          </span>
+        </div>
+      )}
+
       {/* Şablon opsiyoneldir: akış sıfırdan da kurulabilir. */}
       {scopeTemplates.length > 0 && (
-        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed bg-card p-3">
           <div className="space-y-1.5">
             <Label htmlFor="template" className="text-xs">
-              Şablondan kur
+              Yeni şablon uygula
             </Label>
             <NativeSelect
               id="template"

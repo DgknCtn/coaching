@@ -18,6 +18,7 @@ import { HomeworkBuilder } from './homework-builder'
 import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
 import { loadStudentTasks } from '@/lib/academic-tasks-load'
 import { loadCoursesData } from '../../dersler/load'
+import { loadOpenWork } from '@/lib/open-homework'
 
 // Sorgu hatası boş sonuca çevrilmez; teacher/error.tsx hata sınırına gider.
 function orThrow<T>(r: QueryResult<T>): T {
@@ -124,7 +125,7 @@ export default async function NewHomeworkPage({
   // AKIŞ YOKSA ANA TEMAS (M1.0-01 §2.1): Koçluk > Birebir > Grup önceliği
   // deriveMainContact'ta zaten var. Sonraki oturumu varsayılan son teslim
   // olur; hiçbir hizmet yoksa öğretmen tarih + saati elle seçer.
-  let fallbackDue: { dueAt: string; source: string } | null = null
+  let fallbackDue: { dueAt: string; source: string; anchorServiceId: string } | null = null
   if (!activeFlow) {
     const servicesRes = await supabase
       .from('student_services')
@@ -151,6 +152,7 @@ export default async function NewHomeworkPage({
       fallbackDue = {
         dueAt: at.toISOString(),
         source: CONTACT_KIND_LABEL[contactKindOf(anchor)],
+        anchorServiceId: anchor.id,
       }
     }
   }
@@ -183,6 +185,8 @@ export default async function NewHomeworkPage({
     loadStudentTasks(supabase, { studentId, statuses: ['draft'], createdByProfileId: profile.id }),
     loadCoursesData(supabase, { workspaceId, studentId }),
   ])
+  // İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler.
+  const openWork = await loadOpenWork(supabase, { workspaceId, studentId })
   const courses = coursesData.courses.filter(c => c.active).map(c => ({ id: c.scopeId, name: c.name }))
 
   // Kitabı olmayan öğrenciye de görev planı yayınlanabilir: ekran yalnız
@@ -230,6 +234,8 @@ export default async function NewHomeworkPage({
         keepActiveTopicIds={[...keepActiveTopicIds]}
         draftTasks={draftTasks}
         courses={courses}
+        openWorkItems={openWork.items}
+        openWorkFlows={openWork.flows}
       />
     </div>
   )
