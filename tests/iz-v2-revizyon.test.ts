@@ -165,3 +165,35 @@ describe('152 · devir ve geçerlilik SQL sözleşmesi', () => {
     expect(fix).toMatch(/has_workspace_role\(v_workspace, ARRAY\['owner'\]\)/)
   })
 })
+
+describe('153 · seçimli görev devri ve academic_scopes RLS', () => {
+  const sql = readFileSync(
+    join(process.cwd(), 'supabase/migrations/153_iz_v2_secimli_gorev_devri_ve_scope_rls.sql'),
+    'utf8'
+  )
+
+  it('R04 · yalnız açık görev taşınır, geldiği hafta korunur', () => {
+    const start = sql.indexOf('FUNCTION public.carry_academic_tasks(')
+    const fn = sql.slice(start, sql.indexOf('$fn$;', start))
+    expect(fn).toMatch(/status = 'open'/)
+    expect(fn).toMatch(/origin_flow_id = COALESCE\(origin_flow_id, weekly_flow_id, v_flow_id\)/)
+    expect(fn).toMatch(/has_workspace_role\(s\.workspace_id, ARRAY\['owner', 'teacher'\]\)/)
+  })
+
+  it('SEC-01 · öğrenci politikası yalnız authenticated (anon 42501 almaz)', () => {
+    expect(sql).toMatch(
+      /CREATE POLICY academic_scopes_select_student ON public\.academic_scopes\s+FOR SELECT TO authenticated/
+    )
+    expect(sql).not.toMatch(/GRANT\s+SELECT[^;]*TO\s+anon/i)
+  })
+
+  it('R04 · ekran açılışında görev devri yapılmaz', () => {
+    for (const page of [
+      'app/(dashboard)/student/haftam/page.tsx',
+      'app/(dashboard)/teacher/students/[studentId]/haftalik-akis/page.tsx',
+    ]) {
+      const src = readFileSync(join(process.cwd(), page), 'utf8')
+      expect(src, page).not.toMatch(/rpc\('roll_open_tasks_to_flow'/)
+    }
+  })
+})

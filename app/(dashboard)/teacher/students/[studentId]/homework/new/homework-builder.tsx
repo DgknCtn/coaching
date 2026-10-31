@@ -137,6 +137,8 @@ interface Props {
   /** İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler. */
   openWorkItems: OpenWorkItem[]
   openWorkFlows: FlowRef[]
+  /** Aktif hafta dışındaki açık öğretmen görevleri (153, seçimli devir). */
+  openTasks: AcademicTask[]
 }
 
 export function HomeworkBuilder({
@@ -158,6 +160,7 @@ export function HomeworkBuilder({
   courses,
   openWorkItems,
   openWorkFlows,
+  openTasks,
 }: Props) {
   // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
   const keepActiveTopicSet = useMemo(() => new Set(keepActiveTopicIds), [keepActiveTopicIds])
@@ -537,6 +540,7 @@ export function HomeworkBuilder({
   const needsTransition = !activeFlow || effectiveDueDay > activeFlow.dueDate
   const [transitionOpen, setTransitionOpen] = useState(false)
   const [carryIds, setCarryIds] = useState<Set<string>>(new Set())
+  const [carryTaskIds, setCarryTaskIds] = useState<Set<string>>(new Set())
 
   function handleSubmit() {
     if (!dueDate || !hasWork) return
@@ -546,6 +550,9 @@ export function HomeworkBuilder({
       setCarryIds(
         new Set(openWorkItems.filter(i => i.status === 'pending' && i.carryRequested).map(i => i.id))
       )
+      // Tarihsiz açık görevler önceden seçili: eskiden ekran açılışında
+      // kendiliğinden taşınan küme buydu (148); artık öğretmen görüp seçer.
+      setCarryTaskIds(new Set(openTasks.filter(t => t.undated).map(t => t.id)))
       setTransitionOpen(true)
       return
     }
@@ -563,13 +570,23 @@ export function HomeworkBuilder({
         dueSource: anchorDefault ? 'anchor' : 'custom',
         anchorServiceId: anchorDefault ? fallbackDue.anchorServiceId : null,
         carryItemIds: [...carryIds],
+        carryTaskIds: [...carryTaskIds],
       })
       if (opened.error) {
         toast.error(opened.error)
         return
       }
       if (opened.carryError) toast.warning(`Hafta açıldı; açık işler aktarılamadı: ${opened.carryError}`)
-      else if (opened.carried) toast.success(`${opened.carried} açık çalışma yeni haftaya aktarıldı.`)
+      else if (opened.carried || opened.carriedTasks) {
+        toast.success(
+          [
+            opened.carried ? `${opened.carried} açık çalışma` : null,
+            opened.carriedTasks ? `${opened.carriedTasks} görev` : null,
+          ]
+            .filter(Boolean)
+            .join(' ve ') + ' yeni haftaya aktarıldı.'
+        )
+      }
       setTransitionOpen(false)
       await publishNow()
     })
@@ -1284,6 +1301,16 @@ export function HomeworkBuilder({
               if (on) next.add(id)
               else next.delete(id)
             }
+            return next
+          })
+        }
+        tasks={openTasks}
+        selectedTasks={carryTaskIds}
+        onToggleTask={id =>
+          setCarryTaskIds(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
             return next
           })
         }

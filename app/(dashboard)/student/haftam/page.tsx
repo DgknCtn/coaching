@@ -99,11 +99,10 @@ export default async function HaftamPage() {
   const dueAt = new Date(flow.due_at as string)
   const now = new Date()
 
-  // HAFTA GEÇİŞİ (M1.0-03 P0 8, 10): açık tarihsiz görevler aktif haftaya
-  // geçer, gün ataması temizlenir. İdempotent; cron olmadığı için ekran
-  // açılırken. Hata ekranı durdurmaz — görevler eski haftasından da okunur.
-  const roll = await supabase.rpc('roll_open_tasks_to_flow', { p_student_id: student.id })
-  if (roll.error) console.error('[haftam] görev devri yapılamadı:', roll.error.message)
+  // GÖREV DEVRİ BURADA YAPILMAZ (İz V2 R04, 153): eskiden her açılışta
+  // tarihsiz açık görevler aktif haftaya taşınıyordu; öğretmenin hafta
+  // geçişinde SEÇMEDİĞİ görev de taşınırdı. Devir artık hafta açılırken
+  // olur. Açık görevler eski haftadan da okunur (aşağıdaki süzgeç).
 
   // AKADEMİK GÖREVLER: bu haftanınkiler + önceki haftadan açık kalanlar.
   const [allTasks, courses] = await Promise.all([

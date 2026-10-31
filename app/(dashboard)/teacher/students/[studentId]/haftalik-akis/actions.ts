@@ -65,6 +65,12 @@ export async function openWeeklyFlowAction(input: {
 
   if (error) return { error: dbErrorToTr(error.message) }
 
+  // M1.0-03 davranışı, İz V2 ile ekran açılışından HAFTA AÇILIŞINA taşındı:
+  // tarihsiz açık görevler yeni haftaya bir kez devredilir. Ödev
+  // Planlama'daki hafta geçişi ise görevleri seçerek devreder.
+  const roll = await supabase.rpc('roll_open_tasks_to_flow', { p_student_id: parsed.data.studentId })
+  if (roll.error) console.error('[haftalik-akis] görev devri yapılamadı:', roll.error.message)
+
   await logAudit(supabase, {
     workspaceId,
     action: 'flow.open',

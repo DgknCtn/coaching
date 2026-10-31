@@ -116,11 +116,8 @@ export default async function WeeklyFlowPage({
 
   const activeFlow = (flows ?? []).find(f => f.status === 'active') ?? null
 
-  // M1.0-03: açık tarihsiz görevler aktif haftaya devredilir (idempotent).
-  if (activeFlow) {
-    const roll = await supabase.rpc('roll_open_tasks_to_flow', { p_student_id: studentId })
-    if (roll.error) console.error('[haftalik-akis] görev devri yapılamadı:', roll.error.message)
-  }
+  // Görev devri ekran açılışında YAPILMAZ (İz V2 R04, 153) — hafta
+  // açılırken bir kez (openWeeklyFlowAction / Ödev Planlama hafta geçişi).
   const academicTasks = activeFlow
     ? await loadStudentTasks(supabase, { studentId, statuses: ['open', 'done'] })
     : []

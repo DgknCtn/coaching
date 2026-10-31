@@ -211,6 +211,8 @@ const startWeekSchema = z.object({
   dueSource: z.enum(['anchor', 'custom']),
   anchorServiceId: uuidSchema.nullable(),
   carryItemIds: z.array(uuidSchema).max(500),
+  /** Seçilen açık akademik görevler (153). */
+  carryTaskIds: z.array(uuidSchema).max(500).default([]),
 })
 
 export async function startNewWeekAction(input: z.input<typeof startWeekSchema>) {
@@ -248,16 +250,34 @@ export async function startNewWeekAction(input: z.input<typeof startWeekSchema>)
     else carried = Number((carry.data as { carried?: number } | null)?.carried ?? 0)
   }
 
+  let carriedTasks = 0
+  if (v.carryTaskIds.length > 0) {
+    const carry = await supabase.rpc('carry_academic_tasks', { p_task_ids: v.carryTaskIds })
+    if (carry.error) {
+      const msg = dbErrorToTr(carry.error.message)
+      carryError = carryError ? `${carryError} · ${msg}` : msg
+    } else {
+      carriedTasks = Number((carry.data as { carried?: number } | null)?.carried ?? 0)
+    }
+  }
+
   await logAudit(supabase, {
     workspaceId,
     action: 'weekly_flow.transition',
     entityType: 'student',
     entityId: v.studentId,
-    detail: { flowId, dueAt: v.dueAt, carryItemIds: v.carryItemIds, carried },
+    detail: {
+      flowId,
+      dueAt: v.dueAt,
+      carryItemIds: v.carryItemIds,
+      carried,
+      carryTaskIds: v.carryTaskIds,
+      carriedTasks,
+    },
   })
 
   revalidatePath(`/teacher/students/${v.studentId}`, 'layout')
   revalidatePath('/teacher')
   revalidatePath('/student/haftam')
-  return { success: true, flowId: flowId as string, carried, carryError }
+  return { success: true, flowId: flowId as string, carried, carriedTasks, carryError }
 }

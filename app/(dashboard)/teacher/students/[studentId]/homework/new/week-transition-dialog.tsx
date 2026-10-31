@@ -14,6 +14,7 @@ import {
 import { formatSelectedUnits } from '@/lib/book-map'
 import { formatSessionLong } from '@/lib/service-structure'
 import { flowShortLabel, type FlowRef, type OpenWorkItem } from '@/lib/open-homework'
+import { taskProgressLabel, type AcademicTask } from '@/lib/academic-tasks'
 
 // HAFTA GEÇİŞİ ONAYI — İz V2 R04.
 //
@@ -43,6 +44,9 @@ export function WeekTransitionDialog({
   selected,
   onToggle,
   onToggleAll,
+  tasks,
+  selectedTasks,
+  onToggleTask,
   pending,
   onConfirm,
   onPublishWithoutWeek,
@@ -57,6 +61,10 @@ export function WeekTransitionDialog({
   selected: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[], on: boolean) => void
+  /** Aktif hafta dışındaki açık öğretmen görevleri. */
+  tasks: AcademicTask[]
+  selectedTasks: Set<string>
+  onToggleTask: (id: string) => void
   pending: boolean
   onConfirm: () => void
   /** Yalnız kitap çalışması varken: eski yol (haftaya bağlamadan). */
@@ -134,8 +142,40 @@ export function WeekTransitionDialog({
                 açık kalır, sonra da devredilebilir.
               </p>
             </div>
-          ) : (
+          ) : tasks.length === 0 ? (
             <p className="text-xs text-muted-foreground">Aktarılacak açık iş yok.</p>
+          ) : null}
+
+          {tasks.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium">Yeni haftaya aktarılacak açık görevler</p>
+              <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
+                {tasks.map(task => (
+                  <li key={task.id} className="flex items-start gap-2 px-3 py-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 shrink-0 accent-primary"
+                      checked={selectedTasks.has(task.id)}
+                      disabled={pending}
+                      onChange={() => onToggleTask(task.id)}
+                      aria-label={`${task.title} aktar`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{task.title}</p>
+                      <p className="truncate text-muted-foreground">
+                        {flowShortLabel(task.weeklyFlowId ? flowById.get(task.weeklyFlowId) : null)} ·{' '}
+                        {task.scopeName}
+                      </p>
+                    </div>
+                    <Badge variant="neutral" className="shrink-0">{taskProgressLabel(task)}</Badge>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-muted-foreground">
+                Tarihsiz görevler seçili gelir. Seçilmeyen görev eski haftasında açık kalır; öğrenci onu
+                yine görür.
+              </p>
+            </div>
           )}
         </div>
 
