@@ -5,23 +5,34 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   Archive,
+  ArrowRightToLine,
+  CalendarClock,
   Check,
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  Copy,
+  ListTodo,
   Loader2,
   RotateCcw,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { HomeworkBatchRow } from '@/components/shared/homework-batch-row'
-import { BulkItemDrawer, type BulkDrawerItem } from '@/components/shared/bulk-item-drawer'
+import {
+  BulkItemDrawer,
+  type BulkDrawerAction,
+  type BulkDrawerItem,
+} from '@/components/shared/bulk-item-drawer'
 import type { HomeworkDetailBook } from '@/lib/homework-detail'
 import { formatDueDateTime } from '@/lib/homework-load'
 import { formatSelectedUnits } from '@/lib/book-map'
 import { formatRelativeTime } from '@/lib/student-attention'
+import { formatSessionLong } from '@/lib/service-structure'
+import { flowShortLabel, type FlowRef, type OpenWork } from '@/lib/open-homework'
 import {
   approveItemsAction,
+  carryItemsAction,
   completeItemsManuallyAction,
   releaseFromActiveLoadAction,
   releaseItemsAction,
@@ -78,12 +89,76 @@ export interface PublishedBatch {
   status: string
   /** Aktif ödevden kalem bazlı çıkarılan çalışma sayısı. */
   releasedCount: number
+  /** Başka haftaya devredilen çalışma sayısı (İz V2 R03). */
+  carriedCount: number
+  /** Partinin bağlı olduğu hafta (077); akıştan önceki ödevlerde null. */
+  weeklyFlowId: string | null
   items: PublishedItem[]
 }
 
 const OPEN_STATUSES = new Set(['pending', 'pending_approval'])
 
-function itemLabel(item: PublishedItem): string {
+/**
+ * DEVİR EYLEMLERİ — İz V2 R03. Tekil ödev paneli ve "Açık çalışmalar"
+ * paneli AYNI iki eylemi kullanır. Yalnız teslim edilmemiş (pending)
+ * kalem devredilebilir; onaya gönderilmiş iş öğrencinin yaptığı iştir.
+ */
+function carryActions({
+  studentId,
+  activeFlow,
+  eligibleCurrent,
+  eligibleNext,
+}: {
+  studentId: string
+  activeFlow: FlowRef | null
+  eligibleCurrent: (id: string) => boolean
+  eligibleNext: (id: string) => boolean
+}): BulkDrawerAction[] {
+  const actions: BulkDrawerAction[] = []
+  if (activeFlow) {
+    actions.push({
+      key: 'carry-current',
+      label: n => `${n} çalışmayı bu haftaya devret`,
+      icon: ArrowRightToLine,
+      variant: 'outline',
+      eligible: eligibleCurrent,
+      run: async ids => {
+        const res = await carryItemsAction(studentId, ids, 'current')
+        if (res.error) return { error: res.error }
+        return {
+          message: `${res.carried ?? 0} çalışma ${flowShortLabel(activeFlow).toLocaleLowerCase('tr-TR')}ya devredildi; eski haftanın sonucu değişmedi.`,
+        }
+      },
+    })
+  }
+  actions.push({
+    key: 'carry-next',
+    label: n => `${n} çalışmayı gelecek haftaya devret`,
+    icon: CalendarClock,
+    variant: 'outline',
+    eligible: eligibleNext,
+    run: async ids => {
+      const res = await carryItemsAction(studentId, ids, 'next')
+      if (res.error) return { error: res.error }
+      return {
+        message: `${res.requested ?? 0} çalışma gelecek haftaya devredilecek; yeni hafta açılırken seçili gelir.`,
+      }
+    },
+  })
+  return actions
+}
+
+/** Devrin hedefini İŞLEMDEN ÖNCE söyler (hedef hafta + yeni son teslim). */
+function carryTargetNote(activeFlow: FlowRef | null): string {
+  const next =
+    'Gelecek haftaya devret: yeni hafta açılırken (Ödev Planlama) seçili gelir; son teslim o haftanınki olur.'
+  if (!activeFlow) {
+    return `Açık hafta yok; "Bu haftaya devret" için önce yeni haftayı açın. ${next}`
+  }
+  return `Bu haftaya devret: ${flowShortLabel(activeFlow)} · yeni son teslim ${formatSessionLong(activeFlow.dueAt)}. Yalnız kalan iş taşınır. ${next}`
+}
+
+function itemLabel(item: Pick<PublishedItem, 'unitNumber' | 'trackingMode' | 'unitTitle'>): string {
   if (item.unitNumber != null && item.trackingMode) {
     const label = formatSelectedUnits([item.unitNumber], item.trackingMode)
     if (label) return label
@@ -95,9 +170,15 @@ export function PublishedHomeworkList({
   studentId,
   batches,
   activeFlowId,
+  openWork,
+  weekMessage,
 }: {
   studentId: string
   batches: PublishedBatch[]
+  /** İz V2 R03: tüm açık çalışmalar + hafta etiketleri (20 parti sınırı yok). */
+  openWork: OpenWork | null
+  /** İz V2 R04: aktif haftanın güncel ödev mesajı; hafta/iş yoksa null. */
+  weekMessage: string | null
   /**
    * Aktif Haftalık Akış — "Yeniden Aktifleştir" için ZORUNLU hedef.
    *
@@ -114,7 +195,23 @@ export function PublishedHomeworkList({
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [panelBatch, setPanelBatch] = useState<PublishedBatch | null>(null)
+  const [openPanel, setOpenPanel] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const activeFlow = openWork?.activeFlow ?? null
+  const openItems = openWork?.items ?? []
+  const submittedCount = openItems.filter(i => i.status === 'pending_approval').length
+
+  async function copyWeekMessage() {
+    if (!weekMessage) return
+    try {
+      await navigator.clipboard.writeText(weekMessage)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Metin kopyalanamadı.')
+    }
+  }
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -143,6 +240,43 @@ export function PublishedHomeworkList({
 
   return (
     <div className="space-y-4">
+      {/* İz V2 R03/R04: güncel mesaj + tüm açık çalışmalar tek yerden. */}
+      {(weekMessage || openItems.length > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {openItems.length > 0
+              ? `${openItems.length} açık çalışma${submittedCount > 0 ? ` · ${submittedCount} onaya gönderildi` : ''}`
+              : 'Açık çalışma yok'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {weekMessage && (
+              <Button size="sm" variant="outline" onClick={copyWeekMessage}>
+                {copied ? <Check /> : <Copy />}
+                {copied ? 'Kopyalandı!' : 'Mesaj metnini kopyala'}
+              </Button>
+            )}
+            {openItems.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setOpenPanel(true)} aria-haspopup="dialog">
+                <ListTodo />
+                Açık çalışmalar ({openItems.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {openPanel && openWork && (
+        <OpenWorkPanel
+          studentId={studentId}
+          openWork={openWork}
+          onClose={() => setOpenPanel(false)}
+          onDone={() => {
+            setOpenPanel(false)
+            router.refresh()
+          }}
+        />
+      )}
+
       {/* TOPLU İŞLEM ŞERİDİ — yalnız seçim varken görünür. Boşken de
           durması, hiçbir şey yapamayacak bir düğmeyi sürekli ekranda
           tutmak olurdu. */}
@@ -208,6 +342,11 @@ export function PublishedHomeworkList({
                   {batch.releasedCount} çalışma aktif yükten çıkarıldı
                 </span>
               )}
+              {batch.carriedCount > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {batch.carriedCount} çalışma devredildi
+                </span>
+              )}
             </div>
           </li>
         ))}
@@ -217,6 +356,8 @@ export function PublishedHomeworkList({
         <BatchActionPanel
           studentId={studentId}
           batch={panelBatch}
+          activeFlow={activeFlow}
+          carryRequestedIds={new Set(openItems.filter(i => i.carryRequested).map(i => i.id))}
           onClose={() => setPanelBatch(null)}
           onDone={() => {
             setPanelBatch(null)
@@ -253,14 +394,19 @@ export function PublishedHomeworkList({
 function BatchActionPanel({
   studentId,
   batch,
+  activeFlow,
+  carryRequestedIds,
   onClose,
   onDone,
 }: {
   studentId: string
   batch: PublishedBatch
+  activeFlow: FlowRef | null
+  carryRequestedIds: Set<string>
   onClose: () => void
   onDone: () => void
 }) {
+  const inCurrentWeek = !!activeFlow && batch.weeklyFlowId === activeFlow.id
   const open = batch.items.filter(i => OPEN_STATUSES.has(i.status))
   const statusById = new Map(open.map(i => [i.id, i.status]))
   const completedCount = batch.items.filter(i => i.status === 'completed').length
@@ -285,9 +431,14 @@ function BatchActionPanel({
       footnote={
         open.length === 0
           ? 'Bu ödevde açık çalışma kalmadı.'
-          : completedCount > 0
-            ? `${completedCount} çalışma zaten tamamlandı; listede gösterilmiyor.`
-            : null
+          : [
+              completedCount > 0
+                ? `${completedCount} çalışma zaten tamamlandı; listede gösterilmiyor.`
+                : null,
+              carryTargetNote(activeFlow),
+            ]
+              .filter(Boolean)
+              .join(' ')
       }
       actions={[
         {
@@ -326,6 +477,88 @@ function BatchActionPanel({
             if (res.error) return { error: res.error }
             return {
               message: `${res.count ?? ids.length} çalışma aktif yükten çıkarıldı; kayıtlar silinmedi.`,
+            }
+          },
+        },
+        ...carryActions({
+          studentId,
+          activeFlow,
+          eligibleCurrent: id => !inCurrentWeek && statusById.get(id) === 'pending',
+          eligibleNext: id => statusById.get(id) === 'pending' && !carryRequestedIds.has(id),
+        }),
+      ]}
+      onClose={onClose}
+      onDone={onDone}
+    />
+  )
+}
+
+/**
+ * TÜM AÇIK ÇALIŞMALAR — İz V2 R03.
+ *
+ * Tek yerden: hangi haftadan geldiği, teslim edilip edilmediği ve üç
+ * eylem (bu haftaya / gelecek haftaya devret, aktif yükten çıkar). Panel
+ * aynı BulkItemDrawer: açıldığında hepsi seçili, öğretmen istisnaları
+ * çıkarır — tekil, seçili ve tüm işler aynı yerden.
+ */
+function OpenWorkPanel({
+  studentId,
+  openWork,
+  onClose,
+  onDone,
+}: {
+  studentId: string
+  openWork: OpenWork
+  onClose: () => void
+  onDone: () => void
+}) {
+  const { items: open, activeFlow, flows } = openWork
+  const flowById = new Map(flows.map(f => [f.id, f]))
+  const byId = new Map(open.map(i => [i.id, i]))
+
+  const items: BulkDrawerItem[] = open.map(i => ({
+    id: i.id,
+    primary: [i.sectionTitle, itemLabel(i)].filter(Boolean).join(' · '),
+    secondary: `${flowShortLabel(i.flowId ? flowById.get(i.flowId) : null)} · ${i.bookTitle ?? i.batchTitle ?? 'Ödev'}`,
+    badge:
+      i.status === 'pending_approval'
+        ? { label: 'Onaya gönderildi', variant: 'info' }
+        : i.carryRequested
+          ? { label: 'Gelecek haftaya', variant: 'neutral' }
+          : { label: 'Yapılmadı', variant: 'warning' },
+    meta: i.submittedAt ? formatRelativeTime(i.submittedAt) : null,
+  }))
+
+  return (
+    <BulkItemDrawer
+      title="Açık çalışmalar"
+      description="Tüm haftalardan teslim edilmemiş ve onay bekleyen işler. En eski hafta üstte."
+      items={items}
+      footnote={carryTargetNote(activeFlow)}
+      actions={[
+        ...carryActions({
+          studentId,
+          activeFlow,
+          eligibleCurrent: id => {
+            const i = byId.get(id)
+            return !!i && i.status === 'pending' && i.flowId !== activeFlow?.id
+          },
+          eligibleNext: id => {
+            const i = byId.get(id)
+            return !!i && i.status === 'pending' && !i.carryRequested
+          },
+        }),
+        {
+          key: 'release',
+          label: n => `${n} çalışmayı aktif yükten çıkar`,
+          icon: Archive,
+          variant: 'outline',
+          reasonLabel: 'Aktif yükten çıkarma nedeni',
+          run: async (ids, reason) => {
+            const res = await releaseItemsAction(studentId, ids, reason)
+            if (res.error) return { error: res.error }
+            return {
+              message: `${res.count ?? ids.length} çalışma aktif yükten çıkarıldı; kayıtlar silinmedi, yeniden aktifleştirilebilir.`,
             }
           },
         },

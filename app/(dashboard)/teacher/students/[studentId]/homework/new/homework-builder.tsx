@@ -30,7 +30,9 @@ import {
   localClock,
   summarizeLoad,
 } from '@/lib/homework-load'
-import { createHomeworkBatchAction, retryAttachBatchToFlowAction } from './actions'
+import { createHomeworkBatchAction, retryAttachBatchToFlowAction, startNewWeekAction } from './actions'
+import { WeekTransitionDialog } from './week-transition-dialog'
+import type { FlowRef, OpenWorkItem } from '@/lib/open-homework'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
   approveUnitsAction,
@@ -43,7 +45,7 @@ import type { BookMapBook } from '@/lib/book-map'
 import { isSelectableState, formatSelectedUnits } from '@/lib/book-map'
 import { buildShareText } from '@/lib/share-text'
 import { resolveBasketItems, toHomeworkItems, type BasketUnit } from '@/lib/weekly-plan'
-import { COUNTER_LABEL, todayDateString } from '@/lib/homework-status'
+import { COUNTER_LABEL, localDateString, todayDateString } from '@/lib/homework-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -107,7 +109,7 @@ interface Props {
    * Akış yoksa ana temasın sıradaki oturumu (Koçluk > Birebir > Grup).
    * Yalnız bilgi etiketi için; değer zaten initialDueDate/Time'a işlenmiş.
    */
-  fallbackDue: { dueAt: string; source: string } | null
+  fallbackDue: { dueAt: string; source: string; anchorServiceId: string } | null
   initialTitle: string
   initialNote: string
   /**
@@ -132,6 +134,9 @@ interface Props {
   draftTasks: AcademicTask[]
   /** Toplu Yapıştır için öğrencinin aktif dersleri. */
   courses: { id: string; name: string }[]
+  /** İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler. */
+  openWorkItems: OpenWorkItem[]
+  openWorkFlows: FlowRef[]
 }
 
 export function HomeworkBuilder({
@@ -151,6 +156,8 @@ export function HomeworkBuilder({
   keepActiveTopicIds,
   draftTasks,
   courses,
+  openWorkItems,
+  openWorkFlows,
 }: Props) {
   // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
   const keepActiveTopicSet = useMemo(() => new Set(keepActiveTopicIds), [keepActiveTopicIds])
@@ -523,86 +530,133 @@ export function HomeworkBuilder({
   const hasWork = selectedTests.length > 0 || draftTasks.length > 0
   const plan = planSummary(selectedTests.length, draftTasks)
 
+  // HAFTA GEÇİŞİ (İz V2 R04). Aynı haftaya ek çalışma yeni hafta AÇMAZ:
+  // son teslim aktif haftanın kapanış günü içindeyse doğrudan yayınlanır.
+  // Dışındaysa ya da açık hafta yoksa önce küçük bir onay istenir.
+  const effectiveDueDay = effectiveDueAt ? localDateString(effectiveDueAt) : dueDate
+  const needsTransition = !activeFlow || effectiveDueDay > activeFlow.dueDate
+  const [transitionOpen, setTransitionOpen] = useState(false)
+  const [carryIds, setCarryIds] = useState<Set<string>>(new Set())
+
   function handleSubmit() {
     if (!dueDate || !hasWork) return
     setServerError(null)
-    startTransition(async () => {
-      let result: Awaited<ReturnType<typeof createHomeworkBatchAction>> | null = null
-      if (selectedTests.length > 0) {
-        result = await createHomeworkBatchAction(
-          workspaceId,
-          termId,
-          studentId,
-          dueDate,
-          title || undefined,
-          toHomeworkItems(selectedTests),
-          note || undefined,
-          effectiveDueAt?.toISOString()
-        )
-        if (result?.error) {
-          setServerError(result.error)
-          return
-        }
-        // Yayınlanan plan taslakta durmamalı.
-        await enqueueDraft(() => clearWeeklyPlanDraftAction(workspaceId, studentId))
-        // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
-        // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
-        // zorunluluk değil.
-        setBasketIds(new Set())
-        clearMapSelection()
-        setTitle('')
-        setNote('')
-      }
-
-      // Akademik görevler plan son teslimini varsayılan alır; satır
-      // istisnası (farklı tarih, tarihsiz) korunur (148).
-      if (draftTasks.length > 0) {
-        const published = await publishDraftTasksAction(studentId, effectiveDueAt?.toISOString() ?? null)
-        if (published.error) {
-          if (!result) {
-            setServerError(published.error)
-            return
-          }
-          toast.error(`Kitap çalışmaları yayınlandı; görevler yayınlanamadı: ${published.error}`)
-        }
-      }
-
-      toast.success(
-        result ? 'Plan yayınlandı. Harita güncellendi.' : 'Görevler öğrencinin haftasına yayınlandı.'
+    if (needsTransition) {
+      // "Gelecek haftaya devret" ile işaretlenmiş işler önceden seçili.
+      setCarryIds(
+        new Set(openWorkItems.filter(i => i.status === 'pending' && i.carryRequested).map(i => i.id))
       )
-      // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
-      // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
-      // artmadığını bilmeden ekranda eksik sayı görürdü.
-      //
-      // Bağlama DÜŞTÜYSE (B06) toast kapanmaz ve tek aksiyonu yalnız
-      // bağlamayı yeniden denemek: "Planı Yayınla"ya tekrar basmak ikinci
-      // bir ödev oluştururdu.
-      if (result?.attachFailed && result.batchId) {
-        const batchId = result.batchId
-        toast.warning(result.flowWarning, {
-          duration: Infinity,
-          action: {
-            label: 'Bağlamayı tekrar dene',
-            onClick: async () => {
-              const retry = await retryAttachBatchToFlowAction(studentId, batchId)
-              if (retry.error) toast.error(retry.error)
-              else {
-                if (retry.flowWarning) toast.warning(retry.flowWarning, { duration: 8000 })
-                else toast.success('Ödev haftalık akışa bağlandı.')
-                router.refresh()
-              }
-            },
-          },
-        })
-      } else if (result?.flowWarning) {
-        toast.warning(result.flowWarning, { duration: 8000 })
+      setTransitionOpen(true)
+      return
+    }
+    startTransition(publishNow)
+  }
+
+  function confirmTransition() {
+    if (!effectiveDueAt) return
+    const anchorDefault =
+      !activeFlow && fallbackDue && new Date(fallbackDue.dueAt).getTime() === effectiveDueAt.getTime()
+    startTransition(async () => {
+      const opened = await startNewWeekAction({
+        studentId,
+        dueAt: effectiveDueAt.toISOString(),
+        dueSource: anchorDefault ? 'anchor' : 'custom',
+        anchorServiceId: anchorDefault ? fallbackDue.anchorServiceId : null,
+        carryItemIds: [...carryIds],
+      })
+      if (opened.error) {
+        toast.error(opened.error)
+        return
       }
-      router.refresh()
+      if (opened.carryError) toast.warning(`Hafta açıldı; açık işler aktarılamadı: ${opened.carryError}`)
+      else if (opened.carried) toast.success(`${opened.carried} açık çalışma yeni haftaya aktarıldı.`)
+      setTransitionOpen(false)
+      await publishNow()
     })
   }
 
+  function publishWithoutWeek() {
+    setTransitionOpen(false)
+    startTransition(publishNow)
+  }
+
+  async function publishNow() {
+    let result: Awaited<ReturnType<typeof createHomeworkBatchAction>> | null = null
+    if (selectedTests.length > 0) {
+      result = await createHomeworkBatchAction(
+        workspaceId,
+        termId,
+        studentId,
+        dueDate,
+        title || undefined,
+        toHomeworkItems(selectedTests),
+        note || undefined,
+        effectiveDueAt?.toISOString()
+      )
+      if (result?.error) {
+        setServerError(result.error)
+        return
+      }
+      // Yayınlanan plan taslakta durmamalı.
+      await enqueueDraft(() => clearWeeklyPlanDraftAction(workspaceId, studentId))
+      // R6-03.5: öğretmen yayından sonra AYNI Kitap Haritasında kalır ve yeni
+      // durumları yerinde görür. Öğrenci sayfasına dönmek artık bir seçim,
+      // zorunluluk değil.
+      setBasketIds(new Set())
+      clearMapSelection()
+      setTitle('')
+      setNote('')
+    }
+
+    // Akademik görevler plan son teslimini varsayılan alır; satır
+    // istisnası (farklı tarih, tarihsiz) korunur (148).
+    if (draftTasks.length > 0) {
+      const published = await publishDraftTasksAction(studentId, effectiveDueAt?.toISOString() ?? null)
+      if (published.error) {
+        if (!result) {
+          setServerError(published.error)
+          return
+        }
+        toast.error(`Kitap çalışmaları yayınlandı; görevler yayınlanamadı: ${published.error}`)
+      }
+    }
+
+    toast.success(
+      result ? 'Plan yayınlandı. Harita güncellendi.' : 'Görevler öğrencinin haftasına yayınlandı.'
+    )
+    // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
+    // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
+    // artmadığını bilmeden ekranda eksik sayı görürdü.
+    //
+    // Bağlama DÜŞTÜYSE (B06) toast kapanmaz ve tek aksiyonu yalnız
+    // bağlamayı yeniden denemek: "Planı Yayınla"ya tekrar basmak ikinci
+    // bir ödev oluştururdu.
+    if (result?.attachFailed && result.batchId) {
+      const batchId = result.batchId
+      toast.warning(result.flowWarning, {
+        duration: Infinity,
+        action: {
+          label: 'Bağlamayı tekrar dene',
+          onClick: async () => {
+            const retry = await retryAttachBatchToFlowAction(studentId, batchId)
+            if (retry.error) toast.error(retry.error)
+            else {
+              if (retry.flowWarning) toast.warning(retry.flowWarning, { duration: 8000 })
+              else toast.success('Ödev haftalık akışa bağlandı.')
+              router.refresh()
+            }
+          },
+        },
+      })
+    } else if (result?.flowWarning) {
+      toast.warning(result.flowWarning, { duration: 8000 })
+    }
+    router.refresh()
+  }
+
   function copyShareText() {
-    if (selectedTests.length === 0) return
+    // İz V2 H01: kitapsız plan (yalnız akademik görev) da kopyalanabilir.
+    if (!hasWork) return
     // Metin üretimi lib/share-text.ts'te; sıkıştırma kuralları (R4 §7)
     // orada tek yerde duruyor ve testleniyor.
     navigator.clipboard.writeText(
@@ -621,6 +675,13 @@ export function HomeworkBuilder({
             units: section.units,
           })),
           videoTasks: group.videoTasks,
+        })),
+        tasks: draftTasks.map(task => ({
+          scopeName: task.scopeName,
+          title: task.title,
+          kind: task.kind,
+          targetMinutes: task.targetMinutes,
+          checklist: task.checklist.map(item => item.title),
         })),
         note: note || undefined,
       })
@@ -662,7 +723,7 @@ export function HomeworkBuilder({
             size="sm"
             variant="outline"
             onClick={copyShareText}
-            disabled={selectedTests.length === 0}
+            disabled={!hasWork}
           >
             {copied ? <Check className="text-success" /> : <Copy />}
             {copied ? 'Kopyalandı!' : 'Ödev metnini kopyala'}
@@ -767,31 +828,56 @@ export function HomeworkBuilder({
                 <BulkActionPanel
                   // M1.0-03 §6: bar haritanın HEMEN ÜSTÜNDE açılır, seçim
                   // yokken hiç görünmez; göz ve fare hareketi kısalır.
-                  className="top-2 bottom-auto shadow-md"
-                  book={activeBook}
-                  selectedIds={mapSelection}
-                  onClearSelection={clearMapSelection}
-                  onAssign={addToBasket}
-                  onComplete={(ids, studiedOn) =>
-                    completeUnitsManuallyAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                      studiedOn,
-                    }).then(reportBulk('tamamlandı olarak işlendi'))
-                  }
-                  onApprove={ids =>
-                    approveUnitsAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                    }).then(reportBulk('onaylandı'))
-                  }
-                  onRevert={ids =>
-                    revertUnitsAction(studentId, activeBook.bookId, {
-                      assignmentId: activeBook.assignmentId,
-                      unitIds: ids,
-                    }).then(reportBulk('geri alındı'))
-                  }
-                />
+                  className="top-2 bottom-auto shadow-md"
+
+                  book={activeBook}
+
+                  selectedIds={mapSelection}
+
+                  onClearSelection={clearMapSelection}
+
+                  onAssign={addToBasket}
+
+                  onComplete={(ids, studiedOn) =>
+
+                    completeUnitsManuallyAction(studentId, activeBook.bookId, {
+
+                      assignmentId: activeBook.assignmentId,
+
+                      unitIds: ids,
+
+                      studiedOn,
+
+                    }).then(reportBulk('tamamlandı olarak işlendi'))
+
+                  }
+
+                  onApprove={ids =>
+
+                    approveUnitsAction(studentId, activeBook.bookId, {
+
+                      assignmentId: activeBook.assignmentId,
+
+                      unitIds: ids,
+
+                    }).then(reportBulk('onaylandı'))
+
+                  }
+
+                  onRevert={ids =>
+
+                    revertUnitsAction(studentId, activeBook.bookId, {
+
+                      assignmentId: activeBook.assignmentId,
+
+                      unitIds: ids,
+
+                    }).then(reportBulk('geri alındı'))
+
+                  }
+
+                />
+
                 <p className="text-xs text-muted-foreground">
                   Çalışmaları seçmek durumlarını değiştirmez. Değişiklik yalnız
                   seçim barından bir işlem uyguladığınızda gerçekleşir.
@@ -1174,6 +1260,39 @@ export function HomeworkBuilder({
           </div>
         </aside>
       </div>
+
+      <WeekTransitionDialog
+        open={transitionOpen}
+        onOpenChange={setTransitionOpen}
+        activeFlowDueAt={activeFlow?.dueAt ?? null}
+        newDueAt={effectiveDueAt}
+        items={openWorkItems}
+        flows={openWorkFlows}
+        selected={carryIds}
+        onToggle={id =>
+          setCarryIds(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+        }
+        onToggleAll={(ids, on) =>
+          setCarryIds(prev => {
+            const next = new Set(prev)
+            for (const id of ids) {
+              if (on) next.add(id)
+              else next.delete(id)
+            }
+            return next
+          })
+        }
+        pending={isPending}
+        onConfirm={confirmTransition}
+        // Görev yayını açık hafta ister (148); yalnız kitap çalışması varken
+        // eski yol (haftaya bağlamadan yayın) açık kalır.
+        onPublishWithoutWeek={draftTasks.length === 0 ? publishWithoutWeek : null}
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { BookEditForm, type TopicOption } from './book-edit-form'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,15 +87,20 @@ export default async function BookEditPage({
   const scopeIds = scopes.map((s) => s.id)
   const scopeNameById = new Map(scopes.map((s) => [s.id, s.name]))
 
+  // H03 (İz V2): tek istek 1000 satırda kesiliyordu — tüm konular sayfalı okunur.
   const { data: topicRows } = scopeIds.length
-    ? await supabase
-        .from('topics')
-        .select('id, name, scope_id')
-        .eq('workspace_id', workspaceId)
-        .eq('active', true)
-        .in('scope_id', scopeIds)
-        .order('sort_order')
-        .order('name')
+    ? await fetchAllRows<{ id: string; name: string; scope_id: string }>((from, to) =>
+        supabase
+          .from('topics')
+          .select('id, name, scope_id')
+          .eq('workspace_id', workspaceId)
+          .eq('active', true)
+          .in('scope_id', scopeIds)
+          .order('sort_order')
+          .order('name')
+          .order('id')
+          .range(from, to)
+      )
     : { data: [] }
 
   const topics: TopicOption[] = (topicRows ?? []).map((t) => ({

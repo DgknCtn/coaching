@@ -49,8 +49,27 @@ export async function saveCurriculumFlowAction(
   const parsed = saveSchema.safeParse({ studentId, scopeId, items })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
-  await getTeacherContext()
+  const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
+
+  // H02 (İz V2): kayıtlı satırlar bu öğrencinin BU dersine ait olmalı.
+  // Ekran eski bir dersin listesini taşıyorsa RPC o satırları güncellemez
+  // ama adlarından seçili derste yeni konular üretirdi; bir dersin
+  // düzenlenmesi diğerini kirletirdi. Uyuşmazlık kayıttan önce reddedilir.
+  const ids = parsed.data.items.map(i => i.id).filter((id): id is string => !!id)
+  if (ids.length > 0) {
+    const { data: owned, error: ownedError } = await supabase
+      .from('student_curriculum_items')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', parsed.data.studentId)
+      .eq('scope_id', parsed.data.scopeId)
+      .in('id', ids)
+    if (ownedError) return { error: dbErrorToTr(ownedError.message) }
+    if ((owned ?? []).length !== new Set(ids).size) {
+      return { error: 'Ekrandaki liste seçili derse ait değil. Sayfayı yenileyip tekrar deneyin.' }
+    }
+  }
 
   const { error } = await supabase.rpc('save_student_curriculum_flow', {
     p_student_id: parsed.data.studentId,

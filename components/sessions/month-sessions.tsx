@@ -4,10 +4,9 @@ import { useMemo, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Circle, Clock, X } from 'lucide-react'
 import {
-  formatSessionClock,
-  formatSessionWeekdayShort,
+  formatSessionDayDate,
   isAwaitingOutcome,
 } from '@/lib/service-structure'
 import { sessionDisplayStatus } from '@/lib/session-state'
@@ -269,24 +268,37 @@ function SessionCellLine({
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       {ordinal && <span className="tabular-nums text-muted-foreground">{ordinal}</span>}
+      {/* İz V2 R08: kesin tarih — "13 Ekim Salı · 18:00"; yıl ay başlığında. */}
       <span className="tabular-nums">
         {row.isMakeup && 'Telafi · '}
-        {formatSessionWeekdayShort(row.currentPlannedAt)} {formatSessionClock(row.currentPlannedAt)}
+        {formatSessionDayDate(row.currentPlannedAt, true)}
       </span>
       {row.isExtra && <span className="text-muted-foreground">Ek ders</span>}
 
+      {/* DURUM YALNIZ RENKLE ANLATILMAZ (R8): sonuçlanmamış oturum boş
+          halka + metinle nötr görünür; dolu tik yalnız "Yapıldı"da. Eskiden
+          sonucu bekleyen oturumda dolu turuncu tik vardı ve yapılmış
+          izlenimi veriyordu. */}
       {row.status === 'planlandi' ? (
         <Button
           size="xs"
-          variant={awaiting ? 'default' : 'outline'}
+          variant="outline"
           disabled={isPending}
           onClick={onMarkDone}
-          className="h-5 px-1.5"
+          className={cn('h-5 gap-1 px-1.5 text-[10px]', awaiting && 'border-warning-border')}
+          title="Yapıldı olarak işaretle"
+          aria-label={`${awaiting ? 'Sonuç bekliyor' : 'Planlandı'} — yapıldı olarak işaretle`}
         >
-          <Check className="size-3" />
+          {awaiting ? <Clock className="size-3" /> : <Circle className="size-3" />}
+          {awaiting ? 'Sonuç bekliyor' : display.label}
         </Button>
       ) : (
-        <Badge variant={display.variant} className="px-1.5 py-0 text-[10px]">
+        <Badge variant={display.variant} className="gap-1 px-1.5 py-0 text-[10px]">
+          {row.status === 'yapildi' ? (
+            <Check className="size-3" />
+          ) : row.status === 'iptal' || row.status === 'yapilmadi' ? (
+            <X className="size-3" />
+          ) : null}
           {display.label}
         </Badge>
       )}

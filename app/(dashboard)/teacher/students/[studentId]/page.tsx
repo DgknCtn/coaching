@@ -44,6 +44,8 @@ import { MetricTiles } from '@/components/shared/metric-tiles'
 import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { PublishedHomeworkList } from './published-homework-list'
+import { loadOpenWork } from '@/lib/open-homework'
+import { loadWeekMessage } from '@/lib/week-message'
 import { ProtectionPoolCard, ResourcePlanCard } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
 import {
@@ -159,7 +161,7 @@ export default async function StudentDetailPage({
           .select(`
             id, title, description, due_date, due_at, status, weekly_flow_id,
             homework_items(
-              id, status, book_id, section_id, submitted_at,
+              id, status, book_id, section_id, submitted_at, carried_to_item_id,
               books(title, tracking_mode),
               book_sections(title, order_index),
               book_tests(order_index, title)
@@ -382,6 +384,19 @@ export default async function StudentDetailPage({
   const now = new Date()
   const lastSubmittedAt =
     (lastSubmittedRows?.[0]?.submitted_at as string | null | undefined) ?? null
+
+  // İz V2 R03: tüm açık çalışmalar (20 parti sınırı olmadan) + hafta etiketleri.
+  const openWork = need.homeworkBatches
+    ? await loadOpenWork(supabase, { workspaceId, studentId })
+    : null
+  const weekMessage = openWork?.activeFlow
+    ? await loadWeekMessage(supabase, {
+        workspaceId,
+        studentId,
+        studentName: student.full_name,
+        flow: openWork.activeFlow,
+      })
+    : null
 
   const thisWeek: ThisWeekView = {
     flowId: (weekOperation?.weekly_flow_id as string | null) ?? null,
@@ -1127,6 +1142,8 @@ export default async function StudentDetailPage({
                 <PublishedHomeworkList
                   studentId={studentId}
                   activeFlowId={thisWeek.flowId}
+                  openWork={openWork}
+                  weekMessage={weekMessage}
                   batches={homeworkBatches.map((batch) => {
                     // Supabase iç içe select'i tek kaydı da dizi tipinde
                     // çözebiliyor; okurken tekile indiriyoruz.
@@ -1137,6 +1154,7 @@ export default async function StudentDetailPage({
                         book_id: string | null
                         section_id: string | null
                         submitted_at: string | null
+                        carried_to_item_id: string | null
                         books: Nested<{ title: string; tracking_mode: string }>
                         book_sections: Nested<{ title: string; order_index: number | null }>
                         book_tests: Nested<{ order_index: number; title: string | null }>
@@ -1149,7 +1167,10 @@ export default async function StudentDetailPage({
                       batch.status === 'archived'
                         ? allItems
                         : allItems.filter((i) => i.status !== 'cancelled')
-                    const releasedCount = allItems.length - items.length
+                    // İz V2 R03: devredilen kalem de 'cancelled' — ama aktif
+                    // yükten çıkarılmadı, başka haftaya taşındı. Ayrı sayılır.
+                    const carriedCount = allItems.filter((i) => i.carried_to_item_id).length
+                    const releasedCount = allItems.length - items.length - carriedCount
                     const total = items.length
                     const completed = items.filter((i) => i.status === 'completed').length
                     // R6-06: detay assignment_items'tan türetilir; ödev
@@ -1197,6 +1218,8 @@ export default async function StudentDetailPage({
                       detail,
                       status: batch.status,
                       releasedCount,
+                      carriedCount,
+                      weeklyFlowId: (batch.weekly_flow_id as string | null) ?? null,
                       // Sağ panel kalemleri — sıra detaydakiyle aynı.
                       items: [...items]
                         .sort((a, b) =>

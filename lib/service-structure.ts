@@ -531,6 +531,47 @@ export function formatSessionClock(value: string | Date | null | undefined): str
   return sessionClockFormatter.format(d)
 }
 
+const sessionDayMonthFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  day: 'numeric',
+  month: 'long',
+  weekday: 'long',
+})
+
+/**
+ * `13 Ekim Salı` / `13 Ekim Salı · 18:00` — İz V2 R08.
+ *
+ * Aylık ders ve finans satırlarında yalnız "Sal 18:00" yazılıyordu; kesin
+ * tarih okunmuyordu. Yıl YAZILMAZ: dönem başlığında ("Ekim 2026") durur.
+ */
+export function formatSessionDayDate(
+  value: string | Date | null | undefined,
+  withClock = false
+): string {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  const parts = sessionDayMonthFormatter.formatToParts(d)
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  const day = `${get('day')} ${get('month')} ${get('weekday')}`
+  return withClock ? `${day} · ${sessionClockFormatter.format(d)}` : day
+}
+
+/**
+ * YYYY-MM-DD (takvim günü) için `13 Ekim Salı`; `withYear` ile
+ * `13 Ekim 2026 Salı` — dönemler arası listelerde (Tüm hareketler, Veli
+ * Hesap Özeti) yıl başlıkta olmadığı için satırda yazılır. Gün öğlen UTC
+ * okunur: gece yarısı okunsaydı İstanbul'a çevrilirken gün kayabilirdi.
+ */
+export function formatIsoDayDate(day: string | null | undefined, withYear = false): string {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return '—'
+  const d = new Date(`${day}T12:00:00Z`)
+  const base = formatSessionDayDate(d)
+  if (!withYear) return base
+  const [dayNo, month, ...weekday] = base.split(' ')
+  return `${dayNo} ${month} ${day.slice(0, 4)} ${weekday.join(' ')}`
+}
+
 /** `Cuma` — gün adı tek başına (dashboard'un yakın temas etiketi). */
 export function formatSessionWeekdayLong(value: string | Date | null | undefined): string {
   if (!value) return '—'

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'rea
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus } from 'lucide-react'
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Circle, MoreHorizontal, Plus } from 'lucide-react'
 import {
   FINANCE_LINK_LABEL,
   formatSessionClock,
@@ -460,13 +460,16 @@ export function WeekSessions({
                         <div className="flex items-center justify-end gap-1">
                           {row.status === 'planlandi' && fast && (
                             <>
+                              {/* İz V2 R08: sonuçlanmamış oturumda dolu tik yok —
+                                  boş halka; "bekliyor" durumu kenarlıkla + etiketle. */}
                               <Button
                                 size="xs"
-                                variant={awaiting ? 'default' : 'outline'}
+                                variant="outline"
+                                className={cn(awaiting && 'border-warning-border')}
                                 disabled={isPending}
                                 onClick={() => markDoneAndCollect(row)}
                               >
-                                <Check className="size-3.5" />
+                                <Circle className="size-3.5" />
                                 Yapıldı + Tahsil Edildi
                               </Button>
                               <Button size="xs" variant="ghost" disabled={isPending} onClick={() => markDone(row)}>
@@ -477,11 +480,12 @@ export function WeekSessions({
                           {row.status === 'planlandi' && !fast && (
                             <Button
                               size="xs"
-                              variant={awaiting ? 'default' : 'outline'}
+                              variant="outline"
+                              className={cn(awaiting && 'border-warning-border')}
                               disabled={isPending}
                               onClick={() => markDone(row)}
                             >
-                              <Check className="size-3.5" />
+                              <Circle className="size-3.5" />
                               Yapıldı
                             </Button>
                           )}
