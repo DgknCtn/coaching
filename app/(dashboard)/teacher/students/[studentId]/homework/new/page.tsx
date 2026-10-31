@@ -181,12 +181,17 @@ export default async function NewHomeworkPage({
 
   // M1.0-03 ORTAK SEPET: kitap seçimleri ve akademik görevler aynı
   // haftalık planda. Görev taslakları öğretmene özel (148).
-  const [draftTasks, coursesData] = await Promise.all([
+  const [draftTasks, coursesData, openTaskRows, openWork] = await Promise.all([
     loadStudentTasks(supabase, { studentId, statuses: ['draft'], createdByProfileId: profile.id }),
     loadCoursesData(supabase, { workspaceId, studentId }),
+    // İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler —
+    // kitap kalemleri ve aktif hafta DIŞINDAKİ açık öğretmen görevleri.
+    loadStudentTasks(supabase, { studentId, statuses: ['open'] }),
+    loadOpenWork(supabase, { workspaceId, studentId }),
   ])
-  // İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler.
-  const openWork = await loadOpenWork(supabase, { workspaceId, studentId })
+  const openTasks = openTaskRows.filter(
+    t => t.createdByRole === 'teacher' && t.weeklyFlowId !== (activeFlow?.id ?? null)
+  )
   const courses = coursesData.courses.filter(c => c.active).map(c => ({ id: c.scopeId, name: c.name }))
 
   // Kitabı olmayan öğrenciye de görev planı yayınlanabilir: ekran yalnız
@@ -235,6 +240,7 @@ export default async function NewHomeworkPage({
         draftTasks={draftTasks}
         courses={courses}
         openWorkItems={openWork.items}
+        openTasks={openTasks}
         openWorkFlows={openWork.flows}
       />
     </div>
