@@ -31,6 +31,7 @@ import {
   mapPayment,
 } from './data'
 import { ExpensePanel } from './expense-panel'
+import { fetchAllRows } from '@/lib/fetch-all'
 
 export const metadata: Metadata = { title: 'Finans' }
 export const dynamic = 'force-dynamic'
@@ -97,8 +98,15 @@ export default async function FinancePage({
     { data: monthlyRows },
   ] = await Promise.all([
     supabase.from('students').select('id, full_name, status').eq('workspace_id', workspaceId).order('full_name'),
-    supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('workspace_id', workspaceId).limit(10000),
-    supabase.from('finance_payments').select(PAYMENT_SELECT).eq('workspace_id', workspaceId).limit(10000),
+    // PostgREST tek istekte en fazla 1000 satır döndürür; .limit(10000) bunu
+    // AŞAMAZ, defter sessizce kesilir ve bakiyeler yanlış çıkardı (EK-01:
+    // finans detayı, genel finans ve veli özeti aynı tutarı göstermeli).
+    fetchAllRows((from, to) =>
+      supabase.from('finance_lessons').select(ACCRUAL_SELECT).eq('workspace_id', workspaceId).order('id').range(from, to)
+    ),
+    fetchAllRows((from, to) =>
+      supabase.from('finance_payments').select(PAYMENT_SELECT).eq('workspace_id', workspaceId).order('id').range(from, to)
+    ),
     supabase
       .from('finance_expenses')
       .select(EXPENSE_SELECT)
@@ -147,8 +155,10 @@ export default async function FinancePage({
       return { student: s, summary, model: model?.model ?? null, hasAny: a.length + p.length > 0 }
     })
     .filter((r) => r.hasAny || (r.student.status === 'active' && r.model !== null))
-    .filter((r) => r.student.status === 'active' || r.summary.closingBalanceKurus !== 0)
-    .sort((x, y) => y.summary.closingBalanceKurus - x.summary.closingBalanceKurus)
+    .filter((r) => r.student.status === 'active' || r.summary.currentBalanceKurus !== 0)
+    // EK-01: sıra GÜNCEL borca göre — eski ayın ay sonu bakiyesi bugünkü
+    // borç değildir.
+    .sort((x, y) => y.summary.currentBalanceKurus - x.summary.currentBalanceKurus)
 
   const overview = ((overviewRows ?? []) as Record<string, unknown>[])[0]
   const accrued = Number(overview?.accrued_kurus ?? 0)
@@ -276,12 +286,13 @@ export default async function FinancePage({
                   <tr className="border-b border-border text-xs text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">Öğrenci</th>
                     <th className="px-3 py-2 text-left font-medium">Model</th>
-                    <th className="hidden px-3 py-2 text-right font-medium md:table-cell">Önceki açık</th>
+                    <th className="hidden px-3 py-2 text-right font-medium md:table-cell">Dönem başı devreden</th>
                     <th className="px-3 py-2 text-right font-medium">Dönem</th>
                     <th className="px-3 py-2 text-right font-medium">Tahsil</th>
-                    {/* M1.0-05: "Kalan" TOPLAM CARİ BORCU (closingBalanceKurus)
-                        gösteriyor — ismi bunu söylesin. */}
-                    <th className="px-3 py-2 text-right font-medium">Toplam açık bakiye</th>
+                    {/* EK-01: ay sonu bakiyesi tarihsel, güncel açık bakiye bugünkü
+                        borç — iki ayrı sütun, iki ayrı ad. */}
+                    <th className="hidden px-3 py-2 text-right font-medium lg:table-cell">Ay sonu bakiyesi</th>
+                    <th className="px-3 py-2 text-right font-medium">Güncel açık bakiye</th>
                     <th className="px-3 py-2 text-left font-medium">Durum</th>
                   </tr>
                 </thead>
@@ -302,14 +313,19 @@ export default async function FinancePage({
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{formatKurus(summary.periodAccruedKurus)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{formatKurus(summary.periodCollectedKurus)}</td>
-                      <td
-                        className={`px-3 py-2 text-right font-medium tabular-nums ${
-                          summary.closingBalanceKurus > 0 ? 'text-destructive-foreground' : ''
-                        }`}
-                      >
+                      <td className="hidden px-3 py-2 text-right tabular-nums text-muted-foreground lg:table-cell">
                         {summary.closingBalanceKurus < 0
                           ? `+${formatKurus(-summary.closingBalanceKurus)}`
                           : formatKurus(summary.closingBalanceKurus)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-medium tabular-nums ${
+                          summary.currentBalanceKurus > 0 ? 'text-destructive-foreground' : ''
+                        }`}
+                      >
+                        {summary.currentBalanceKurus < 0
+                          ? `+${formatKurus(-summary.currentBalanceKurus)}`
+                          : formatKurus(summary.currentBalanceKurus)}
                       </td>
                       <td className="px-3 py-2">
                         <Badge variant={STATE_VARIANT[summary.state]}>{PERIOD_STATE_LABEL[summary.state]}</Badge>

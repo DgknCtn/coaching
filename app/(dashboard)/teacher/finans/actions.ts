@@ -640,3 +640,27 @@ export async function addExpenseAction(
   revalidateFinance(v.studentId || undefined)
   return { success: true }
 }
+
+/**
+ * EKSİK TAHAKKUKLARI TAMAMLA — EK-03 (04.11.2026).
+ *
+ * Yalnız öğretmen ELLE basınca çalışır; borç otomatik varsayılmaz. Var olan
+ * `backfill_missing_accruals` (141) işlemini kullanır: yalnız tahakkuku
+ * OLMAYAN yapılmış oturumlara, bugünkü kurala göre satır açar. İdempotent —
+ * tekrar basmak satır çoğaltmaz (service_session_id tekil), var olan
+ * tahakkuka ve tahsilata dokunmaz, oturumları birleştirmez/silmez.
+ */
+export async function backfillMissingAccrualsAction(studentId: string): Promise<FinanceActionResult> {
+  const parsed = uuidSchema.safeParse(studentId)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const ctx = await assertOwner()
+  if (!ctx) return DENIED
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('backfill_missing_accruals', { p_student_id: parsed.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidateFinance(parsed.data)
+  return { success: true, backfilled: Number(data ?? 0) }
+}

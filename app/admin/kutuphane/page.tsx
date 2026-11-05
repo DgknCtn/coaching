@@ -8,6 +8,7 @@ import { formatRelativeTr } from '@/lib/format'
 import { unitLabel } from '@/lib/unit-labels'
 import { SubmissionRow } from './submission-row'
 import { LibrarySetup } from './library-setup'
+import { WorkspacePublish } from './workspace-publish'
 
 export const metadata: Metadata = { title: 'Kaynak Kütüphanesi' }
 export const dynamic = 'force-dynamic'
@@ -41,12 +42,17 @@ interface SubmissionRowData {
 export default async function AdminLibraryPage() {
   const supabase = await createClient()
 
-  const [{ data: submissions }, { data: libraryWorkspaceId }] = await Promise.all([
+  const [{ data: submissions }, { data: libraryWorkspaceId }, { data: workspaceRows }] = await Promise.all([
     // p_status null: karara bağlanmışlar da listelenir, "ne oldu?" sorusu
     // ayrı bir yerde aranmasın. RPC bekleyenleri en üste sıralar.
     supabase.rpc('admin_list_library_submissions', { p_status: null, p_limit: 200 }),
     supabase.rpc('library_workspace_id'),
+    // EK-05: koç havuzundan yayın için alan listesi (yalnız yönetici, 060/126).
+    supabase.rpc('admin_list_workspaces', { p_search: null, p_limit: 200, p_status: null, p_plan: null, p_partner: null }),
   ])
+  const workspaces = ((workspaceRows ?? []) as { workspace_id: string; workspace_name: string; owner_name: string | null }[])
+    .filter((w) => w.workspace_id !== libraryWorkspaceId)
+    .map((w) => ({ id: w.workspace_id, name: w.workspace_name, owner: w.owner_name }))
 
   const rows = (submissions ?? []) as unknown as SubmissionRowData[]
   const pending = rows.filter((r) => r.library_status === 'pending')
@@ -78,6 +84,8 @@ export default async function AdminLibraryPage() {
         libraryWorkspaceId={(libraryWorkspaceId as string | null) ?? null}
         bookCount={libraryBookCount ?? 0}
       />
+
+      <WorkspacePublish workspaces={workspaces} libraryReady={!!libraryWorkspaceId} />
 
       <Section title="Koç önerileri" variant="card">
         {rows.length === 0 ? (

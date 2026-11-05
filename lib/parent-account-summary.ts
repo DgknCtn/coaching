@@ -8,7 +8,8 @@ import {
   type LedgerPayment,
 } from '@/lib/finance-ledger'
 import { formatUnits } from '@/lib/session-state'
-import { formatIsoDayDate } from '@/lib/service-structure'
+import { formatIsoDayDate, formatSessionClock } from '@/lib/service-structure'
+import { localDateString } from '@/lib/homework-status'
 
 // VELİ HESAP ÖZETİ — İz V2 R09.
 //
@@ -22,10 +23,18 @@ import { formatIsoDayDate } from '@/lib/service-structure'
 
 export interface SummaryAccrual extends LedgerAccrual {
   unitCount: number | null
+  /**
+   * EK-02/04: bağlı oturumun GERÇEKLEŞME anı. Varsa satır o gün + saatle
+   * yazılır; yoksa tahakkuk günüyle, saatsiz (plan saati gerçek saat gibi
+   * gösterilmez). Tahakkukun dönemi (tarihi) bundan etkilenmez.
+   */
+  occurredAt?: string | null
 }
 
 export interface OpenLine {
   id: string
+  /** Ders satırlarında oturum sırası (1, 2, 3…); diğer kalemlerde null. */
+  no: number | null
   date: string
   /** "24 Eylül 2026 Perşembe · 1 ders" */
   label: string
@@ -40,6 +49,8 @@ export interface ParentSummary {
   totalOpenKurus: number
   /** Açık satırlardaki ders birimi toplamı ("Toplam · 4 ders"). */
   openUnits: number
+  /** Açık ders KAYDI sayısı — birimden ayrı (7 kayıt, 6,5 ders olabilir). */
+  openLessonCount: number
   recentPayments: { id: string; date: string; amountKurus: number }[]
   /** Fazla ödeme (alacak). */
   creditKurus: number
@@ -55,11 +66,15 @@ export function formatMoney(kurus: number): string {
 }
 
 function accrualLabel(a: SummaryAccrual): string {
-  const day = formatIsoDayDate(a.date, true)
   if (LESSON_KINDS.includes(a.kind)) {
+    // "17 Ekim 2026 Cumartesi · 11:01 · 1 ders" — gerçekleşme günü ve saati.
+    const day = a.occurredAt
+      ? `${formatIsoDayDate(localDateString(new Date(a.occurredAt)), true)} · ${formatSessionClock(a.occurredAt)}`
+      : formatIsoDayDate(a.date, true)
     const units = formatUnits(a.unitCount ?? 1)
     return `${day} · ${a.kind === 'ek_ders' ? `${units} (ek)` : units}`
   }
+  const day = formatIsoDayDate(a.date, true)
   if (a.kind === 'aylik') return `${monthLabel(a.date.slice(0, 7))} · aylık ücret`
   return `${day} · ${ACCRUAL_KIND_LABEL[a.kind]}`
 }
@@ -77,6 +92,7 @@ export function buildParentSummary(
       const paid = paidByAccrual.get(a.id) ?? 0
       return {
         id: a.id,
+        no: null,
         date: a.date,
         label: accrualLabel(a),
         amountKurus: a.amountKurus,
@@ -87,6 +103,13 @@ export function buildParentSummary(
     })
     .filter(l => l.openKurus > 0)
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+
+  // Ders satırları oturum sırasıyla numaralanır (EK-04). Numara KAYIT
+  // sırasıdır, birim değil: yarım ders tek satırdır, ikinci kez sayılmaz.
+  let lessonNo = 0
+  for (const line of openLines) {
+    if (line.units > 0) line.no = ++lessonNo
+  }
 
   const recentPayments = [...payments]
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
@@ -110,6 +133,7 @@ export function buildParentSummary(
     openLines,
     totalOpenKurus: openLines.reduce((s, l) => s + l.openKurus, 0),
     openUnits: openLines.reduce((s, l) => s + l.units, 0),
+    openLessonCount: lessonNo,
     recentPayments,
     creditKurus,
     history,
@@ -123,6 +147,23 @@ export function openLineAmount(line: OpenLine): string {
     : formatMoney(line.openKurus)
 }
 
+/** "1) 17 Ekim 2026 Cumartesi · 11:01 · 1 ders · 1.850 ₺" — önizleme, metin, çıktı ortak. */
+export function openLineText(line: OpenLine): string {
+  return `${line.no ? `${line.no}) ` : ''}${line.label} · ${openLineAmount(line)}`
+}
+
+/**
+ * "Toplam · 4 ders"; kayıt sayısı birimden farklıysa ikisi de yazılır:
+ * "Toplam · 7 kayıt · 6,5 ders" (EK-04).
+ */
+export function openTotalLabel(summary: Pick<ParentSummary, 'openUnits' | 'openLessonCount'>): string {
+  if (summary.openUnits <= 0) return 'Toplam'
+  const units = formatUnits(summary.openUnits)
+  return summary.openLessonCount !== summary.openUnits
+    ? `Toplam · ${summary.openLessonCount} kayıt · ${units}`
+    : `Toplam · ${units}`
+}
+
 /** Paylaşım metni — öğretmen kopyalayıp kendi gönderir (sistem göndermez). */
 export function parentSummaryText(studentName: string, summary: ParentSummary, today: string): string {
   const lines = [`${studentName} · Hesap özeti (${formatIsoDayDate(today, true)})`, '']
@@ -131,9 +172,8 @@ export function parentSummaryText(studentName: string, summary: ParentSummary, t
     lines.push('Açık tutar yok.')
   } else {
     lines.push('Açık tutar')
-    for (const l of summary.openLines) lines.push(`${l.label} — ${openLineAmount(l)}`)
-    const unitsPart = summary.openUnits > 0 ? ` · ${formatUnits(summary.openUnits)}` : ''
-    lines.push(`Toplam${unitsPart} — ${formatMoney(summary.totalOpenKurus)}`)
+    for (const l of summary.openLines) lines.push(openLineText(l))
+    lines.push(`${openTotalLabel(summary)} — ${formatMoney(summary.totalOpenKurus)}`)
   }
 
   if (summary.creditKurus > 0) {

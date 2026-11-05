@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Plus, Settings2, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Settings2, Trash2 } from 'lucide-react'
 import { formatKurus } from '@/lib/billing/pricing'
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL, parseLiraToKurus } from '@/lib/finance'
 import {
@@ -12,6 +12,7 @@ import {
   PERIOD_STATE_LABEL,
   allocatePayments,
   monthLabel,
+  monthLastDay,
   periodLines,
   periodSummary,
   shiftMonth,
@@ -26,6 +27,7 @@ import {
 } from '@/lib/pricing-history'
 import { formatUnits } from '@/lib/session-state'
 import { isoWeekKeyOfDate } from '@/lib/iso-week'
+import { localDateString } from '@/lib/homework-status'
 import { formatIsoDayDate } from '@/lib/service-structure'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,6 +39,7 @@ import { SegmentedField } from '@/components/shared/segmented-field'
 import {
   addManualAccrualAction,
   addPaymentV2Action,
+  backfillMissingAccrualsAction,
   deleteFinanceEntryAction,
   deletePaymentNoticeAction,
   purgeStudentFinanceAction,
@@ -44,6 +47,8 @@ import {
 import type { AccrualRow, ExpenseRow, PaymentRow } from '../data'
 import { ExpensePanel } from '../expense-panel'
 import { ParentSummaryButton } from './parent-summary-dialog'
+import { COVERAGE_REASON_LABEL, type UncoveredSession } from '@/lib/finance-coverage'
+import { formatSessionDayDate } from '@/lib/service-structure'
 
 
 export function StudentFinanceClient({
@@ -56,16 +61,19 @@ export function StudentFinanceClient({
   models,
   prices,
   notices,
+  uncovered,
 }: {
   student: { id: string; name: string }
   month: string
   today: string
-  accruals: (AccrualRow & { serviceLabel: string | null })[]
+  accruals: (AccrualRow & { serviceLabel: string | null; occurredAt: string | null })[]
   payments: PaymentRow[]
   expenses: ExpenseRow[]
   models: (FinanceModelVersion & { id: string })[]
   prices: (PriceVersion & { id: string })[]
   notices: { id: string; monthStart: string; status: 'pending' | 'confirmed' | 'rejected'; note: string | null }[]
+  /** EK-03: tahakkuku olmayan yapılmış oturumlar ve nedeni. */
+  uncovered: (UncoveredSession & { serviceLabel: string | null })[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -128,6 +136,17 @@ export function StudentFinanceClient({
           </span>
           {/* İz V2 R09: aynı cari hesabın paylaşılabilir özeti. */}
           <ParentSummaryButton studentName={student.name} today={today} accruals={accruals} payments={payments} />
+          {/* EK-04: aynı öğrencinin GENEL oturum sayfası (seçili ay). "Görüşmeyi
+              aç" tek hareketin oturumunu açar; bu bağlantı bütün ayı. */}
+          <Button
+            size="sm"
+            variant="ghost"
+            nativeButton={false}
+            render={<Link href={`/teacher/students/${student.id}/gorusmeler?ay=${month}`} />}
+          >
+            <CalendarDays className="size-4" />
+            Ders &amp; Görüşmeler
+          </Button>
           <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/teacher/students/${student.id}/gorusmeler`} />}>
             <Settings2 className="size-4" />
             Hizmet Yapısı
@@ -237,15 +256,31 @@ export function StudentFinanceClient({
           </div>
         )}
 
-        {/* ÖZET — "5,5 ders birimi | Ekim dönemi toplamı 13.750 TL | Tahsil edilen 10.000 TL | Kalan 3.750 TL" */}
-        <dl className="mt-4 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4">
+        {/* ÖZET (EK-01): ay sonu bakiyesi TARİHSELDİR, güncel borç ayrı.
+            Eskiden tek "Toplam açık bakiye" kutusu seçilen ayın ay sonu
+            bakiyesini gösteriyordu: Kasım'da kapanan Ekim borcu, Ekim'e
+            dönüldüğünde hâlâ "3.500 TL Kısmi" görünüyordu. */}
+        <dl className="mt-4 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
           <div>
             <dt className="text-xs text-muted-foreground">Ders birimi</dt>
             <dd className="font-medium tabular-nums">{units > 0 ? formatUnits(units) : '—'}</dd>
           </div>
+          {summary.carriedInKurus !== 0 && (
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                {summary.carriedInKurus < 0 ? 'Dönem başı devreden alacak' : 'Dönem başı devreden bakiye'}
+              </dt>
+              <dd className="font-medium tabular-nums">{formatKurus(Math.abs(summary.carriedInKurus))}</dd>
+            </div>
+          )}
           <div>
             <dt className="text-xs text-muted-foreground">Dönem toplamı</dt>
-            <dd className="font-medium tabular-nums">{formatKurus(summary.periodAccruedKurus)}</dd>
+            <dd className="flex items-center gap-2 font-medium tabular-nums">
+              {formatKurus(summary.periodAccruedKurus)}
+              <Badge variant={summary.state === 'odendi' ? 'success' : summary.state === 'alacak' ? 'info' : summary.state === 'yok' ? 'neutral' : 'warning'}>
+                {PERIOD_STATE_LABEL[summary.state]}
+              </Badge>
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Tahsil edilen (bu ay)</dt>
@@ -253,14 +288,19 @@ export function StudentFinanceClient({
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">
-              {summary.closingBalanceKurus < 0 ? 'Alacak (fazla ödeme)' : 'Toplam açık bakiye'}
+              {formatIsoDayDate(monthLastDay(month)).split(' ').slice(0, 2).join(' ')} ay sonu bakiyesi
             </dt>
-            <dd className="flex items-center gap-2 font-medium tabular-nums">
-              {formatKurus(Math.abs(summary.closingBalanceKurus))}
-              <Badge variant={summary.state === 'odendi' ? 'success' : summary.state === 'alacak' ? 'info' : summary.state === 'yok' ? 'neutral' : 'warning'}>
-                {PERIOD_STATE_LABEL[summary.state]}
-              </Badge>
+            <dd className="font-medium tabular-nums text-muted-foreground">
+              {summary.closingBalanceKurus < 0
+                ? `${formatKurus(-summary.closingBalanceKurus)} alacak`
+                : formatKurus(summary.closingBalanceKurus)}
             </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">
+              {summary.currentBalanceKurus < 0 ? 'Güncel alacak (fazla ödeme)' : 'Güncel toplam açık bakiye'}
+            </dt>
+            <dd className="font-semibold tabular-nums">{formatKurus(Math.abs(summary.currentBalanceKurus))}</dd>
           </div>
         </dl>
 
@@ -288,6 +328,10 @@ export function StudentFinanceClient({
         students={[{ id: student.id, name: student.name }]}
         defaultStudentId={student.id}
       />
+
+      {uncovered.length > 0 && (
+        <UncoveredPanel studentId={student.id} uncovered={uncovered} />
+      )}
 
       {/* TÜM HAREKETLER — düzeltilebilen defter */}
       <Section title="Tüm hareketler" description="Tahakkuk ve tahsilat, yeniden eskiye." variant="card">
@@ -322,7 +366,7 @@ export function StudentFinanceClient({
                       nativeButton={false}
                       render={
                         <Link
-                          href={`/teacher/students/${student.id}/gorusmeler?hafta=${isoWeekKeyOfDate(m.date)}`}
+                          href={sessionHref(student.id, m.row as AccrualRow & { occurredAt: string | null }, m.date)}
                         />
                       }
                     >
@@ -599,6 +643,94 @@ function PurgeSection({
           </div>
         </div>
       )}
+    </Section>
+  )
+}
+
+/**
+ * Görüşmeden doğan tahakkukun oturumu: gerçekleşme haftası + oturum id'si
+ * (EK-03). Eskiden yalnız tahakkuk TARİHİNİN haftası açılıyordu; telafi ya
+ * da gün değişikliğinde bu başka bir haftaydı ve oturum seçili gelmiyordu.
+ */
+function sessionHref(
+  studentId: string,
+  row: { sessionId: string | null; occurredAt: string | null },
+  date: string
+): string {
+  const day = row.occurredAt ? localDateString(new Date(row.occurredAt)) : date
+  const params = new URLSearchParams({ hafta: isoWeekKeyOfDate(day) })
+  if (row.sessionId) params.set('oturum', row.sessionId)
+  return `/teacher/students/${studentId}/gorusmeler?${params.toString()}`
+}
+
+/**
+ * ÜCRET KAYDI OLMAYAN YAPILMIŞ DERSLER — EK-03.
+ *
+ * Teşhis panelidir: her satır nedenini söyler ve oturumuna götürür. Borç
+ * otomatik EKLENMEZ. Yalnız "Tahakkuk eksik" satırları varsa öğretmen elle
+ * tamamlar; işlem idempotent, var olan tahakkuka/tahsilata dokunmaz.
+ */
+function UncoveredPanel({
+  studentId,
+  uncovered,
+}: {
+  studentId: string
+  uncovered: (UncoveredSession & { serviceLabel: string | null })[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const missing = uncovered.filter((u) => u.reason === 'eksik').length
+
+  function backfill() {
+    startTransition(async () => {
+      const r = await backfillMissingAccrualsAction(studentId)
+      if (r.error) {
+        toast.error(r.error)
+        return
+      }
+      toast.success(
+        r.backfilled
+          ? `${r.backfilled} oturuma tahakkuk açıldı; mevcut kayıtlar değişmedi.`
+          : 'Açılacak tahakkuk bulunmadı; mevcut kayıtlar değişmedi.'
+      )
+      router.refresh()
+    })
+  }
+
+  return (
+    <Section
+      title="Ücret kaydı olmayan yapılmış dersler"
+      description="Yapıldı olarak kayıtlı ama tahakkuku olmayan oturumlar ve nedeni. Kayıt otomatik eklenmez."
+      variant="card"
+      action={
+        missing > 0 ? (
+          <Button size="sm" variant="outline" disabled={isPending} onClick={backfill}>
+            Eksik tahakkukları tamamla ({missing})
+          </Button>
+        ) : undefined
+      }
+    >
+      <ul className="divide-y text-sm">
+        {uncovered.map((u) => (
+          <li key={u.sessionId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <div className="min-w-0">
+              <p className="tabular-nums">{formatSessionDayDate(u.at, true)}</p>
+              {u.serviceLabel && <p className="text-xs text-muted-foreground">{u.serviceLabel}</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={u.reason === 'eksik' ? 'warning' : 'neutral'}>{COVERAGE_REASON_LABEL[u.reason]}</Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                nativeButton={false}
+                render={<Link href={sessionHref(studentId, { sessionId: u.sessionId, occurredAt: u.at }, u.at.slice(0, 10))} />}
+              >
+                Görüşmeyi aç
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </Section>
   )
 }

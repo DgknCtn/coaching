@@ -104,7 +104,7 @@ describe('R09 · Veli Hesap Özeti', () => {
     expect(s.openUnits).toBe(2)
 
     const text = parentSummaryText('Taha', s, '2026-10-31')
-    expect(text).toContain('13 Ekim 2026 Salı · 1 ders — Ödenen 400 ₺ / Açık 1.200 ₺')
+    expect(text).toContain('1) 13 Ekim 2026 Salı · 1 ders · Ödenen 400 ₺ / Açık 1.200 ₺')
     expect(text).toContain('Toplam · 2 ders — 2.800 ₺')
     expect(text).toContain('Son tahsilatlar')
   })

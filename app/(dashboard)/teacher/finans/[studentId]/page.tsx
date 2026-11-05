@@ -17,6 +17,8 @@ import {
   mapPayment,
 } from '../data'
 import { StudentFinanceClient } from './student-finance-client'
+import { fetchAllRows } from '@/lib/fetch-all'
+import { uncoveredSessions } from '@/lib/finance-coverage'
 
 export const metadata: Metadata = { title: 'Öğrenci finansı' }
 export const dynamic = 'force-dynamic'
@@ -115,8 +117,20 @@ export default async function StudentFinancePage({
     .map((r) => r.service_session_id as string | null)
     .filter((x): x is string => !!x)
   const { data: sessionRows } = sessionIds.length
-    ? await supabase.from('service_sessions').select('id, service_id').in('id', sessionIds)
+    ? await supabase.from('service_sessions').select('id, service_id, actual_at').in('id', sessionIds)
     : { data: [] }
+
+  // EK-03: yapılmış BÜTÜN oturumlar — tahakkuku olmayanların nedeni.
+  const { data: doneRows } = await fetchAllRows<Record<string, unknown>>((from, to) =>
+    supabase
+      .from('service_sessions')
+      .select('id, service_id, planned_at, current_planned_at, actual_at, attended, is_extra')
+      .eq('student_id', studentId)
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'yapildi')
+      .order('id')
+      .range(from, to)
+  )
   const serviceLabel = new Map(
     (serviceRows ?? []).map((s) => [
       s.id as string,
@@ -124,6 +138,10 @@ export default async function StudentFinancePage({
     ])
   )
   const sessionService = new Map((sessionRows ?? []).map((s) => [s.id as string, s.service_id as string]))
+  // EK-04: veli dökümünde gerçekleşen başlangıç saati.
+  const sessionActualAt = new Map(
+    (sessionRows ?? []).map((s) => [s.id as string, (s.actual_at as string | null) ?? null])
+  )
 
   // M1.0-05: aylık sabit tahakkuk YALNIZ para satırı olmasın — mümkünse
   // ilgili hizmete bağlansın. "aylik_paket" olarak işaretli, aktif ve TEK
@@ -140,7 +158,48 @@ export default async function StudentFinancePage({
     const base = mapAccrual(r as Record<string, unknown>)
     const sid = r.service_session_id as string | null
     const svc = sid ? sessionService.get(sid) : aylikPaketServiceId && base.kind === 'aylik' ? aylikPaketServiceId : undefined
-    return { ...base, serviceLabel: svc ? (serviceLabel.get(svc) ?? null) : null }
+    return {
+      ...base,
+      serviceLabel: svc ? (serviceLabel.get(svc) ?? null) : null,
+      occurredAt: sid ? (sessionActualAt.get(sid) ?? null) : null,
+    }
+  })
+
+  const models = ((modelRows ?? []) as Record<string, unknown>[]).map((m) => ({
+    id: m.id as string,
+    model: m.model as 'aylik_sabit' | 'ders_basi',
+    collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
+    validFrom: m.valid_from as string,
+    createdAt: m.created_at as string,
+  }))
+  const prices = ((priceRows ?? []) as Record<string, unknown>[]).map((p) => ({
+    id: p.id as string,
+    priceType: p.price_type as 'aylik' | 'ek_ders' | 'ders_basi',
+    amountKurus: Number(p.amount_kurus),
+    validFrom: p.valid_from as string,
+    createdAt: p.created_at as string,
+  }))
+
+  const uncovered = uncoveredSessions({
+    sessions: doneRows.map((r) => ({
+      id: r.id as string,
+      serviceId: (r.service_id as string | null) ?? null,
+      plannedAt: r.planned_at as string,
+      currentPlannedAt: (r.current_planned_at as string | null) ?? null,
+      actualAt: (r.actual_at as string | null) ?? null,
+      attended: (r.attended as boolean | null) ?? null,
+      isExtra: Boolean(r.is_extra),
+    })),
+    services: (serviceRows ?? []).map((s) => ({
+      id: s.id as string,
+      financeLink: (s.finance_link as 'aylik_paket' | 'ders_basi' | 'haric' | null) ?? null,
+    })),
+    models,
+    prices,
+    accruedSessionIds: new Set(sessionIds),
+  }).map((u) => {
+    const svc = doneRows.find((r) => r.id === u.sessionId)?.service_id as string | undefined
+    return { ...u, serviceLabel: svc ? (serviceLabel.get(svc) ?? null) : null }
   })
 
   return (
@@ -162,20 +221,9 @@ export default async function StudentFinancePage({
         accruals={accruals}
         payments={(paymentRows ?? []).map((r) => mapPayment(r as Record<string, unknown>))}
         expenses={(expenseRows ?? []).map((r) => mapExpense(r as Record<string, unknown>))}
-        models={((modelRows ?? []) as Record<string, unknown>[]).map((m) => ({
-          id: m.id as string,
-          model: m.model as 'aylik_sabit' | 'ders_basi',
-          collectionTiming: m.collection_timing as 'ay_basi' | 'ay_sonu' | 'ders_sonrasi',
-          validFrom: m.valid_from as string,
-          createdAt: m.created_at as string,
-        }))}
-        prices={((priceRows ?? []) as Record<string, unknown>[]).map((p) => ({
-          id: p.id as string,
-          priceType: p.price_type as 'aylik' | 'ek_ders' | 'ders_basi',
-          amountKurus: Number(p.amount_kurus),
-          validFrom: p.valid_from as string,
-          createdAt: p.created_at as string,
-        }))}
+        models={models}
+        prices={prices}
+        uncovered={uncovered}
         notices={((noticeRows ?? []) as Record<string, unknown>[]).map((n) => ({
           id: n.id as string,
           monthStart: n.month_start as string,

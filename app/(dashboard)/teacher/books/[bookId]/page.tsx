@@ -3,7 +3,7 @@ import { formatUnitCount } from '@/lib/unit-labels'
 import { formatTestRange } from '@/lib/book-structure'
 import { cn } from '@/lib/utils'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, BookOpen, Pencil, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Download, Pencil, Users } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -88,6 +88,11 @@ export default async function BookDetailPage({
             libraryStatus={book.library_status}
             reviewNote={book.library_review_note}
           />
+          {/* EK-05: tek kitabı dosyaya al — tüm havuzu taşımadan başka hesaba aktarmak için. */}
+          <Button variant="outline" size="sm" render={<a href={`/teacher/books/export?format=json&ids=${bookId}`} />}>
+            <Download className="size-4" />
+            Dışa aktar
+          </Button>
           <Button
             variant="outline"
             size="sm"
