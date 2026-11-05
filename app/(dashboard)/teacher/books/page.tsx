@@ -90,6 +90,11 @@ export default async function BooksPage({ searchParams }: PageProps) {
 
   const hasAnyBook = (facetRows?.length ?? 0) > 0
 
+  // Havuz filtreleri dışa aktarıma aynen taşınır (export/route.ts aynı anahtarları okur).
+  const exportQuery = new URLSearchParams(
+    Object.entries(filters).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1] !== '')
+  ).toString()
+
   return (
     <div className="max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
@@ -105,6 +110,14 @@ export default async function BooksPage({ searchParams }: PageProps) {
               <Download />
               Yedek al
             </Button>
+            {/* EK-05: yalnız filtrelenen kitaplar — tüm katalog zorunlu değil,
+                dosya küçük kalır ve başka hesaba kolayca aktarılır. */}
+            {exportQuery && (
+              <Button size="sm" variant="outline" render={<a href={`/teacher/books/export?format=json&${exportQuery}`} />}>
+                <Download />
+                Filtrelenenleri dışa aktar ({books?.length ?? 0})
+              </Button>
+            )}
             {/* İÇE AKTARMA YEDEĞİN HEMEN YANINDA: "yedek al" tek başına
                 yarım bir vaatti — dosya iniyordu ama geri konulamıyordu.
                 İki düğme yan yana durunca yedeğin ne işe yaradığı da

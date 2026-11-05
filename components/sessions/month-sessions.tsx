@@ -9,7 +9,7 @@ import {
   formatSessionDayDate,
   isAwaitingOutcome,
 } from '@/lib/service-structure'
-import { sessionDisplayStatus } from '@/lib/session-state'
+import { sessionDisplayAt, sessionDisplayStatus } from '@/lib/session-state'
 import { formatKurus } from '@/lib/billing/pricing'
 import {
   MONTH_COLUMN_LABEL,
@@ -263,6 +263,7 @@ function SessionCellLine({
 }) {
   const awaiting = isAwaitingOutcome({ status: row.status, effectiveAt: new Date(row.currentPlannedAt) }, now)
   const display = sessionDisplayStatus(row)
+  const shownAt = sessionDisplayAt(row)
   const due = cash ? cash.amountKurus - cash.paidKurus : 0
 
   return (
@@ -271,7 +272,11 @@ function SessionCellLine({
       {/* İz V2 R08: kesin tarih — "13 Ekim Salı · 18:00"; yıl ay başlığında. */}
       <span className="tabular-nums">
         {row.isMakeup && 'Telafi · '}
-        {formatSessionDayDate(row.currentPlannedAt, true)}
+        {/* EK-02: yapılmış ders GERÇEKLEŞME anıyla; an girilmemişse plan
+            günü + "saat girilmedi" (plan saati gerçek saat gibi yazılmaz). */}
+        {shownAt
+          ? formatSessionDayDate(shownAt, true)
+          : `${formatSessionDayDate(row.currentPlannedAt)} · saat girilmedi`}
       </span>
       {row.isExtra && <span className="text-muted-foreground">Ek ders</span>}
 

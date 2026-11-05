@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { dbErrorToTr } from '@/lib/auth-errors'
-import { libraryReviewSchema, firstIssue } from '@/lib/validation'
+import { libraryReviewSchema, firstIssue, uuidSchema } from '@/lib/validation'
 import { parseBookBackup, bookIdentityKey } from '@/lib/book-backup'
 import { logAudit } from '@/lib/audit'
 
@@ -174,4 +174,68 @@ export async function importLibraryBackupAction(fileText: string) {
   revalidatePath('/teacher/books/library')
 
   return { imported, skipped }
+}
+
+// ============================================================
+// KOÇ HAVUZUNDAN SEÇEREK YAYIN — EK-05 (154)
+//
+// Yetki RPC'de (is_platform_admin); burada tekrarlanmaz (dosya başı notu).
+// Liste yalnız künye döndürür; yayın ayrı bir kütüphane KOPYASIDIR.
+// ============================================================
+
+export interface AdminWorkspaceBook {
+  id: string
+  title: string
+  subject: string
+  publisher: string | null
+  level_exam: string | null
+  edition_year: number | null
+  tracking_mode: string | null
+  library_status: string
+  section_count: number
+  test_count: number
+}
+
+export async function listWorkspaceBooksAction(
+  workspaceId: string
+): Promise<{ error?: string; books?: AdminWorkspaceBook[] }> {
+  const parsed = uuidSchema.safeParse(workspaceId)
+  if (!parsed.success) return { error: 'Geçersiz çalışma alanı.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_list_workspace_books', { p_workspace_id: parsed.data })
+  if (error) return { error: dbErrorToTr(error.message) }
+  return {
+    books: ((data ?? []) as AdminWorkspaceBook[]).map((b) => ({
+      ...b,
+      section_count: Number(b.section_count ?? 0),
+      test_count: Number(b.test_count ?? 0),
+    })),
+  }
+}
+
+export interface PublishReport {
+  published: number
+  skipped: { id: string; title?: string; reason: string }[]
+  failed: { id: string; title?: string; reason: string }[]
+}
+
+export async function publishBooksToLibraryAction(
+  bookIds: string[],
+  reason: string
+): Promise<{ error?: string; report?: PublishReport }> {
+  const parsed = uuidSchema.array().min(1, 'Kitap seçin.').max(50, 'Tek seferde en fazla 50 kitap.').safeParse(bookIds)
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('publish_books_to_library', {
+    p_book_ids: parsed.data,
+    p_reason: reason,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  revalidatePath('/admin/kutuphane')
+  revalidatePath('/admin/kayit')
+  revalidatePath('/teacher/books/library')
+  return { report: data as PublishReport }
 }

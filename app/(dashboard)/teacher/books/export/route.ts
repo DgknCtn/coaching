@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
   const format = request.nextUrl.searchParams.get('format') === 'csv' ? 'csv' : 'json'
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('books')
     .select(`
       id, title, subject, publisher, level_exam, exam_type, edition_year,
@@ -127,6 +127,34 @@ export async function GET(request: NextRequest) {
     .eq('workspace_id', workspaceId)
     .order('title')
     .limit(1000)
+
+  // EK-05: tüm kataloğu taşımak zorunlu değil. `?ids=` (tek/seçili kitap)
+  // ya da havuz ekranının filtreleri (aynı searchParams anahtarları) ile
+  // yalnız gereken kitaplar dışa aktarılır; dosya küçük kalır.
+  const sp = request.nextUrl.searchParams
+  const ids = (sp.get('ids') ?? '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(x => /^[0-9a-f-]{36}$/i.test(x))
+    .slice(0, 200)
+  if (ids.length > 0) query = query.in('id', ids)
+  const q = sp.get('q')?.replace(/[%,()]/g, ' ').trim()
+  if (q) query = query.or(`title.ilike.%${q}%,publisher.ilike.%${q}%`)
+  for (const [param, column] of [
+    ['subject', 'subject'],
+    ['level', 'level_exam'],
+    ['publisher', 'publisher'],
+    ['tracking', 'tracking_mode'],
+    ['program', 'curriculum_program'],
+    ['type', 'resource_type'],
+  ] as const) {
+    const v = sp.get(param)
+    if (v) query = query.eq(column, v)
+  }
+  const year = sp.get('year')
+  if (year && /^\d{4}$/.test(year)) query = query.eq('edition_year', Number(year))
+
+  const { data, error } = await query
 
   if (error) {
     return NextResponse.json({ error: 'Yedek alınamadı.' }, { status: 500 })

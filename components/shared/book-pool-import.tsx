@@ -31,7 +31,15 @@ import { importBookBackupAction } from '@/app/(dashboard)/teacher/books/actions'
 // eyleminde, çünkü yetki ve yazma kuralları orada. İstemcideki ayrıştırma
 // bir KOLAYLIK, kapı değil: sunucu aynı dosyayı baştan kendisi ayrıştırır.
 
-const MAX_FILE_BYTES = 4_000_000
+// EK-05 (04.11.2026): dosya PARTİLER hâlinde gönderilir. Eskiden tüm yedek
+// tek sunucu eylemine gidiyordu ve 4 MB gövde sınırı (next.config) dosya
+// sınırını belirliyordu; 131 kitaplık ≈15 MB'lık havuz hiç aktarılamıyordu.
+// Artık sınır yalnız tarayıcının ayrıştırabileceği makul bir boyut; her
+// parti birkaç yüz KB. Tek kaynak bu sabit — ekrandaki metin de buradan.
+export const MAX_FILE_BYTES = 25_000_000
+const MAX_FILE_LABEL = '25 MB'
+/** Bir sunucu çağrısındaki kitap sayısı. */
+const BOOKS_PER_BATCH = 10
 
 /** Rapor uzun olabilir; ekranda bu kadarı listelenir, gerisi sayılır. */
 const SKIPPED_PREVIEW = 8
@@ -68,6 +76,7 @@ export function BookPoolImport({
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsed, setParsed] = useState<BackupParseResult | null>(null)
   const [pending, startTransition] = useTransition()
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const fileText = useRef<string>('')
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -85,7 +94,11 @@ export function BookPoolImport({
 
     if (file.size > MAX_FILE_BYTES) {
       setFileName(file.name)
-      setParsed({ books: [], skipped: [], fatal: 'Dosya çok büyük (en fazla 4 MB).' })
+      setParsed({
+        books: [],
+        skipped: [],
+        fatal: `Dosya çok büyük (en fazla ${MAX_FILE_LABEL}). Havuzda yalnız gereken kitapları seçip "Seçilenleri dışa aktar" ile daha küçük bir dosya alın.`,
+      })
       return
     }
 
@@ -102,48 +115,86 @@ export function BookPoolImport({
 
   function handleImport() {
     startTransition(async () => {
-      // EYLEMİN KENDİSİ PATLARSA SAYFA ÇÖKMESİN.
-      //
-      // Sunucu eylemi bazen hiç ÇALIŞMADAN reddedilir: gövde platform
-      // sınırını aşarsa, ağ koparsa ya da dağıtım sırasında eylem
-      // kimliği değişirse. Yakalanmayan bu hata Next.js'te en yakın hata
-      // sınırına gider — kullanıcı, seçtiği dosyaya ne olduğunu anlatan
-      // hiçbir şey görmeden tam sayfa "Bir hata oluştu" ekranına düşer ve
-      // diyalogdaki önizleme de kaybolur.
-      let res: Awaited<ReturnType<BookImportAction>>
+      // PARTİLER: ham kitap kayıtları 10'ar 10'ar ayrı çağrılarla gider.
+      // Sunucu her partiyi BAŞTAN kendisi ayrıştırır (istemci ayrıştırması
+      // kapı değil). Her kitap tek RPC'dir — yarım kitap kalmaz; mevcut
+      // havuz her partide yeniden okunduğu için tekrar deneme kopya
+      // üretmez (bookIdentityKey).
+      let rawBooks: unknown[]
       try {
-        res = await action(fileText.current)
-      } catch (error) {
-        console.error('[book-import] içe aktarma başarısız:', error)
+        const raw = JSON.parse(fileText.current) as unknown
+        rawBooks = Array.isArray(raw) ? raw : ((raw as { books?: unknown[] }).books ?? [])
+      } catch {
+        toast.error('Dosya okunamadı.')
+        return
+      }
+
+      const batches: unknown[][] = []
+      for (let i = 0; i < rawBooks.length; i += BOOKS_PER_BATCH) {
+        batches.push(rawBooks.slice(i, i + BOOKS_PER_BATCH))
+      }
+
+      let imported = 0
+      const skipped: string[] = []
+      let failedAt: number | null = null
+      let failure: string | null = null
+      setProgress({ done: 0, total: batches.length })
+
+      for (let i = 0; i < batches.length; i++) {
+        // EYLEMİN KENDİSİ PATLARSA SAYFA ÇÖKMESİN: ağ koparsa ya da dağıtım
+        // sırasında eylem kimliği değişirse hata yakalanır, rapor edilir.
+        let res: Awaited<ReturnType<BookImportAction>>
+        try {
+          res = await action(JSON.stringify(batches[i]))
+        } catch (error) {
+          console.error('[book-import] parti gönderilemedi:', error)
+          failedAt = i
+          failure = 'sunucuya gönderilemedi'
+          break
+        }
+        if (res.error) {
+          // Partideki tüm kitaplar okunamadıysa (ör. hepsi arşivli) bu bir
+          // ayrıştırma sonucu; işlem sürer, rapora yazılır.
+          if (res.error === 'Dosyadaki kitapların hiçbiri içe aktarılamadı.') {
+            skipped.push(`${i + 1}. parti — okunabilir kitap yok`)
+          } else {
+            failedAt = i
+            failure = res.error
+            break
+          }
+        } else {
+          imported += res.imported ?? 0
+          skipped.push(...(res.skipped ?? []))
+        }
+        setProgress({ done: i + 1, total: batches.length })
+      }
+      setProgress(null)
+
+      if (failedAt !== null) {
+        // BAŞARISIZ İŞLEM "EKLENDİ" DEMEZ: kaç kitabın girdiği ve nerede
+        // durduğu açıkça söylenir; dosya yeniden seçilirse girenler atlanır.
         toast.error(
-          'Dosya sunucuya gönderilemedi. Yedek çok büyük olabilir; ' +
-            'havuzu bölüp daha küçük dosyalarla deneyin.'
+          `${imported} kitap eklendi; ${failedAt + 1}. partide durdu (${failure}). ` +
+            'Dosyayı yeniden aktarırsanız eklenenler atlanır.',
+          { duration: 10000 }
         )
+        router.refresh()
         return
       }
 
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-
-      // HİÇBİRİ EKLENMEDİYSE BU BİR BAŞARI DEĞİL. Yeşil bir "0 kitap
-      // eklendi" bildirimi, kullanıcıya işin yürüdüğünü söylerdi.
-      if (!res.imported) {
-        toast.warning(`Yeni kitap eklenmedi; dosyadaki kitaplar ${targetLocative} zaten var.`)
+      // HİÇBİRİ EKLENMEDİYSE BU BİR BAŞARI DEĞİL.
+      if (!imported) {
+        toast.warning(`Yeni kitap eklenmedi; dosyadaki kitaplar ${targetLocative} zaten var ya da okunamadı.`)
       } else {
-        const left = res.skipped?.length ?? 0
         toast.success(
-          left > 0
-            ? `${res.imported} kitap eklendi, ${left} kitap atlandı.`
-            : `${res.imported} kitap ${targetDative} eklendi.`
+          skipped.length > 0
+            ? `${imported} kitap eklendi, ${skipped.length} kitap atlandı.`
+            : `${imported} kitap ${targetDative} eklendi.`
         )
       }
 
       reset()
       setOpen(false)
-      // Sunucu eylemi revalidatePath çağırıyor; refresh, açık olan listeyi
-      // yeniden çizdirir.
       router.refresh()
     })
   }
@@ -251,7 +302,9 @@ export function BookPoolImport({
           </Button>
           <Button type="button" disabled={!canImport} onClick={handleImport}>
             {pending
-              ? 'Aktarılıyor…'
+              ? progress
+                ? `Aktarılıyor… ${progress.done}/${progress.total}`
+                : 'Aktarılıyor…'
               : books.length > 0
                 ? `${books.length} kitabı aktar`
                 : 'Aktar'}

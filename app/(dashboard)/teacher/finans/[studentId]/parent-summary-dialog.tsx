@@ -13,12 +13,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { LedgerPayment } from '@/lib/finance-ledger'
-import { formatUnits } from '@/lib/session-state'
 import { formatIsoDayDate } from '@/lib/service-structure'
 import {
   buildParentSummary,
   formatMoney,
   openLineAmount,
+  openTotalLabel,
   parentSummaryText,
   type SummaryAccrual,
 } from '@/lib/parent-account-summary'
@@ -110,14 +110,15 @@ export function ParentSummaryButton({
                 <ul className="divide-y rounded-md border">
                   {summary.openLines.map(l => (
                     <li key={l.id} className="flex items-baseline justify-between gap-3 px-3 py-2">
-                      <span>{l.label}</span>
+                      <span>
+                        {l.no && <span className="tabular-nums text-muted-foreground">{l.no}) </span>}
+                        {l.label}
+                      </span>
                       <span className="shrink-0 tabular-nums">{openLineAmount(l)}</span>
                     </li>
                   ))}
                   <li className="flex items-baseline justify-between gap-3 bg-muted/40 px-3 py-2 font-medium">
-                    <span>
-                      Toplam{summary.openUnits > 0 ? ` · ${formatUnits(summary.openUnits)}` : ''}
-                    </span>
+                    <span>{openTotalLabel(summary)}</span>
                     <span className="tabular-nums">{formatMoney(summary.totalOpenKurus)}</span>
                   </li>
                 </ul>

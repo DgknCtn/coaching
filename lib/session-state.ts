@@ -176,3 +176,21 @@ export function monthSummaryLine(s: MonthSummary): string {
   if (s.extra > 0) parts.push(`Ek ders ${s.extra}`)
   return parts.length ? `${s.monthLabel}: ${parts.join(' · ')}` : `${s.monthLabel}: planlanmış hizmet yok`
 }
+
+/**
+ * Satırda gösterilecek AN — EK-02 (04.11.2026).
+ *
+ * Yapılmış oturum gerçekleşme anıyla gösterilir: aylık listede 17 Ekim
+ * dersi 11:01'de yapılmışken "09:00 · Yapıldı" yazıyordu. Gerçekleşme anı
+ * bilinmiyorsa `null` döner — plan saati gerçek saatmiş gibi gösterilmez,
+ * çağıran plan GÜNÜNÜ "saat girilmedi" ile yazar. Yapılmamış oturumlarda
+ * güncel plan anıdır. İlk plan ayrıntıda ayrı kalır.
+ */
+export function sessionDisplayAt(row: {
+  status: SessionStatus
+  actualAt: string | null
+  currentPlannedAt: string
+}): string | null {
+  if (row.status === 'yapildi') return row.actualAt
+  return row.currentPlannedAt
+}

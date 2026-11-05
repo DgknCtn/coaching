@@ -118,8 +118,20 @@ export interface PeriodSummary {
   periodAccruedKurus: number
   /** Bu dönemde alınan para. */
   periodCollectedKurus: number
-  /** Dönem sonu bakiyesi = devreden + dönem − tahsil. */
+  /**
+   * AY SONU bakiyesi = devreden + dönem − tahsil (o ayın son günü itibarıyla).
+   * Tarihseldir: sonraki ayda gelen ödeme bunu DEĞİŞTİRMEZ. Ekranda "31 Ekim
+   * ay sonu bakiyesi" olarak adlandırılır, güncel borç diye gösterilmez (EK-01).
+   */
   closingBalanceKurus: number
+  /** Bugünkü toplam bakiye — hangi ay açılırsa açılsın aynı (EK-01). */
+  currentBalanceKurus: number
+  /**
+   * Bu dönemin tahakkuklarından, BÜTÜN ödemeler FIFO dağıtıldıktan sonra
+   * kalan. Satır rozetleri ("Ödendi") aynı dağıtımdan geliyor; dönem
+   * durumu da buradan türer — satırlar ödendi derken özet "Kısmi" diyemez.
+   */
+  periodOpenKurus: number
   state: PeriodState
 }
 
@@ -139,6 +151,12 @@ export function periodSummary(
   const periodAccruedKurus = sum(accruals, inMonth)
   const periodCollectedKurus = sum(payments, inMonth)
   const closingBalanceKurus = carriedInKurus + periodAccruedKurus - periodCollectedKurus
+  const currentBalanceKurus = currentBalance(accruals, payments)
+
+  const { paidByAccrual } = allocatePayments(accruals, payments)
+  const periodAccruals = accruals.filter((a) => inMonth(a.date) && a.amountKurus > 0)
+  const periodPaidKurus = periodAccruals.reduce((s, a) => s + (paidByAccrual.get(a.id) ?? 0), 0)
+  const periodOpenKurus = periodAccruals.reduce((s, a) => s + a.amountKurus, 0) - periodPaidKurus
 
   return {
     month,
@@ -146,8 +164,32 @@ export function periodSummary(
     periodAccruedKurus,
     periodCollectedKurus,
     closingBalanceKurus,
-    state: balanceState(closingBalanceKurus, periodAccruedKurus + Math.max(carriedInKurus, 0), periodCollectedKurus),
+    currentBalanceKurus,
+    periodOpenKurus,
+    state: periodState({ periodAccruedKurus, periodOpenKurus, periodPaidKurus, currentBalanceKurus }),
   }
+}
+
+/**
+ * Dönemin durumu, dönem tahakkuklarının GÜNCEL ödenmişliğinden (EK-01):
+ *  - dönemde borç yok: güncel bakiye alacaksa Alacaklı, değilse —
+ *  - kalan 0 → Ödendi; bir kısmı ödendi → Kısmi; hiç ödenmedi → Bekliyor
+ */
+export function periodState(input: {
+  periodAccruedKurus: number
+  periodOpenKurus: number
+  periodPaidKurus: number
+  currentBalanceKurus: number
+}): PeriodState {
+  if (input.periodAccruedKurus <= 0) return input.currentBalanceKurus < 0 ? 'alacak' : 'yok'
+  if (input.periodOpenKurus <= 0) return input.currentBalanceKurus < 0 ? 'alacak' : 'odendi'
+  return input.periodPaidKurus > 0 ? 'kismi' : 'bekliyor'
+}
+
+/** 'YYYY-MM' ayının son günü: '2026-10' → '2026-10-31'. */
+export function monthLastDay(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
 }
 
 /**

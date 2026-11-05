@@ -151,6 +151,8 @@ export const ADMIN_ACTION_LABEL: Record<string, string> = {
   'partner.commissions_paid': 'Partner hakedişi ödendi',
   'library.approve': 'Kütüphane önerisi onaylandı',
   'library.reject': 'Kütüphane önerisi reddedildi',
+  // 154:
+  'library.bulk_publish': 'Koç havuzundan kütüphaneye yayınlandı',
   // 136:
   'workspace.delete': 'Çalışma alanı kalıcı silindi',
   'partner.delete': 'Partner silindi',

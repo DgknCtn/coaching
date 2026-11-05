@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { CalendarPlus, Check, ChevronLeft, ChevronRight, Circle, MoreHorizontal, Plus } from 'lucide-react'
 import {
@@ -207,7 +207,10 @@ export function WeekSessions({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [detailId, setDetailId] = useState<string | null>(null)
+  // EK-03: finans kaleminden gelinince (?oturum=<id>) o oturumun detayı açık
+  // gelir — "her finans kaleminden doğru oturuma ulaşılabilsin".
+  const searchParams = useSearchParams()
+  const [detailId, setDetailId] = useState<string | null>(() => searchParams?.get('oturum') ?? null)
   const [addOpen, setAddOpen] = useState<null | 'session' | 'extra'>(null)
 
   const now = new Date(nowIso)
