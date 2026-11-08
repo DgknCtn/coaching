@@ -4,7 +4,7 @@ import { AlertTriangle, BookOpen, CheckCircle2, Gauge, LayoutGrid, Minus } from 
 import { getTeacherContext } from '@/lib/workspace'
 import { loadBookMap, type BookMapBook } from '@/lib/book-map'
 import { resolvePlanScope, type PlanScope } from '@/lib/plan-scope'
-import { calculatePlanTempo } from '@/lib/plan-pace'
+import { calculatePlanPace, calculatePlanTempo } from '@/lib/plan-pace'
 import {
   bookPlanGroup,
   bookPlanStatusLabel,
@@ -98,6 +98,12 @@ interface ResourceRowData {
   plannedPacePerWeek: number | null
   requiredPacePerWeek: number | null
   deviation: PlanDeviation
+  /**
+   * EK-07: kitap detayındaki plan farkının kısa biçimi ("10 sayfa önde").
+   * Detayla AYNI hesap (calculatePlanPace), aynı kapsam (resolvePlanScope)
+   * ve aynı birim; hesaplanamıyorsa null.
+   */
+  paceShort: string | null
   signal: ResourceWeekSignal
   /** Aktif VE başlangıcı gelmiş: haftalık genel tempoya yalnız bunlar girer. */
   countsTowardTempo: boolean
@@ -170,13 +176,14 @@ export default async function StudentResourcePlanPage({
 
   const rows: ResourceRowData[] = books.map(book => {
     const scope = resolvePlanScope(book)
-    const tempo = calculatePlanTempo({
+    const paceInput = {
       startDate: scope.startDate,
       targetEndDate: scope.targetEndDate,
       totalUnits: scope.totalUnits,
       completedUnits: scope.completedUnits,
       trackingMode: book.trackingMode,
-    })
+    }
+    const tempo = calculatePlanTempo(paceInput)
 
     const group = bookPlanGroup(book.status)
     const started = !scope.startDate || new Date(scope.startDate) <= today
@@ -196,6 +203,7 @@ export default async function StudentResourcePlanPage({
         startDate: scope.startDate,
         today,
       }),
+      paceShort: calculatePlanPace(paceInput).shortPhrase,
       signal: signals.get(book.assignmentId) ?? emptyResourceWeekSignal(),
       countsTowardTempo: group === 'active' && started,
     }
@@ -491,11 +499,17 @@ function ResourceRow({ studentId, row }: { studentId: string; row: ResourceRowDa
       </Field>
 
       <Field label="Durum">
-        {deviation.key === 'not_evaluated' ? (
-          <Muted />
-        ) : (
-          <Badge variant={deviation.tone}>{deviation.label}</Badge>
-        )}
+        <span className="flex flex-col items-start gap-0.5">
+          {deviation.key === 'not_evaluated' ? (
+            <Muted />
+          ) : (
+            <Badge variant={deviation.tone}>{deviation.label}</Badge>
+          )}
+          {/* EK-07: rozetin kuralı değişmedi; altına detaydaki fark. */}
+          {row.paceShort && (
+            <span className="text-[11px] tabular-nums text-muted-foreground">{row.paceShort}</span>
+          )}
+        </span>
       </Field>
 
       {/* §6.3: 0 çalışma NÖTRDÜR. Uyarı rengi veya eksiklik ikonu

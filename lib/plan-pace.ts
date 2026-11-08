@@ -28,6 +28,12 @@ export interface PlanPaceResult {
   expectedCompletedUnits: number
   phraseKey: PhraseKey
   phrase: string
+  /**
+   * Liste hücresi için kısa biçim — EK-07: "10 sayfa önde", "59 test geride",
+   * "Plan çizgisinde". Hesaplanamayan farkta (hedef yok, plan başlamadı,
+   * kapsam boş) null: fark sıfır gibi gösterilmez.
+   */
+  shortPhrase: string | null
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -44,6 +50,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
       expectedCompletedUnits: 0,
       phraseKey: 'no_target',
       phrase: 'Bu kitap için henüz bir hedef tarih belirlenmemiş.',
+      shortPhrase: null,
     }
   }
 
@@ -56,6 +63,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
       expectedCompletedUnits: 0,
       phraseKey: 'not_started',
       phrase: 'Bu kitap için plan henüz başlamadı.',
+      shortPhrase: null,
     }
   }
 
@@ -67,6 +75,8 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
   const delta = completedUnits - expectedCompletedUnits
 
   const unit = unitLabel(input.trackingMode)
+  // Kapsam boşsa beklenen de 0 çıkar ve "plan çizgisinde" yanıltıcı olur.
+  const measurable = totalUnits > 0
 
   if (delta > 0) {
     return {
@@ -74,6 +84,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
       expectedCompletedUnits,
       phraseKey: 'ahead',
       phrase: `Plan çizgisinin ${delta} ${unit} önündesin.`,
+      shortPhrase: `${delta} ${unit} önde`,
     }
   }
 
@@ -83,6 +94,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
       expectedCompletedUnits,
       phraseKey: 'behind',
       phrase: `Plan çizgisinin ${Math.abs(delta)} ${unit} gerisindesin.`,
+      shortPhrase: `${Math.abs(delta)} ${unit} geride`,
     }
   }
 
@@ -91,6 +103,7 @@ export function calculatePlanPace(input: PlanPaceInput): PlanPaceResult {
     expectedCompletedUnits,
     phraseKey: 'on_track',
     phrase: 'Planla tam uyumlusun.',
+    shortPhrase: measurable ? 'Plan çizgisinde' : null,
   }
 }
 
