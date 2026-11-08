@@ -61,6 +61,7 @@ import { planSummary, type AcademicTask } from '@/lib/academic-tasks'
 import { publishDraftTasksAction } from '../../dersler/actions'
 import { TeacherTaskList } from '@/components/academic/teacher-task-list'
 import { BulkPasteDialog } from '@/components/academic/bulk-paste-dialog'
+import { defaultHomeworkTitle, targetWeekNumber } from '@/lib/homework-title'
 
 // Tek Kitap Haritası — öğretmenin kaynak üzerindeki ana çalışma yüzeyi
 // (R7 / R6-03 güncellemesi).
@@ -182,7 +183,11 @@ export function HomeworkBuilder({
   const [customDue, setCustomDue] = useState(
     () => !activeFlow || (initialDueDate !== '' && initialDueDate !== activeFlow.dueDate)
   )
+  // EK-08: `title` yalnız ELLE girilen başlıktır. Taslakta başlık varsa
+  // elle girilmiş sayılır ve korunur; yoksa alan hedef haftanın numarasından
+  // önerilen başlıkla dolar (aşağıda autoTitle).
   const [title, setTitle] = useState(initialTitle)
+  const [titleTouched, setTitleTouched] = useState(initialTitle !== '')
   // Ödev notu (R6-05): ödev başına TEK isteğe bağlı alan.
   const [note, setNote] = useState(initialNote)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -539,6 +544,13 @@ export function HomeworkBuilder({
   const effectiveDueDay = effectiveDueAt ? localDateString(effectiveDueAt) : dueDate
   const needsTransition = !activeFlow || effectiveDueDay > activeFlow.dueDate
   const [transitionOpen, setTransitionOpen] = useState(false)
+  // EK-08: "6. Hafta Ödevi" — hedef haftanın öğrenciyle çalışma haftası
+  // numarası. Taslağa YAZILMAZ (yalnız elle girilen başlık yazılır): hafta
+  // değişince öneri eski numarada donup kalmasın.
+  const autoTitle = defaultHomeworkTitle(
+    targetWeekNumber({ flows: openWorkFlows, activeFlowId: activeFlow?.id ?? null, needsTransition })
+  )
+  const effectiveTitle = titleTouched ? title : (autoTitle ?? '')
   const [carryIds, setCarryIds] = useState<Set<string>>(new Set())
   const [carryTaskIds, setCarryTaskIds] = useState<Set<string>>(new Set())
 
@@ -605,7 +617,7 @@ export function HomeworkBuilder({
         termId,
         studentId,
         dueDate,
-        title || undefined,
+        effectiveTitle || undefined,
         toHomeworkItems(selectedTests),
         note || undefined,
         effectiveDueAt?.toISOString()
@@ -622,6 +634,7 @@ export function HomeworkBuilder({
       setBasketIds(new Set())
       clearMapSelection()
       setTitle('')
+      setTitleTouched(false)
       setNote('')
     }
 
@@ -1099,9 +1112,12 @@ export function HomeworkBuilder({
                     </Label>
                     <Input
                       id="title"
-                      placeholder="Örn: 12. Hafta ödevi"
-                      value={title}
-                      onChange={e => setTitle(e.target.value)}
+                      placeholder="Örn: 12. Hafta Ödevi"
+                      value={titleTouched ? title : (autoTitle ?? '')}
+                      onChange={e => {
+                        setTitleTouched(true)
+                        setTitle(e.target.value)
+                      }}
                     />
                   </div>
                   {/* SON TESLİM — varsayılan aktif Haftalık Akış'tan.

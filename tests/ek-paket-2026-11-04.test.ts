@@ -5,6 +5,7 @@ import { monthLastDay, periodSummary, type LedgerAccrual, type LedgerPayment } f
 import { sessionDisplayAt } from '@/lib/session-state'
 import { buildParentSummary, openLineText, openTotalLabel, parentSummaryText } from '@/lib/parent-account-summary'
 import { uncoveredSessions } from '@/lib/finance-coverage'
+import type { FinanceModelVersion, PriceVersion } from '@/lib/pricing-history'
 
 // İz Ek Paket · 04.11.2026 — madde kodlarıyla.
 
@@ -125,7 +126,8 @@ describe('EK-03 · ücret kaydı olmayan yapılmış dersler', () => {
       models: [{ model: 'aylik_sabit' as const, collectionTiming: 'ay_basi' as const, validFrom: '2026-09-01', createdAt: '2026-09-01' }],
       prices: [],
     }
-    const reasons = (services: { id: string; financeLink: 'aylik_paket' | 'ders_basi' | 'haric' | null }[], m = base, s = session('x', 'svc')) =>
+    type Pricing = { models: FinanceModelVersion[]; prices: PriceVersion[] }
+    const reasons = (services: { id: string; financeLink: 'aylik_paket' | 'ders_basi' | 'haric' | null }[], m: Pricing = base, s = session('x', 'svc')) =>
       uncoveredSessions({ ...m, sessions: [s], services, accruedSessionIds: new Set() })[0].reason
     expect(reasons([{ id: 'svc', financeLink: 'aylik_paket' }], aylik)).toBe('pakete_dahil')
     expect(reasons([{ id: 'svc', financeLink: 'haric' }])).toBe('haric')

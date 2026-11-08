@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, ChevronLeft, ChevronRight, Circle, Clock, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Circle, Clock, Plus, X } from 'lucide-react'
 import {
   formatSessionDayDate,
   isAwaitingOutcome,
@@ -22,7 +22,7 @@ import {
   setSessionOutcomeAction,
 } from '@/app/(dashboard)/teacher/students/[studentId]/gorusmeler/actions'
 import type { SessionRow } from '@/app/(dashboard)/teacher/students/[studentId]/gorusmeler/types'
-import type { SessionMoney } from '@/components/sessions/week-sessions'
+import { AddSessionDialog, type AddSessionTarget, type SessionMoney } from '@/components/sessions/week-sessions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -60,6 +60,8 @@ export function MonthSessions({
   money,
   academicWeekLabelByWeekKey,
   hasAnyService,
+  addSession,
+  monthKey,
 }: {
   weeks: MonthWeekRow[]
   columns: MonthColumnKind[]
@@ -77,6 +79,10 @@ export function MonthSessions({
   /** "Öğrenciyle 3. Hafta" — hafta anahtarı başına, akış hiç açılmadıysa null. */
   academicWeekLabelByWeekKey: Record<string, string | null>
   hasAnyService: boolean
+  /** EK-06: oturum / ek ders ekleme — haftalık görünümle aynı hedef ve form. */
+  addSession?: AddSessionTarget | null
+  /** 'YYYY-MM' — başka bir ay açıkken formun varsayılan günü o ayın 1'i. */
+  monthKey?: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -84,6 +90,29 @@ export function MonthSessions({
   const unpriced = useMemo(() => new Set(unpricedIds), [unpricedIds])
   const quickCollect = useMemo(() => new Set(quickCollectIds), [quickCollectIds])
   const sessionById = useMemo(() => new Map(sessions.map(s => [s.id, s])), [sessions])
+  const [addOpen, setAddOpen] = useState<null | 'session' | 'extra'>(null)
+  const canAdd = !!addSession && addSession.services.length > 0
+  // Bu ay açıksa varsayılan "şimdi" (formun kendi davranışı); başka bir ay
+  // açıksa o ayın 1'i 18:00 — öğretmen o aya ders girmek için açmıştır.
+  const addInitialAt =
+    !isCurrentMonth && monthKey && /^\d{4}-\d{2}$/.test(monthKey)
+      ? new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)) - 1, 1, 18, 0)
+      : undefined
+  const addActions = canAdd ? (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setAddOpen('session')}>
+        <Plus className="size-4" />
+        Oturum ekle
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setAddOpen('extra')}>
+        Ek ders ekle
+      </Button>
+    </>
+  ) : null
+  const addDialog =
+    addSession && addOpen ? (
+      <AddSessionDialog mode={addOpen} target={addSession} initialAt={addInitialAt} onClose={() => setAddOpen(null)} />
+    ) : null
 
   function act(action: () => Promise<{ error?: string; success?: boolean; amountKurus?: number }>, ok: string) {
     startTransition(async () => {
@@ -128,7 +157,8 @@ export function MonthSessions({
   if (!hasAnyService) {
     return (
       <section className="rounded-xl border border-border bg-card">
-        <MonthNav title={monthTitle} prevHref={prevHref} nextHref={nextHref} currentHref={currentHref} isCurrent={isCurrentMonth} />
+        <MonthNav title={monthTitle} prevHref={prevHref} nextHref={nextHref} currentHref={currentHref} isCurrent={isCurrentMonth} actions={addActions} />
+        {addDialog}
         <div className="p-4">
           <EmptyState icon={CalendarX} title="Aktif hizmet yok" description="Hizmet Yapısı'ndan ders/koçluk düzeni tanımlanınca ay görünümü burada oluşur." />
         </div>
@@ -138,7 +168,8 @@ export function MonthSessions({
 
   return (
     <section className="rounded-xl border border-border bg-card">
-      <MonthNav title={monthTitle} prevHref={prevHref} nextHref={nextHref} currentHref={currentHref} isCurrent={isCurrentMonth} />
+      <MonthNav title={monthTitle} prevHref={prevHref} nextHref={nextHref} currentHref={currentHref} isCurrent={isCurrentMonth} actions={addActions} />
+      {addDialog}
 
       <div className="border-t border-border px-4 py-2 text-sm text-muted-foreground">{summary}</div>
 
@@ -217,12 +248,15 @@ function MonthNav({
   nextHref,
   currentHref,
   isCurrent,
+  actions,
 }: {
   title: string
   prevHref: string
   nextHref: string
   currentHref: string
   isCurrent: boolean
+  /** Ay başlığının sağındaki ekleme düğmeleri (EK-06). */
+  actions?: React.ReactNode
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -235,11 +269,14 @@ function MonthNav({
           <ChevronRight className="size-4" />
         </Button>
       </div>
-      {!isCurrent && (
-        <Link href={currentHref} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
-          Bu aya dön
-        </Link>
-      )}
+      <div className="flex flex-wrap items-center gap-1">
+        {!isCurrent && (
+          <Link href={currentHref} className="mr-2 text-xs text-muted-foreground underline-offset-2 hover:underline">
+            Bu aya dön
+          </Link>
+        )}
+        {actions}
+      </div>
     </div>
   )
 }

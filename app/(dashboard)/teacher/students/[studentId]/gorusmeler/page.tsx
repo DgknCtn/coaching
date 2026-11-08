@@ -538,6 +538,7 @@ async function MonthView({
         view={{
           mode: 'month',
           month: {
+            key: month,
             title: ledgerMonthLabel(month),
             prevHref: `?ay=${shiftMonth(month, -1)}`,
             nextHref: `?ay=${shiftMonth(month, 1)}`,

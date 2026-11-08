@@ -1087,14 +1087,22 @@ function SessionDetailBody({
 // OTURUM / EK DERS EKLE
 // ============================================================
 
-function AddSessionDialog({
+/**
+ * Oturum / ek ders ekleme formu — haftalık VE aylık görünüm aynı formu
+ * kullanır (EK-06). İkinci bir form yazılmaz; öğrenci sabit, hizmet ve
+ * tarih/saat seçilir.
+ */
+export function AddSessionDialog({
   mode,
   target,
   onClose,
+  initialAt,
 }: {
   mode: null | 'session' | 'extra'
   target: AddSessionTarget
   onClose: () => void
+  /** Varsayılan tarih/saat. Verilmezse şimdi (saat başına yuvarlanmış). */
+  initialAt?: Date
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -1104,6 +1112,7 @@ function AddSessionDialog({
     ? pickedServiceId
     : (target.services[0]?.id ?? '')
   const [when, setWhen] = useState(() => {
+    if (initialAt) return toLocalInputValue(initialAt)
     const d = new Date()
     d.setMinutes(0, 0, 0)
     return toLocalInputValue(d)

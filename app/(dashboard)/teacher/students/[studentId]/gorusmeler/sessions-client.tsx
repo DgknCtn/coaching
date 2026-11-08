@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Section } from '@/components/shared/section'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MetricTiles } from '@/components/shared/metric-tiles'
-import { WeekSessions, type SessionMoney, type WeekServiceInfo } from '@/components/sessions/week-sessions'
+import { WeekSessions, type AddSessionTarget, type SessionMoney, type WeekServiceInfo } from '@/components/sessions/week-sessions'
 import { MonthSessions } from '@/components/sessions/month-sessions'
 import type { MonthColumnKind, MonthWeekRow } from '@/lib/month-sessions'
 import {
@@ -72,7 +72,7 @@ export type SessionsView =
     }
   | {
       mode: 'month'
-      month: { title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
+      month: { key: string; title: string; prevHref: string; nextHref: string; currentHref: string; isCurrent: boolean }
       weekRows: MonthWeekRow[]
       columns: MonthColumnKind[]
       academicWeekLabelByWeekKey: Record<string, string | null>
@@ -135,6 +135,15 @@ export function SessionsClient({
   const [structureOpen, setStructureOpen] = useState(false)
 
   const active = services.filter((s) => s.status === 'active')
+  // Oturum / ek ders ekleme hedefi — haftalık ve aylık görünüm AYNI nesneyi
+  // kullanır (EK-06). Yalnız aktif, birebir hizmetler: grup oturumu ortak kayıttır.
+  const addSession: AddSessionTarget = {
+    studentId,
+    services: active
+      .filter((s) => s.participation === 'birebir')
+      .map((s) => serviceInfo[s.id])
+      .filter(Boolean),
+  }
 
   function run(action: () => Promise<{ error?: string; success?: boolean }>, ok: string) {
     startTransition(async () => {
@@ -191,13 +200,7 @@ export function SessionsClient({
                 )}
               </span>
             }
-            addSession={{
-              studentId,
-              services: active
-                .filter((s) => s.participation === 'birebir')
-                .map((s) => serviceInfo[s.id])
-                .filter(Boolean),
-            }}
+            addSession={addSession}
             emptyHint={
               active.some((s) => s.cadence === 'esnek')
                 ? 'Esnek ritimli hizmetin oturumlarını "Oturum ekle" ile girin.'
@@ -234,6 +237,9 @@ export function SessionsClient({
       ) : (
         /* ---------------- Ay (M1.0-05) — varsayılan görünüm ---------------- */
         <MonthSessions
+          // EK-06: aylık ekrandan da aynı ekleme formu; "Bu haftaya git" şart değil.
+          addSession={addSession}
+          monthKey={view.month.key}
           weeks={view.weekRows}
           columns={view.columns}
           sessions={sessions}
