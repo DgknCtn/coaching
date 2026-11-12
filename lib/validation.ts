@@ -412,6 +412,8 @@ export const assignBookSchema = z.object({
 const homeworkItemSchema = z.object({
   student_book_assignment_id: uuid,
   book_test_id: uuid,
+  /** Revize Mini 02: açık kalemin sepetten devri (create_homework_batch, 155). */
+  carry: z.literal(true).optional(),
 })
 
 export const homeworkBatchSchema = z.object({

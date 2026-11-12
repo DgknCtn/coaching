@@ -12,6 +12,8 @@ import { trackFeature } from '@/lib/telemetry'
 interface HomeworkItem {
   student_book_assignment_id: string
   book_test_id: string
+  /** Revize Mini 02: açık kalem devirle plana girdi (155). */
+  carry?: true
 }
 
 export async function createHomeworkBatchAction(

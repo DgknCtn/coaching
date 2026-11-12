@@ -25,6 +25,14 @@ export interface BasketUnit {
   /** Test kitabında test numarası, sayfa kitabında fiziksel sayfa numarası. */
   orderIndex: number
   trackingMode: string
+  /**
+   * Revize Mini 02: birimin AÇIK bir ödev kalemi var ve plana devirle girdi.
+   * Taslağa yazılmaz; harita durumundan türer. Yayında kaynak kalem
+   * 'Devredildi' olur, yeni kalem hedef haftaya girer (155).
+   */
+  carry?: boolean
+  /** Devredilen açık kalemin id'si — hafta geçişi penceresi bunu iki kez listelemesin. */
+  homeworkItemId?: string | null
 }
 
 export interface ResolvedBasket {
@@ -64,9 +72,11 @@ export function resolveBasketItems(
 /** Yayın RPC'sinin beklediği minimal kalem listesi. */
 export function toHomeworkItems(
   units: BasketUnit[]
-): { student_book_assignment_id: string; book_test_id: string }[] {
+): { student_book_assignment_id: string; book_test_id: string; carry?: true }[] {
   return units.map(u => ({
     student_book_assignment_id: u.student_book_assignment_id,
     book_test_id: u.book_test_id,
+    // Yalnız devirde anahtar eklenir: yeni kalemlerin yükü değişmez.
+    ...(u.carry ? { carry: true as const } : {}),
   }))
 }

@@ -132,6 +132,13 @@ export interface PeriodSummary {
    * durumu da buradan türer — satırlar ödendi derken özet "Kısmi" diyemez.
    */
   periodOpenKurus: number
+  /**
+   * ÖNCEKİ dönemlerin tahakkuklarından BUGÜN kalan açık (Revize Mini 04).
+   * `carriedInKurus` tarihseldir — sonradan gelen ödeme onu değiştirmez;
+   * üstteki "önceki dönemden açık" uyarısı bunu değil, bu alanı gösterir.
+   * Önceki dönemler tamamen kapandıysa 0.
+   */
+  previousOpenKurus: number
   state: PeriodState
 }
 
@@ -157,6 +164,9 @@ export function periodSummary(
   const periodAccruals = accruals.filter((a) => inMonth(a.date) && a.amountKurus > 0)
   const periodPaidKurus = periodAccruals.reduce((s, a) => s + (paidByAccrual.get(a.id) ?? 0), 0)
   const periodOpenKurus = periodAccruals.reduce((s, a) => s + a.amountKurus, 0) - periodPaidKurus
+  const previousOpenKurus = accruals
+    .filter((a) => before(a.date) && a.amountKurus > 0)
+    .reduce((s, a) => s + a.amountKurus - (paidByAccrual.get(a.id) ?? 0), 0)
 
   return {
     month,
@@ -166,6 +176,7 @@ export function periodSummary(
     closingBalanceKurus,
     currentBalanceKurus,
     periodOpenKurus,
+    previousOpenKurus,
     state: periodState({ periodAccruedKurus, periodOpenKurus, periodPaidKurus, currentBalanceKurus }),
   }
 }

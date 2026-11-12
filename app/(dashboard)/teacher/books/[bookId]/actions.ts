@@ -312,10 +312,17 @@ export async function setSectionPageRangeAction(
   bookId: string,
   sectionId: string,
   pageStart: number,
-  pageEnd: number
+  pageEnd: number,
+  /**
+   * Revize Mini 03: 'resize' sayfa numaralarını korur (kullanılmamış sayfa
+   * eklenir/çıkar); 'shift' baskı farkında birimleri yerinde yeniden
+   * numaralar. Kural migration 155'te; ekran önizlemesi lib/page-range-plan.
+   */
+  mode: 'resize' | 'shift' = 'resize'
 ) {
   const parsed = sectionPageRangeSchema.safeParse({ sectionId, pageStart, pageEnd })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
+  if (mode !== 'resize' && mode !== 'shift') return { error: 'Geçersiz düzeltme türü.' }
 
   await getTeacherContext()
   const supabase = await createClient()
@@ -324,6 +331,7 @@ export async function setSectionPageRangeAction(
     p_section_id: parsed.data.sectionId,
     p_page_start: parsed.data.pageStart,
     p_page_end: parsed.data.pageEnd,
+    p_mode: mode,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }

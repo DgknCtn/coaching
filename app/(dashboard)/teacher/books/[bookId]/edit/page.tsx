@@ -47,6 +47,35 @@ export default async function BookEditPage({
     p_book_id: bookId,
   })
 
+  // Revize Mini 03: sayfa aralığı kilidi artık KİTAP değil BÖLÜM düzeyinde
+  // ve tam kilit değil uyarı. Hangi bölümün hangi sayfalarında ödev ya da
+  // tamamlama kaydı (geri alınmış dahil) olduğu okunur.
+  const [usedByHomework, usedByCompletion] = await Promise.all([
+    fetchAllRows<{ book_tests: { section_id: string; order_index: number } | { section_id: string; order_index: number }[] | null }>((from, to) =>
+      supabase
+        .from('homework_items')
+        .select('book_tests!inner(section_id, order_index, book_id)')
+        .eq('book_tests.book_id', bookId)
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAllRows<{ book_tests: { section_id: string; order_index: number } | { section_id: string; order_index: number }[] | null }>((from, to) =>
+      supabase
+        .from('test_completions')
+        .select('book_tests!inner(section_id, order_index, book_id)')
+        .eq('book_tests.book_id', bookId)
+        .order('id')
+        .range(from, to)
+    ),
+  ])
+  const usedPagesBySection: Record<string, number[]> = {}
+  for (const row of [...usedByHomework.data, ...usedByCompletion.data]) {
+    const bt = Array.isArray(row.book_tests) ? row.book_tests[0] : row.book_tests
+    if (!bt) continue
+    const list = (usedPagesBySection[bt.section_id] ??= [])
+    if (!list.includes(bt.order_index)) list.push(bt.order_index)
+  }
+
   // R7-02 §8: müfredat listesi kitabın Ders + Seviye/Sınav bilgisine göre
   // FİLTRELENİR. Kabul #8: "TYT Matematik müfredat seçiminde AYT Felsefe
   // görünmüyor." Filtre kapsam (academic_scopes) düzeyinde uygulanır; kapsam
@@ -202,6 +231,7 @@ export default async function BookEditPage({
         topicsFiltered={filtered}
         trackingMode={book.tracking_mode ?? 'test'}
         hasProgress={hasProgress === true}
+        usedPagesBySection={usedPagesBySection}
       />
     </div>
   )
