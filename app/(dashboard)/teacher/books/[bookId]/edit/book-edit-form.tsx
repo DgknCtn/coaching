@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TopicMultiSelect, type TopicOption } from '@/components/shared/topic-multi-select'
 import { SubsectionList, type SubsectionRow } from './subsection-list'
 import { unitLabel } from '@/lib/unit-labels'
+import { planPageRangeChange, type PageRangeMode } from '@/lib/page-range-plan'
 import {
   SUBJECTS,
   LEVEL_EXAMS,
@@ -119,6 +120,12 @@ interface Props {
    * gibi güvenli alanlar düzenlenmeye devam eder.
    */
   hasProgress: boolean
+  /**
+   * Revize Mini 03: bölüm id → ödev/tamamlama kaydı olan sayfa numaraları.
+   * Sayfa aralığı artık kitap düzeyinde kilitlenmez; kullanılmış bölümde
+   * uyarı + kontrollü düzeltme (kaydır / aralığı değiştir) sunulur.
+   */
+  usedPagesBySection: Record<string, number[]>
 }
 
 export function BookEditForm({
@@ -130,6 +137,7 @@ export function BookEditForm({
   topics,
   topicsFiltered,
   hasProgress,
+  usedPagesBySection,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -337,6 +345,7 @@ export function BookEditForm({
               topics={topics}
               topicsFiltered={topicsFiltered}
               hasProgress={hasProgress}
+              usedPages={usedPagesBySection[section.id] ?? []}
             />
           ))}
 
@@ -544,6 +553,7 @@ function SectionRowForm({
   topics,
   topicsFiltered,
   hasProgress,
+  usedPages,
 }: {
   bookId: string
   section: SectionRow
@@ -552,7 +562,10 @@ function SectionRowForm({
   parts: PartRow[]
   topics: TopicOption[]
   topicsFiltered: boolean
+  /** Kitap düzeyi — yalnız test kitabının alt bölüm listesi için (değişmedi). */
   hasProgress: boolean
+  /** Bu bölümde ödev/tamamlama kaydı olan sayfalar (Mini 03). */
+  usedPages: number[]
 }) {
   const router = useRouter()
   const [title, setTitle] = useState(section.title)
@@ -586,6 +599,29 @@ function SectionRowForm({
     Number(pageEnd) >= Number(pageStart)
   const pageEndChanged =
     isPageBook && (Number(pageEnd) || 0) !== (section.pageEnd ?? 0) && Number(pageEnd) >= 1
+
+  // REVİZE MİNİ 03 — kayıtlı bölümde KONTROLLÜ düzeltme. Tam kilit yerine:
+  // sayfa sayısı aynıysa "kaydır" (baskı farkı; kayıtlar yeni numaralara
+  // taşınır), değilse "aralığı değiştir" (kullanılmış sayfa aralık dışında
+  // kalamaz). Önizleme lib/page-range-plan; asıl kural migration 155'te.
+  const [pageMode, setPageMode] = useState<PageRangeMode>('resize')
+  const sectionUsed = usedPages.length > 0
+  const rangeDirty = pageRangeChanged || pageEndChanged
+  const sameCount =
+    section.pageStart != null &&
+    section.pageEnd != null &&
+    Number(pageEnd) - Number(pageStart) === section.pageEnd - section.pageStart
+  const effectiveMode: PageRangeMode = sectionUsed && sameCount ? pageMode : 'resize'
+  const rangePlan = rangeDirty
+    ? planPageRangeChange({
+        oldStart: section.pageStart,
+        oldEnd: section.pageEnd,
+        newStart: Number(pageStart),
+        newEnd: Number(pageEnd),
+        usedPages,
+        mode: effectiveMode,
+      })
+    : null
 
   // Bilgi amaçlı test aralığı (R7-03 Revize). Boş bırakmak da bir
   // değişikliktir: öğretmen yanlış girdiği aralığı temizleyebilmeli.
@@ -631,7 +667,8 @@ function SectionRowForm({
           bookId,
           section.id,
           Number(pageStart),
-          Number(pageEnd)
+          Number(pageEnd),
+          effectiveMode
         )
         if (r?.error) {
           toast.error(r.error)
@@ -728,7 +765,6 @@ function SectionRowForm({
                 type="number"
                 min={1}
                 value={pageStart}
-                disabled={hasProgress}
                 onChange={(e) => setPageStart(e.target.value)}
               />
             </div>
@@ -739,7 +775,6 @@ function SectionRowForm({
                 type="number"
                 min={1}
                 value={pageEnd}
-                disabled={hasProgress}
                 onChange={(e) => setPageEnd(e.target.value)}
               />
             </div>
@@ -790,7 +825,7 @@ function SectionRowForm({
           </div>
         )}
 
-        <Button size="sm" disabled={isPending || !dirty} onClick={save}>
+        <Button size="sm" disabled={isPending || !dirty || (rangePlan !== null && !rangePlan.ok)} onClick={save}>
           {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save />}
           Kaydet
         </Button>
@@ -799,6 +834,62 @@ function SectionRowForm({
           Sil
         </Button>
       </div>
+
+      {isPageBook && sectionUsed && (
+        <div className="space-y-2 rounded-md border border-warning-border bg-warning-subtle/40 p-2.5 text-xs">
+          <p>
+            Bu bölümde ödev/tamamlama kaydı var ({usedPages.length} sayfa). Sayfa aralığı düzeltilebilir;
+            kayıtlar silinmez ve çoğalmaz.
+          </p>
+          {rangeDirty && (
+            <fieldset className="space-y-1.5">
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name={`page-mode-${section.id}`}
+                  className="mt-0.5 accent-primary"
+                  checked={effectiveMode === 'shift'}
+                  disabled={!sameCount}
+                  onChange={() => setPageMode('shift')}
+                />
+                <span>
+                  <span className="font-medium">Sayfa numaralarını kaydır (baskı farkı)</span> — sayfa sayısı
+                  aynı kalır; kayıtlar yeni numaralara taşınır.
+                  {!sameCount && ' Sayfa sayısı değiştiği için kullanılamaz.'}
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name={`page-mode-${section.id}`}
+                  className="mt-0.5 accent-primary"
+                  checked={effectiveMode === 'resize'}
+                  onChange={() => setPageMode('resize')}
+                />
+                <span>
+                  <span className="font-medium">Aralığı değiştir</span> — sayfa numaraları aynı kalır;
+                  kullanılmamış sayfalar eklenir ya da çıkarılır, kullanılmış sayfa aralık dışında kalamaz.
+                </span>
+              </label>
+            </fieldset>
+          )}
+        </div>
+      )}
+
+      {rangePlan && (
+        <p className={rangePlan.ok ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>
+          {!rangePlan.ok
+            ? rangePlan.error
+            : rangePlan.mode === 'shift'
+              ? `Sayfalar ${rangePlan.offset > 0 ? '+' : ''}${rangePlan.offset} kaydırılacak; bölüm ve kayıtları korunur.`
+              : [
+                  rangePlan.add.length > 0 ? `${rangePlan.add.length} sayfa eklenecek` : null,
+                  rangePlan.remove.length > 0 ? `${rangePlan.remove.length} kullanılmamış sayfa çıkarılacak` : null,
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'Aralık güncellenecek.'}
+        </p>
+      )}
 
       {legacyLabels && (
         <p className="text-xs text-muted-foreground">
