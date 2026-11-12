@@ -32,7 +32,9 @@ import {
 } from '@/lib/homework-load'
 import { createHomeworkBatchAction, retryAttachBatchToFlowAction, startNewWeekAction } from './actions'
 import { WeekTransitionDialog } from './week-transition-dialog'
-import type { FlowRef, OpenWorkItem } from '@/lib/open-homework'
+import { flowShortLabel, type FlowRef, type OpenWorkItem } from '@/lib/open-homework'
+import { canCarry } from '@/lib/bulk-actions'
+import { carryItemsAction } from '../../homework-actions'
 import { saveWeeklyPlanDraftAction, clearWeeklyPlanDraftAction } from './draft-actions'
 import {
   approveUnitsAction,
@@ -233,6 +235,11 @@ export function HomeworkBuilder({
                 ? test.pageStart
                 : position + 1,
             trackingMode: book.trackingMode,
+            // Revize Mini 02: açık kalemi olan birim sepete yalnız "Bu
+            // haftaya aktar" ile girebilir (Ödeve Ekle not_assigned ister);
+            // yayında devredilir. Taslağa yazılmaz, durumdan türer.
+            carry: canCarry(test.state),
+            homeworkItemId: test.homeworkItemId,
           })
         })
       }
@@ -538,6 +545,22 @@ export function HomeworkBuilder({
   const hasWork = selectedTests.length > 0 || draftTasks.length > 0
   const plan = planSummary(selectedTests.length, draftTasks)
 
+  // REVİZE MİNİ 02 — sepetteki devirler ve geldikleri hafta.
+  const carriedInBasket = selectedTests.filter(t => t.carry)
+  const carriedItemIds = new Set(
+    carriedInBasket.map(t => t.homeworkItemId).filter((id): id is string => !!id)
+  )
+  const carriedSourceWeeks = (() => {
+    const flowById = new Map(openWorkFlows.map(f => [f.id, f]))
+    const labels = new Set<string>()
+    for (const item of openWorkItems) {
+      if (carriedItemIds.has(item.id)) {
+        labels.add(flowShortLabel(item.flowId ? flowById.get(item.flowId) : null))
+      }
+    }
+    return labels.size > 0 ? `${[...labels].join(', ')}'dan` : null
+  })()
+
   // HAFTA GEÇİŞİ (İz V2 R04). Aynı haftaya ek çalışma yeni hafta AÇMAZ:
   // son teslim aktif haftanın kapanış günü içindeyse doğrudan yayınlanır.
   // Dışındaysa ya da açık hafta yoksa önce küçük bir onay istenir.
@@ -560,7 +583,11 @@ export function HomeworkBuilder({
     if (needsTransition) {
       // "Gelecek haftaya devret" ile işaretlenmiş işler önceden seçili.
       setCarryIds(
-        new Set(openWorkItems.filter(i => i.status === 'pending' && i.carryRequested).map(i => i.id))
+        new Set(
+          openWorkItems
+            .filter(i => i.status === 'pending' && i.carryRequested && !carriedItemIds.has(i.id))
+            .map(i => i.id)
+        )
       )
       // Tarihsiz açık görevler önceden seçili: eskiden ekran açılışında
       // kendiliğinden taşınan küme buydu (148); artık öğretmen görüp seçer.
@@ -868,6 +895,19 @@ export function HomeworkBuilder({
 
                   onAssign={addToBasket}
 
+                  // Revize Mini 02: açık/süresi geçmiş iş sepete; yayında devir.
+                  onCarry={addToBasket}
+
+                  onCarryNext={async itemIds => {
+                    const r = await carryItemsAction(studentId, itemIds, 'next')
+                    if (r.error) return r
+                    toast.success(
+                      `${r.requested ?? itemIds.length} çalışma gelecek haftaya devredilecek; yeni hafta açılırken seçili gelir.`
+                    )
+                    router.refresh()
+                    return r
+                  }}
+
                   onComplete={(ids, studiedOn) =>
 
                     completeUnitsManuallyAction(studentId, activeBook.bookId, {
@@ -1008,6 +1048,14 @@ export function HomeworkBuilder({
                   {' '}· {groupedSelection.length} kitap
                 </span>
               </p>
+              {/* Mini 02: sepetteki devirler ayrı söylenir — yayında kaynak
+                  haftadaki kalem "Devredildi" olur, bu haftaya tek kez girer. */}
+              {carriedInBasket.length > 0 && (
+                <p className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Devir: {carriedInBasket.length} açık çalışma</span>
+                  {carriedSourceWeeks && ` · ${carriedSourceWeeks}`}
+                </p>
+              )}
               {(plan.taskCount > 0 || plan.minutes > 0) && (
                 <p className="tabular-nums">
                   <span className="font-semibold">Akademik görevler: {plan.taskCount}</span>
@@ -1299,7 +1347,8 @@ export function HomeworkBuilder({
         onOpenChange={setTransitionOpen}
         activeFlowDueAt={activeFlow?.dueAt ?? null}
         newDueAt={effectiveDueAt}
-        items={openWorkItems}
+        // Sepete zaten aktarılmış iş pencerede ikinci kez listelenmez (Mini 02).
+        items={openWorkItems.filter(i => !carriedItemIds.has(i.id))}
         flows={openWorkFlows}
         selected={carryIds}
         onToggle={id =>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { Check, CheckCheck, Loader2, Plus, Undo2, X } from 'lucide-react'
+import { ArrowRightToLine, CalendarClock, Check, CheckCheck, Loader2, Plus, Undo2, X } from 'lucide-react'
 import type { BookMapBook } from '@/lib/book-map'
 import { formatSelectedUnits } from '@/lib/book-map'
 import {
@@ -10,6 +10,8 @@ import {
   filterApplicable,
   revertConfirmMessage,
   type BulkAction,
+  countCarryable,
+  filterCarryable,
 } from '@/lib/bulk-actions'
 import { todayDateString, type HomeworkTestState } from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
@@ -43,11 +45,19 @@ export interface BulkActionPanelProps {
   ) => Promise<{ error?: string; success?: boolean }>
   onApprove: (unitIds: string[]) => Promise<{ error?: string; success?: boolean }>
   onRevert: (unitIds: string[]) => Promise<{ error?: string; success?: boolean }>
+  /**
+   * Revize Mini 02: açık/süresi geçmiş çalışmayı plan SEPETİNE aktarır
+   * (veri değişmez; yayında devredilir). Verilmezse düğme gösterilmez.
+   */
+  onCarry?: (unitIds: string[]) => void
+  /** "Gelecek haftaya devret": açık ödev KALEMLERİNİ işaretler (152). */
+  onCarryNext?: (homeworkItemIds: string[]) => Promise<{ error?: string; success?: boolean }>
   className?: string
 }
 
 interface SelectedUnit {
   id: string
+  homeworkItemId: string | null
   state: HomeworkTestState
   orderIndex: number
   sectionId: string
@@ -62,9 +72,11 @@ export function BulkActionPanel({
   onComplete,
   onApprove,
   onRevert,
+  onCarry,
+  onCarryNext,
   className,
 }: BulkActionPanelProps) {
-  const [pendingAction, setPendingAction] = useState<BulkAction | null>(null)
+  const [pendingAction, setPendingAction] = useState<BulkAction | 'carry_next' | null>(null)
   // R5.1: "Tamamlandı Olarak İşle" geçmişte yapılmış işi kaydeder; tarih
   // bugüne sabitlenirse Koruma Havuzu'nun son temas hesabı yanılır.
   const [studiedOn, setStudiedOn] = useState(todayDateString())
@@ -78,6 +90,7 @@ export function BulkActionPanel({
         if (!selectedIds.has(test.id)) continue
         out.push({
           id: test.id,
+          homeworkItemId: test.homeworkItemId,
           state: test.state,
           orderIndex: test.orderIndex,
           sectionId: section.id,
@@ -89,6 +102,7 @@ export function BulkActionPanel({
   }, [book, selectedIds])
 
   const counts = useMemo(() => countApplicable(units.map(u => u.state)), [units])
+  const carryCount = useMemo(() => countCarryable(units.map(u => u.state)), [units])
 
   // Seçim bağlamı bölüm bölüm gösterilir (§7). Sayfa kaynağında bu şarttır:
   // "24 sayfa seçildi" tek başına hangi fasikülden olduğunu söylemez.
@@ -111,6 +125,31 @@ export function BulkActionPanel({
   )
 
   if (units.length === 0) return null
+
+  // REVİZE MİNİ 02 — açık çalışmayı haftaya taşı.
+  function carryToBasket() {
+    const ids = filterCarryable(units)
+    if (ids.length > 0) onCarry?.(ids)
+  }
+
+  function carryNext() {
+    if (!onCarryNext) return
+    const itemIds = units
+      .filter(u => filterCarryable([u]).length > 0 && u.homeworkItemId)
+      .map(u => u.homeworkItemId as string)
+    if (itemIds.length === 0) return
+    setPendingAction('carry_next')
+    setMessage(null)
+    startTransition(async () => {
+      const result = await onCarryNext(itemIds)
+      setPendingAction(null)
+      if (result.error) {
+        setMessage(result.error)
+        return
+      }
+      onClearSelection()
+    })
+  }
 
   function run(action: BulkAction) {
     const ids = filterApplicable(action, units)
@@ -216,6 +255,29 @@ export function BulkActionPanel({
             busy={false}
             disabled={isPending}
             onClick={() => run('assign')}
+          />
+        )}
+        {/* Mini 02: açık/süresi geçmiş iş sepete düşer; yayında devredilir. */}
+        {onCarry && (
+          <ActionButton
+            label="Bu haftaya aktar"
+            icon={ArrowRightToLine}
+            count={carryCount}
+            busy={false}
+            disabled={isPending}
+            onClick={carryToBasket}
+            variant="outline"
+          />
+        )}
+        {onCarryNext && (
+          <ActionButton
+            label="Gelecek haftaya devret"
+            icon={CalendarClock}
+            count={carryCount}
+            busy={isPending && pendingAction === 'carry_next'}
+            disabled={isPending}
+            onClick={carryNext}
+            variant="outline"
           />
         )}
         <ActionButton

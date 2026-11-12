@@ -193,3 +193,29 @@ export function selectByState<T extends { id: string; state: HomeworkTestState }
   if (kind === 'all') return usable.map(u => u.id)
   return usable.filter(u => u.state === kind).map(u => u.id)
 }
+
+// ============================================================
+// SEPETE DEVİR — Revize Mini 02 (09.11.2026)
+//
+// Kitap Haritası'nda açık ya da süresi geçmiş çalışma "Bu haftaya aktar"
+// ile plan sepetine düşer (veri değişmez; yayında create_homework_batch
+// `carry` ile devreder, 155). "Gelecek haftaya devret" kalemi işaretler
+// (carry_homework_items 'next', 152).
+//
+// Yalnız AÇIK kalem taşınır: ödevi verilmiş, öğrencinin teslim etmediği
+// (assigned / overdue / returned). Onaya gönderilmiş iş öğrencinin işidir;
+// tamamlanan kısım yeniden görev olmaz. countApplicable'ın şekli bilinçli
+// olarak değişmedi — sayımı ayrı.
+// ============================================================
+
+export function canCarry(state: HomeworkTestState): boolean {
+  return state === 'assigned' || state === 'overdue' || state === 'returned'
+}
+
+export function countCarryable(states: HomeworkTestState[]): number {
+  return states.filter(canCarry).length
+}
+
+export function filterCarryable<T extends { id: string; state: HomeworkTestState }>(units: T[]): string[] {
+  return units.filter(u => canCarry(u.state)).map(u => u.id)
+}
