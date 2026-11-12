@@ -184,16 +184,15 @@ export function StudentFinanceClient({
           <AccrualForm studentId={student.id} today={today} disabled={isPending} onDone={() => setForm(null)} run={run} />
         )}
 
-        {summary.carriedInKurus !== 0 && (
-          // M1.0-05: "Dönem toplamı", "Önceki dönemden açık" ve "Toplam açık
-          // bakiye" NET ayrışsın — hesap değişmiyor (periodSummary), yalnız
-          // etiket PDF'in istediği üçlüyle uyumlu hâle geldi.
+        {summary.previousOpenKurus > 0 && (
+          // Revize Mini 04: üst uyarı GÜNCEL kalanı söyler. Eskiden tarihsel
+          // devri (carriedInKurus) gösteriyordu; önceki dönem ödendikten sonra
+          // da "Önceki dönemden açık: 4.000 TL" yazıp güncel borç izlenimi
+          // veriyordu. Tarihsel devir alttaki özette kalır.
           <p className="mb-3 text-sm text-muted-foreground">
-            Önceki dönemden açık:{' '}
+            Önceki dönemlerden kalan açık:{' '}
             <span className="font-medium tabular-nums text-foreground">
-              {summary.carriedInKurus < 0
-                ? `${formatKurus(-summary.carriedInKurus)} alacak`
-                : formatKurus(summary.carriedInKurus)}
+              {formatKurus(summary.previousOpenKurus)}
             </span>
           </p>
         )}
