@@ -45,7 +45,9 @@ import { COUNTER_LABEL, OVERDUE_HINT } from '@/lib/homework-status'
 import { Section } from '@/components/shared/section'
 import { PublishedHomeworkList } from './published-homework-list'
 import { loadOpenWork } from '@/lib/open-homework'
-import { loadWeekMessage } from '@/lib/week-message'
+import { loadPlanMessage } from '@/lib/plan-message'
+import { loadHomeworkPlans } from '@/lib/homework-plan-load'
+import { planDisplayTitle, planResult } from '@/lib/homework-plan'
 import { ProtectionPoolCard, ResourcePlanCard } from '@/components/shared/r5-summary-cards'
 import { loadBookMap } from '@/lib/book-map'
 import {
@@ -159,7 +161,7 @@ export default async function StudentDetailPage({
       ? supabase
           .from('homework_batches')
           .select(`
-            id, title, description, due_date, due_at, status, weekly_flow_id,
+            id, title, description, due_date, due_at, status, weekly_flow_id, plan_id,
             homework_items(
               id, status, book_id, section_id, submitted_at, carried_to_item_id,
               books(title, tracking_mode),
@@ -389,14 +391,20 @@ export default async function StudentDetailPage({
   const openWork = need.homeworkBatches
     ? await loadOpenWork(supabase, { workspaceId, studentId })
     : null
-  const weekMessage = openWork?.activeFlow
-    ? await loadWeekMessage(supabase, {
-        workspaceId,
-        studentId,
-        studentName: student.full_name,
-        flow: openWork.activeFlow,
-      })
-    : null
+  // Mini 05/06: kartlar Ödev Planı'nın başlığını ve sonucunu gösterir;
+  // mesaj plan başına (güncel teslimle) — yalnız açık planlar için.
+  const plans = need.homeworkBatches ? await loadHomeworkPlans(supabase, { workspaceId, studentId }) : []
+  const planById = new Map(plans.map((p) => [p.id, p]))
+  const planMessages: Record<string, string> = {}
+  for (const plan of plans.filter((p) => p.status === 'open').slice(0, 10)) {
+    const text = await loadPlanMessage(supabase, {
+      workspaceId,
+      studentId,
+      studentName: student.full_name,
+      plan,
+    })
+    if (text) planMessages[plan.id] = text
+  }
 
   const thisWeek: ThisWeekView = {
     flowId: (weekOperation?.weekly_flow_id as string | null) ?? null,
@@ -1143,7 +1151,9 @@ export default async function StudentDetailPage({
                   studentId={studentId}
                   activeFlowId={thisWeek.flowId}
                   openWork={openWork}
-                  weekMessage={weekMessage}
+                  standaloneTaskPlans={plans.filter(
+                    (p) => p.status === 'open' && !p.batchId
+                  ).map((p) => ({ ...p, message: planMessages[p.id] ?? null }))}
                   batches={homeworkBatches.map((batch) => {
                     // Supabase iç içe select'i tek kaydı da dizi tipinde
                     // çözebiliyor; okurken tekile indiriyoruz.
@@ -1171,8 +1181,19 @@ export default async function StudentDetailPage({
                     // yükten çıkarılmadı, başka haftaya taşındı. Ayrı sayılır.
                     const carriedCount = allItems.filter((i) => i.carried_to_item_id).length
                     const releasedCount = allItems.length - items.length - carriedCount
-                    const total = items.length
-                    const completed = items.filter((i) => i.status === 'completed').length
+                    // MİNİ 06: VERİLEN toplam iptal edilenleri DÜŞMEZ. Testte
+                    // devirden sonra ilk plan 2/6 → 2/4 görünüyordu. Kapanmış
+                    // planda kapanış sonucu gösterilir; sonraki tamamlamalar
+                    // onu yükseltmez.
+                    const plan = batch.plan_id ? (planById.get(batch.plan_id as string) ?? null) : null
+                    const result =
+                      plan?.status === 'closed' && plan.closingResult
+                        ? plan.closingResult
+                        : planResult(
+                            allItems.map((i) => ({ status: i.status, carriedToItemId: i.carried_to_item_id }))
+                          )
+                    const total = result.given
+                    const completed = result.done
                     // R6-06: detay assignment_items'tan türetilir; ödev
                     // kaydında ayrı bir kopya metin tutulmaz.
                     //
@@ -1208,7 +1229,10 @@ export default async function StudentDetailPage({
                       isOverdue(batch.due_date) && items.some((i) => i.status === 'pending')
                     return {
                       id: batch.id,
-                      title: batch.title,
+                      title: plan ? planDisplayTitle(plan) : batch.title,
+                      plan,
+                      result,
+                      message: plan ? (planMessages[plan.id] ?? null) : null,
                       dueDate: batch.due_date,
                       dueAt: (batch.due_at as string | null) ?? null,
                       description: batch.description,

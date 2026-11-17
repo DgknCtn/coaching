@@ -21,18 +21,22 @@ export async function createHomeworkBatchAction(
   termId: string,
   studentId: string,
   dueDate: string,
-  title: string | undefined,
+  /** Mini 05/06: yalnız öğretmenin AÇIKLAMASI; numaralı ön ek plandan gelir. */
+  titleSuffix: string | undefined,
   items: HomeworkItem[],
   note?: string,
-  dueAt?: string
+  dueAt?: string,
+  /** Hedef plan (156). Boşsa yeni plan yayımlanır, doluysa plana eklenir. */
+  planId?: string | null
 ) {
+  if (planId && !uuidSchema.safeParse(planId).success) return { error: 'Geçersiz ödev planı.' }
   const parsed = homeworkBatchSchema.safeParse({
     workspaceId,
     termId,
     studentId,
     dueDate,
     dueAt,
-    title,
+    title: titleSuffix,
     note,
     items,
   })
@@ -49,13 +53,15 @@ export async function createHomeworkBatchAction(
     p_academic_term_id: termId,
     p_student_id: studentId,
     p_due_date: dueDate,
-    p_title: title || null,
     // R6-05: Ödev Notu. homework_batches.description 001'den beri vardı ve
     // kullanılmıyordu; yeni kolon açmak yerine o alan kullanılır.
     p_description: parsed.data.note || null,
     p_items: items,
     // M1.0-01: teslim gün + saat. due_date RPC'de bunun yerel gününden türer.
     p_due_at: parsed.data.dueAt ?? null,
+    // Mini 05/06: plana yayın / plana ekleme. Başlık plandan üretilir.
+    p_plan_id: planId ?? null,
+    p_title_suffix: parsed.data.title || null,
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
@@ -71,7 +77,15 @@ export async function createHomeworkBatchAction(
   //
   // Karar RPC'nin içinde: aidiyet kuralı tek yerde kalsın diye. Burada
   // tarih karşılaştırılsaydı arayüzle sunucu bir gün ayrışırdı.
-  const batchId = (data as { homework_batch_id?: string } | null)?.homework_batch_id
+  const result = (data ?? {}) as {
+    homework_batch_id?: string
+    plan_id?: string
+    plan_no?: number
+    created_plan?: boolean
+    created_batch?: boolean
+    added?: number
+  }
+  const batchId = result.homework_batch_id
 
   // Bağlanıp bağlanmadığı KULLANICIYA SÖYLENİR.
   //
@@ -85,7 +99,9 @@ export async function createHomeworkBatchAction(
   // `batchId` dönüyor ve arayüz yalnız bağlamayı yeniden deniyor
   // (retryAttachBatchToFlowAction). attach_batch_to_flow tekrar çağrıya
   // dayanıklı: aynı partiyi aynı akışa yeniden yazar.
-  const attach = batchId ? await attachAndExplain(supabase, batchId) : undefined
+  // Mevcut plana EKLEMEDE parti zaten bir haftaya bağlı; yeniden bağlamak
+  // eski planı yeni haftaya taşırdı (Mini 06: "aktarım hafta açmaz").
+  const attach = batchId && result.created_batch ? await attachAndExplain(supabase, batchId) : undefined
 
   const flowWarning = attach?.warning
   const attachFailed = attach?.failed ?? false
@@ -109,7 +125,16 @@ export async function createHomeworkBatchAction(
   revalidatePath(`/teacher/students/${studentId}`)
   revalidatePath(`/teacher/students/${studentId}/haftalik-akis`)
   revalidatePath('/teacher')
-  return { success: true, flowWarning, attachFailed, batchId }
+  return {
+    success: true,
+    flowWarning,
+    attachFailed,
+    batchId,
+    planId: result.plan_id ?? null,
+    planNo: result.plan_no ?? null,
+    createdPlan: result.created_plan ?? false,
+    added: result.added ?? 0,
+  }
 }
 
 type Supabase = Awaited<ReturnType<typeof createClient>>

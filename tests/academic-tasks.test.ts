@@ -123,6 +123,7 @@ describe('Dersler ekranı (§2)', () => {
     undated: false,
     weeklyFlowId: null,
     originFlowId: null,
+    planId: null,
     plannedForDate: null,
     completedAt: null,
     checklist: [],

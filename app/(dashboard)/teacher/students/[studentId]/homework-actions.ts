@@ -325,3 +325,82 @@ export async function carryItemsAction(
     skipped: Number(result.skipped ?? 0),
   }
 }
+
+// ============================================================
+// ÖDEV PLANI İŞLEMLERİ — Revize Mini 05 + 06 (156)
+// ============================================================
+//
+// Teslim değişir (ilk teslim korunur), açıklama değişir (numara değişmez),
+// plan kapanır (sonuç bir kez yazılır). Hiçbiri kalem ya da tamamlama
+// kaydını değiştirmez.
+
+const planIdSchema = z.object({ studentId: uuidSchema, planId: uuidSchema })
+
+export async function setPlanDueAction(studentId: string, planId: string, dueAtIso: string) {
+  const parsed = planIdSchema.safeParse({ studentId, planId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  const due = new Date(dueAtIso)
+  if (Number.isNaN(due.getTime())) return { error: 'Geçerli bir son teslim girin.' }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('set_homework_plan_due', {
+    p_plan_id: parsed.data.planId,
+    p_due_at: due.toISOString(),
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework_plan.due_change',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { planId: parsed.data.planId, dueAt: due.toISOString() },
+  })
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true }
+}
+
+export async function setPlanTitleAction(studentId: string, planId: string, suffix: string) {
+  const parsed = planIdSchema.safeParse({ studentId, planId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+  if (suffix.trim().length > 160) return { error: 'Açıklama en fazla 160 karakter olabilir.' }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('set_homework_plan_title', {
+    p_plan_id: parsed.data.planId,
+    p_suffix: suffix.trim() || null,
+  })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework_plan.rename',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { planId: parsed.data.planId, title: data },
+  })
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true, title: (data as string | null) ?? null }
+}
+
+export async function closePlanAction(studentId: string, planId: string) {
+  const parsed = planIdSchema.safeParse({ studentId, planId })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('close_homework_plan', { p_plan_id: parsed.data.planId })
+  if (error) return { error: dbErrorToTr(error.message) }
+
+  await logAudit(supabase, {
+    workspaceId,
+    action: 'homework_plan.close',
+    entityType: 'student',
+    entityId: parsed.data.studentId,
+    detail: { planId: parsed.data.planId, result: data },
+  })
+  revalidateStudentHomework(parsed.data.studentId)
+  return { success: true }
+}

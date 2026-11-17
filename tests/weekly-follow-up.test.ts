@@ -25,6 +25,7 @@ const t = (p: Partial<AcademicTask>): AcademicTask => ({
   undated: false,
   weeklyFlowId: W,
   originFlowId: W,
+  planId: null,
   plannedForDate: null,
   completedAt: null,
   checklist: [],

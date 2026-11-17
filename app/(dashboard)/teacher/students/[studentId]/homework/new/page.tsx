@@ -19,6 +19,7 @@ import { listResult, singleResult, type QueryResult } from '@/lib/data-result'
 import { loadStudentTasks } from '@/lib/academic-tasks-load'
 import { loadCoursesData } from '../../dersler/load'
 import { loadOpenWork } from '@/lib/open-homework'
+import { loadHomeworkPlans } from '@/lib/homework-plan-load'
 
 // Sorgu hatası boş sonuca çevrilmez; teacher/error.tsx hata sınırına gider.
 function orThrow<T>(r: QueryResult<T>): T {
@@ -181,13 +182,15 @@ export default async function NewHomeworkPage({
 
   // M1.0-03 ORTAK SEPET: kitap seçimleri ve akademik görevler aynı
   // haftalık planda. Görev taslakları öğretmene özel (148).
-  const [draftTasks, coursesData, openTaskRows, openWork] = await Promise.all([
+  const [draftTasks, coursesData, openTaskRows, openWork, plans] = await Promise.all([
     loadStudentTasks(supabase, { studentId, statuses: ['draft'], createdByProfileId: profile.id }),
     loadCoursesData(supabase, { workspaceId, studentId }),
     // İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler —
     // kitap kalemleri ve aktif hafta DIŞINDAKİ açık öğretmen görevleri.
     loadStudentTasks(supabase, { studentId, statuses: ['open'] }),
     loadOpenWork(supabase, { workspaceId, studentId }),
+    // Mini 05/06: sepetin hedefi (açık planlar) ve yeni planın numarası.
+    loadHomeworkPlans(supabase, { workspaceId, studentId }),
   ])
   const openTasks = openTaskRows.filter(
     t => t.createdByRole === 'teacher' && t.weeklyFlowId !== (activeFlow?.id ?? null)
@@ -241,6 +244,7 @@ export default async function NewHomeworkPage({
         courses={courses}
         openWorkItems={openWork.items}
         openTasks={openTasks}
+        plans={plans}
         openWorkFlows={openWork.flows}
       />
     </div>

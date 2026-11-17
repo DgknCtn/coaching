@@ -7,11 +7,11 @@ import {
   Archive,
   ArrowRightToLine,
   CalendarClock,
+  CalendarCog,
   Check,
   CheckCheck,
   ChevronDown,
   ChevronRight,
-  Copy,
   ListTodo,
   Loader2,
   RotateCcw,
@@ -30,6 +30,13 @@ import { formatSelectedUnits } from '@/lib/book-map'
 import { formatRelativeTime } from '@/lib/student-attention'
 import { formatSessionLong } from '@/lib/service-structure'
 import { flowShortLabel, type FlowRef, type OpenWork } from '@/lib/open-homework'
+import {
+  planDisplayTitle,
+  planResultLine,
+  type HomeworkPlanRef,
+  type PlanResult,
+} from '@/lib/homework-plan'
+import { PlanActionsDialog } from './plan-actions-dialog'
 import {
   approveItemsAction,
   carryItemsAction,
@@ -94,7 +101,16 @@ export interface PublishedBatch {
   /** Partinin bağlı olduğu hafta (077); akıştan önceki ödevlerde null. */
   weeklyFlowId: string | null
   items: PublishedItem[]
+  /** Mini 05/06: bağlı Ödev Planı (156); geçiş öncesi kayıtta da var. */
+  plan?: HomeworkPlanRef | null
+  /** Verilen iptalleri DÜŞMEZ; kapalı planda kapanış sonucu. */
+  result?: PlanResult | null
+  /** Planın güncel mesajı (yalnız açık planlar). */
+  message?: string | null
 }
+
+/** Kitap partisi olmayan (yalnız görevli) açık plan — kartı yok, satırı var. */
+export type TaskOnlyPlan = HomeworkPlanRef & { message: string | null }
 
 const OPEN_STATUSES = new Set(['pending', 'pending_approval'])
 
@@ -171,14 +187,14 @@ export function PublishedHomeworkList({
   batches,
   activeFlowId,
   openWork,
-  weekMessage,
+  standaloneTaskPlans = [],
 }: {
   studentId: string
   batches: PublishedBatch[]
   /** İz V2 R03: tüm açık çalışmalar + hafta etiketleri (20 parti sınırı yok). */
   openWork: OpenWork | null
-  /** İz V2 R04: aktif haftanın güncel ödev mesajı; hafta/iş yoksa null. */
-  weekMessage: string | null
+  /** Mini 05/06: yalnız görev içeren açık planlar (kitap partisi yok). */
+  standaloneTaskPlans?: TaskOnlyPlan[]
   /**
    * Aktif Haftalık Akış — "Yeniden Aktifleştir" için ZORUNLU hedef.
    *
@@ -196,22 +212,16 @@ export function PublishedHomeworkList({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [panelBatch, setPanelBatch] = useState<PublishedBatch | null>(null)
   const [openPanel, setOpenPanel] = useState(false)
-  const [copied, setCopied] = useState(false)
+  // Mini 05/06: plan işlemleri (teslim, açıklama, mesaj, kapat).
+  const [planDialog, setPlanDialog] = useState<{
+    plan: HomeworkPlanRef
+    result: PlanResult | null
+    message: string | null
+  } | null>(null)
   const [isPending, startTransition] = useTransition()
   const activeFlow = openWork?.activeFlow ?? null
   const openItems = openWork?.items ?? []
   const submittedCount = openItems.filter(i => i.status === 'pending_approval').length
-
-  async function copyWeekMessage() {
-    if (!weekMessage) return
-    try {
-      await navigator.clipboard.writeText(weekMessage)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error('Metin kopyalanamadı.')
-    }
-  }
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -240,8 +250,9 @@ export function PublishedHomeworkList({
 
   return (
     <div className="space-y-4">
-      {/* İz V2 R03/R04: güncel mesaj + tüm açık çalışmalar tek yerden. */}
-      {(weekMessage || openItems.length > 0) && (
+      {/* İz V2 R03: tüm açık çalışmalar tek yerden. Mesaj artık PLAN başına
+          (Mini 05/06) — her kartın "Plan" işlemlerinde. */}
+      {openItems.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {openItems.length > 0
@@ -249,12 +260,6 @@ export function PublishedHomeworkList({
               : 'Açık çalışma yok'}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            {weekMessage && (
-              <Button size="sm" variant="outline" onClick={copyWeekMessage}>
-                {copied ? <Check /> : <Copy />}
-                {copied ? 'Kopyalandı!' : 'Mesaj metnini kopyala'}
-              </Button>
-            )}
             {openItems.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => setOpenPanel(true)} aria-haspopup="dialog">
                 <ListTodo />
@@ -320,6 +325,21 @@ export function PublishedHomeworkList({
                 detail={batch.detail}
                 note={batch.description}
               />
+              {/* Mini 06: plan sonucu — verilen iptalleri düşmez; kapalı
+                  planda kapanış sonucu (sonraki tamamlamalar değiştirmez). */}
+              {batch.result && (
+                <p className="flex flex-wrap items-center gap-1.5 px-4 pb-2 text-[11px] tabular-nums text-muted-foreground">
+                  {planResultLine(batch.result)}
+                  {batch.plan?.status === 'closed' && (
+                    <Badge variant="neutral">
+                      Kapandı{batch.plan.closedAt ? ` · ${formatDueDateTime(null, batch.plan.closedAt)}` : ''}
+                    </Badge>
+                  )}
+                  {batch.plan?.status === 'open' && batch.plan.dueAt && new Date(batch.plan.dueAt) < new Date() && (
+                    <Badge variant="warning">Teslim geçti · açık</Badge>
+                  )}
+                </p>
+              )}
             </div>
             {/* TEKİL İŞLEM (M1.0-01 §4.1): "Aktif Yükten Çıkar" tek ana
                 aksiyon olmaktan çıktı; "İşlemler" sağ paneli açar ve
@@ -337,6 +357,19 @@ export function PublishedHomeworkList({
                 İşlemler
                 <ChevronDown />
               </Button>
+              {batch.plan && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setPlanDialog({ plan: batch.plan!, result: batch.result ?? null, message: batch.message ?? null })
+                  }
+                  aria-haspopup="dialog"
+                >
+                  <CalendarCog />
+                  Plan
+                </Button>
+              )}
               {batch.releasedCount > 0 && (
                 <span className="text-[11px] text-muted-foreground">
                   {batch.releasedCount} çalışma aktif yükten çıkarıldı
@@ -351,6 +384,39 @@ export function PublishedHomeworkList({
           </li>
         ))}
       </ul>
+
+      {standaloneTaskPlans.length > 0 && (
+        <ul className="divide-y rounded-lg border bg-card text-sm">
+          {standaloneTaskPlans.map(p => (
+            <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2">
+              <span className="min-w-0">
+                <span className="font-medium">{planDisplayTitle(p)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {' '}· yalnız görev{p.dueAt ? ` · teslim ${formatDueDateTime(null, p.dueAt)}` : ''}
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setPlanDialog({ plan: p, result: null, message: p.message })}
+              >
+                <CalendarCog />
+                Plan
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {planDialog && (
+        <PlanActionsDialog
+          studentId={studentId}
+          plan={planDialog.plan}
+          result={planDialog.result}
+          message={planDialog.message}
+          onClose={() => setPlanDialog(null)}
+        />
+      )}
 
       {panelBatch && (
         <BatchActionPanel

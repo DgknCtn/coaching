@@ -423,7 +423,8 @@ export const homeworkBatchSchema = z.object({
   dueDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçerli bir teslim tarihi seçin.'),
   /** Son teslim anı (M1.0-01) — ISO; verilirse due_date onun İstanbul günüdür. */
   dueAt: z.string().datetime({ offset: true }).optional(),
-  title: z.string().trim().max(200).optional().or(z.literal('')),
+  /** Mini 05/06: plan açıklaması (numaralı ön ek plandan gelir; 156 sınırı 160). */
+  title: z.string().trim().max(160, 'Açıklama en fazla 160 karakter olabilir.').optional().or(z.literal('')),
   /** Ödev notu (R6-05) — isteğe bağlı, ödev başına tek alan. */
   note: z.string().trim().max(2000, 'Ödev notu en fazla 2000 karakter olabilir.').optional().or(z.literal('')),
   items: z.array(homeworkItemSchema).min(1, 'En az bir çalışma seçin.').max(500),
