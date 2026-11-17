@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { flowMembership } from '@/lib/weekly-flow'
@@ -63,7 +64,13 @@ import { planSummary, type AcademicTask } from '@/lib/academic-tasks'
 import { publishDraftTasksAction } from '../../dersler/actions'
 import { TeacherTaskList } from '@/components/academic/teacher-task-list'
 import { BulkPasteDialog } from '@/components/academic/bulk-paste-dialog'
-import { defaultHomeworkTitle, targetWeekNumber } from '@/lib/homework-title'
+import {
+  defaultTargetPlan,
+  nextPlanNo,
+  planDisplayTitle,
+  planPrefix,
+  type HomeworkPlanRef,
+} from '@/lib/homework-plan'
 
 // Tek Kitap Haritası — öğretmenin kaynak üzerindeki ana çalışma yüzeyi
 // (R7 / R6-03 güncellemesi).
@@ -142,6 +149,8 @@ interface Props {
   openWorkFlows: FlowRef[]
   /** Aktif hafta dışındaki açık öğretmen görevleri (153, seçimli devir). */
   openTasks: AcademicTask[]
+  /** Mini 05/06: öğrencinin ödev planları (156) — sepetin hedefi ve numara. */
+  plans: HomeworkPlanRef[]
 }
 
 export function HomeworkBuilder({
@@ -164,6 +173,7 @@ export function HomeworkBuilder({
   openWorkItems,
   openWorkFlows,
   openTasks,
+  plans,
 }: Props) {
   // Sunucudan dizi olarak gelir (Set serileştirilemez), burada kümeye çevrilir.
   const keepActiveTopicSet = useMemo(() => new Set(keepActiveTopicIds), [keepActiveTopicIds])
@@ -185,11 +195,30 @@ export function HomeworkBuilder({
   const [customDue, setCustomDue] = useState(
     () => !activeFlow || (initialDueDate !== '' && initialDueDate !== activeFlow.dueDate)
   )
-  // EK-08: `title` yalnız ELLE girilen başlıktır. Taslakta başlık varsa
-  // elle girilmiş sayılır ve korunur; yoksa alan hedef haftanın numarasından
-  // önerilen başlıkla dolar (aşağıda autoTitle).
-  const [title, setTitle] = useState(initialTitle)
-  const [titleTouched, setTitleTouched] = useState(initialTitle !== '')
+  // MİNİ 05/06 — SEPETİN HEDEFİ. Hangi Ödev Planı hazırlanıyor her zaman
+  // yazılı: mevcut açık plana ekleme ("Planı güncelle") ya da yeni plan
+  // ("Planı yayımla"). Varsayılan: teslimi geçmemiş son açık plan, yoksa
+  // yeni. Yayından hemen sonra yeni plan, sayfa tazelenene dek yerelde
+  // tutulur — ikinci aktarım aynı plana gitsin, yeni numara açılmasın.
+  const [justPublished, setJustPublished] = useState<HomeworkPlanRef | null>(null)
+  const allPlans = useMemo(
+    () => (justPublished && !plans.some(p => p.id === justPublished.id) ? [justPublished, ...plans] : plans),
+    [plans, justPublished]
+  )
+  const openPlans = allPlans.filter(p => p.status === 'open')
+  const [targetPlanId, setTargetPlanId] = useState<string>(() => defaultTargetPlan(plans)?.id ?? 'new')
+  const targetPlan = openPlans.find(p => p.id === targetPlanId) ?? null
+  const newPlanNo = nextPlanNo(allPlans)
+  // `title` yalnız öğretmenin AÇIKLAMASIDIR; numaralı ön ek plandan gelir
+  // (Mini 06). Taslakta açıklama varsa o; yoksa hedef planın açıklaması.
+  const [title, setTitle] = useState(
+    () => initialTitle || (defaultTargetPlan(plans)?.titleSuffix ?? '')
+  )
+
+  function changeTarget(id: string) {
+    setTargetPlanId(id)
+    setTitle(openPlans.find(p => p.id === id)?.titleSuffix ?? '')
+  }
   // Ödev notu (R6-05): ödev başına TEK isteğe bağlı alan.
   const [note, setNote] = useState(initialNote)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -357,9 +386,11 @@ export function HomeworkBuilder({
   // SON TESLİM ANI (M1.0-01 §2): akıştan miras alınıyorsa akışın kesin
   // anı; aksi hâlde seçilen gün + saat (İstanbul).
   const effectiveDueAt = useMemo<Date | null>(() => {
+    // Mevcut plana eklemede teslim PLANINDIR; değişikliği plan işlemlerinden.
+    if (targetPlan?.dueAt) return new Date(targetPlan.dueAt)
     if (activeFlow && !customDue) return new Date(activeFlow.dueAt)
     return dueAtFromLocal(dueDate, dueTime)
-  }, [activeFlow, customDue, dueDate, dueTime])
+  }, [targetPlan, activeFlow, customDue, dueDate, dueTime])
 
   // YÜK ÖZETİ — sepet kartı ve WhatsApp metni AYNI nesneyi kullanır.
   const loadSummary = useMemo(
@@ -502,6 +533,21 @@ export function HomeworkBuilder({
     })
   }
 
+  // Mini 06: "Gelecek haftaya devret" ile bekletilen, henüz sepette olmayan işler.
+  const deferredItems = openWorkItems.filter(
+    i => i.status === 'pending' && i.carryRequested && !basketIds.has(i.bookTestId) && testIndex.has(i.bookTestId)
+  )
+
+  // Mini 06: sepetten tek tek / bölüm bölüm çıkarma — veri değişmez.
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  function removeFromBasket(testIds: string[]) {
+    setBasketIds(prev => {
+      const next = new Set(prev)
+      for (const id of testIds) next.delete(id)
+      return next
+    })
+  }
+
   function clearBasket() {
     setBasketIds(new Set())
   }
@@ -565,20 +611,15 @@ export function HomeworkBuilder({
   // son teslim aktif haftanın kapanış günü içindeyse doğrudan yayınlanır.
   // Dışındaysa ya da açık hafta yoksa önce küçük bir onay istenir.
   const effectiveDueDay = effectiveDueAt ? localDateString(effectiveDueAt) : dueDate
-  const needsTransition = !activeFlow || effectiveDueDay > activeFlow.dueDate
+  // Mini 06: mevcut plana ekleme hafta AÇMAZ; geçiş yalnız yeni planda.
+  const needsTransition = !targetPlan && (!activeFlow || effectiveDueDay > activeFlow.dueDate)
   const [transitionOpen, setTransitionOpen] = useState(false)
-  // EK-08: "6. Hafta Ödevi" — hedef haftanın öğrenciyle çalışma haftası
-  // numarası. Taslağa YAZILMAZ (yalnız elle girilen başlık yazılır): hafta
-  // değişince öneri eski numarada donup kalmasın.
-  const autoTitle = defaultHomeworkTitle(
-    targetWeekNumber({ flows: openWorkFlows, activeFlowId: activeFlow?.id ?? null, needsTransition })
-  )
-  const effectiveTitle = titleTouched ? title : (autoTitle ?? '')
+  const canPublish = hasWork && (!!targetPlan || !!dueDate)
   const [carryIds, setCarryIds] = useState<Set<string>>(new Set())
   const [carryTaskIds, setCarryTaskIds] = useState<Set<string>>(new Set())
 
   function handleSubmit() {
-    if (!dueDate || !hasWork) return
+    if (!canPublish) return
     setServerError(null)
     if (needsTransition) {
       // "Gelecek haftaya devret" ile işaretlenmiş işler önceden seçili.
@@ -637,17 +678,24 @@ export function HomeworkBuilder({
   }
 
   async function publishNow() {
+    // Mini 05/06: hedef plan. Boşsa yeni plan yayımlanır (numara burada,
+    // sunucuda alınır); doluysa kalemler o planın partisine eklenir.
+    const target = targetPlan
+    let planId: string | null = target?.id ?? null
+    let planNo: number | null = target?.planNo ?? null
+    const publishDay = dueDate || (effectiveDueAt ? localDateString(effectiveDueAt) : '')
     let result: Awaited<ReturnType<typeof createHomeworkBatchAction>> | null = null
     if (selectedTests.length > 0) {
       result = await createHomeworkBatchAction(
         workspaceId,
         termId,
         studentId,
-        dueDate,
-        effectiveTitle || undefined,
+        publishDay,
+        title.trim() || undefined,
         toHomeworkItems(selectedTests),
         note || undefined,
-        effectiveDueAt?.toISOString()
+        effectiveDueAt?.toISOString(),
+        planId
       )
       if (result?.error) {
         setServerError(result.error)
@@ -660,15 +708,26 @@ export function HomeworkBuilder({
       // zorunluluk değil.
       setBasketIds(new Set())
       clearMapSelection()
-      setTitle('')
-      setTitleTouched(false)
       setNote('')
+      if (!result.error) {
+        planId = result.planId ?? planId
+        planNo = result.planNo ?? planNo
+      }
     }
 
     // Akademik görevler plan son teslimini varsayılan alır; satır
     // istisnası (farklı tarih, tarihsiz) korunur (148).
     if (draftTasks.length > 0) {
-      const published = await publishDraftTasksAction(studentId, effectiveDueAt?.toISOString() ?? null)
+      const published = await publishDraftTasksAction(
+        studentId,
+        effectiveDueAt?.toISOString() ?? null,
+        planId,
+        title.trim() || null
+      )
+      if (!published.error) {
+        planId = published.planId ?? planId
+        planNo = published.planNo ?? planNo
+      }
       if (published.error) {
         if (!result) {
           setServerError(published.error)
@@ -678,9 +737,25 @@ export function HomeworkBuilder({
       }
     }
 
-    toast.success(
-      result ? 'Plan yayınlandı. Harita güncellendi.' : 'Görevler öğrencinin haftasına yayınlandı.'
-    )
+    const planLabel = planNo ? planPrefix(planNo) : 'Ödev planı'
+    toast.success(target ? `${planLabel} güncellendi.` : `${planLabel} yayımlandı.`)
+    // Yeni plan: hedef ona geçer — sonraki aktarımlar aynı plana eklenir.
+    if (!target && planId && planNo) {
+      setJustPublished({
+        id: planId,
+        planNo,
+        titleSuffix: title.trim() || null,
+        legacyTitle: null,
+        publishedAt: new Date().toISOString(),
+        initialDueAt: effectiveDueAt?.toISOString() ?? null,
+        dueAt: effectiveDueAt?.toISOString() ?? null,
+        status: 'open',
+        closedAt: null,
+        closingResult: null,
+        batchId: result?.batchId ?? null,
+      })
+      setTargetPlanId(planId)
+    }
     // Ödev bir haftaya bağlanamadıysa bu SÖYLENİR. Yayın başarılı
     // olduğu için hata değil uyarı; ama öğretmen haftanın toplamının
     // artmadığını bilmeden ekranda eksik sayı görürdü.
@@ -788,10 +863,10 @@ export function HomeworkBuilder({
           <Button
             size="sm"
             onClick={handleSubmit}
-            disabled={isPending || !hasWork || !dueDate}
+            disabled={isPending || !canPublish}
           >
             {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-            Planı Yayınla
+            {targetPlan ? 'Planı güncelle' : 'Planı yayımla'}
           </Button>
         </div>
       </div>
@@ -1088,6 +1163,28 @@ export function HomeworkBuilder({
 
             {panelOpen && (
               <>
+                {/* MİNİ 06 — SONRAKİ PLANA BIRAKILANLAR. "Gelecek haftaya
+                    devret" ile bekletilen işler yeni plan hazırlanırken burada
+                    görünür. Sepete kendiliğinden girmez: taslağa gelmesi ve
+                    yayın ayrı adımlardır. */}
+                {!targetPlan && deferredItems.length > 0 && (
+                  <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-info-border bg-info-subtle px-3 py-2 text-xs">
+                    <span>Sonraki plana bırakılan {deferredItems.length} iş</span>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        setBasketIds(prev => {
+                          const next = new Set(prev)
+                          for (const i of deferredItems) next.add(i.bookTestId)
+                          return next
+                        })
+                      }
+                    >
+                      Sepete ekle
+                    </Button>
+                  </div>
+                )}
                 {selectedTests.length === 0 ? (
                   <p className={cn('px-4 py-4 text-xs text-muted-foreground', draftTasks.length > 0 && 'hidden')}>
                     Haritadan çalışma seçip &quot;Ödeve Ekle&quot; deyin. Kitap
@@ -1117,21 +1214,68 @@ export function HomeworkBuilder({
                             {formatUnitCount(group.count, group.trackingMode)}
                           </Badge>
                         </div>
+                        {/* MİNİ 06 — TEKİL ÇIKARMA. Bölüm satırındaki × bölümün
+                            seçimini, açılan listedeki × tek test/sayfayı sepetten
+                            çıkarır. Veri değişmez: devredilen bir iş çıkarılırsa
+                            yalnız devirden vazgeçilir, kaynak plandaki açık iş kalır. */}
                         <ul className="mt-2 space-y-1">
-                          {[...group.sections.values()].map(section => (
-                            <li
-                              key={section.title}
-                              className="flex items-start justify-between gap-2 text-[11px]"
-                            >
-                              <span className="flex min-w-0 gap-1.5 text-muted-foreground">
-                                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" />
-                                <span className="truncate">{section.title}</span>
-                              </span>
-                              <span className="shrink-0 tabular-nums text-muted-foreground">
-                                {formatSelectedUnits(section.units, group.trackingMode)}
-                              </span>
-                            </li>
-                          ))}
+                          {[...group.sections.entries()].map(([sectionId, section]) => {
+                            const key = `${group.bookId}:${sectionId}`
+                            const sectionUnits = selectedTests.filter(
+                              t => t.bookId === group.bookId && t.sectionId === sectionId
+                            )
+                            const expanded = expandedSection === key
+                            return (
+                              <li key={key} className="text-[11px]">
+                                <div className="flex items-start justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    className="flex min-w-0 gap-1.5 text-left text-muted-foreground hover:text-foreground"
+                                    onClick={() => setExpandedSection(expanded ? null : key)}
+                                    aria-expanded={expanded}
+                                    title="Tek tek çıkarmak için aç"
+                                  >
+                                    <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" />
+                                    <span className="truncate">{section.title}</span>
+                                  </button>
+                                  <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
+                                    {formatSelectedUnits(section.units, group.trackingMode)}
+                                    <button
+                                      type="button"
+                                      className="rounded px-0.5 hover:text-destructive"
+                                      aria-label={`${section.title} bölümünü sepetten çıkar`}
+                                      onClick={() => removeFromBasket(sectionUnits.map(t => t.book_test_id))}
+                                    >
+                                      <X className="size-3" />
+                                    </button>
+                                  </span>
+                                </div>
+                                {expanded && (
+                                  <ul className="mt-1 ml-3 flex flex-wrap gap-1">
+                                    {[...sectionUnits]
+                                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                                      .map(t => (
+                                        <li
+                                          key={t.book_test_id}
+                                          className="inline-flex items-center gap-0.5 rounded border px-1 tabular-nums"
+                                        >
+                                          {formatSelectedUnits([t.orderIndex], t.trackingMode)}
+                                          {t.carry && <span className="text-muted-foreground"> · devir</span>}
+                                          <button
+                                            type="button"
+                                            className="hover:text-destructive"
+                                            aria-label="Sepetten çıkar"
+                                            onClick={() => removeFromBasket([t.book_test_id])}
+                                          >
+                                            <X className="size-3" />
+                                          </button>
+                                        </li>
+                                      ))}
+                                  </ul>
+                                )}
+                              </li>
+                            )
+                          })}
                         </ul>
                       </div>
                     ))}
@@ -1154,19 +1298,51 @@ export function HomeworkBuilder({
                 </div>
 
                 <div className="shrink-0 space-y-3 overflow-y-auto border-t px-4 py-3">
+                  {/* MİNİ 05/06 — HEDEF PLAN ve BAŞLIK. Numaralı ön ek sistemden
+                      (yalnız yeni ve ayrı plan yayımlanınca artar), açıklama
+                      öğretmenden. Sıra başlıktaki rakamdan hesaplanmaz. */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="targetPlan" className="text-xs">
+                      Hedef plan
+                    </Label>
+                    <NativeSelect
+                      id="targetPlan"
+                      value={targetPlan ? targetPlan.id : 'new'}
+                      onChange={e => changeTarget(e.target.value)}
+                      disabled={isPending}
+                    >
+                      <option value="new">Yeni plan: {planPrefix(newPlanNo)}</option>
+                      {openPlans.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {planDisplayTitle(p)}
+                          {p.dueAt ? ` · teslim ${formatSessionLong(p.dueAt)}` : ''}
+                          {p.dueAt && new Date(p.dueAt) < new Date() ? ' (teslim geçti)' : ''}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <p className="text-[11px] text-muted-foreground">
+                      {targetPlan
+                        ? 'Sepet bu plana eklenir; numara artmaz, yeni hafta açılmaz.'
+                        : 'Yeni ve ayrı bir plan yayımlanır; numara yayında verilir.'}
+                    </p>
+                  </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="title" className="text-xs">
                       Başlık
                     </Label>
-                    <Input
-                      id="title"
-                      placeholder="Örn: 12. Hafta Ödevi"
-                      value={titleTouched ? title : (autoTitle ?? '')}
-                      onChange={e => {
-                        setTitleTouched(true)
-                        setTitle(e.target.value)
-                      }}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <span className="shrink-0 text-sm font-medium">
+                        {targetPlan ? (targetPlan.legacyTitle ?? planPrefix(targetPlan.planNo)) : planPrefix(newPlanNo)}
+                        {' ·'}
+                      </span>
+                      <Input
+                        id="title"
+                        placeholder="Açıklama (isteğe bağlı), örn: Yazılı Hazırlığı"
+                        maxLength={160}
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                      />
+                    </div>
                   </div>
                   {/* SON TESLİM — varsayılan aktif Haftalık Akış'tan.
                       §1'in istediği satır: "Son teslim: 20 Eylül Pazar
@@ -1177,7 +1353,16 @@ export function HomeworkBuilder({
                       Son Teslim
                     </Label>
 
-                    {activeFlow && !customDue ? (
+                    {targetPlan ? (
+                      <div className="rounded-md border bg-muted/40 p-2.5">
+                        <p className="text-sm font-medium">
+                          {targetPlan.dueAt ? formatSessionLong(targetPlan.dueAt) : '—'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Planın son teslimi. Değiştirmek için Genel Bakış &gt; Ödevler &gt; plan İşlemleri.
+                        </p>
+                      </div>
+                    ) : activeFlow && !customDue ? (
                       <div className="rounded-md border bg-muted/40 p-2.5">
                         <p className="text-sm font-medium">
                           {formatSessionLong(activeFlow.dueAt)}
@@ -1319,10 +1504,10 @@ export function HomeworkBuilder({
                   <Button
                     className="w-full"
                     onClick={handleSubmit}
-                    disabled={isPending || !hasWork || !dueDate}
+                    disabled={isPending || !canPublish}
                   >
                     {isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                    Planı Yayınla
+                    {targetPlan ? 'Planı güncelle' : 'Planı yayımla'}
                   </Button>
                   {!dueDate && selectedTests.length > 0 && (
                     <p className="text-xs text-muted-foreground">

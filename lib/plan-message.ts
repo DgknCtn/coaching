@@ -5,20 +5,14 @@ import { summarizeLoad } from '@/lib/homework-load'
 import { loadStudentTasks } from '@/lib/academic-tasks-load'
 import { buildShareText, groupPublishedUnits, type PublishedShareUnit } from '@/lib/share-text'
 
-// GÜNCEL ÖDEV MESAJI — İz V2 R04.
+// ÖDEV PLANININ GÜNCEL MESAJI — İz V2 R04, Revize Mini 05/06 ile PLAN bazlı.
 //
-// "Yayımlanan haftalık listenin yanında 'Mesaj metnini kopyala' erişimi
-// olsun. İlk yayın ve aynı hafta sonradan eklenen yayımlanmış çalışmalar
-// güncel metinde birer kez yer alsın. Taslaklar ve aktif yükten
-// çıkarılan işler mesaja girmesin."
-//
-// Kaynak AKTİF HAFTANIN kayıtlarıdır; Ödev Planlama sepeti değil:
-//   - kitap kalemleri: aktif haftaya bağlı, aktif partilerin iptal
-//     edilmemiş kalemleri (aktif yükten çıkarılan / devredilen girmez)
-//   - akademik görevler: aktif haftanın öğretmen görevleri, taslak ve
-//     kapatılan hariç
-// Metin mevcut düzenle (buildShareText) üretilir; ders bazlı gruplama
-// yoktur. Kopyalamak hiçbir kayıt oluşturmaz.
+// Eskiden aktif HAFTANIN mesajıydı. Ödev Planı (156) kalıcı kayıt olunca
+// mesaj planın kendisidir: o planın yayımlanmış kalemleri (ilk yayın ve
+// sonradan eklenenler, birer kez) ve görevleri, planın GÜNCEL teslimiyle.
+// Teslim uzatılınca yeniden kopyalanan mesaj yeni teslimi kullanır.
+// Taslaklar, aktif yükten çıkarılan ve devredilen işler mesaja girmez.
+// Metin mevcut düzenle (buildShareText) üretilir; kopyalamak kayıt üretmez.
 
 type Nested<T> = T | T[] | null
 function one<T>(value: Nested<T>): T | null {
@@ -26,23 +20,24 @@ function one<T>(value: Nested<T>): T | null {
   return value ?? null
 }
 
-export async function loadWeekMessage(
+export async function loadPlanMessage(
   supabase: SupabaseClient,
   {
     workspaceId,
     studentId,
     studentName,
-    flow,
+    plan,
     now = new Date(),
   }: {
     workspaceId: string
     studentId: string
     studentName: string
-    flow: { id: string; dueAt: string } | null
+    plan: { id: string; dueAt: string | null }
     now?: Date
   }
 ): Promise<string | null> {
-  if (!flow) return null
+  if (!plan.dueAt) return null
+  const flow = { id: plan.id, dueAt: plan.dueAt }
 
   const [itemsRes, tasks] = await Promise.all([
     fetchAllRows<Record<string, unknown>>((from, to) =>
@@ -50,25 +45,24 @@ export async function loadWeekMessage(
         .from('homework_items')
         .select(
           `id, book_id, section_id,
-           homework_batches!inner(weekly_flow_id, status, description, created_at),
+           homework_batches!inner(plan_id, description, created_at),
            books(title, tracking_mode),
            book_sections(title),
            book_tests(order_index)`
         )
         .eq('workspace_id', workspaceId)
-        .eq('homework_batches.weekly_flow_id', flow.id)
-        .eq('homework_batches.status', 'active')
+        .eq('homework_batches.plan_id', plan.id)
         .neq('status', 'cancelled')
         .order('id')
         .range(from, to)
     ),
     loadStudentTasks(supabase, { studentId, statuses: ['open', 'done'] }).catch(error => {
-      console.error('[week-message] görevler okunamadı:', error)
+      console.error('[plan-message] görevler okunamadı:', error)
       return []
     }),
   ])
   if (itemsRes.error) {
-    console.error('[week-message] kalemler okunamadı:', itemsRes.error.message)
+    console.error('[plan-message] kalemler okunamadı:', itemsRes.error.message)
     return null
   }
 
@@ -96,9 +90,7 @@ export async function loadWeekMessage(
     })
   }
 
-  const weekTasks = tasks.filter(
-    t => t.weeklyFlowId === flow.id && t.createdByRole === 'teacher'
-  )
+  const weekTasks = tasks.filter(t => t.planId === plan.id && t.createdByRole === 'teacher')
   if (units.length === 0 && weekTasks.length === 0) return null
 
   // Partilerin notları (yayın sırasıyla), her biri bir kez.

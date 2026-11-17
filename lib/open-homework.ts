@@ -26,6 +26,8 @@ export interface FlowRef {
 
 export interface OpenWorkItem {
   id: string
+  /** Birimin kimliği — "sonraki plana bırakılanlar" sepete bununla eklenir (Mini 06). */
+  bookTestId: string
   /** pending | pending_approval */
   status: string
   bookTitle: string | null
@@ -93,7 +95,7 @@ export async function loadOpenWork(
       supabase
         .from('homework_items')
         .select(
-          `id, status, submitted_at, carry_requested_at,
+          `id, book_test_id, status, submitted_at, carry_requested_at,
            homework_batches!inner(id, title, due_date, due_at, weekly_flow_id, status, student_id, workspace_id),
            books(title, tracking_mode),
            book_sections(title, order_index),
@@ -125,6 +127,7 @@ export async function loadOpenWork(
   }
   type Row = {
     id: string
+    book_test_id: string
     status: string
     submitted_at: string | null
     carry_requested_at: string | null
@@ -159,6 +162,7 @@ export async function loadOpenWork(
     })
     .map<OpenWorkItem>(({ r, batch }) => ({
       id: r.id,
+      bookTestId: r.book_test_id,
       status: r.status,
       bookTitle: one(r.books)?.title ?? null,
       trackingMode: one(r.books)?.tracking_mode ?? null,

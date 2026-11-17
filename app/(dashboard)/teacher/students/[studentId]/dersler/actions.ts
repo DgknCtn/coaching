@@ -253,15 +253,28 @@ export async function setTaskClosedAction(studentId: string, taskId: string, clo
   return { success: true }
 }
 
-/** Taslak görevleri aktif haftaya yayınla (Planı Yayınla'nın görev ayağı). */
-export async function publishDraftTasksAction(studentId: string, dueAtIso: string | null): Promise<Result & { published?: number }> {
+/**
+ * Taslak görevleri aktif haftaya yayınla (Planı Yayınla'nın görev ayağı).
+ * Mini 05/06 (156): görevler plana bağlanır. Plan verilmediyse ve taslak
+ * varsa yeni plan açılır (kitapsız plan); taslak yoksa plan açılmaz.
+ */
+export async function publishDraftTasksAction(
+  studentId: string,
+  dueAtIso: string | null,
+  planId?: string | null,
+  titleSuffix?: string | null
+): Promise<Result & { published?: number; planId?: string | null; planNo?: number | null }> {
   if (!uuidSchema.safeParse(studentId).success) return { error: 'Geçersiz öğrenci.' }
+  if (planId && !uuidSchema.safeParse(planId).success) return { error: 'Geçersiz ödev planı.' }
   const { supabase } = await getTeacherContext()
   const { data, error } = await supabase.rpc('publish_draft_academic_tasks', {
     p_student_id: studentId,
     p_due_at: dueAtIso,
+    p_plan_id: planId ?? null,
+    p_title_suffix: titleSuffix?.trim() || null,
   })
   if (error) return { error: dbErrorToTr(error.message) }
+  const r = (data ?? {}) as { published?: number; plan_id?: string | null; plan_no?: number | null }
   revalidate(studentId)
-  return { success: true, published: Number(data ?? 0) }
+  return { success: true, published: Number(r.published ?? 0), planId: r.plan_id ?? null, planNo: r.plan_no ?? null }
 }

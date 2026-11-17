@@ -43,13 +43,15 @@ export interface AcademicTask {
   undated: boolean
   weeklyFlowId: string | null
   originFlowId: string | null
+  /** Bağlı olduğu Ödev Planı (156); planla yayımlanmamış eski görevlerde null. */
+  planId: string | null
   plannedForDate: string | null
   completedAt: string | null
   checklist: ChecklistItem[]
 }
 
 export const TASK_SELECT =
-  'id, student_id, scope_id, kind, title, target_minutes, done_minutes, created_by_role, tracked, status, due_at, undated, weekly_flow_id, origin_flow_id, planned_for_date, completed_at'
+  'id, student_id, scope_id, kind, title, target_minutes, done_minutes, created_by_role, tracked, status, due_at, undated, weekly_flow_id, origin_flow_id, plan_id, planned_for_date, completed_at'
 
 export const CHECKLIST_SELECT = 'id, task_id, title, done, order_index'
 
@@ -87,6 +89,7 @@ export function mapTasks(
     undated: Boolean(r.undated),
     weeklyFlowId: (r.weekly_flow_id as string | null) ?? null,
     originFlowId: (r.origin_flow_id as string | null) ?? null,
+    planId: (r.plan_id as string | null) ?? null,
     plannedForDate: (r.planned_for_date as string | null) ?? null,
     completedAt: (r.completed_at as string | null) ?? null,
     checklist: (items.get(r.id as string) ?? [])
