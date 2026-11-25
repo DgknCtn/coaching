@@ -145,6 +145,12 @@ describe('anahtar şifreleme', () => {
     expect(() => decryptToken(parts.join(':'))).toThrow()
   })
 
+  it('panele tırnakla/boşlukla yapıştırılan anahtar da çalışır', async () => {
+    vi.stubEnv('CALENDAR_TOKEN_KEY', ` "${KEY}" `)
+    const { decryptToken, encryptToken } = await import('@/lib/calendar/crypto')
+    expect(decryptToken(encryptToken('x'))).toBe('x')
+  })
+
   it('anahtar yoksa açık hata', async () => {
     vi.stubEnv('CALENDAR_TOKEN_KEY', '')
     const { CalendarKeyError, encryptToken } = await import('@/lib/calendar/crypto')

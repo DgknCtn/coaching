@@ -27,6 +27,11 @@ const RESULT_TEXT: Record<string, string> = {
   anahtar_yok: 'Google kalıcı erişim vermedi; tekrar bağlanıp izinleri onaylayın.',
   kayit: 'Bağlantı kaydedilemedi.',
   hata: 'Google ile bağlantı kurulamadı.',
+  istemci:
+    "Google, uygulama kimliğini reddetti (invalid_client). Vercel'deki GOOGLE_CALENDAR_CLIENT_ID ve GOOGLE_CALENDAR_CLIENT_SECRET değerlerini Google Cloud'daki istemciyle karşılaştırın.",
+  sifreleme:
+    "CALENDAR_TOKEN_KEY geçersiz: 64 karakterlik onaltılık (0-9, a-f) bir değer olmalı.",
+  kod: 'Google onay kodu kabul edilmedi; birkaç saniye bekleyip yeniden bağlanmayı deneyin.',
   yapilandirilmadi: 'Google Calendar entegrasyonu henüz yapılandırılmadı.',
 }
 

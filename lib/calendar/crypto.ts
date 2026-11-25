@@ -17,7 +17,7 @@ const VERSION = 'v1'
 export class CalendarKeyError extends Error {}
 
 function key(): Buffer {
-  const raw = process.env.CALENDAR_TOKEN_KEY?.trim()
+  const raw = (process.env.CALENDAR_TOKEN_KEY ?? '').trim().replace(/^(['"])(.*)\1$/, '$2').trim()
   if (!raw) throw new CalendarKeyError('CALENDAR_TOKEN_KEY tanımlı değil.')
   const buf = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, 'hex') : Buffer.from(raw, 'base64')
   if (buf.length !== 32) throw new CalendarKeyError('CALENDAR_TOKEN_KEY 32 bayt olmalı.')

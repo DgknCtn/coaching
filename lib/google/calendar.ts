@@ -10,6 +10,15 @@ import 'server-only'
 // (calendarConfigured): bağla düğmesi görünmez, eşitleme çalışmaz.
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+/**
+ * Ortam değişkeni, panele yapıştırılırken eklenen boşluk ve tırnaklardan
+ * arındırılmış olarak. ("abc" ya da 'abc' → abc.) Google, sondaki tek bir
+ * boşluk yüzünden bile invalid_client döner.
+ */
+export function calendarEnv(name: string): string {
+  return (process.env[name] ?? '').trim().replace(/^(['"])(.*)\1$/, '$2').trim()
+}
+
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
@@ -19,9 +28,9 @@ export const CALENDAR_SCOPES = ['openid', 'email', 'https://www.googleapis.com/a
 
 export function calendarConfigured(): boolean {
   return !!(
-    process.env.GOOGLE_CALENDAR_CLIENT_ID &&
-    process.env.GOOGLE_CALENDAR_CLIENT_SECRET &&
-    process.env.CALENDAR_TOKEN_KEY
+    calendarEnv('GOOGLE_CALENDAR_CLIENT_ID') &&
+    calendarEnv('GOOGLE_CALENDAR_CLIENT_SECRET') &&
+    calendarEnv('CALENDAR_TOKEN_KEY')
   )
 }
 
@@ -34,7 +43,7 @@ export class GoogleReauthError extends Error {}
 
 export function buildAuthUrl(input: { state: string; codeChallenge: string; redirectUri: string }): string {
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CALENDAR_CLIENT_ID ?? '',
+    client_id: calendarEnv('GOOGLE_CALENDAR_CLIENT_ID'),
     redirect_uri: input.redirectUri,
     response_type: 'code',
     scope: CALENDAR_SCOPES.join(' '),
@@ -54,8 +63,8 @@ async function tokenRequest(body: Record<string, string>) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CALENDAR_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET ?? '',
+      client_id: calendarEnv('GOOGLE_CALENDAR_CLIENT_ID'),
+      client_secret: calendarEnv('GOOGLE_CALENDAR_CLIENT_SECRET'),
       ...body,
     }),
     cache: 'no-store',

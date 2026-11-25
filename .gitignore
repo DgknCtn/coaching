@@ -85,3 +85,6 @@ WhatsApp Image *.jpg
 
 # Postgres becerisinin bağlantı bilgileri — KİMLİK BİLGİSİ İÇERİR, asla işlenmez.
 .claude/skills/postgres/connections.json
+
+# Google OAuth istemci dosyası (Client Secret içerir) — asla commit edilmez
+client_secret_*.json

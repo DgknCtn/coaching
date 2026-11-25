@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getTeacherContext } from '@/lib/workspace'
 import { createClient } from '@/lib/supabase/server'
-import { encryptToken } from '@/lib/calendar/crypto'
+import { CalendarKeyError, encryptToken } from '@/lib/calendar/crypto'
 import {
   calendarConfigured,
   calendarRedirectUri,
   exchangeCode,
   fetchUserEmail,
+  GoogleReauthError,
 } from '@/lib/google/calendar'
 import { syncConnection } from '@/lib/calendar/sync'
 import { siteUrl } from '@/lib/brand'
@@ -80,7 +81,12 @@ export async function GET(request: NextRequest) {
       new Promise(resolve => setTimeout(resolve, 8000)),
     ])
   } catch (error) {
-    console.error('[google-calendar] bağlanamadı:', error instanceof Error ? error.message : error)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[google-calendar] bağlanamadı:', message)
+    // Hangi adımın düştüğü ekranda görünsün (sır içermez).
+    if (error instanceof CalendarKeyError) return fail('sifreleme')
+    if (/invalid_client|unauthorized_client/.test(message)) return fail('istemci')
+    if (error instanceof GoogleReauthError || /invalid_grant/.test(message)) return fail('kod')
     return fail('hata')
   }
 
