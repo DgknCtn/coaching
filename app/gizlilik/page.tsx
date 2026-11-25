@@ -119,6 +119,24 @@ export default function PrivacyPage() {
         </li>
       </ul>
 
+      <LegalHeading>Google Takvim bağlantısı (isteğe bağlı)</LegalHeading>
+      <p>
+        Öğretmen dilerse kendi Google Takvim&apos;ini bağlayabilir. Bu bağlantı yalnız{' '}
+        <strong className="text-foreground">okuma</strong> izni ister; platform takvime
+        hiçbir şey yazmaz, etkinlik oluşturmaz ya da silmez. Okunan etkinliklerden yalnız
+        derslerin zamanı, katılımcı e-posta adresleri (öğrenciyle eşleştirmek için) ve
+        varsa görüntülü görüşme bağlantısı saklanır. Öğrenciyle eşleşmeyen etkinliklerin
+        başlığı yalnız eşleştirme ekranında gösterilmek için tutulur ve en geç 30 gün
+        sonra silinir.
+      </p>
+      <p>
+        Google&apos;ın verdiği erişim anahtarı şifrelenmiş olarak saklanır ve tarayıcıya
+        hiçbir zaman gönderilmez. Bağlantı Ayarlar&apos;dan koparıldığında anahtar
+        Google&apos;da iptal edilir ve platformdan silinir; bağlantı sırasında oluşmuş
+        ders kayıtları öğretmenin kaydı olarak kalır. Google verileri reklam ya da
+        başka bir amaçla kullanılmaz ve üçüncü taraflarla paylaşılmaz.
+      </p>
+
       <LegalHeading>Saklama süresi ve silme</LegalHeading>
       <p>
         Veriler, hesap aktif olduğu sürece saklanır. Silme talebinizi{' '}

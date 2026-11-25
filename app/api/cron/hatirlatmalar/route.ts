@@ -5,6 +5,8 @@ import { checkCronAuth } from '@/lib/cron-auth'
 import { reminderFor, type Reminder } from '@/lib/reminders'
 import { reminderEmail } from '@/lib/email-templates'
 import { emailConfigured, sendEmail, type SendStatus } from '@/lib/email'
+import { calendarConfigured } from '@/lib/google/calendar'
+import { syncConnection } from '@/lib/calendar/sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -145,6 +147,36 @@ export async function GET(request: NextRequest) {
   })
   if (logError) console.error('[cron/hatirlatmalar] cron_runs yazılamadı:', logError.message)
 
-  console.log(`[cron/hatirlatmalar] ${JSON.stringify(counts)}`)
-  return NextResponse.json({ ok, ...counts, time: new Date().toISOString() })
+  // GOOGLE CALENDAR GÜNLÜK YEDEK EŞİTLEME (157). Vercel Hobby planında
+  // ayrı bir zamanlanmış iş tanımlanamıyor (en fazla iki, ikisi kullanımda);
+  // asıl eşitleme sayfa açılışında ve "Şimdi eşitle" ile. Burada öğretmen
+  // sayfayı hiç açmasa da plan günde bir kez güncellenir. Hata hatırlatma
+  // işini etkilemez; bağlantıya yazılır.
+  const calendar = await syncAllCalendars(supabase)
+
+  console.log(`[cron/hatirlatmalar] ${JSON.stringify(counts)} calendar=${JSON.stringify(calendar)}`)
+  return NextResponse.json({ ok, ...counts, calendar, time: new Date().toISOString() })
+}
+
+/** Etkin bağlantıları sırayla, süre bütçesiyle eşitler (service_role, CRON_SECRET arkasında). */
+async function syncAllCalendars(supabase: SupabaseClient): Promise<{ synced: number; failed: number; skipped: number }> {
+  const result = { synced: 0, failed: 0, skipped: 0 }
+  if (!calendarConfigured()) return result
+  const { data } = await supabase
+    .from('calendar_connections')
+    .select('id')
+    .eq('status', 'active')
+    .order('last_synced_at', { ascending: true, nullsFirst: true })
+    .limit(50)
+  const deadline = Date.now() + 40_000
+  for (const conn of (data ?? []) as { id: string }[]) {
+    if (Date.now() > deadline) {
+      result.skipped++
+      continue
+    }
+    const summary = await syncConnection(supabase, conn.id).catch(() => null)
+    if (summary?.ok) result.synced++
+    else result.failed++
+  }
+  return result
 }

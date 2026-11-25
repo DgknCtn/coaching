@@ -1151,6 +1151,7 @@ export default async function StudentDetailPage({
                   studentId={studentId}
                   activeFlowId={thisWeek.flowId}
                   openWork={openWork}
+                  studentName={student.full_name}
                   standaloneTaskPlans={plans.filter(
                     (p) => p.status === 'open' && !p.batchId
                   ).map((p) => ({ ...p, message: planMessages[p.id] ?? null }))}

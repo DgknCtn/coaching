@@ -5,7 +5,7 @@
 // tabloyu içe aktarmadan tipe ulaşamazdı.
 
 import type { FinanceLink, ServiceCadence, SessionStatus, Weekday } from '@/lib/service-structure'
-import type { MakeupStatus, SessionSource } from '@/lib/session-state'
+import type { CalendarState, MakeupStatus, SessionSource } from '@/lib/session-state'
 import type { FinanceModelVersion, PriceVersion } from '@/lib/pricing-history'
 
 export interface ServiceRow {
@@ -27,6 +27,8 @@ export interface ServiceRow {
   defaultUnitCount: number
   isMainContact: boolean
   status: 'active' | 'passive' | 'archived'
+  /** 157: bu tarihten sonra program Google Calendar'dan gelir; null = İz üretir. */
+  calendarLinkedFrom?: string | null
 }
 
 export interface SessionRow {
@@ -53,6 +55,10 @@ export interface SessionRow {
   makeupStatus: MakeupStatus
   /** Telafiyse: asıl oturumun planlanan anı. */
   originPlannedAt: string | null
+  /** Calendar'da iptal edildi / karşılığı yok (157); sonuç bekler. */
+  calendarState?: CalendarState | null
+  /** Calendar etkinliğindeki Meet bağlantısı (yalnız okunur). */
+  meetUrl?: string | null
 }
 
 /** Hizmet Modeli kartının verisi; null = finansı görme yetkisi yok (owner değil). */

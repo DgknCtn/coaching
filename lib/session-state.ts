@@ -34,7 +34,11 @@ export const MAKEUP_STATUS_VARIANT: Record<
   completed: 'success',
 }
 
-export type SessionSource = 'takvim' | 'elle' | 'telafi'
+/** 'calendar': Google Calendar'dan planlandı (157). */
+export type SessionSource = 'takvim' | 'elle' | 'telafi' | 'calendar'
+
+/** Calendar'daki karşılığın durumu (157); null = sorun yok. */
+export type CalendarState = 'cancelled_in_calendar' | 'missing_in_calendar'
 
 /** Yapıldı panelinin hazır birimleri; "Özel" serbest giriş. */
 export const UNIT_PRESETS = [0.5, 1, 1.5, 2] as const
