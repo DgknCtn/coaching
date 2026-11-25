@@ -127,7 +127,7 @@ async function buildCalendarPanel(
   studentName: string
 ) {
   if (!calendarConfigured()) return null
-  const events = await loadUnmatchedEvents(supabase, workspaceId)
+  const events = await loadUnmatchedEvents(supabase, workspaceId, studentId)
   if (events.length === 0) return null
   const { data: svc } = await supabase
     .from('student_services')

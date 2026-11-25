@@ -31,7 +31,7 @@ export function CalendarUnmatchedPanel({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [serviceByLink, setServiceByLink] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -76,9 +76,16 @@ export function CalendarUnmatchedPanel({
       {open && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Öğrenciyle güvenli eşleşmeyen dersler otomatik bağlanmaz. Bu öğrenciye aitse bir hizmet seçip
-            eşleyin; değilse yok sayın ya da ilgili öğrencinin sayfasından eşleyin.
+            Bu öğrencinin (ya da velisinin) davetli olduğu ama otomatik bağlanamayan dersler ile katılımcısız
+            etkinlikler. Otomatik bağlama için öğrencinin <strong>tek</strong> aktif birebir hizmeti olmalı;
+            birden çoksa hangisine yazılacağını burada bir kez seçersiniz.
           </p>
+          {services.length === 0 && (
+            <p className="text-xs font-medium text-destructive">
+              Bu öğrencinin aktif birebir hizmeti yok. Önce Hizmet Yapısı&apos;ndan birebir ders ya da koçluk
+              ekleyin; sonra buradan eşleyebilirsiniz.
+            </p>
+          )}
           <ul className="divide-y rounded-md border bg-card">
             {events.map(e => (
               <li key={e.linkId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
