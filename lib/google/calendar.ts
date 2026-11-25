@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createHash } from 'node:crypto'
+
 // GOOGLE CALENDAR — yalnız OKUMA (migration 157, tek yönlü model).
 //
 // Ek paket yok: OAuth ve Calendar REST uçları doğrudan fetch ile. Kapsam
@@ -74,6 +76,15 @@ async function tokenRequest(body: Record<string, string>) {
     // invalid_grant: anahtar iptal edildi ya da (test modunda) 7 günlük
     // süresi doldu — öğretmen yeniden bağlanmalı.
     if (json.error === 'invalid_grant') throw new GoogleReauthError('Google bağlantısının süresi doldu ya da iptal edildi.')
+    if (json.error === 'invalid_client') {
+      // Tanı: hangi istemci/secret kullanıldığını SIR SIZDIRMADAN gösterir
+      // (Client ID'nin sonu herkese açıktır; secret yalnız uzunluk + özet).
+      const id = calendarEnv('GOOGLE_CALENDAR_CLIENT_ID')
+      const secret = calendarEnv('GOOGLE_CALENDAR_CLIENT_SECRET')
+      console.error(
+        `[google-calendar] invalid_client · id …${id.slice(-34)} · secret uzunluk ${secret.length} · özet ${createHash('sha256').update(secret).digest('hex').slice(0, 8)}`
+      )
+    }
     throw new Error(`Google token hatası: ${String(json.error ?? res.status)}`)
   }
   return json as { access_token: string; refresh_token?: string; expires_in?: number }
