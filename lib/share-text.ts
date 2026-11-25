@@ -300,3 +300,76 @@ export function groupPublishedUnits(units: PublishedShareUnit[]): ShareBook[] {
     }
   })
 }
+
+// ============================================================
+// DERS HATIRLATMASI ve ÖDEV YOKLAMASI — Calendar belgesi (23.11.2026) §4
+//
+// WhatsApp katmanı AYRI ve OPSİYONEL: bu sürümde otomatik gönderim YOK.
+// Calendar'dan planlanan dersten hazır metin üretilir; öğretmen kopyalar
+// ya da "WhatsApp'ta aç" ile kendi gönderir (wa.me, numara seçmeden).
+// Meta API kurulmadan sıfır maliyetli ara çözüm.
+// ============================================================
+
+const reminderDay = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: APP_TIME_ZONE,
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+})
+
+/** "Merhaba Doğa, yarın sabah saat 10.00'da online matematik dersin var." */
+export function buildLessonReminder(input: {
+  studentName: string
+  at: Date | string
+  online?: boolean
+  subject?: string | null
+  meetUrl?: string | null
+  now?: Date
+}): string {
+  const at = input.at instanceof Date ? input.at : new Date(input.at)
+  const first = input.studentName.trim().split(' ')[0] || input.studentName.trim()
+  const now = input.now ?? new Date()
+  const diff = dayDiff(todayDateStringAt(now), todayDateStringAt(at))
+  const dayWord =
+    diff === 0 ? 'bugün' : diff === 1 ? 'yarın' : reminderDay.format(at)
+  const hour = Number(localClock(at).slice(0, 2))
+  const part = hour < 12 ? 'sabah' : hour < 18 ? 'öğleden sonra' : 'akşam'
+  const time = localClock(at).replace(':', '.')
+  const suffix = locativeSuffix(Number(localClock(at).slice(0, 2)), Number(localClock(at).slice(3, 5)))
+  const kind = [input.online ? 'online' : null, input.subject?.trim().toLocaleLowerCase('tr') || null, 'dersin']
+    .filter(Boolean)
+    .join(' ')
+  const lines = [`Merhaba ${first}, ${dayWord} ${part} saat ${time}'${suffix} ${kind} var.`]
+  if (input.meetUrl) lines.push(`Derse katıl: ${input.meetUrl}`)
+  return lines.join('\n')
+}
+
+/** Hafta içi ödev yoklaması (belgedeki örnek). Yanıt WhatsApp'ta kalır. */
+export function buildHomeworkCheckIn(studentName: string): string {
+  const first = studentName.trim().split(' ')[0] || studentName.trim()
+  return (
+    `Merhaba ${first}, bu haftaki çalışmaların nasıl gidiyor? ` +
+    `Tamamladığın kısmı ve zorlandığın yeri kısaca yazabilir misin?`
+  )
+}
+
+/** Numara seçmeden WhatsApp'ta hazır metinle açar (öğretmen kişiyi seçer). */
+export function whatsappShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
+}
+
+function todayDateStringAt(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE }).format(d)
+}
+
+// "-da/-de/-ta/-te": saatin OKUNUŞUNUN son sözcüğüne göre (ünlü uyumu +
+// sert ünsüz benzeşmesi). 10.00 "on"da, 20.00 "yirmi"de, 13.00 "üç"te,
+// 10.30 "otuz"da. Dakika 0 değilse son sözcük dakikanındır.
+const UNIT_SUFFIX: Record<number, string> = { 1: 'de', 2: 'de', 3: 'te', 4: 'te', 5: 'te', 6: 'da', 7: 'de', 8: 'de', 9: 'da' }
+const TENS_SUFFIX: Record<number, string> = { 1: 'da', 2: 'de', 3: 'da', 4: 'ta', 5: 'de' }
+
+export function locativeSuffix(hour: number, minute: number): string {
+  const n = minute > 0 ? minute : hour
+  if (n === 0) return 'da' // "sıfır"
+  return n % 10 !== 0 ? UNIT_SUFFIX[n % 10] : TENS_SUFFIX[Math.floor(n / 10)] ?? 'da'
+}

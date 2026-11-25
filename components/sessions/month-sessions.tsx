@@ -23,6 +23,7 @@ import {
 } from '@/app/(dashboard)/teacher/students/[studentId]/gorusmeler/actions'
 import type { SessionRow } from '@/app/(dashboard)/teacher/students/[studentId]/gorusmeler/types'
 import { AddSessionDialog, type AddSessionTarget, type SessionMoney } from '@/components/sessions/week-sessions'
+import { CalendarBadges } from '@/components/sessions/calendar-badges'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -316,6 +317,7 @@ function SessionCellLine({
           : `${formatSessionDayDate(row.currentPlannedAt)} · saat girilmedi`}
       </span>
       {row.isExtra && <span className="text-muted-foreground">Ek ders</span>}
+      <CalendarBadges row={row} />
 
       {/* DURUM YALNIZ RENKLE ANLATILMAZ (R8): sonuçlanmamış oturum boş
           halka + metinle nötr görünür; dolu tik yalnız "Yapıldı"da. Eskiden

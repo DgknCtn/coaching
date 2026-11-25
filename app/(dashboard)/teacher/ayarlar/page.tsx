@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { AccountForm } from './account-form'
 import { PasswordForm } from './password-form'
 import { NotificationToggle } from './notification-toggle'
+import { CalendarCard, type CalendarConnectionView } from './calendar-card'
+import { calendarConfigured } from '@/lib/google/calendar'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = { title: 'Ayarlar' }
@@ -31,8 +33,13 @@ export const dynamic = 'force-dynamic'
 // değiştirmeyen düğme, kullanıcıya kapattığını sandığı şeyi gizler.
 // ============================================================
 
-export default async function SettingsPage() {
-  const { profile, workspace, role, usage } = await getTeacherContext()
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ takvim?: string }>
+}) {
+  const { profile, workspace, workspaceId, role, usage } = await getTeacherContext()
+  const { takvim } = await searchParams
 
   const state = usage ? licenseState(usage) : null
   const endsAt =
@@ -50,6 +57,26 @@ export default async function SettingsPage() {
     .eq('id', profile.id)
     .maybeSingle()
 
+  // Google Takvim (157): yapılandırılmadıysa kart hiç çizilmez.
+  const calendarEnabled = calendarConfigured()
+  const { data: calRow } = calendarEnabled
+    ? await (await createClient())
+        .from('calendar_connections')
+        .select('google_email, status, calendar_ids, last_synced_at, last_error')
+        .eq('workspace_id', workspaceId)
+        .eq('profile_id', profile.id)
+        .maybeSingle()
+    : { data: null }
+  const calendarConnection: CalendarConnectionView | null = calRow
+    ? {
+        googleEmail: (calRow.google_email as string | null) ?? null,
+        status: calRow.status as CalendarConnectionView['status'],
+        calendarIds: (calRow.calendar_ids as string[]) ?? ['primary'],
+        lastSyncedAt: (calRow.last_synced_at as string | null) ?? null,
+        lastError: (calRow.last_error as string | null) ?? null,
+      }
+    : null
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 md:p-8">
       <PageHeader title="Ayarlar" subtitle="Hesap bilgileri, güvenlik ve plan" />
@@ -62,6 +89,12 @@ export default async function SettingsPage() {
           isOwner={role === 'owner'}
         />
       </Section>
+
+      {calendarEnabled && (
+        <Section title="Google Takvim" variant="card" contentClassName="p-5">
+          <CalendarCard connection={calendarConnection} result={takvim ?? null} />
+        </Section>
+      )}
 
       <Section title="Şifre" variant="card" contentClassName="p-5">
         <PasswordForm />

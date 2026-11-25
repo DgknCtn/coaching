@@ -5,17 +5,17 @@
 // yerde unutulur ve aynı oturum iki ekranda iki farklı saatte görünürdü.
 
 import { CONTACT_KIND_LABEL, contactKindOf, type ServiceLike, type Weekday } from '@/lib/service-structure'
-import type { MakeupStatus, SessionSource } from '@/lib/session-state'
+import type { CalendarState, MakeupStatus, SessionSource } from '@/lib/session-state'
 import { accrualPriceType, modelAt, type FinanceModelVersion } from '@/lib/pricing-history'
 import { localDateString } from '@/lib/homework-status'
 import type { WeekServiceInfo } from '@/components/sessions/week-sessions'
 import type { ServiceRow, SessionRow } from './types'
 
 export const SERVICE_SELECT =
-  'id, student_id, kind, participation, medium, group_id, cadence, weekday, start_time, weekday_2, start_time_2, planned_duration_minutes, start_date, submission_offset_minutes, finance_link, default_unit_count, is_main_contact, status'
+  'id, student_id, kind, participation, medium, group_id, cadence, weekday, start_time, weekday_2, start_time_2, planned_duration_minutes, start_date, submission_offset_minutes, finance_link, default_unit_count, is_main_contact, status, calendar_linked_from'
 
 export const SESSION_SELECT =
-  'id, student_id, service_id, group_session_id, planned_at, current_planned_at, actual_at, duration_minutes, unit_count, status, attended, note, cancel_reason, makeup_of_session_id, makeup_decision, makeup_status, is_extra, source, origin_planned_at'
+  'id, student_id, service_id, group_session_id, planned_at, current_planned_at, actual_at, duration_minutes, unit_count, status, attended, note, cancel_reason, makeup_of_session_id, makeup_decision, makeup_status, is_extra, source, origin_planned_at, calendar_state'
 
 type Row = Record<string, unknown>
 
@@ -40,6 +40,7 @@ export function mapServiceRow(r: Row, groupNames: Map<string, string>): ServiceR
     defaultUnitCount: Number(r.default_unit_count ?? 1),
     isMainContact: Boolean(r.is_main_contact),
     status: r.status as ServiceRow['status'],
+    calendarLinkedFrom: (r.calendar_linked_from as string | null) ?? null,
   }
 }
 
@@ -65,6 +66,8 @@ export function mapSessionRow(r: Row, studentName?: string): SessionRow {
     makeupDecision: (r.makeup_decision as 'pending' | 'waived' | null) ?? null,
     makeupStatus: ((r.makeup_status as string | null) ?? 'none') as MakeupStatus,
     originPlannedAt: (r.origin_planned_at as string | null) ?? null,
+    calendarState: (r.calendar_state as CalendarState | null) ?? null,
+    meetUrl: null,
   }
 }
 

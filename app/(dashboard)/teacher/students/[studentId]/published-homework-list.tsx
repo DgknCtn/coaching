@@ -188,8 +188,11 @@ export function PublishedHomeworkList({
   activeFlowId,
   openWork,
   standaloneTaskPlans = [],
+  studentName,
 }: {
   studentId: string
+  /** Ödev yoklaması metni için (Calendar belgesi §4). */
+  studentName?: string
   batches: PublishedBatch[]
   /** İz V2 R03: tüm açık çalışmalar + hafta etiketleri (20 parti sınırı yok). */
   openWork: OpenWork | null
@@ -414,6 +417,7 @@ export function PublishedHomeworkList({
           plan={planDialog.plan}
           result={planDialog.result}
           message={planDialog.message}
+          studentName={studentName}
           onClose={() => setPlanDialog(null)}
         />
       )}

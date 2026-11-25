@@ -41,6 +41,7 @@ import {
   type ServiceUpdateInput,
 } from './actions'
 import { deletePriceVersionAction, setFinanceModelAction } from '../../../finans/actions'
+import { unlinkServiceCalendarAction } from '../../../takvim-actions'
 import type { FinanceModelInfo, ServiceRow } from './types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -722,6 +723,26 @@ function ServiceCard({
             <Badge variant="success">Aktif</Badge>
             {isMain && <Badge variant="info">Ana temas</Badge>}
             <span className="text-xs text-muted-foreground">Başlangıç {formatDate(service.startDate)}</span>
+            {/* 157: programı Google Calendar'dan gelen hizmet. Bağ kaldırılırsa
+                İz kendi üretimine döner; mevcut oturumlar kalır. */}
+            {service.calendarLinkedFrom && (
+              <>
+                <Badge variant="neutral">Program Calendar&apos;dan · {formatDate(service.calendarLinkedFrom)}</Badge>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                  disabled={disabled}
+                  onClick={() =>
+                    run(
+                      () => unlinkServiceCalendarAction(studentId, service.id),
+                      'Calendar bağı kaldırıldı; program İz\'den üretilecek.'
+                    )
+                  }
+                >
+                  Bağlantıyı kaldır
+                </button>
+              </>
+            )}
           </div>
         </div>
 

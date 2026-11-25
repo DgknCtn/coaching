@@ -201,6 +201,7 @@ export function SessionsClient({
               </span>
             }
             addSession={addSession}
+            studentName={student.name}
             emptyHint={
               active.some((s) => s.cadence === 'esnek')
                 ? 'Esnek ritimli hizmetin oturumlarını "Oturum ekle" ile girin.'

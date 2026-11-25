@@ -48,6 +48,9 @@ export type AuditAction =
   | 'homework_plan.due_change'
   | 'homework_plan.rename'
   | 'homework_plan.close'
+  | 'calendar.connect'
+  | 'calendar.disconnect'
+  | 'calendar.match'
   // 137: test öğrencisinin finans kayıtlarının toptan silinmesi (SQL'de yazılır).
   | 'finance.purge_student'
   | 'book.archive'
@@ -130,6 +133,9 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'homework_plan.due_change': 'Ödev planının teslimini değiştirdi',
   'homework_plan.rename': 'Ödev planının açıklamasını değiştirdi',
   'homework_plan.close': 'Ödev planını kapattı',
+  'calendar.connect': 'Google Takvimi bağladı',
+  'calendar.disconnect': 'Google Takvim bağlantısını kopardı',
+  'calendar.match': 'Takvim etkinliğini öğrenciyle eşledi',
   'finance.purge_student': 'Öğrencinin finans kayıtlarını temizledi',
   'book.archive': 'Kitap arşivledi',
   'book.delete': 'Kitap sildi (atanmamış kayıt)',

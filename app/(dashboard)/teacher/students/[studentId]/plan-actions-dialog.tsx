@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, Copy, Loader2, Lock } from 'lucide-react'
+import { Check, Copy, Loader2, Lock, MessageCircle } from 'lucide-react'
+import { buildHomeworkCheckIn, whatsappShareUrl } from '@/lib/share-text'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,9 +42,12 @@ export function PlanActionsDialog({
   plan,
   result,
   message,
+  studentName,
   onClose,
 }: {
   studentId: string
+  /** Ödev yoklaması metni için (Calendar belgesi §4, WhatsApp ara çözümü). */
+  studentName?: string
   plan: HomeworkPlanRef
   result: PlanResult | null
   message: string | null
@@ -166,6 +170,32 @@ export function PlanActionsDialog({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            {/* Hafta içi ödev yoklaması: hazır metin; yanıt WhatsApp'ta kalır,
+                otomatik gönderim yok. */}
+            {!closed && studentName && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(buildHomeworkCheckIn(studentName))
+                      .then(() => toast.success('Ödev yoklaması metni kopyalandı.'))
+                      .catch(() => toast.error('Metin kopyalanamadı.'))
+                  }
+                >
+                  <MessageCircle />
+                  Ödev yoklaması
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => window.open(whatsappShareUrl(buildHomeworkCheckIn(studentName)), '_blank', 'noopener')}
+                >
+                  WhatsApp&apos;ta aç
+                </Button>
+              </>
+            )}
             {message && (
               <Button size="sm" variant="outline" onClick={copy}>
                 {copied ? <Check /> : <Copy />}

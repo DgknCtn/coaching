@@ -62,6 +62,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
+import { CalendarBadges } from '@/components/sessions/calendar-badges'
+import { buildLessonReminder, whatsappShareUrl } from '@/lib/share-text'
 
 // ============================================================
 // DERS & GÖRÜŞMELER V1 — HAFTALIK OPERASYON TABLOSU (M1.0-02 §4)
@@ -159,6 +161,7 @@ export function WeekSessions({
   nowIso,
   showStudent,
   addSession,
+  studentName,
   summary,
   emptyTitle,
   emptyHint,
@@ -186,6 +189,8 @@ export function WeekSessions({
   nowIso: string
   showStudent: boolean
   addSession?: AddSessionTarget | null
+  /** Öğrenci sayfasında satırın öğrenci adı (hatırlatma metni için). */
+  studentName?: string
   summary?: ReactNode
   /** Varsayılan "Bu hafta planlanmış oturum yok" — hafta kavramı taşımayan görünümlerde geçersiz kılınır. */
   emptyTitle?: string
@@ -414,6 +419,9 @@ export function WeekSessions({
                           {row.isMakeup && 'Telafi · '}
                           {service?.label ?? 'Hizmet'}
                           {row.isExtra && <span className="text-muted-foreground"> · Ek ders</span>}
+                          <span className="ml-1 inline-flex items-center gap-1.5">
+                            <CalendarBadges row={row} />
+                          </span>
                         </button>
                       </td>
                       <td className="px-3 py-2 align-top whitespace-nowrap tabular-nums">
@@ -503,6 +511,17 @@ export function WeekSessions({
                             financeHref={financeDetail ? `/teacher/finans/${row.studentId}` : null}
                             onOpenDetail={() => setDetailId(row.id)}
                             onOutcome={(s) => markOutcome(row, s)}
+                            reminderText={
+                              row.status === 'planlandi'
+                                ? buildLessonReminder({
+                                    studentName: row.studentName ?? studentName ?? '',
+                                    at: row.currentPlannedAt,
+                                    // Meet bağlantısı varsa ders online'dır.
+                                    online: !!row.meetUrl,
+                                    meetUrl: row.meetUrl ?? null,
+                                  })
+                                : null
+                            }
                           />
                         </div>
                       </td>
@@ -542,6 +561,7 @@ function RowMenu({
   financeHref,
   onOpenDetail,
   onOutcome,
+  reminderText,
 }: {
   row: SessionRow
   disabled: boolean
@@ -549,6 +569,8 @@ function RowMenu({
   financeHref: string | null
   onOpenDetail: () => void
   onOutcome: (status: 'yapilmadi' | 'iptal') => void
+  /** Calendar belgesi §4: WhatsApp ara çözümü — hazır metin, otomatik gönderim yok. */
+  reminderText?: string | null
 }) {
   const open = row.status === 'planlandi'
   return (
@@ -566,6 +588,24 @@ function RowMenu({
         )}
         {open && <DropdownMenuItem onClick={() => onOutcome('yapilmadi')}>Yapılmadı</DropdownMenuItem>}
         {open && <DropdownMenuItem onClick={() => onOutcome('iptal')}>İptal edildi</DropdownMenuItem>}
+        {open && reminderText && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(reminderText)
+                  .then(() => toast.success('Hatırlatma metni kopyalandı.'))
+                  .catch(() => toast.error('Metin kopyalanamadı.'))
+              }}
+            >
+              Hatırlatma metnini kopyala
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.open(whatsappShareUrl(reminderText), '_blank', 'noopener')}>
+              WhatsApp&apos;ta aç
+            </DropdownMenuItem>
+          </>
+        )}
         {open && <DropdownMenuSeparator />}
         <DropdownMenuItem onClick={onOpenDetail}>Gerçekleşme detayını düzenle</DropdownMenuItem>
         <DropdownMenuItem onClick={onOpenDetail}>Not ekle</DropdownMenuItem>

@@ -33,6 +33,10 @@ import {
   serviceInfo,
 } from './load'
 import type { FinanceModelInfo } from './types'
+import { syncIfStale } from '@/lib/calendar/sync'
+import { attachMeetUrls, loadUnmatchedEvents } from '@/lib/calendar/session-links'
+import { calendarConfigured } from '@/lib/google/calendar'
+import { CalendarUnmatchedPanel } from '@/components/sessions/calendar-unmatched-panel'
 
 // DERS & GÖRÜŞMELER V1 — öğrenci sayfası (M1.0-02 §4, M1.0-05 aylık görünüm).
 //
@@ -58,7 +62,7 @@ export default async function StudentSessionsPage({
   const { hafta, ay } = await searchParams
   const now = new Date()
 
-  const { supabase, workspaceId, role } = await getTeacherContext()
+  const { supabase, workspaceId, role, profile } = await getTeacherContext()
   const isOwner = role === 'owner'
 
   const { data: student } = await supabase
@@ -76,8 +80,16 @@ export default async function StudentSessionsPage({
     meta: [student.grade_level, student.exam_type].filter(Boolean).join(' · ') || null,
   }
 
+  // GOOGLE CALENDAR (157): son eşitlemeden 5 dk'dan fazla geçtiyse önce
+  // eşitle — öğretmenin Calendar'da yaptığı değişiklik bu sayfada görünsün.
+  // Süre sınırlı; hata sayfayı durdurmaz. Bağlantı yoksa hiçbir şey yapmaz.
+  await syncIfStale(supabase, { workspaceId, profileId: profile.id }).catch(() => null)
+  const calendarPanel = await buildCalendarPanel(supabase, workspaceId, studentId, studentMeta.name)
+
   if (isValidWeekKey(hafta)) {
     return (
+      <>
+      {calendarPanel}
       <WeekView
         studentId={studentId}
         student={studentMeta}
@@ -85,6 +97,7 @@ export default async function StudentSessionsPage({
         now={now}
         isOwner={isOwner}
       />
+      </>
     )
   }
 
@@ -92,6 +105,8 @@ export default async function StudentSessionsPage({
   const month = isValidMonth(ay) ? ay : currentMonth
 
   return (
+    <>
+    {calendarPanel}
     <MonthView
       studentId={studentId}
       student={studentMeta}
@@ -100,6 +115,35 @@ export default async function StudentSessionsPage({
       now={now}
       isOwner={isOwner}
     />
+    </>
+  )
+}
+
+/** Eşleşmeyen Calendar etkinlikleri kutusu; yoksa ya da bağlantı yoksa null. */
+async function buildCalendarPanel(
+  supabase: Awaited<ReturnType<typeof getTeacherContext>>['supabase'],
+  workspaceId: string,
+  studentId: string,
+  studentName: string
+) {
+  if (!calendarConfigured()) return null
+  const events = await loadUnmatchedEvents(supabase, workspaceId)
+  if (events.length === 0) return null
+  const { data: svc } = await supabase
+    .from('student_services')
+    .select('id, kind, medium')
+    .eq('workspace_id', workspaceId)
+    .eq('student_id', studentId)
+    .eq('status', 'active')
+    .eq('participation', 'birebir')
+  const services = ((svc ?? []) as { id: string; kind: string; medium: string }[]).map(s => ({
+    id: s.id,
+    label: `${s.medium === 'yuz_yuze' ? 'Yüz yüze' : 'Online'} ${s.kind === 'kocluk' ? 'koçluk' : 'ders'}`,
+  }))
+  return (
+    <div className="mx-auto max-w-6xl px-6 pt-6 md:px-8">
+      <CalendarUnmatchedPanel studentId={studentId} studentName={studentName} events={events} services={services} />
+    </div>
   )
 }
 
@@ -332,7 +376,11 @@ async function WeekView({
       .order('current_planned_at'),
   ])
 
-  const sessions = (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
+  // 157: Calendar'dan planlanan oturumlara Meet bağlantısı.
+  const sessions = await attachMeetUrls(
+    supabase,
+    (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
+  )
   const mainContact = deriveMainContact(services as ServiceLike[])
   const upcoming = nextContact((services as ServiceLike[]).filter(s => s.status === 'active'), now)
 
@@ -469,7 +517,11 @@ async function MonthView({
       .eq('ay', summaryMonthStart),
   ])
 
-  const sessions = (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
+  // 157: Calendar'dan planlanan oturumlara Meet bağlantısı.
+  const sessions = await attachMeetUrls(
+    supabase,
+    (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
+  )
   const mainContact = deriveMainContact(services as ServiceLike[])
   const upcoming = nextContact((services as ServiceLike[]).filter(s => s.status === 'active'), now)
 
