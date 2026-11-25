@@ -109,3 +109,50 @@ export function syncWindow(now: Date = new Date()): { timeMin: Date; timeMax: Da
   const day = 86_400_000
   return { timeMin: new Date(now.getTime() - 30 * day), timeMax: new Date(now.getTime() + 120 * day) }
 }
+
+// ============================================================
+// BAŞLIKTAN ÖNERİ — yalnız ÖNERİ, asla otomatik bağlama değil.
+//
+// Belgenin kuralı başlıktan SESSİZ tahmini yasaklar. Burada başlık,
+// eşleşmeyen etkinlik listesinde öğrenci seçim kutusunu önceden doldurmak
+// için kullanılır; bağlama yine öğretmenin tıklamasıyla olur. Tek bir
+// öğrenciye işaret etmiyorsa öneri yoktur ("Ek ders", iki "Deniz").
+// ============================================================
+
+function foldTr(s: string): string {
+  return s
+    .toLocaleLowerCase('tr')
+    .replace(/ı/g, 'i')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+}
+
+function tokens(s: string): string[] {
+  return foldTr(s).split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+/** Başlık tek bir öğrenciye işaret ediyorsa onun id'si; yoksa null. */
+export function suggestStudentFromTitle(
+  title: string | null,
+  students: { id: string; name: string }[]
+): string | null {
+  if (!title) return null
+  const titleTokens = tokens(title)
+  if (titleTokens.length === 0) return null
+  const joined = ` ${titleTokens.join(' ')} `
+
+  // 1) Tam ad başlıkta geçiyorsa en güçlü işaret.
+  const full = students.filter(s => {
+    const t = tokens(s.name)
+    return t.length > 1 && joined.includes(` ${t.join(' ')} `)
+  })
+  if (full.length === 1) return full[0].id
+  if (full.length > 1) return null
+
+  // 2) İlk ad başlıkta ayrı bir sözcük olarak geçiyorsa — tek öğrenciyse.
+  const first = students.filter(s => {
+    const f = tokens(s.name)[0]
+    return !!f && titleTokens.includes(f)
+  })
+  return first.length === 1 ? first[0].id : null
+}

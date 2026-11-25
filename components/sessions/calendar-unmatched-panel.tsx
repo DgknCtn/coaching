@@ -76,9 +76,9 @@ export function CalendarUnmatchedPanel({
       {open && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Bu öğrencinin (ya da velisinin) davetli olduğu ama otomatik bağlanamayan dersler ile katılımcısız
-            etkinlikler. Otomatik bağlama için öğrencinin <strong>tek</strong> aktif birebir hizmeti olmalı;
-            birden çoksa hangisine yazılacağını burada bir kez seçersiniz.
+            Bu öğrencinin (ya da velisinin) davetli olduğu ama otomatik bağlanamayan dersler. Otomatik bağlama
+            için öğrencinin <strong>tek</strong> aktif birebir hizmeti olmalı; birden çoksa hangisine yazılacağını
+            burada bir kez seçersiniz. Katılımcısız etkinlikler Ders &amp; Görüşmeler ekranındaki listededir.
           </p>
           {services.length === 0 && (
             <p className="text-xs font-medium text-destructive">
@@ -121,7 +121,12 @@ export function CalendarUnmatchedPanel({
                     {e.recurring ? 'Seriyi bu öğrenciyle eşle' : 'Bu öğrenciyle eşle'}
                   </Button>
                   {e.recurring && (
-                    <Button size="xs" variant="outline" disabled={isPending || services.length === 0} onClick={() => apply(e.linkId, false, false)}>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={isPending || services.length === 0}
+                      onClick={() => apply(e.linkId, false, false)}
+                    >
                       Yalnız bu tarih
                     </Button>
                   )}

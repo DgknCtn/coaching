@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CalendarState } from '@/lib/session-state'
+import { suggestStudentFromTitle } from '@/lib/calendar/match'
 
 // Calendar bağları (157) — Ders & Görüşmeler'in okuduğu iki küçük sorgu.
 
@@ -70,24 +71,43 @@ type UnmatchedRow = {
 
 const UNMATCHED_SELECT = 'id, title, start_at, recurring_event_id, attendee_emails'
 
+/** Hizmet seçim kutusundaki ad: "Online ders", "Yüz yüze koçluk". */
+export function calendarServiceLabel(s: { kind: string; medium: string }): string {
+  return `${s.medium === 'yuz_yuze' ? 'Yüz yüze' : 'Online'} ${s.kind === 'kocluk' ? 'koçluk' : 'ders'}`
+}
+
+function toEvents(rows: UnmatchedRow[], max: number): UnmatchedCalendarEvent[] {
+  // Aynı serinin her tarihi ayrı satır; ekranda seri başına bir satır yeter.
+  const seen = new Set<string>()
+  const out: UnmatchedCalendarEvent[] = []
+  for (const r of rows) {
+    const key = r.recurring_event_id ?? r.id
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      linkId: r.id,
+      title: r.title,
+      startAt: r.start_at,
+      recurring: !!r.recurring_event_id,
+      attendees: r.attendee_emails ?? [],
+    })
+    if (out.length >= max) break
+  }
+  return out
+}
+
 /**
- * Öğrencinin sayfasında gösterilecek eşleşmeyen etkinlikler — öğretmenden
- * BİR KEZ seçim ister. İki grup:
- *   1. Davetlilerinde BU öğrencinin ya da velisinin e-postası olanlar
- *      (ör. öğrencinin birden çok birebir hizmeti var: hangisi?).
- *   2. Hiç katılımcısı olmayan, yakın tarihli etkinlikler ("Ek ders" gibi;
- *      kime ait olduğunu yalnız öğretmen bilir).
- * Başka kişilerle yapılan toplantılar öğrenci sayfalarına düşmez. Her
- * sorgu kendi sınırıyla: takvimdeki yüzlerce etkinlik ilgili olanı itmez.
+ * Öğrencinin sayfası: davetlilerinde BU öğrencinin ya da velisinin
+ * e-postası olan ama otomatik bağlanamamış etkinlikler (ör. öğrencinin
+ * birden çok birebir hizmeti var: hangisi?). Katılımcısız etkinlikler
+ * burada GÖSTERİLMEZ — her öğrencinin sayfasına düşer ve yanlış öğrenciyle
+ * eşlenebilirdi; onlar koç genelindeki listededir (loadUnmatchedInbox).
  */
 export async function loadUnmatchedEvents(
   supabase: SupabaseClient,
   workspaceId: string,
   studentId: string
 ): Promise<UnmatchedCalendarEvent[]> {
-  const day = 86_400_000
-  const now = Date.now()
-
   const [{ data: student }, { data: parents }] = await Promise.all([
     supabase.from('students').select('email').eq('id', studentId).eq('workspace_id', workspaceId).maybeSingle(),
     supabase
@@ -106,47 +126,80 @@ export async function loadUnmatchedEvents(
   for (const p of (parents ?? []) as unknown as { profiles: { email: string | null } | { email: string | null }[] | null }[]) {
     add((Array.isArray(p.profiles) ? p.profiles[0] : p.profiles)?.email)
   }
+  if (emails.size === 0) return []
 
-  const base = () =>
+  const { data } = await supabase
+    .from('calendar_event_links')
+    .select(UNMATCHED_SELECT)
+    .eq('workspace_id', workspaceId)
+    .eq('match_state', 'unmatched')
+    .neq('event_status', 'cancelled')
+    .overlaps('attendee_emails', [...emails])
+    .gte('start_at', new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .order('start_at')
+    .limit(100)
+  return toEvents((data ?? []) as UnmatchedRow[], 30)
+}
+
+export interface InboxEvent extends UnmatchedCalendarEvent {
+  /** Başlıktan ÖNERİ (suggestStudentFromTitle); bağlama öğretmenin onayıyla. */
+  suggestedStudentId: string | null
+}
+
+export interface InboxStudent {
+  id: string
+  name: string
+  /** Aktif birebir hizmetler — Calendar yalnız bunlara bağlanır. */
+  services: { id: string; label: string }[]
+}
+
+/**
+ * Koç geneli "eşleşmeyen etkinlikler" listesi (Ders & Görüşmeler).
+ * Geçmiş 14 gün ile önümüzdeki 60 gün; seri başına bir satır. Kayıtlı
+ * "yok say" kararı olan seriler zaten 'ignored' olduğu için düşmez.
+ */
+export async function loadUnmatchedInbox(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<{ events: InboxEvent[]; students: InboxStudent[] }> {
+  const day = 86_400_000
+  const now = Date.now()
+  const [{ data: rows }, { data: studentRows }, { data: serviceRows }] = await Promise.all([
     supabase
       .from('calendar_event_links')
       .select(UNMATCHED_SELECT)
       .eq('workspace_id', workspaceId)
       .eq('match_state', 'unmatched')
       .neq('event_status', 'cancelled')
-
-  const [own, open] = await Promise.all([
-    emails.size > 0
-      ? base()
-          .overlaps('attendee_emails', [...emails])
-          .gte('start_at', new Date(now - 30 * day).toISOString())
-          .order('start_at')
-          .limit(100)
-      : Promise.resolve({ data: [] as UnmatchedRow[] }),
-    base()
-      .eq('attendee_emails', '{}')
-      .gte('start_at', new Date(now - 7 * day).toISOString())
-      .lte('start_at', new Date(now + 30 * day).toISOString())
+      .gte('start_at', new Date(now - 14 * day).toISOString())
+      .lte('start_at', new Date(now + 60 * day).toISOString())
       .order('start_at')
-      .limit(100),
+      .limit(500),
+    supabase.from('students').select('id, full_name').eq('workspace_id', workspaceId).eq('status', 'active').order('full_name'),
+    supabase
+      .from('student_services')
+      .select('id, student_id, kind, medium')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .eq('participation', 'birebir'),
   ])
+  const events = toEvents((rows ?? []) as UnmatchedRow[], 60)
+  if (events.length === 0) return { events: [], students: [] }
 
-  // Aynı serinin her tarihi ayrı satır; ekranda seri başına bir satır yeter.
-  // Önce öğrencinin kendi etkinlikleri.
-  const seen = new Set<string>()
-  const out: UnmatchedCalendarEvent[] = []
-  for (const r of [...((own.data ?? []) as UnmatchedRow[]), ...((open.data ?? []) as UnmatchedRow[])]) {
-    const key = r.recurring_event_id ?? r.id
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({
-      linkId: r.id,
-      title: r.title,
-      startAt: r.start_at,
-      recurring: !!r.recurring_event_id,
-      attendees: r.attendee_emails ?? [],
-    })
-    if (out.length >= 30) break
+  const servicesByStudent = new Map<string, { id: string; label: string }[]>()
+  for (const sv of (serviceRows ?? []) as { id: string; student_id: string; kind: string; medium: string }[]) {
+    const list = servicesByStudent.get(sv.student_id) ?? []
+    list.push({ id: sv.id, label: calendarServiceLabel(sv) })
+    servicesByStudent.set(sv.student_id, list)
   }
-  return out
+  const students: InboxStudent[] = ((studentRows ?? []) as { id: string; full_name: string }[]).map(s => ({
+    id: s.id,
+    name: s.full_name,
+    services: servicesByStudent.get(s.id) ?? [],
+  }))
+  const forSuggest = students.map(s => ({ id: s.id, name: s.name }))
+  return {
+    events: events.map(e => ({ ...e, suggestedStudentId: suggestStudentFromTitle(e.title, forSuggest) })),
+    students,
+  }
 }

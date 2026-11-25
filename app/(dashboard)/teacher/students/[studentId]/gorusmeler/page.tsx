@@ -34,7 +34,7 @@ import {
 } from './load'
 import type { FinanceModelInfo } from './types'
 import { syncIfStale } from '@/lib/calendar/sync'
-import { attachCalendarInfo, loadUnmatchedEvents } from '@/lib/calendar/session-links'
+import { attachCalendarInfo, calendarServiceLabel, loadUnmatchedEvents } from '@/lib/calendar/session-links'
 import { calendarConfigured } from '@/lib/google/calendar'
 import { CalendarUnmatchedPanel } from '@/components/sessions/calendar-unmatched-panel'
 
@@ -138,7 +138,7 @@ async function buildCalendarPanel(
     .eq('participation', 'birebir')
   const services = ((svc ?? []) as { id: string; kind: string; medium: string }[]).map(s => ({
     id: s.id,
-    label: `${s.medium === 'yuz_yuze' ? 'Yüz yüze' : 'Online'} ${s.kind === 'kocluk' ? 'koçluk' : 'ders'}`,
+    label: calendarServiceLabel(s),
   }))
   return (
     <div className="mx-auto max-w-6xl px-6 pt-6 md:px-8">

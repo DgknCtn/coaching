@@ -19,7 +19,9 @@ import {
   quickCollectSessionIds,
   serviceInfo,
 } from '../students/[studentId]/gorusmeler/load'
-import { attachCalendarInfo } from '@/lib/calendar/session-links'
+import { attachCalendarInfo, loadUnmatchedInbox } from '@/lib/calendar/session-links'
+import { calendarConfigured } from '@/lib/google/calendar'
+import { CalendarInbox } from '@/components/sessions/calendar-inbox'
 
 // DERS & GÖRÜŞMELER — koç geneli haftalık operasyon ekranı (M1.0-02 §4).
 //
@@ -199,6 +201,10 @@ export default async function WeeklySessionsPage({
     ? sessions.length
     : sessions.filter((s) => s.makeupStatus === 'decision_pending').length
 
+  // 157: hiçbir öğrenciye güvenle bağlanamayan Calendar etkinlikleri —
+  // öğretmen burada bir kez öğrenci + hizmet seçer.
+  const inbox = !allPendingMode && calendarConfigured() ? await loadUnmatchedInbox(supabase, workspaceId) : null
+
   const tabs: LinkTab[] = [
     { key: 'hafta', label: 'Bu hafta', href: '/teacher/gorusmeler' },
     { key: 'tum-telafiler', label: 'Tüm bekleyenler', href: '/teacher/gorusmeler?gorunum=tum-telafiler' },
@@ -216,6 +222,8 @@ export default async function WeeklySessionsPage({
       />
 
       <LinkTabs tabs={tabs} activeKey={allPendingMode ? 'tum-telafiler' : 'hafta'} ariaLabel="Görünüm seçimi" />
+
+      {inbox && <CalendarInbox events={inbox.events} students={inbox.students} />}
 
       {allPendingMode ? (
         <p className="text-sm text-muted-foreground">

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { matchEvent, normalizeEvent, type MatchContext, type RawCalendarEvent } from '@/lib/calendar/match'
+import { matchEvent, normalizeEvent, suggestStudentFromTitle, type MatchContext, type RawCalendarEvent } from '@/lib/calendar/match'
 import { buildHomeworkCheckIn, buildLessonReminder, locativeSuffix, whatsappShareUrl } from '@/lib/share-text'
 
 // `server-only` testte boş modül: yardımcılar saf ama dosya sunucuya özel.
@@ -121,6 +121,32 @@ describe('matchEvent — güvenli eşleşme yoksa tahmin yok', () => {
     })
     expect(matchEvent(e, c)).toMatchObject({ kind: 'matched', via: 'saved' })
     expect(matchEvent({ ...e, eventId: 'baska' }, c)).toEqual({ kind: 'ignored' })
+  })
+})
+
+describe('suggestStudentFromTitle — yalnız öneri', () => {
+  const students = [
+    { id: 'dunya', name: 'Dünya Kaya' },
+    { id: 'doga', name: 'Doğa' },
+    { id: 'deniz1', name: 'Deniz Ak' },
+    { id: 'deniz2', name: 'Deniz Er' },
+    { id: 'test', name: 'Test 1 Öğrenci' },
+    { id: 'isik', name: 'Işık' },
+  ]
+  it('ilk ad ayrı sözcükse, büyük/küçük harf ve Türkçe karakter farkıyla', () => {
+    expect(suggestStudentFromTitle('Dünya | Online Ders | 60 dk', students)).toBe('dunya')
+    expect(suggestStudentFromTitle('DOĞA ders', students)).toBe('doga')
+    expect(suggestStudentFromTitle('isik koçluk', students)).toBe('isik')
+  })
+  it('tam ad ilk adın belirsizliğini çözer', () => {
+    expect(suggestStudentFromTitle('Deniz Er - Matematik', students)).toBe('deniz2')
+    expect(suggestStudentFromTitle('Test 1 Öğrenci deneme', students)).toBe('test')
+  })
+  it('belirsiz ya da ad yoksa öneri yok', () => {
+    expect(suggestStudentFromTitle('Deniz | Online Ders', students)).toBeNull()
+    expect(suggestStudentFromTitle('Ek ders', students)).toBeNull()
+    expect(suggestStudentFromTitle('Dünyalar', students)).toBeNull()
+    expect(suggestStudentFromTitle(null, students)).toBeNull()
   })
 })
 
