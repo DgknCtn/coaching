@@ -196,6 +196,17 @@ describe('WhatsApp ara çözüm metinleri', () => {
   })
 })
 
+describe('Google 403 gerekçeleri', () => {
+  it('izin kutusu boş → yeniden bağlan; API kapalı → açık mesaj; bilinmeyen → gerekçe görünür', async () => {
+    const { calendarApiError, GoogleReauthError } = await import('@/lib/google/calendar')
+    const scope = calendarApiError(403, { error: { errors: [{ reason: 'insufficientPermissions' }] } })
+    expect(scope).toBeInstanceOf(GoogleReauthError)
+    expect(scope.message).toMatch(/Takvimlerinizi görme/)
+    expect(calendarApiError(403, { error: { details: [{ reason: 'SERVICE_DISABLED' }] } }).message).toMatch(/Calendar API" etkin değil/)
+    expect(calendarApiError(403, { error: { errors: [{ reason: 'forbidden' }] } }).message).toBe('Google Calendar hatası: 403 (forbidden)')
+  })
+})
+
 describe('migration 157 sözleşmesi', () => {
   const sql = readFileSync(join(process.cwd(), 'supabase/migrations/157_google_calendar.sql'), 'utf8')
   const fn = (name: string) => {

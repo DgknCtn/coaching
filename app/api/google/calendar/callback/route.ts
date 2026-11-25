@@ -57,6 +57,11 @@ export async function GET(request: NextRequest) {
       redirectUri: calendarRedirectUri(siteUrl()),
     })
     if (!tokens.refresh_token) return fail('anahtar_yok')
+    // Google izinleri tek tek kutularla soruyor; takvim kutusu boş
+    // bırakılırsa bağlantı kurulur ama hiçbir şey okunamaz (403).
+    if (tokens.scope && !tokens.scope.split(' ').includes('https://www.googleapis.com/auth/calendar.readonly')) {
+      return fail('izin_eksik')
+    }
     const email = await fetchUserEmail(tokens.access_token)
 
     const supabase = await createClient()

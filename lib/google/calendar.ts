@@ -87,7 +87,7 @@ async function tokenRequest(body: Record<string, string>) {
     }
     throw new Error(`Google token hatası: ${String(json.error ?? res.status)}`)
   }
-  return json as { access_token: string; refresh_token?: string; expires_in?: number }
+  return json as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string }
 }
 
 export async function exchangeCode(input: { code: string; codeVerifier: string; redirectUri: string }) {
@@ -113,8 +113,43 @@ async function api<T>(accessToken: string, path: string, params?: Record<string,
   for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, v)
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
   if (res.status === 401) throw new GoogleReauthError('Google erişimi reddedildi.')
-  if (!res.ok) throw new Error(`Google Calendar hatası: ${res.status}`)
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as GoogleErrorBody
+    throw calendarApiError(res.status, body)
+  }
   return (await res.json()) as T
+}
+
+interface GoogleErrorBody {
+  error?: { status?: string; message?: string; errors?: { reason?: string }[]; details?: { reason?: string }[] }
+}
+
+/**
+ * Google'ın gerekçesini öğretmenin anlayacağı mesaja çevirir. 403'ün iki
+ * yaygın sebebi ayrı ayrı adlandırılır; ikisi de kodla düzelmez.
+ */
+export function calendarApiError(status: number, body: GoogleErrorBody): Error {
+  const reasons = [
+    body.error?.status,
+    ...(body.error?.errors ?? []).map(e => e.reason),
+    ...(body.error?.details ?? []).map(d => d.reason),
+  ].filter(Boolean) as string[]
+  const has = (...r: string[]) => reasons.some(x => r.includes(x))
+
+  // İzin kutusu işaretlenmeden bağlanılmış: yeniden bağlanmak gerekir.
+  if (has('insufficientPermissions', 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+    return new GoogleReauthError(
+      'Google takvim okuma izni verilmemiş. Yeniden bağlanırken "Takvimlerinizi görme" kutusunu işaretleyin.'
+    )
+  }
+  if (has('accessNotConfigured', 'SERVICE_DISABLED')) {
+    return new Error('Google Cloud projesinde "Google Calendar API" etkin değil (APIs & Services > Library > Enable).')
+  }
+  if (has('rateLimitExceeded', 'userRateLimitExceeded', 'RATE_LIMIT_EXCEEDED')) {
+    return new Error('Google istek sınırı aşıldı; birkaç dakika sonra tekrar deneyin.')
+  }
+  const detail = reasons[0] ?? body.error?.message?.slice(0, 120)
+  return new Error(`Google Calendar hatası: ${status}${detail ? ` (${detail})` : ''}`)
 }
 
 export async function fetchUserEmail(accessToken: string): Promise<string | null> {

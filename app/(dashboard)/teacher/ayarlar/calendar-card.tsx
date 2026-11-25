@@ -32,6 +32,8 @@ const RESULT_TEXT: Record<string, string> = {
   sifreleme:
     "CALENDAR_TOKEN_KEY geçersiz: 64 karakterlik onaltılık (0-9, a-f) bir değer olmalı.",
   kod: 'Google onay kodu kabul edilmedi; birkaç saniye bekleyip yeniden bağlanmayı deneyin.',
+  izin_eksik:
+    'Takvim okuma izni verilmedi. Tekrar bağlanın ve Google ekranında "Takvimlerinizi görme" kutusunu işaretleyin.',
   yapilandirilmadi: 'Google Calendar entegrasyonu henüz yapılandırılmadı.',
 }
 
