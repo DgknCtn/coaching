@@ -19,6 +19,7 @@ import {
   quickCollectSessionIds,
   serviceInfo,
 } from '../students/[studentId]/gorusmeler/load'
+import { attachCalendarInfo } from '@/lib/calendar/session-links'
 
 // DERS & GÖRÜŞMELER — koç geneli haftalık operasyon ekranı (M1.0-02 §4).
 //
@@ -116,9 +117,14 @@ export default async function WeeklySessionsPage({
 
   const names = new Map((studentRows ?? []).map((s) => [s.id as string, s.full_name as string]))
   // Arşivli öğrencinin oturumu haftalık operasyonda görünmez (M1.0-01 §1.1).
-  const sessions = (sessionRows ?? [])
-    .filter((r) => names.has(r.student_id as string))
-    .map((r) => mapSessionRow(r as Record<string, unknown>, names.get(r.student_id as string)))
+  // 157: Calendar dersleri burada da rozet, "Katıl" ve iptal uyarısıyla.
+  const sessions = await attachCalendarInfo(
+    supabase,
+    workspaceId,
+    (sessionRows ?? [])
+      .filter((r) => names.has(r.student_id as string))
+      .map((r) => mapSessionRow(r as Record<string, unknown>, names.get(r.student_id as string)))
+  )
 
   const serviceIds = Array.from(new Set(sessions.map((s) => s.serviceId)))
   const { data: serviceRows } = serviceIds.length

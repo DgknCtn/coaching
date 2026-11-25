@@ -34,7 +34,7 @@ import {
 } from './load'
 import type { FinanceModelInfo } from './types'
 import { syncIfStale } from '@/lib/calendar/sync'
-import { attachMeetUrls, loadUnmatchedEvents } from '@/lib/calendar/session-links'
+import { attachCalendarInfo, loadUnmatchedEvents } from '@/lib/calendar/session-links'
 import { calendarConfigured } from '@/lib/google/calendar'
 import { CalendarUnmatchedPanel } from '@/components/sessions/calendar-unmatched-panel'
 
@@ -377,8 +377,9 @@ async function WeekView({
   ])
 
   // 157: Calendar'dan planlanan oturumlara Meet bağlantısı.
-  const sessions = await attachMeetUrls(
+  const sessions = await attachCalendarInfo(
     supabase,
+    workspaceId,
     (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
   )
   const mainContact = deriveMainContact(services as ServiceLike[])
@@ -518,8 +519,9 @@ async function MonthView({
   ])
 
   // 157: Calendar'dan planlanan oturumlara Meet bağlantısı.
-  const sessions = await attachMeetUrls(
+  const sessions = await attachCalendarInfo(
     supabase,
+    workspaceId,
     (sessionRows ?? []).map(r => mapSessionRow(r as Record<string, unknown>))
   )
   const mainContact = deriveMainContact(services as ServiceLike[])

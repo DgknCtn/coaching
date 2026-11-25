@@ -1,20 +1,55 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { CalendarState } from '@/lib/session-state'
 
 // Calendar bağları (157) — Ders & Görüşmeler'in okuduğu iki küçük sorgu.
 
-/** Oturumlara Calendar etkinliğindeki Meet bağlantısını ekler (yalnız okunur). */
-export async function attachMeetUrls<T extends { id: string; source?: string; meetUrl?: string | null }>(
-  supabase: SupabaseClient,
-  sessions: T[]
-): Promise<T[]> {
-  const ids = sessions.filter(s => s.source === 'calendar').map(s => s.id)
-  if (ids.length === 0) return sessions
-  const { data } = await supabase
-    .from('calendar_event_links')
-    .select('session_id, meet_url')
-    .in('session_id', ids)
-  const byId = new Map(((data ?? []) as { session_id: string; meet_url: string | null }[]).map(r => [r.session_id, r.meet_url]))
-  return sessions.map(s => (byId.has(s.id) ? { ...s, meetUrl: byId.get(s.id) ?? null } : s))
+/**
+ * Oturumlara Calendar bilgisini ekler: iptal/karşılık uyarısı
+ * (service_sessions.calendar_state) ve Meet bağlantısı (yalnız okunur).
+ *
+ * NEDEN AYRI SORGU: oturum ekranları `student_service_session_view`
+ * (140) üzerinden okur ve o görünümde calendar_state YOK. Sütunu ortak
+ * SESSION_SELECT'e eklemek sorguyu düşürür ve ekran boş kalır — bir kez
+ * oldu. Her iki sorgu da çalışma alanı düzeyinde ve küçük: yalnız uyarısı
+ * olan oturumlar ve Meet bağlantılı eşleşmiş Calendar örnekleri.
+ */
+export async function attachCalendarInfo<
+  T extends { id: string; calendarState?: CalendarState | null; meetUrl?: string | null },
+>(supabase: SupabaseClient, workspaceId: string, sessions: T[]): Promise<T[]> {
+  if (sessions.length === 0) return sessions
+  const ids = new Set(sessions.map(s => s.id))
+  const [{ data: states }, { data: links }] = await Promise.all([
+    supabase
+      .from('service_sessions')
+      .select('id, calendar_state')
+      .eq('workspace_id', workspaceId)
+      .not('calendar_state', 'is', null)
+      .limit(1000),
+    supabase
+      .from('calendar_event_links')
+      .select('session_id, meet_url')
+      .eq('workspace_id', workspaceId)
+      .eq('match_state', 'matched')
+      .not('session_id', 'is', null)
+      .not('meet_url', 'is', null)
+      .limit(1000),
+  ])
+  const stateById = new Map(
+    ((states ?? []) as { id: string; calendar_state: CalendarState }[])
+      .filter(r => ids.has(r.id))
+      .map(r => [r.id, r.calendar_state])
+  )
+  const meetById = new Map(
+    ((links ?? []) as { session_id: string; meet_url: string }[])
+      .filter(r => ids.has(r.session_id))
+      .map(r => [r.session_id, r.meet_url])
+  )
+  if (stateById.size === 0 && meetById.size === 0) return sessions
+  return sessions.map(s =>
+    stateById.has(s.id) || meetById.has(s.id)
+      ? { ...s, calendarState: stateById.get(s.id) ?? null, meetUrl: meetById.get(s.id) ?? null }
+      : s
+  )
 }
 
 export interface UnmatchedCalendarEvent {
