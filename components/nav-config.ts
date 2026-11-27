@@ -12,6 +12,8 @@ import { Activity, Building2, History, Megaphone, Scale, ScrollText, Server, Use
   LayoutDashboard,
   Library,
   ListChecks,
+  NotebookPen,
+  Repeat2,
   ShieldAlert,
   ShieldCheck,
   Waypoints,
@@ -99,6 +101,8 @@ export const studentScreens = [
   { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
   // Feature Showcase PRD 10.1 (Faz 2c): öğrencinin kronolojik geçmişi.
   { slug: 'zaman-tuneli', path: 'zaman-tuneli', label: 'Zaman Tüneli', icon: History },
+  // Hata Defteri + Soru takibi (161): öğrencinin yanlışları, tekrarı ve netleri.
+  { slug: 'hata-defteri', path: 'hata-defteri', label: 'Hata Defteri', icon: Repeat2 },
 ] as const
 
 export type StudentScreen = (typeof studentScreens)[number]
@@ -143,6 +147,7 @@ export const teacherNav: NavEntry[] = [
       { href: '/teacher/students', label: 'Öğrenciler', icon: Users, exact: true },
       { href: '/teacher/students/new', label: 'Yeni Öğrenci', icon: UserPlus },
       { href: '/teacher/tasks', label: 'Görevler', icon: ClipboardList },
+      { href: '/teacher/hata-defteri', label: 'Soru & Hata Takibi', icon: Repeat2 },
       ...studentScreenLinks,
     ],
   },
@@ -267,6 +272,7 @@ export function studentTabs(studentId: string): LinkTab[] {
       items: [
         { key: 'yayinlanan-odevler', label: 'Yayınlanan Ödevler', href: panel('odevler') },
         { key: 'odev-planlama', label: 'Ödev Planlama', href: screen('homework/new') },
+        { key: 'hata-defteri', label: 'Hata Defteri', href: screen('hata-defteri') },
       ],
     },
     {
@@ -520,6 +526,11 @@ export const studentNav: NavItem[] = [
   // YOL DEĞİŞMEDİ — kayıtlı bağlantılar çalışmaya devam eder.
   { href: '/student/curriculum', label: 'Akademik Akışım', icon: CalendarRange },
   { href: '/student/review', label: 'Tekrar', icon: ShieldCheck },
+  // HATA DEFTERİ + SORU TAKİBİ (161) — EK maddeler. Yukarıdaki "Tekrar"
+  // KONU tekrarıdır (Koruma Havuzu) ve aynen kalır; "Hata Defterim"
+  // yanlış yapılan SORULARIN aralıklı tekrarıdır.
+  { href: '/student/hata-defteri', label: 'Hata Defterim', icon: Repeat2 },
+  { href: '/student/soru', label: 'Soru Takibim', icon: NotebookPen },
 ]
 
 // Veli panelinde tek ekran var; gezinme listesi bilinçli olarak boş.

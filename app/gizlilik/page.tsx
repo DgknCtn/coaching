@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalShell title="Gizlilik ve KVKK Aydınlatma Metni" updatedAt="4 Eylül 2026">
+    <LegalShell title="Gizlilik ve KVKK Aydınlatma Metni" updatedAt="28 Kasım 2026">
       <p>
         Bu metin, {BRAND.name} platformunda kişisel verilerin nasıl işlendiğini açıklar.
         Platform; öğretmenlerin, öğrencilerin ve velilerin akademik takip verilerini
@@ -50,6 +50,16 @@ export default function PrivacyPage() {
           <strong className="text-foreground">Eğitim verisi:</strong> sınıf düzeyi, sınav
           türü, atanan kaynaklar, verilen ödevler, tamamlanan çalışmalar, ilerleme
           yüzdeleri, müfredat planı ve öğretmenin girdiği akademik notlar.
+        </li>
+        <li>
+          <strong className="text-foreground">Hata defteri ve soru takibi:</strong>{' '}
+          öğrencinin yanlış yaptığı soruların kaydı (ders, konu, kaynak, neden, cevaplar,
+          notlar), tekrar sonuçları ve günlük çözülen soru sayıları. Kayda eklenen{' '}
+          <strong className="text-foreground">soru fotoğrafları</strong> sıkıştırılarak,
+          herkese kapalı bir depolama alanında saklanır ve yalnız öğrenci ile öğretmeni
+          tarafından, kısa süreli bağlantıyla görüntülenir. Veli yalnız toplu sayıları
+          görür, fotoğrafı göremez. Fotoğrafta yalnız soru bulunmalı; yüz, isim ya da
+          başka kişisel bilgi çekilmemelidir. Kayıt silinince fotoğraf da silinir.
         </li>
         <li>
           <strong className="text-foreground">Kullanım kayıtları:</strong> oturum

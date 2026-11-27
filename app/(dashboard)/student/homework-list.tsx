@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { formatUnitCount } from '@/lib/unit-labels'
@@ -35,7 +36,7 @@ interface HomeworkItem {
   book_sections: { id: string; title: string; order_index?: number | null } | null
   /** order_index test/sayfa numarasıdır; sayfa kitabında page_start ile aynı
    *  fiziksel sayfayı gösterir (022). Aralık özeti bundan türetilir. */
-  book_tests: { title: string; order_index?: number | null; page_start?: number | null } | null
+  book_tests: { id?: string; title: string; order_index?: number | null; page_start?: number | null } | null
 }
 
 /**
@@ -417,6 +418,17 @@ function HomeworkItemRow({
           <Badge variant={TEST_STATE_VARIANT[state]} className="mt-2">
             {testStateLabel(state, 'student')}
           </Badge>
+        )}
+
+        {/* HATA DEFTERİ (161) — yalnız bağlantı: teslim ve onay akışı
+            değişmez. Form kitap ve test seçili açılır. */}
+        {(isApproved || canWithdraw) && item.book_id && (
+          <Link
+            href={`/student/hata-defteri/yeni?kitap=${item.book_id}${item.book_tests?.id ? `&test=${item.book_tests.id}` : ''}`}
+            className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
+          >
+            Bu testteki yanlışları deftere ekle
+          </Link>
         )}
 
         {/* Öğretmenin red gerekçesi (R2 Ek Revizyon §3). Yeniden gönderimde

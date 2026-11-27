@@ -60,3 +60,21 @@ describe('buildTimeline', () => {
     expect(groupByDay(ev).map(d => [d.day, d.events.length])).toEqual([['2026-11-25', 2], ['2026-11-24', 1]])
   })
 })
+
+describe('hata defteri olayları (161, ek)', () => {
+  it('eklenen/öğrenilen hatalar ve günlük soru özeti akademik kategoride', () => {
+    const ev = buildTimeline({
+      batches: [], items: [], sessions: [], checkIns: [], interventions: [], payments: [], notes: [],
+      mistakes: [
+        { created_at: '2026-11-20T10:00:00Z', status: 'review', last_reviewed_at: null },
+        { created_at: '2026-11-20T11:00:00Z', status: 'learned', last_reviewed_at: '2026-11-25T09:00:00Z' },
+      ],
+      questionLogs: [
+        { log_date: '2026-11-26', created_at: '2026-11-26T18:00:00Z', correct: 15, wrong: 6, blank: 4, penalty_divisor: 4 },
+        { log_date: '2026-11-26', created_at: '2026-11-26T19:00:00Z', correct: 10, wrong: 5, blank: 3, penalty_divisor: 4 },
+      ],
+    })
+    expect(ev.map(e => e.title)).toEqual(['43 soru çözüldü · net 22,25', '1 hata öğrenildi', '2 hata deftere eklendi'])
+    expect(ev.every(e => e.category === 'akademik')).toBe(true)
+  })
+})

@@ -23,7 +23,7 @@ olduğunu, neyin kısmen var olduğunu ve neyin sıfırdan yapılacağını gös
 | 10.8 | İlerleme içgörüleri | P2 | **Kısmen** | Rapor sayfası (`students/[id]/report`) ve AI özet |
 | 10.9 | Görüşme özeti | P2 | **Kısmen** | Ders notu, plan geçmişi, `interventions`, check-in'ler |
 | 10.10 | Veli haftalık özeti | P2 | **Kısmen** | Veli paneli; hazır WhatsApp metinleri |
-| 10.11 | Deneme sınavı takibi | P2 | **Yok** | — |
+| 10.11 | Deneme sınavı takibi | P2 | **Kısmen** (günlük soru/net kaydı var; deneme karnesi yok) | — |
 | 10.12 | Konu bazlı eksik takibi | P3 | **Yok** | Müfredat/konu yapısı (`curriculum`) temel olabilir |
 | 10.13 | Öğrenci portfolyosu | P3 | **Kısmen** | Rapor sayfası, kitap geçmişi |
 | 10.14 | Grup yönetimi | P3 | **Kısmen** | Grup dersleri (`student_groups`, `group_sessions`) |
@@ -72,6 +72,24 @@ devamı getirilir).
   - Öğrenciye uygular; taslak görevler oluşur ve öğrencinin takvimine uyarlanır.
   - Yayın öğretmenin onayıyla olur.
 - **Veri:** Yeni `homework_templates` tablosu (öğretmene özel, kalemler).
+
+## Hata Defteri + Soru/Net takibi — tamamlandı (28.11.2026)
+- **Kaynak:** İncelenen "hata ve net defteri" ürünü; İZ'e **ek** modül olarak, mevcut lisansa dahil.
+- **Öğrenci:**
+  - "Hata Defterim": fotoğraflı hata kaydı ve aralıklı tekrar (1/3/7/14/30 gün).
+  - "Soru Takibim": doğru/yanlış/boş ve net (YKS 4, LGS 3 yanlış).
+  - Ana sayfada "Bugün" kartı; ödev kartında "yanlışları deftere ekle" bağlantısı.
+- **Öğretmen:**
+  - Öğrenci ekranı "Hata Defteri": hatalar ve koç notu, soru, analiz, hedefler, hata ekle.
+  - "Soru & Hata Takibi" genel tablosu.
+- **Veli:** Yalnız toplu özet (`parent_mistake_summary`); fotoğraf ve not yok.
+- **Veri:**
+  - Migration 161: `mistakes`, `mistake_reviews`, `question_logs`, `study_targets`.
+  - İlk depolama alanı: özel `mistake-photos`.
+- **Değişmezlik:** Ödev onayı, kitap ilerlemesi ve öğrenci durumu hesabı etkilenmez.
+- **Sonraki adımlar:**
+  - Odak Laboratuvarı (çalışma zamanlayıcı).
+  - Deneme sınavı karnesi (10.11): soru kaydı altyapısı üzerine kurulabilir.
 
 ## P2/P3 — değerlendirme notları
 - **Deneme sınavı ve konu eksikleri** (10.11–10.12): Yeni veri modeli gerekiyor (sınav, ders, doğru/yanlış/boş, konu kırılımı). Konu eşlemesi için müfredat yapısı kullanılabilir. Efor: orta-yüksek.
