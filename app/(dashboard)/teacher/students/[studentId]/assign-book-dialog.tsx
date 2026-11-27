@@ -45,6 +45,8 @@ import type { StudentScope } from '@/lib/student-scopes'
 const schema = z.object({
   bookId: z.string().min(1, 'Kitap seçin'),
   scopeId: z.string().optional(),
+  /** Ödev akışı (26.11.2026) §1: varsayılan Aktif; Bekliyor bilerek seçilir. */
+  status: z.enum(['active', 'pending']),
 })
 type FormData = z.infer<typeof schema>
 
@@ -98,7 +100,7 @@ export function AssignBookDialog({
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
   /** Atama sonrası CTA (§4.2): pencere kapanmaz, bir sonraki adımı söyler. */
-  const [assigned, setAssigned] = useState(false)
+  const [assigned, setAssigned] = useState<{ bookId: string; status: 'active' | 'pending' } | null>(null)
 
   const [search, setSearch] = useState('')
   const [subject, setSubject] = useState('')
@@ -112,7 +114,7 @@ export function AssignBookDialog({
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { scopeId: defaultScopeId ?? '' },
+    defaultValues: { scopeId: defaultScopeId ?? '', status: 'active' },
   })
 
   // Seçenek listeleri gerçekten atanabilir kitaplardan türetilir; hiç
@@ -140,22 +142,23 @@ export function AssignBookDialog({
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
-      const result = await assignBookAction(studentId, data.bookId, data.scopeId || null)
-      if (result?.error) {
+      const result = await assignBookAction(studentId, data.bookId, data.scopeId || null, data.status)
+      if (result?.error && !result.assignmentId) {
         setServerError(result.error)
       } else {
-        reset({ scopeId: defaultScopeId ?? '' })
+        if (result?.error) setServerError(result.error)
+        reset({ scopeId: defaultScopeId ?? '', status: 'active' })
         setSearch('')
         setSubject('')
         setLevel('')
         setProgram('')
-        setAssigned(true)
+        setAssigned({ bookId: data.bookId, status: result?.status ?? 'pending' })
       }
     })
   }
 
   const closeDialog = () => {
-    setAssigned(false)
+    setAssigned(null)
     setOpen(false)
   }
 
@@ -164,7 +167,7 @@ export function AssignBookDialog({
       open={open}
       onOpenChange={next => {
         setOpen(next)
-        if (!next) setAssigned(false)
+        if (!next) setAssigned(null)
       }}
     >
       <DialogTrigger
@@ -180,18 +183,51 @@ export function AssignBookDialog({
         </DialogHeader>
         {assigned ? (
           <div className="mt-2 space-y-4">
-            <p className="text-sm">
-              Kaynak atandı ve <strong className="font-medium">Bekliyor</strong>{' '}
-              durumunda açıldı.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Rolünü, hedef kapsamını ve tarihlerini belirleyene kadar haftalık
-              tempoya girmez.
-            </p>
+            {assigned.status === 'active' ? (
+              <>
+                <p className="text-sm">
+                  Kaynak atandı ve <strong className="font-medium">Aktif</strong>. Hemen ödev verebilirsiniz.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Rol, hedef kapsam ve tarihler isteğe bağlı olarak Kaynak Planı&apos;nda belirlenir.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm">
+                  Kaynak atandı ve <strong className="font-medium">Bekliyor</strong>{' '}
+                  durumunda açıldı.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Aktif&apos;e alınana kadar haftalık tempoya ve Ödev Ver ekranına girmez.
+                </p>
+              </>
+            )}
+            {serverError && <p className="text-xs text-destructive">{serverError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setAssigned(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAssigned(null)
+                  setServerError(null)
+                }}
+              >
                 Başka kaynak ata
               </Button>
+              {assigned.status === 'active' && (
+                <Button
+                  variant="outline"
+                  render={
+                    <Link
+                      href={`/teacher/students/${studentId}/homework/new?book=${assigned.bookId}`}
+                      onClick={closeDialog}
+                    />
+                  }
+                >
+                  Ödev ver
+                </Button>
+              )}
               {/* Etiket Button'ın children'ı; render elemanı boş kalır.
                   Link'in içine metin konursa Base UI öğeyi birleştiremiyor
                   ve "native <button> bekleniyordu" uyarısı üretiyor. */}
@@ -333,11 +369,16 @@ export function AssignBookDialog({
           {/* Başlangıç / Hedef Bitiş alanları BURADAN KALDIRILDI (§4.2).
               Tarih, hedef kapsam seçilmeden anlamlı bir tempo üretmez;
               ikisi birlikte Kaynak Planı'nda belirlenir. */}
-          <p className="text-[11px] text-muted-foreground">
-            Kaynak <strong className="font-medium">Bekliyor</strong> durumunda
-            açılır ve haftalık tempoya girmez. Rol, hedef kapsam ve tarihler
-            Kaynak Planı&apos;nda belirlenir.
-          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="status">Durum</Label>
+            <NativeSelect id="status" {...register('status')}>
+              <option value="active">Aktif — hemen ödev verilebilir</option>
+              <option value="pending">Bekliyor — yalnız niyet, ödeve girmez</option>
+            </NativeSelect>
+            <p className="text-[11px] text-muted-foreground">
+              Rol, hedef kapsam ve tarihler Kaynak Planı&apos;nda belirlenir.
+            </p>
+          </div>
 
           {serverError && <p className="text-xs text-destructive">{serverError}</p>}
 

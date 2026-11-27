@@ -17,7 +17,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, Lightbulb, Plus, Video } from 'lucide-react'
 import type { BookMapBook, BookMapSection } from '@/lib/book-map'
 import { isSelectableState, type BookMapMode } from '@/lib/book-map'
-import { SECTION_SELECT_OPTIONS, selectByState } from '@/lib/bulk-actions'
+import { SECTION_SELECT_OPTIONS, describeAssignEligibility, filterApplicable, selectByState } from '@/lib/bulk-actions'
 import { hasActiveSignal, signalLabel } from '@/lib/curriculum-signal'
 import { isSectionInTarget } from '@/lib/plan-scope'
 import { Circle } from 'lucide-react'
@@ -37,6 +37,11 @@ interface Props {
   basketTestIds?: Set<string>
   /** Aralıktan gelen birimleri toplu ekler/çıkarır (BookMapGrid ile aynı imza). */
   onToggleSection?: (bookId: string, testIds: string[]) => void
+  /**
+   * Ödev akışı (26.11.2026) §3: aralığı doğrudan ödev sepetine koyar.
+   * Verilmezse (kitap detayı) düğme çizilmez; yalnız "Seç" kalır.
+   */
+  onAddToHomework?: (bookId: string, testIds: string[]) => void
   readOnly?: boolean
   /** plan (varsayılan) | manage — R6-03 yönetim modu. */
   mode?: BookMapMode
@@ -52,6 +57,7 @@ export function BookPageMap({
   selectedTestIds = EMPTY_SELECTION,
   basketTestIds,
   onToggleSection,
+  onAddToHomework,
   readOnly = false,
   mode = 'plan',
   studentId,
@@ -108,6 +114,7 @@ export function BookPageMap({
                 selectedTestIds={selectedTestIds}
                 basketTestIds={basketTestIds}
                 onToggleSection={onToggleSection}
+                onAddToHomework={onAddToHomework}
                 readOnly={readOnly}
                 mode={mode}
                 studentId={studentId}
@@ -140,6 +147,7 @@ function SectionRow({
   selectedTestIds,
   basketTestIds,
   onToggleSection,
+  onAddToHomework,
   readOnly,
   mode,
   startsNewPart,
@@ -154,6 +162,7 @@ function SectionRow({
   selectedTestIds: Set<string>
   basketTestIds?: Set<string>
   onToggleSection?: (bookId: string, testIds: string[]) => void
+  onAddToHomework?: (bookId: string, testIds: string[]) => void
   readOnly: boolean
   mode: BookMapMode
   /** R7-02 §6.4: bu bölüm yeni bir Parça'nın ilki mi? */
@@ -343,6 +352,7 @@ function SectionRow({
                 book={book}
                 section={section}
                 onToggleSection={onToggleSection}
+                onAddToHomework={onAddToHomework}
                 mode={mode}
               />
             </div>
@@ -397,36 +407,43 @@ function RangePicker({
   book,
   section,
   onToggleSection,
+  onAddToHomework,
   mode,
 }: {
   book: BookMapBook
   section: BookMapSection
   onToggleSection?: (bookId: string, testIds: string[]) => void
+  onAddToHomework?: (bookId: string, testIds: string[]) => void
   mode: BookMapMode
 }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
-  const add = () => {
+  /** Aralıktaki birimler; aralık okunamazsa null (hata yazılmıştır). */
+  const unitsInRange = () => {
+    setNotice(null)
     const { ranges, invalid } = parseRanges(value)
     if (invalid.length > 0) {
       setError(`Anlaşılamayan aralık: ${invalid.join(', ')}`)
-      return
+      return null
     }
     if (ranges.length === 0) {
       setError('Örnek: 1-36, 42-48')
-      return
+      return null
     }
-
     const wanted = new Set(pagesFromRanges(ranges))
+    return section.tests.filter((t) => t.pageStart != null && wanted.has(t.pageStart))
+  }
+
+  // "Seç": aralığı seçime alır; seçim çubuğundaki işlemler (tamamlandı,
+  // geri al, aktar, devret) bu seçim üzerinden çalışır.
+  const select = () => {
+    const units = unitsInRange()
+    if (!units) return
     // Yalnız henüz verilmemiş sayfalar plana eklenir; tamamlanmış veya
     // hâlihazırda ödevde olan sayfayı create_homework_batch zaten reddeder.
-    const ids = section.tests
-      .filter(
-        (t) => t.pageStart != null && wanted.has(t.pageStart) && isSelectableState(t.state, mode)
-      )
-      .map((t) => t.id)
-
+    const ids = units.filter((t) => isSelectableState(t.state, mode)).map((t) => t.id)
     if (ids.length === 0) {
       setError(
         mode === 'manage'
@@ -435,17 +452,36 @@ function RangePicker({
       )
       return
     }
-
     setError(null)
     setValue('')
     onToggleSection?.(book.bookId, ids)
+  }
+
+  // "Ödeve ekle" (26.11.2026 §3): en sık iş tek tık — aralık doğrudan
+  // ödev sepetine. Uygunluk seçim çubuğundaki "Ödeve Ekle" ile AYNI kural
+  // (lib/bulk-actions.ts); uygun olmayanların sebebi gizlenmez.
+  const addToHomework = () => {
+    const units = unitsInRange()
+    if (!units) return
+    const ids = filterApplicable('assign', units)
+    if (ids.length === 0) {
+      setError(
+        describeAssignEligibility(units.map((t) => t.state), 'sayfa') ??
+          'Bu aralıkta ödeve eklenebilecek sayfa yok.'
+      )
+      return
+    }
+    setError(null)
+    setValue('')
+    setNotice(describeAssignEligibility(units.map((t) => t.state), 'sayfa'))
+    onAddToHomework?.(book.bookId, ids)
   }
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={`range-${section.id}`} className="text-xs text-muted-foreground">
-          Plana eklenecek sayfalar
+          Sayfalar
         </label>
         <Input
           id={`range-${section.id}`}
@@ -456,16 +492,23 @@ function RangePicker({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              add()
+              if (onAddToHomework) addToHomework()
+              else select()
             }
           }}
         />
-        <Button type="button" size="sm" variant="outline" onClick={add}>
-          <Plus className="size-3.5" />
-          Plana ekle
+        {onAddToHomework && (
+          <Button type="button" size="sm" onClick={addToHomework}>
+            <Plus className="size-3.5" />
+            Ödeve ekle
+          </Button>
+        )}
+        <Button type="button" size="sm" variant="outline" onClick={select}>
+          Seç
         </Button>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
     </div>
   )
 }

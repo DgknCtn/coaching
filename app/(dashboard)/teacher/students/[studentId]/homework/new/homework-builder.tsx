@@ -33,6 +33,7 @@ import {
 } from '@/lib/homework-load'
 import { createHomeworkBatchAction, retryAttachBatchToFlowAction, startNewWeekAction } from './actions'
 import { WeekTransitionDialog } from './week-transition-dialog'
+import { BookPicker, type PendingBook, type PickerScope, type PoolBook } from './book-picker'
 import { flowShortLabel, type FlowRef, type OpenWorkItem } from '@/lib/open-homework'
 import { canCarry } from '@/lib/bulk-actions'
 import { carryItemsAction } from '../../homework-actions'
@@ -120,6 +121,16 @@ interface Props {
    * Yalnız bilgi etiketi için; değer zaten initialDueDate/Time'a işlenmiş.
    */
   fallbackDue: { dueAt: string; source: string; anchorServiceId: string } | null
+  /**
+   * Ödev akışı (26.11.2026) §5: açık hafta var ama son teslimi geçmiş
+   * (kapatılmamış). activeFlow bu durumda null gelir; yayında "Geçen hafta
+   * kapanmamış, kapatıp yeni haftaya yayımlayayım mı?" sorulur.
+   */
+  staleFlow?: { id: string; dueAt: string } | null
+  /** 26.11.2026 §2: Ödev Ver içinden aktif etme ve havuzdan atama. */
+  pendingBooks?: PendingBook[]
+  poolBooks?: PoolBook[]
+  scopes?: PickerScope[]
   initialTitle: string
   initialNote: string
   /**
@@ -164,6 +175,10 @@ export function HomeworkBuilder({
   initialDueDate,
   initialDueTime,
   fallbackDue,
+  staleFlow = null,
+  pendingBooks = [],
+  poolBooks = [],
+  scopes = [],
   initialTitle,
   initialNote,
   activeFlow,
@@ -933,25 +948,15 @@ export function HomeworkBuilder({
             </>
           )}
 
-          {books.length > 1 && (
-            <div className="flex items-center gap-2">
-              <Label htmlFor="activeBook" className="shrink-0 text-xs text-muted-foreground">
-                Görüntülenen kitap
-              </Label>
-              <NativeSelect
-                id="activeBook"
-                value={activeBook?.bookId ?? ''}
-                onChange={e => setActiveBookId(e.target.value)}
-                className="max-w-xs"
-              >
-                {books.map(book => (
-                  <option key={book.bookId} value={book.bookId}>
-                    {book.title}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-          )}
+          <BookPicker
+            studentId={studentId}
+            activeBooks={books.map(b => ({ bookId: b.bookId, title: b.title }))}
+            activeBookId={activeBook?.bookId ?? null}
+            onSelectActive={setActiveBookId}
+            pendingBooks={pendingBooks}
+            poolBooks={poolBooks}
+            scopes={scopes}
+          />
 
           {/* Harita — masaüstü. Dar ekranda gizlenir (R3 v2 "Mobil karar"). */}
           <div className="hidden space-y-3 lg:block">
@@ -1034,6 +1039,10 @@ export function HomeworkBuilder({
                   basketTestIds={basketIds}
                   onToggleTest={toggleTest}
                   onToggleSection={toggleSection}
+                  onAddToHomework={(_bookId, ids) => {
+                    addToBasket(ids)
+                    toast.success(`${ids.length} sayfa ödeve eklendi.`)
+                  }}
                   onSelectRange={selectRange}
                   studentId={studentId}
                   keepActiveTopicIds={keepActiveTopicSet}
@@ -1409,6 +1418,12 @@ export function HomeworkBuilder({
                             ({formatSessionLong(fallbackDue.dueAt)})
                           </p>
                         )}
+                        {staleFlow && (
+                          <p className="text-[11px] text-warning-foreground">
+                            Geçen hafta ({formatSessionLong(staleFlow.dueAt)}) kapatılmamış. Yayımlarken kapatılıp
+                            yeni hafta açılır.
+                          </p>
+                        )}
                         {activeFlow && (
                           <>
                             {/* Seçilen tarihin SONUCU anında yazılıyor.
@@ -1531,6 +1546,7 @@ export function HomeworkBuilder({
         open={transitionOpen}
         onOpenChange={setTransitionOpen}
         activeFlowDueAt={activeFlow?.dueAt ?? null}
+        staleFlowDueAt={staleFlow?.dueAt ?? null}
         newDueAt={effectiveDueAt}
         // Sepete zaten aktarılmış iş pencerede ikinci kez listelenmez (Mini 02).
         items={openWorkItems.filter(i => !carriedItemIds.has(i.id))}
