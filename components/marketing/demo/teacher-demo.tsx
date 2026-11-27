@@ -11,6 +11,8 @@ import { academicYearLabel, demoRelative } from '@/lib/demo-data'
 import { cn } from '@/lib/utils'
 import { demoStudents, demoSummary, type DemoStudent } from './demo-students'
 import { StudentDetailPanel } from './student-detail-panel'
+import { HomeworkMock } from '../mock/homework-mock'
+import { LessonsMock } from '../mock/lessons-mock'
 
 // KOÇ PANELİ DEMOSU.
 //
@@ -166,6 +168,15 @@ export function TeacherDemo() {
       </Section>
 
       {selected && <StudentDetailPanel student={selected} />}
+
+      {/* Landing ürün turuyla AYNI ekranlar (tour-fixtures.ts): demo ile
+          tanıtım sayfası aynı ürünü anlatsın. */}
+      <Section title="Ödev verme · Kitap Haritası" variant="plain">
+        <HomeworkMock />
+      </Section>
+      <Section title="Ders & Görüşmeler · Google Takvim" variant="plain">
+        <LessonsMock />
+      </Section>
     </div>
   )
 }

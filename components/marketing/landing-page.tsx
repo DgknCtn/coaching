@@ -3,7 +3,6 @@ import { HeroSection } from './hero-section'
 import { BeforeAfterSection } from './before-after-section'
 import { FeaturesSection } from './features-section'
 import { ApprovalSection } from './approval-section'
-import { ParentSection } from './parent-section'
 import { FounderSection } from './founder-section'
 import { TestimonialsSection } from './testimonials-section'
 import { HowItWorks } from './how-it-works'
@@ -13,6 +12,9 @@ import { FaqSection } from './faq-section'
 import { ClosingCta } from './closing-cta'
 import { Footer } from './footer'
 import { StickyCta } from './sticky-cta'
+import { ProductTour } from './product-tour'
+import { ComparisonSection } from './comparison-section'
+import { SetupSection } from './setup-section'
 
 // SAYFA SIRASI — satış akışına göre kuruldu.
 //
@@ -62,6 +64,20 @@ import { StickyCta } from './sticky-cta'
 //    öğrencileri için yaptığı ürün, sayfadaki en güçlü güven kanıtı.
 // 11. TestimonialsSection hemen ardından; yalnız gerçek ve izinli sözler
 //    (lib/testimonials.ts), liste boşken hiç çizilmez.
+//
+// 27 KASIM 2026 (göster, anlatma):
+// 12. ProductTour Önce/Sonra'nın hemen ardında: okuyucu derdinin
+//     tanındığını gördükten sonra ÇÖZÜMÜ GÖRMELİ — madde listesi değil,
+//     uygulamanın gerçek bileşenleriyle çizilmiş beş ekran (ödev, öğrenci,
+//     ders & takvim, finans, veli). #ozellikler bağlantısı artık buraya.
+// 13. ParentSection SAYFADAN ÇIKTI (dosya duruyor): veli paneli turun bir
+//     sekmesi. ApprovalSection kalıyor — "onaylı ilerleme" ürünün asıl
+//     farkı ve veli verisinin neden güvenilir olduğunu açıklıyor.
+// 14. ComparisonSection onayın ardından: farkı gören okuyucu "neden
+//     WhatsApp + Excel değil?" diye sorar; cevap yan yana tablo.
+// 15. FeaturesSection (roller) karşılaştırmadan sonra, kısa özet olarak.
+// 16. SetupSection kurucudan ÖNCE: "kurması zor mu?" itirazı fiyata
+//     inmeden karşılanır; HowItWorks'ün üç adımı onu tamamlar.
 // ============================================================
 
 export function LandingPage() {
@@ -70,9 +86,11 @@ export function LandingPage() {
       <Navbar />
       <HeroSection />
       <BeforeAfterSection />
-      <FeaturesSection />
+      <ProductTour />
       <ApprovalSection />
-      <ParentSection />
+      <ComparisonSection />
+      <FeaturesSection />
+      <SetupSection />
       <FounderSection />
       <TestimonialsSection />
       <HowItWorks />

@@ -18,6 +18,7 @@ import {
 } from '@/lib/billing/pricing'
 import { SectionHeading } from './section-heading'
 import { GuaranteeStrip } from './guarantee-strip'
+import { registerHref } from '@/lib/signup-source'
 
 // FİYATLANDIRMA — lisans hesaplayıcısı (058).
 //
@@ -157,7 +158,7 @@ export function PricingSection() {
                   )}
 
                   <Link
-                    href="/register"
+                    href={registerHref('fiyat')}
                     className={buttonVariants({ size: 'lg', className: 'mt-6 w-full' })}
                   >
                     {TRIAL_CTA_LABEL}

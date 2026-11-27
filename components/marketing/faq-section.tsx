@@ -67,6 +67,18 @@ export const FAQS: { q: string; a: string }[] = [
     a: 'Evet. Görüşmeleri ve dersleri kaydedersiniz; her öğrencinin cari hesabında borç ve ödemeler görünür, giderlerinizi de aynı yerde tutarsınız. Veli ödeme yaptığını kendi ekranından tek dokunuşla bildirebilir.',
   },
   {
+    q: 'Google Takvim’imi bağlayabilir miyim?',
+    a: 'Evet. Ayarlar’dan kendi Google Takvim’inizi bağlarsınız; öğrenciyle eşleşen dersler Ders & Görüşmeler’e kendiliğinden gelir, Meet bağlantısıyla birlikte. Bağlantı yalnız okur: takviminize hiçbir şey yazılmaz. Takvimde iptal edilen ders silinmez, sonucunu siz seçersiniz.',
+  },
+  {
+    q: 'WhatsApp’tan otomatik mesaj atıyor mu?',
+    a: 'Hayır, bilinçli olarak. Ödev, ders hatırlatması ve ödev yoklaması için hazır metinler üretilir; tek dokunuşla kopyalar ya da WhatsApp’ta açıp kendiniz gönderirsiniz. Öğrencinizle yazışma sizin numaranızda ve sizin kontrolünüzde kalır.',
+  },
+  {
+    q: 'Bir ödevi vermek ne kadar sürüyor?',
+    a: 'Tek ekranda: kitabı seçin, sayfa aralığını (ör. 2-10) yazıp “Ödeve ekle” deyin ve yayımlayın. Kitap henüz atanmamışsa aynı ekrandan atanır; son teslim öğrencinin sıradaki dersine göre kendiliğinden gelir.',
+  },
+  {
     q: 'Hesabımı ve verilerimi silebilir miyim?',
     a: 'Evet. Ayarlar > Veri bölümünden çalışma alanınızın ya da tek bir öğrencinin silinmesini talep edebilirsiniz. Kitap havuzunuzu dilediğiniz zaman CSV veya JSON olarak dışa aktarabilirsiniz.',
   },

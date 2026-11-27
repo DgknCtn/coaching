@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { AtSign, Mail, MessageCircle } from 'lucide-react'
 import { BRAND, contactMailto, whatsappLink, instagramLink } from '@/lib/brand'
 import { BrandMark } from '@/components/shared/brand-mark'
+import { registerHref } from '@/lib/signup-source'
 
 export function Footer() {
   return (
@@ -93,7 +94,7 @@ export function Footer() {
               Giriş yap
             </Link>
             <Link
-              href="/register"
+              href={registerHref('footer')}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Kayıt Ol

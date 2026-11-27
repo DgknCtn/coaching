@@ -4,6 +4,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { BRAND } from '@/lib/brand'
 import { TRIAL_CTA_LABEL } from '@/lib/plans'
 import { GuaranteeStrip } from './guarantee-strip'
+import { registerHref } from '@/lib/signup-source'
 
 // SAYFANIN SON CTA'SI.
 //
@@ -64,7 +65,7 @@ export function ClosingCta() {
           </ol>
 
           <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/register" className={buttonVariants({ size: 'lg' })}>
+            <Link href={registerHref('kapanis')} className={buttonVariants({ size: 'lg' })}>
               {TRIAL_CTA_LABEL}
               <ArrowRight />
             </Link>

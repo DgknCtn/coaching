@@ -62,12 +62,17 @@ export default function RegisterPage() {
   const onSubmit = (data: FormData) => {
     setServerError(null)
     startTransition(async () => {
+      // Kaydın hangi landing bölümünden geldiği (/register?k=hero|tur|...).
+      // Gönderim anında okunur: useSearchParams sayfayı Suspense'e
+      // zorlardı. Biçim sunucuda doğrulanır (lib/signup-source.ts).
+      const source = new URLSearchParams(window.location.search).get('k')
       const result = await registerAction(
         data.fullName,
         data.email,
         data.password,
         undefined,
-        data.partnerCode
+        data.partnerCode,
+        source
       )
       if (result?.error) {
         setServerError(result.error)

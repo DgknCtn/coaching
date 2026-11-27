@@ -6,6 +6,7 @@ import { Footer } from '@/components/marketing/footer'
 import { DemoTabs } from '@/components/marketing/demo/demo-tabs'
 import { BRAND } from '@/lib/brand'
 import { TRIAL_CTA_LABEL } from '@/lib/plans'
+import { registerHref } from '@/lib/signup-source'
 
 export const metadata = {
   title: 'Demo',
@@ -30,7 +31,7 @@ export default function DemoPage() {
         </span>
         {/* Düğme de yukarıdaki metinle aynı kısıta tabi: dar ekranda
             tam etiket şeridi ikinci satıra taşırıyor. */}
-        <Link href="/register" className={buttonVariants({ size: 'xs', variant: 'outline' })}>
+        <Link href={registerHref('demo')} className={buttonVariants({ size: 'xs', variant: 'outline' })}>
           <span className="sm:hidden">Ücretsiz</span>
           <span className="hidden sm:inline">{TRIAL_CTA_LABEL}</span>
         </Link>
@@ -66,7 +67,7 @@ export default function DemoPage() {
               öğrencilerinizi tek ekrandan yönetin.
             </p>
             <div className="mt-6">
-              <Link href="/register" className={buttonVariants({ size: 'lg' })}>
+              <Link href={registerHref('demo')} className={buttonVariants({ size: 'lg' })}>
                 {TRIAL_CTA_LABEL}
                 <ArrowRight />
               </Link>

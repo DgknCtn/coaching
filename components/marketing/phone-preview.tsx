@@ -1,6 +1,7 @@
 import { Check, Clock, Circle } from 'lucide-react'
 import { demoStudents } from './demo/demo-students'
 import { PhoneFrame } from './phone-frame'
+import { DEMO_WEEK } from './demo/tour-fixtures'
 import { cn } from '@/lib/utils'
 
 // TELEFONDA ÖĞRENCİ — "Haftam"ın sadeleştirilmiş temsili.
@@ -12,11 +13,8 @@ import { cn } from '@/lib/utils'
 
 const student = demoStudents[0]
 
-const WEEK: { title: string; detail: string; state: 'approved' | 'submitted' | 'todo' }[] = [
-  { title: 'TYT Matematik', detail: 'Denklemler · Test 4-6', state: 'approved' },
-  { title: 'TYT Türkçe', detail: 'Paragraf · 12 sayfa', state: 'submitted' },
-  { title: 'TYT Matematik', detail: 'Problemler · Test 1-3', state: 'todo' },
-]
+// Hafta içeriği ürün turuyla ortak (tour-fixtures.ts) — iki vitrin çelişmesin.
+const WEEK = DEMO_WEEK
 
 const STATE = {
   approved: { label: 'Onaylandı', Icon: Check, className: 'text-success-foreground' },

@@ -11,14 +11,15 @@ const roles = [
     description:
       'Tüm öğrencilerinizi tek ekrandan yönetin. Kimin neden takibe ihtiyacı olduğunu, gerekçesiyle birlikte erkenden görün.',
     features: [
+      'Tek ekranda ödev: kitap seç, sayfa aralığı yaz, yayımla',
       'Haftalık Akış: haftanın yükü, tempo ve tek son teslim',
-      "Kitap Haritası'ndan ödev verme, hazır WhatsApp metni",
       'Teslimleri onaylama — ilerlemeye yalnız onaylı iş sayılır',
       // ÜRÜNÜN DURUM SÖZLÜĞÜ (lib/student-status.ts) — elle yazılmıyor.
       // Önceden "Kritik / Dikkat / İyi" yazıyordu; üründe olmayan bir üçlü.
       `Durum ve nedeni: ${Object.values(STATUS_LABEL).join(' / ')}`,
-      'Görüşme ve ders takibi',
+      'Ders & Görüşmeler: Google Takvim bağlantısı, sonuç ve telafi',
       'Finans: öğrenci başına cari hesap, ödemeler ve giderler',
+      'Hazır WhatsApp metinleri: ödev, ders hatırlatması, ödev yoklaması',
       'Öğrenciye ve veliye kullanıcı adı + PIN — e-posta gerekmez',
     ],
   },
@@ -62,7 +63,7 @@ const roles = [
 
 export function FeaturesSection() {
   return (
-    <section id="ozellikler" className="scroll-mt-16 px-6 py-20 md:py-28">
+    <section id="roller" className="scroll-mt-16 px-6 py-20 md:py-28">
       <div className="mx-auto max-w-6xl">
         <SectionHeading
           eyebrow="Roller"
