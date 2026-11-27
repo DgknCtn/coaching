@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { ParentTempoRow } from '@/components/shared/parent-tempo-row'
 import { BookMapGrid, BookMapLegend } from '@/components/shared/book-map-grid'
+import { bookLevelLabel } from '@/lib/book-taxonomy'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,7 +60,7 @@ export default async function ParentBookMapPage({
           [link.students.full_name, book.subject, book.publisher].filter(Boolean).join(' · ') ||
           undefined
         }
-        badges={book.examType ? <Badge variant="info">{book.examType}</Badge> : undefined}
+        badges={bookLevelLabel(book.levelExam, book.examType) ? <Badge variant="info">{bookLevelLabel(book.levelExam, book.examType)}</Badge> : undefined}
       />
 
       {/* Veliye sadeleştirilmiş tempo (R6 bekleme listesi): aynı hesap,

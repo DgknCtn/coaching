@@ -58,6 +58,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { NativeSelect } from '@/components/ui/native-select'
+import { bookLevelLabel } from '@/lib/book-taxonomy'
 import { MetricTiles } from '@/components/shared/metric-tiles'
 import { TempoStrip } from '@/components/shared/tempo-strip'
 import { formatUnitCount, unitLabel } from '@/lib/unit-labels'
@@ -858,7 +859,9 @@ export function HomeworkBuilder({
             <h1 className="truncate text-xl font-semibold tracking-tight">
               {activeBook?.title ?? 'Ödev Planlama'}
             </h1>
-            {activeBook?.examType && <Badge variant="info">{activeBook.examType}</Badge>}
+            {activeBook && bookLevelLabel(activeBook.levelExam, activeBook.examType) && (
+              <Badge variant="info">{bookLevelLabel(activeBook.levelExam, activeBook.examType)}</Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {[activeBook?.subject, activeBook?.publisher].filter(Boolean).join(' · ') ||

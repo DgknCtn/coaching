@@ -228,7 +228,7 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
                       </td>
                       <td className="px-3 py-2 text-sm tabular-nums">{r.daysSinceContact} gün</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {contactSourceLabel(r.lastContactSource)}
+                        {contactSourceLabel(r.lastContactSource, r.contactUnit)}
                       </td>
                       <td className="px-3 py-2">
                         <span
@@ -277,7 +277,7 @@ export function ProtectionPoolClient({ studentId, scopes, activeScopeId, rows }:
                 },
                 {
                   label: 'Son temasın türü',
-                  value: contactSourceLabel(selected.lastContactSource),
+                  value: contactSourceLabel(selected.lastContactSource, selected.contactUnit),
                 },
                 {
                   label: 'Çalışılan kaynaklar',

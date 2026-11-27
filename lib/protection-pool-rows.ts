@@ -120,7 +120,7 @@ export async function loadProtectionPoolData(
       // ekranı "bu konuya git" bağlantısı kurabilsin.
       supabase
         .from('book_sections')
-        .select('topic_id, book_id, books(title)')
+        .select('topic_id, book_id, books(title, tracking_mode)')
         .eq('workspace_id', workspaceId)
         .in('topic_id', topicIds),
     ])
@@ -145,13 +145,19 @@ export async function loadProtectionPoolData(
 
   const booksByTopic = new Map<string, string[]>()
   const bookIdsByTopic = new Map<string, string[]>()
+  const modesByTopic = new Map<string, Set<'page' | 'test'>>()
   for (const row of (bookRows ?? []) as unknown as {
     topic_id: string
     book_id: string
-    books: Nested<{ title: string }>
+    books: Nested<{ title: string; tracking_mode: string | null }>
   }[]) {
-    const title = one(row.books)?.title
+    const book = one(row.books)
+    const title = book?.title
     if (!title) continue
+
+    const modes = modesByTopic.get(row.topic_id) ?? new Set()
+    modes.add(book?.tracking_mode === 'page' ? 'page' : 'test')
+    modesByTopic.set(row.topic_id, modes)
 
     const titles = booksByTopic.get(row.topic_id) ?? []
     if (!titles.includes(title)) titles.push(title)
@@ -181,6 +187,11 @@ export async function loadProtectionPoolData(
       openWorkCount: Number(openByTopic.get(topicId) ?? 0),
       keepActive: overrideByTopic.get(topicId) === true,
       bookTitles: booksByTopic.get(topicId) ?? [],
+      contactUnit: (() => {
+        const modes = modesByTopic.get(topicId)
+        if (!modes || modes.size === 0) return null
+        return modes.size > 1 ? 'mixed' : [...modes][0]
+      })(),
     }
   })
 

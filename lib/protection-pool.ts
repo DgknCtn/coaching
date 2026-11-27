@@ -31,6 +31,12 @@ export interface PoolRowInput {
   keepActive: boolean
   /** Bu konuda çalışılmış kaynakların adları — "Kaynaklara Git" için. */
   bookTitles: string[]
+  /**
+   * Konuya bağlı kaynakların takip türü (Kitap Girişi 4): hepsi sayfa
+   * takipliyse 'page', hepsi test/birim ise 'test', karışıksa 'mixed'.
+   * Kaynak sütununda "Sayfa çalışması" / "Test çalışması" ayrımı için.
+   */
+  contactUnit?: 'page' | 'test' | 'mixed' | null
 }
 
 export interface PoolRow extends PoolRowInput {
@@ -148,7 +154,15 @@ const SOURCE_LABEL: Record<NonNullable<PoolRowInput['lastContactSource']>, strin
   self_study: 'Kendi çalışması',
 }
 
-export function contactSourceLabel(source: PoolRowInput['lastContactSource']): string {
+export function contactSourceLabel(
+  source: PoolRowInput['lastContactSource'],
+  unit?: PoolRowInput['contactUnit']
+): string {
+  if (source === 'homework') {
+    // Sayfa takipli kitapta "Test çalışması" yanlıştı (27.11 kabul testi).
+    if (unit === 'page') return 'Sayfa çalışması'
+    if (unit === 'mixed') return 'Kitap çalışması'
+  }
   return source ? SOURCE_LABEL[source] : '—'
 }
 

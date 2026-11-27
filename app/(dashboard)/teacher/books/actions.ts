@@ -35,6 +35,8 @@ export interface SectionInput {
    *  RPC aralıktaki her sayfa için bir birim satırı açar. */
   page_start?: number | null
   page_end?: number | null
+  /** Kitap Girişi 3a: içindekilerden gelen alt bölümler (test kitabı). */
+  subsections?: { title: string; test_start: number; test_end: number }[]
 }
 
 export interface NewBookInput {
@@ -63,6 +65,15 @@ export async function createBookAction(input: NewBookInput) {
   const { workspaceId } = await getTeacherContext()
   const supabase = await createClient()
 
+  // Kitap Girişi 3a: alt bölümleri içindekilerden gelen bölüm TESTSİZ
+  // kurulur — testler alt bölümlerle açılır (add_book_subsection kendi
+  // testi olan bölüme alt bölüm eklemeyi reddeder, 076). Sayfa kitabında
+  // alt bölüm yoktur (061); orada bu alan yok sayılır.
+  const isPage = parsed.data.trackingMode === 'page'
+  const rpcSections = parsed.data.sections.map(({ subsections, ...section }) =>
+    !isPage && subsections?.length ? { ...section, test_count: 0 } : section
+  )
+
   const { data, error } = await supabase.rpc('create_book_with_sections_and_tests', {
     p_workspace_id: workspaceId,
     p_academic_term_id: parsed.data.termId || null,
@@ -72,7 +83,7 @@ export async function createBookAction(input: NewBookInput) {
     p_level_exam: parsed.data.levelExam || null,
     p_edition_year: parsed.data.editionYear ?? null,
     p_description: parsed.data.description || null,
-    p_sections: parsed.data.sections,
+    p_sections: rpcSections,
     p_tracking_mode: parsed.data.trackingMode,
     p_video_mode: parsed.data.videoMode,
     p_video_url: parsed.data.videoUrl || null,
@@ -80,26 +91,27 @@ export async function createBookAction(input: NewBookInput) {
 
   if (error) return { error: dbErrorToTr(error.message) }
 
-  // R6-14: öğretim programı ayrı bir çağrıyla yazılır. create RPC'si
-  // bölüm/test üretimini de yapan uzun bir fonksiyon; ona alan eklemek
-  // için gövdesini çoğaltmak yerine tek işli yardımcı kullanılır.
   const newBookId = (data as { book_id?: string } | null)?.book_id
-  if (newBookId && parsed.data.curriculumProgram) {
-    await supabase.rpc('set_book_curriculum_program', {
-      p_book_id: newBookId,
-      p_curriculum_program: parsed.data.curriculumProgram,
-    })
-  }
-
-  // R7-02 §6.2-6.3: Kaynak Türü / Yapısı da aynı gerekçeyle ayrı çağrıdır.
-  // Kolonların DEFAULT'u tutarlı olduğu için bu çağrı başarısız olsa da
-  // kitap kullanılabilir kalır.
+  let warning: string | undefined
   if (newBookId) {
-    await supabase.rpc('set_book_classification', {
-      p_book_id: newBookId,
-      p_resource_type: parsed.data.resourceType,
-      p_structure_kind: parsed.data.structureKind,
-    })
+    // R6-14 / R7-02 §6.2-6.3: öğretim programı ve sınıflama ayrı tek işli
+    // RPC'lerle yazılır (create RPC'sinin gövdesini çoğaltmamak için).
+    // İkisi birbirinden bağımsız: 3b — sırayla değil PARALEL. Kolonların
+    // DEFAULT'u tutarlı olduğu için biri başarısız olsa da kitap
+    // kullanılabilir kalır.
+    await Promise.all([
+      parsed.data.curriculumProgram
+        ? supabase.rpc('set_book_curriculum_program', {
+            p_book_id: newBookId,
+            p_curriculum_program: parsed.data.curriculumProgram,
+          })
+        : Promise.resolve(null),
+      supabase.rpc('set_book_classification', {
+        p_book_id: newBookId,
+        p_resource_type: parsed.data.resourceType,
+        p_structure_kind: parsed.data.structureKind,
+      }),
+    ])
 
     // §6.4: çok parçalı kaynakta bölümler Parça altında toplanır. Parçalar
     // bölüm sırasına göre kurulur; tek parçalı kaynakta liste boştur ve
@@ -116,10 +128,55 @@ export async function createBookAction(input: NewBookInput) {
         })
       }
     }
+
+    // 3a: içindekilerden gelen alt bölümler. Bölüm kimlikleri ancak şimdi
+    // var; bölümler form sırasıyla (order_index) eşlenir. Bölüm içinde
+    // SIRAYLA (alt bölüm sırası korunur), bölümler arasında paralel.
+    if (!isPage && parsed.data.sections.some(s => s.subsections?.length)) {
+      const { data: created } = await supabase
+        .from('book_sections')
+        .select('id, title, order_index')
+        .eq('book_id', newBookId)
+        .is('parent_section_id', null)
+        .order('order_index')
+      // Sıra ile eşlenir, başlıkla doğrulanır: çok parçalı kaynakta
+      // apply_book_parts sırayı değiştirmiş olabilir — o durumda aynı
+      // başlıklı ilk kullanılmamış bölüm alınır.
+      const rows = (created ?? []) as { id: string; title: string }[]
+      const used = new Set<string>()
+      const sectionIdFor = (index: number, title: string): string | undefined => {
+        const byOrder = rows[index]
+        const pick =
+          byOrder && byOrder.title.trim() === title.trim() && !used.has(byOrder.id)
+            ? byOrder
+            : rows.find(r => !used.has(r.id) && r.title.trim() === title.trim())
+        if (pick) used.add(pick.id)
+        return pick?.id
+      }
+      const targets = parsed.data.sections.map((section, index) => ({ section, sectionId: sectionIdFor(index, section.title) }))
+      const failed: string[] = []
+      await Promise.all(
+        targets.map(async ({ section, sectionId }) => {
+          if (!section.subsections?.length || !sectionId) return
+          for (const sub of section.subsections) {
+            const { error: subError } = await supabase.rpc('add_book_subsection', {
+              p_section_id: sectionId,
+              p_title: sub.title,
+              p_test_start: sub.test_start,
+              p_test_end: sub.test_end,
+            })
+            if (subError) failed.push(`${section.title} › ${sub.title}`)
+          }
+        })
+      )
+      if (failed.length > 0) {
+        warning = `Kitap kaydedildi ama ${failed.length} alt bölüm eklenemedi (${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}). Düzenleme ekranından ekleyebilirsiniz.`
+      }
+    }
   }
 
   revalidatePath('/teacher/books')
-  return { success: true, data }
+  return { success: true, data, warning }
 }
 
 /**

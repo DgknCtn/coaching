@@ -222,6 +222,21 @@ export function PublishedHomeworkList({
     message: string | null
   } | null>(null)
   const [isPending, startTransition] = useTransition()
+  // KİTAP GİRİŞİ 4 · "tamamlandı işaretle" sonrası kart sayfa yenilenene
+  // dek 0/25 kalıyordu. Sunucu yanıtı (revalidate + refresh) gelene kadar
+  // kart İYİMSER sayıyla güncellenir; yeni `batches` gelince sıfırlanır
+  // ve gerçek sayı geçerli olur. Kapalı planda uygulanmaz: orada kapanış
+  // sonucu gösterilir, sonraki tamamlamalar onu değiştirmez (Mini 06).
+  const [doneBoost, setDoneBoost] = useState<Record<string, number>>({})
+  const [boostBase, setBoostBase] = useState(batches)
+  if (boostBase !== batches) {
+    setBoostBase(batches)
+    setDoneBoost({})
+  }
+  const shownCompleted = (batch: PublishedBatch) =>
+    batch.plan?.status === 'closed'
+      ? batch.completed
+      : Math.min(batch.total, batch.completed + (doneBoost[batch.id] ?? 0))
   const activeFlow = openWork?.activeFlow ?? null
   const openItems = openWork?.items ?? []
   const submittedCount = openItems.filter(i => i.status === 'pending_approval').length
@@ -322,7 +337,7 @@ export function PublishedHomeworkList({
               <HomeworkBatchRow
                 title={batch.title}
                 dueDate={batch.dueDate}
-                completed={batch.completed}
+                completed={shownCompleted(batch)}
                 total={batch.total}
                 isOverdue={batch.isOverdue}
                 detail={batch.detail}
@@ -429,6 +444,10 @@ export function PublishedHomeworkList({
           activeFlow={activeFlow}
           carryRequestedIds={new Set(openItems.filter(i => i.carryRequested).map(i => i.id))}
           onClose={() => setPanelBatch(null)}
+          onCompleted={n => {
+            const id = panelBatch.id
+            setDoneBoost(prev => ({ ...prev, [id]: (prev[id] ?? 0) + n }))
+          }}
           onDone={() => {
             setPanelBatch(null)
             router.refresh()
@@ -467,6 +486,7 @@ function BatchActionPanel({
   activeFlow,
   carryRequestedIds,
   onClose,
+  onCompleted,
   onDone,
 }: {
   studentId: string
@@ -474,6 +494,8 @@ function BatchActionPanel({
   activeFlow: FlowRef | null
   carryRequestedIds: Set<string>
   onClose: () => void
+  /** Elle tamamlanan çalışma sayısı — kart iyimser güncellensin. */
+  onCompleted?: (count: number) => void
   onDone: () => void
 }) {
   const inCurrentWeek = !!activeFlow && batch.weeklyFlowId === activeFlow.id
@@ -531,6 +553,7 @@ function BatchActionPanel({
           run: async ids => {
             const res = await completeItemsManuallyAction(studentId, ids)
             if (res.error) return { error: res.error }
+            onCompleted?.(res.count ?? ids.length)
             return {
               message: `${res.count ?? ids.length} çalışma öğretmen tarafından tamamlandı olarak işaretlendi.`,
             }
