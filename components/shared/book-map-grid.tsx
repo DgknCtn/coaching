@@ -139,6 +139,8 @@ interface Props {
   basketTestIds?: Set<string>
   onToggleTest?: (bookId: string, testId: string) => void
   onToggleSection?: (bookId: string, testIds: string[]) => void
+  /** Sayfa bazlı kitapta aralığı doğrudan ödeve ekler (BookPageMap). */
+  onAddToHomework?: (bookId: string, testIds: string[]) => void
   /** Shift+tık: son tıklanan hücreden buraya kadar seçilebilir testleri seçer. */
   onSelectRange?: (bookId: string, testId: string) => void
   /**
@@ -174,6 +176,7 @@ export function BookMapGrid({
   basketTestIds,
   onToggleTest,
   onToggleSection,
+  onAddToHomework,
   onSelectRange,
   readOnly = false,
   audience = 'teacher',
@@ -192,6 +195,7 @@ export function BookMapGrid({
         selectedTestIds={selectedTestIds}
         basketTestIds={basketTestIds}
         onToggleSection={onToggleSection}
+        onAddToHomework={onAddToHomework}
         readOnly={readOnly}
         mode={mode}
         studentId={studentId}

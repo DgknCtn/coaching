@@ -38,6 +38,7 @@ export function WeekTransitionDialog({
   open,
   onOpenChange,
   activeFlowDueAt,
+  staleFlowDueAt = null,
   newDueAt,
   items,
   flows,
@@ -55,6 +56,8 @@ export function WeekTransitionDialog({
   onOpenChange: (open: boolean) => void
   /** Kapanacak haftanın son teslimi; açık hafta yoksa null. */
   activeFlowDueAt: string | null
+  /** Kapatılmamış (son teslimi geçmiş) hafta — 26.11.2026 §5. */
+  staleFlowDueAt?: string | null
   newDueAt: Date | null
   items: OpenWorkItem[]
   flows: FlowRef[]
@@ -78,9 +81,11 @@ export function WeekTransitionDialog({
     <Dialog open={open} onOpenChange={next => !pending && onOpenChange(next)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Yeni haftaya yayınla</DialogTitle>
+          <DialogTitle>{staleFlowDueAt ? 'Geçen hafta kapanmamış' : 'Yeni haftaya yayınla'}</DialogTitle>
           <DialogDescription>
-            {activeFlowDueAt
+            {staleFlowDueAt
+              ? `Geçen hafta (son teslim ${formatSessionLong(staleFlowDueAt)}) kapatılmamış. Kapatıp ödevi yeni haftaya yayımlayayım mı? Önceki haftanın sonucu korunur.`
+              : activeFlowDueAt
               ? `Planın son teslimi aktif haftanın kapanışını (${formatSessionLong(activeFlowDueAt)}) aşıyor. Aktif hafta kapanır, sonucu korunur; plan yeni haftaya yayınlanır.`
               : 'Bu öğrencide açık bir çalışma haftası yok. Yeni hafta açılır ve plan o haftaya yayınlanır.'}
           </DialogDescription>
@@ -193,7 +198,7 @@ export function WeekTransitionDialog({
             </Button>
             <Button size="sm" disabled={pending || !newDueAt} onClick={onConfirm}>
               {pending && <Loader2 className="animate-spin" />}
-              {activeFlowDueAt ? 'Haftayı kapat ve yayınla' : 'Haftayı aç ve yayınla'}
+              {activeFlowDueAt || staleFlowDueAt ? 'Haftayı kapat ve yayınla' : 'Haftayı aç ve yayınla'}
             </Button>
           </div>
         </DialogFooter>

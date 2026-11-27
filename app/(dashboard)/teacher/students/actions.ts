@@ -149,12 +149,23 @@ export async function updateStudentAction(
   return { success: true }
 }
 
+/**
+ * Kitap ata. "Ödev Verme Akışını Kısaltma" (26.11.2026) §1: varsayılan
+ * durum AKTİF — kitap atanır atanmaz Ödev Ver ekranında görünür.
+ * "Bekliyor" yalnız bilerek seçilirse kullanılır.
+ *
+ * RPC (098) atamayı yine 'pending' açar; Aktif istenirse mevcut
+ * set_student_book_plan (036) ile hemen Aktif'e alınır. RPC'nin ve kolon
+ * varsayılanının değişmemesi bilinçli: 098'in gerekçesi diğer yazarlar
+ * (kütüphane kopyası, içe aktarma) için geçerli; karar bu akışa özgü.
+ */
 export async function assignBookAction(
   studentId: string,
   bookId: string,
-  scopeId: string | null
-) {
-  const parsed = assignBookSchema.safeParse({ studentId, bookId, scopeId })
+  scopeId: string | null,
+  status: 'active' | 'pending' = 'active'
+): Promise<{ error?: string; success?: boolean; assignmentId?: string; status?: 'active' | 'pending' }> {
+  const parsed = assignBookSchema.safeParse({ studentId, bookId, scopeId, status })
   if (!parsed.success) return { error: firstIssue(parsed.error) }
 
   const { workspaceId, activeTerm } = await getTeacherContext()
@@ -162,7 +173,7 @@ export async function assignBookAction(
 
   if (!activeTerm) return { error: 'Aktif dönem bulunamadı' }
 
-  const { error } = await supabase.rpc('assign_book_to_student', {
+  const { data, error } = await supabase.rpc('assign_book_to_student', {
     p_workspace_id: workspaceId,
     p_student_id: studentId,
     p_book_id: bookId,
@@ -174,8 +185,28 @@ export async function assignBookAction(
   })
 
   if (error) return { error: dbErrorToTr(error.message) }
+  const assignmentId = (data as { student_book_assignment_id?: string } | null)?.student_book_assignment_id
+
   revalidatePath(`/teacher/students/${studentId}`)
-  return { success: true }
+  revalidatePath(`/teacher/students/${studentId}/homework/new`)
+
+  if (parsed.data.status === 'active' && assignmentId) {
+    const { error: activateError } = await supabase.rpc('set_student_book_plan', {
+      p_assignment_id: assignmentId,
+      p_status: 'active',
+      p_role: null,
+      p_clear_role: false,
+    })
+    if (activateError) {
+      return {
+        error: "Kitap atandı ama Aktif yapılamadı; Kaynak Planı'ndan Aktif'e alın.",
+        assignmentId,
+        status: 'pending',
+      }
+    }
+    return { success: true, assignmentId, status: 'active' }
+  }
+  return { success: true, assignmentId, status: 'pending' }
 }
 
 export async function removeBookAssignmentAction(assignmentId: string, studentId: string) {

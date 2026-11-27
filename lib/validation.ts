@@ -407,6 +407,7 @@ export const assignBookSchema = z.object({
   studentId: uuid,
   bookId: uuid,
   scopeId: uuid.nullish(),
+  status: z.enum(['active', 'pending']).default('active'),
 })
 
 const homeworkItemSchema = z.object({
