@@ -1,7 +1,7 @@
 import { Navbar } from './navbar'
 import { HeroSection } from './hero-section'
 import { BeforeAfterSection } from './before-after-section'
-import { FeaturesSection } from './features-section'
+import { FeaturePreview } from './features/feature-preview'
 import { ApprovalSection } from './approval-section'
 import { FounderSection } from './founder-section'
 import { TestimonialsSection } from './testimonials-section'
@@ -76,6 +76,10 @@ import { SetupSection } from './setup-section'
 // 14. ComparisonSection onayın ardından: farkı gören okuyucu "neden
 //     WhatsApp + Excel değil?" diye sorar; cevap yan yana tablo.
 // 15. FeaturesSection (roller) karşılaştırmadan sonra, kısa özet olarak.
+// 17. (28.11.2026, Feature Showcase PRD §8) FeaturesSection (roller)
+//     /ozellikler'e TAŞINDI; yerinde FeaturePreview: katalogdaki öne
+//     çıkan özellikler + "Tüm Özellikleri Keşfet". Anasayfa kataloğun
+//     tamamını tekrarlamaz (PRD §8.3).
 // 16. SetupSection kurucudan ÖNCE: "kurması zor mu?" itirazı fiyata
 //     inmeden karşılanır; HowItWorks'ün üç adımı onu tamamlar.
 // ============================================================
@@ -89,7 +93,7 @@ export function LandingPage() {
       <ProductTour />
       <ApprovalSection />
       <ComparisonSection />
-      <FeaturesSection />
+      <FeaturePreview />
       <SetupSection />
       <FounderSection />
       <TestimonialsSection />

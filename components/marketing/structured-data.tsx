@@ -1,5 +1,5 @@
 import { BRAND, siteUrl, absoluteUrl } from '@/lib/brand'
-import { FAQS } from './faq-section'
+import { HOME_FAQS } from './faq-section'
 import { BASE_PER_STUDENT_MONTH_KURUS } from '@/lib/billing/pricing'
 
 /**
@@ -62,7 +62,7 @@ export function StructuredData() {
       {
         '@type': 'FAQPage',
         '@id': `${siteUrl()}/#faq`,
-        mainEntity: FAQS.map((f) => ({
+        mainEntity: HOME_FAQS.map((f) => ({
           '@type': 'Question',
           name: f.q,
           acceptedAnswer: { '@type': 'Answer', text: f.a },

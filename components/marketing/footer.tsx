@@ -64,10 +64,29 @@ export function Footer() {
           {/* Links */}
           <nav className="flex flex-wrap justify-center gap-6">
             <Link
-              href="/#ozellikler"
+              href="/ozellikler"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Özellikler
+            </Link>
+            {/* Feature Showcase PRD §7.1: rol bazlı özellik bağlantıları. */}
+            <Link
+              href="/ozellikler#ogretmen"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Öğretmen özellikleri
+            </Link>
+            <Link
+              href="/ozellikler#ogrenci"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Öğrenci özellikleri
+            </Link>
+            <Link
+              href="/ozellikler#veli"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Veli özellikleri
             </Link>
             <Link
               href="/#nasil-calisir"

@@ -1,4 +1,4 @@
-import { Activity, Building2, Scale, ScrollText, Server, UsersRound,
+import { Activity, Building2, Megaphone, Scale, ScrollText, Server, UsersRound,
   BookOpen,
   Newspaper,
   CalendarCheck,
@@ -428,6 +428,7 @@ export const adminNavSections: AdminNavSection[] = [
       { href: '/admin/musteriler', label: 'Müşteriler', icon: Building2, description: 'Çalışma alanları, plan ve lisans' },
       { href: '/admin/kullanicilar', label: 'Kullanıcılar', icon: UsersRound, description: 'Hesaplar, roller ve son giriş' },
       { href: '/admin/kullanim', label: 'Kullanım', icon: Activity, description: 'Aktivasyon ve özellik kullanımı' },
+      { href: '/admin/pazarlama', label: 'Pazarlama', icon: Megaphone, description: 'Özellik sayfası, CTA ve kayıt kaynakları' },
     ],
   },
   {

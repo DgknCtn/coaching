@@ -34,6 +34,10 @@ function isPublicPath(pathname: string): boolean {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/demo' ||
+    // ÖZELLİK SAYFASI (Feature Showcase PRD): tanıtım sayfası, alıcı adayı
+    // okur. Paylaşım görseli de ayrı bir adres (bkz. /opengraph-image notu).
+    pathname === '/ozellikler' ||
+    pathname === '/ozellikler/opengraph-image' ||
     pathname === '/forgot-password' ||
     pathname === '/api/health' ||
     // ARAMA MOTORU VE PAYLAŞIM VARLIKLARI.

@@ -25,7 +25,9 @@ export function BrowserWindow({
         <span className="size-2.5 rounded-full bg-success/40" />
         <span className="ml-3 truncate text-xs text-muted-foreground">{title}</span>
       </div>
-      <div aria-hidden className="pointer-events-none select-none">
+      {/* @container: içerik EKRAN değil PENCERE genişliğine göre düzenlenir.
+          Lightbox'ın "mobil" görünümü (390 px) gerçek dar düzeni gösterir. */}
+      <div aria-hidden className="pointer-events-none select-none @container">
         {children}
       </div>
       <figcaption className="sr-only">{label}</figcaption>

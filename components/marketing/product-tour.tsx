@@ -186,6 +186,12 @@ export function ProductTour() {
                 Kayıt olmadan demoda gezin
                 <ArrowRight className="size-4" />
               </Link>
+              <Link
+                href="/ozellikler"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Tüm özellikler
+              </Link>
             </div>
           </div>
           <div
