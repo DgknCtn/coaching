@@ -134,3 +134,20 @@ export function suggestScopeForBook(
   }
   return bySubject.length === 1 ? bySubject[0].id : null
 }
+
+/**
+ * Havuz araması (Ödev Ver kitap seçici). Sözcüklerin HEPSİ kitabın adı,
+ * yayını ya da düzeyinde geçmeli; Türkçe harf ve büyük/küçük harf
+ * duyarsız: "orijinal 10" → "Orijinal 10. Sınıf Matematik Soru Bankası",
+ * "sinif mat" → "10. Sınıf Matematik". Boş sorgu listeyi olduğu gibi döner.
+ */
+export function filterPoolBooks<
+  T extends { title: string; publisher?: string | null; levelExam?: string | null; subject?: string | null },
+>(books: T[], query: string): T[] {
+  const terms = words(query)
+  if (terms.length === 0) return books
+  return books.filter(b => {
+    const hay = words([b.title, b.publisher, b.levelExam, b.subject].filter(Boolean).join(' '))
+    return terms.every(t => hay.some(w => w.startsWith(t)))
+  })
+}
