@@ -85,8 +85,23 @@ const STOPWORDS = new Set([
   'i', 'ii', 'iii', 'iv', 'v', 'vi',
 ])
 
+/** Aynı kavramın yaygın iki yazımı tek biçime indirgenir. */
+const SYNONYM: Record<string, string> = { obeb: 'ebob', okek: 'ekok', istatiksel: 'istatistiksel' }
+
+/**
+ * Anlamlı sözcükler. Kitap bölüm adları kod ve kısaltma taşır
+ * ("T4 |B7· Nicelikler ve D. (Karesel Fonksiyon)", "Ge.Şek."): rakam
+ * içeren parçalar ve 3 harften kısa parçalar sayılmaz — yoksa eşleşme
+ * oranı yapay olarak düşer (28.11 canlı kabul: Parkur 10).
+ */
 export function contentWords(s: string | null | undefined): string[] {
-  return [...new Set(words(s).filter(w => w.length >= 2 && !/^\d+$/.test(w) && !STOPWORDS.has(w)))]
+  return [
+    ...new Set(
+      words(s)
+        .filter(w => w.length >= 3 && !/\d/.test(w) && !STOPWORDS.has(w))
+        .map(w => SYNONYM[w] ?? w)
+    ),
+  ]
 }
 
 /**

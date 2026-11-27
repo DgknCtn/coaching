@@ -53,6 +53,18 @@ describe('konu önerisi (2b)', () => {
     expect(suggestTopics('Osmanlı Kültür ve Medeniyeti', topics)).toEqual([])
     expect(suggestTopics('Osmanlı Devleti', topics)[0]?.topic.id).toBe('e')
   })
+  it('bölüm kodları ve kısaltmalar sayılmaz (Parkur 10 canlı verisi)', () => {
+    const real = [
+      { id: 'k', name: 'Karesel Fonksiyon ve Dönüşümleri', tier: 'primary' as const },
+      { id: 'k2', name: 'Karekök Fonksiyonu ve Dönüşümleri', tier: 'primary' as const },
+      { id: 't', name: 'Dik Üçgende Trigonometrik Oranlar ve Özdeşlikler', tier: 'primary' as const },
+    ]
+    expect(contentWords('T4 |B7· Nicelikler ve D. (Karesel Fonksiyon)')).toEqual(['nicelikler', 'karesel', 'fonksiyon'])
+    expect(suggestTopics('T4 |B7· Nicelikler ve D. (Karesel Fonksiyon)', real)[0]?.topic.id).toBe('k')
+    expect(suggestTopics('T1 |B1· Ge.Şek. Dik Üçgende Trigonometri', real)[0]?.topic.id).toBe('t')
+    const ebob = [{ id: 'e', name: 'EBOB-EKOK ve Problemleri', tier: 'primary' as const }]
+    expect(suggestTopics('T3 |B5· Sayılar (OBEB-OKEK)', ebob)[0]?.topic.id).toBe('e')
+  })
   it('en fazla 3 öneri', () => {
     const many = Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Fonksiyonlar ${i}`, tier: 'primary' as const }))
     expect(suggestTopics('Fonksiyonlar', many)).toHaveLength(3)
