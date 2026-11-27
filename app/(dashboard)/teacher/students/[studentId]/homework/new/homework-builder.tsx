@@ -34,6 +34,8 @@ import {
 import { createHomeworkBatchAction, retryAttachBatchToFlowAction, startNewWeekAction } from './actions'
 import { WeekTransitionDialog } from './week-transition-dialog'
 import { BookPicker, type PendingBook, type PickerScope, type PoolBook } from './book-picker'
+import { PlanCopyControl } from './plan-copy-control'
+import { TemplateControl, type TemplateRef } from './template-control'
 import { flowShortLabel, type FlowRef, type OpenWorkItem } from '@/lib/open-homework'
 import { canCarry } from '@/lib/bulk-actions'
 import { carryItemsAction } from '../../homework-actions'
@@ -127,6 +129,8 @@ interface Props {
    * kapanmamış, kapatıp yeni haftaya yayımlayayım mı?" sorulur.
    */
   staleFlow?: { id: string; dueAt: string } | null
+  /** Faz 2d: ödev şablonları; null = tablo yok (bölüm çizilmez). */
+  templates?: TemplateRef[] | null
   /** 26.11.2026 §2: Ödev Ver içinden aktif etme ve havuzdan atama. */
   pendingBooks?: PendingBook[]
   poolBooks?: PoolBook[]
@@ -176,6 +180,7 @@ export function HomeworkBuilder({
   initialDueTime,
   fallbackDue,
   staleFlow = null,
+  templates = null,
   pendingBooks = [],
   poolBooks = [],
   scopes = [],
@@ -1307,6 +1312,11 @@ export function HomeworkBuilder({
                 </div>
 
                 <div className="shrink-0 space-y-3 overflow-y-auto border-t px-4 py-3">
+                  {/* Faz 2a (PRD 10.4): önceki planı kopyala — görevler taslak,
+                      kitaplarda aynı miktarın devamı sepete. */}
+                  <PlanCopyControl studentId={studentId} plans={plans} books={books} onAddUnits={addToBasket} />
+                  {/* Faz 2d (PRD 10.3): ödev şablonları — yalnız taslak görev üretir. */}
+                  <TemplateControl studentId={studentId} templates={templates} draftTasks={draftTasks} />
                   {/* MİNİ 05/06 — HEDEF PLAN ve BAŞLIK. Numaralı ön ek sistemden
                       (yalnız yeni ve ayrı plan yayımlanınca artar), açıklama
                       öğretmenden. Sıra başlıktaki rakamdan hesaplanmaz. */}

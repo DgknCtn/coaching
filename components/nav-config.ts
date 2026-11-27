@@ -1,4 +1,4 @@
-import { Activity, Building2, Megaphone, Scale, ScrollText, Server, UsersRound,
+import { Activity, Building2, History, Megaphone, Scale, ScrollText, Server, UsersRound,
   BookOpen,
   Newspaper,
   CalendarCheck,
@@ -97,6 +97,8 @@ export const studentScreens = [
   { slug: 'gorusmeler', path: 'gorusmeler', label: 'Görüşmeler', icon: CalendarCheck },
   { slug: 'koruma', path: 'protection', label: 'Koruma Havuzu', icon: ShieldCheck },
   { slug: 'rapor', path: 'report', label: 'Rapor', icon: FileBarChart },
+  // Feature Showcase PRD 10.1 (Faz 2c): öğrencinin kronolojik geçmişi.
+  { slug: 'zaman-tuneli', path: 'zaman-tuneli', label: 'Zaman Tüneli', icon: History },
 ] as const
 
 export type StudentScreen = (typeof studentScreens)[number]
@@ -284,6 +286,7 @@ export function studentTabs(studentId: string): LinkTab[] {
       key: 'diger',
       label: 'Diğer',
       items: [
+        { key: 'zaman-tuneli', label: 'Zaman Tüneli', href: screen('zaman-tuneli') },
         { key: 'veliler', label: 'Veliler', href: panel('veliler') },
         // R7/03: "Akademik Not" → "Öğretmen Hafızası". Ad, alanın kime
         // ait olduğunu söylemeliydi: burası öğrencinin notu değil,

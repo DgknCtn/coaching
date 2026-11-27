@@ -24,6 +24,7 @@ import { dueFromNextSession, pickDefaultDue } from '@/lib/homework-defaults'
 import { loadAssignableBooks } from '@/lib/assignable-books'
 import { loadWorkspaceScopes } from '@/lib/student-scopes'
 import type { PendingBook, PoolBook } from './book-picker'
+import type { TemplateRef } from './template-control'
 
 // Sorgu hatası boş sonuca çevrilmez; teacher/error.tsx hata sınırına gider.
 function orThrow<T>(r: QueryResult<T>): T {
@@ -221,7 +222,7 @@ export default async function NewHomeworkPage({
 
   // M1.0-03 ORTAK SEPET: kitap seçimleri ve akademik görevler aynı
   // haftalık planda. Görev taslakları öğretmene özel (148).
-  const [draftTasks, coursesData, openTaskRows, openWork, plans, pendingRes, scopeRows] = await Promise.all([
+  const [draftTasks, coursesData, openTaskRows, openWork, plans, pendingRes, scopeRows, templateRes] = await Promise.all([
     loadStudentTasks(supabase, { studentId, statuses: ['draft'], createdByProfileId: profile.id }),
     loadCoursesData(supabase, { workspaceId, studentId }),
     // İz V2 R04: hafta geçişinde yeni haftaya aktarılabilecek açık işler —
@@ -239,7 +240,16 @@ export default async function NewHomeworkPage({
       .eq('academic_term_id', activeTerm.id)
       .eq('status', 'pending'),
     loadWorkspaceScopes(supabase, { workspaceId }),
+    // Faz 2d (160): ödev şablonları. Tablo yoksa bölüm çizilmez.
+    supabase.from('homework_templates').select('id, name, items').eq('workspace_id', workspaceId).order('name'),
   ])
+  const templates: TemplateRef[] | null = templateRes.error
+    ? null
+    : ((templateRes.data ?? []) as { id: string; name: string; items: unknown[] | null }[]).map(t => ({
+        id: t.id,
+        name: t.name,
+        count: Array.isArray(t.items) ? t.items.length : 0,
+      }))
   const pendingBooks: PendingBook[] = ((pendingRes.data ?? []) as unknown as {
     id: string
     book_id: string
@@ -319,6 +329,7 @@ export default async function NewHomeworkPage({
         initialDueTime={initialDueTime}
         fallbackDue={fallbackDue}
         staleFlow={staleFlow}
+        templates={templates}
         pendingBooks={pendingBooks}
         poolBooks={poolBooks}
         scopes={scopeRows.map(sc => ({ id: sc.id, name: sc.name, subject: sc.subject, levelExam: sc.levelExam }))}

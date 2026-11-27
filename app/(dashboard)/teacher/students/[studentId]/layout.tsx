@@ -4,6 +4,8 @@ import { getTeacherContext } from '@/lib/workspace'
 import { licenseBadgeProps } from '@/lib/plans'
 import { StudentTabs } from './student-tabs'
 import { StudentHeaderBadges } from './student-header-badges'
+import { StudentTagPicker } from './student-tag-picker'
+import { loadStudentTags } from '@/lib/student-tags'
 
 /**
  * ÖĞRENCİ ÇALIŞMA MASASI (067).
@@ -53,6 +55,9 @@ export default async function StudentWorkbenchLayout({
   // burada 404 vermek, boş bir başlıkla açılan sekmelerden iyi.
   if (!student) notFound()
 
+  // Etiketler (159): tablo yoksa ya da okunamazsa bölüm çizilmez.
+  const tagData = await loadStudentTags(supabase, workspaceId, [studentId])
+
   const meta = [student.grade_level, student.exam_type].filter(Boolean).join(' · ')
 
   return (
@@ -67,6 +72,13 @@ export default async function StudentWorkbenchLayout({
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-6 pb-3 pt-6 md:px-8">
           <h1 className="text-lg font-semibold tracking-tight">{student.full_name}</h1>
           {meta && <p className="text-sm text-muted-foreground">{meta}</p>}
+          {tagData && (
+            <StudentTagPicker
+              studentId={studentId}
+              tags={tagData.tags}
+              selected={tagData.byStudent.get(studentId) ?? []}
+            />
+          )}
           {student.status === 'archived' && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               Arşivlendi
