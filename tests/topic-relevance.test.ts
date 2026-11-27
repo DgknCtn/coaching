@@ -39,7 +39,9 @@ describe('konu önerisi (2b)', () => {
   it('belgedeki örnek ilk sırada', () => {
     const s = suggestTopics('Dik Üçgende Trigonometri', topics)
     expect(s[0].topic.id).toBe('b')
-    expect(s.map(x => x.topic.id)).not.toContain('a') // yalnız 1/3 sözcük
+    expect(s[0].strong).toBe(true)
+    // yalnız tek ortak sözcüğü olanlar (ör. "Üçgende Açılar") en fazla ZAYIF öneri
+    expect(s.filter(x => x.topic.id !== 'b').every(x => !x.strong)).toBe(true)
   })
   it('ekler köke indirgenir; sayı ve yapı sözcükleri yok sayılır', () => {
     expect(sameStem('trigonometri', 'trigonometrik')).toBe(true)
@@ -64,6 +66,28 @@ describe('konu önerisi (2b)', () => {
     expect(suggestTopics('T1 |B1· Ge.Şek. Dik Üçgende Trigonometri', real)[0]?.topic.id).toBe('t')
     const ebob = [{ id: 'e', name: 'EBOB-EKOK ve Problemleri', tier: 'primary' as const }]
     expect(suggestTopics('T3 |B5· Sayılar (OBEB-OKEK)', ebob)[0]?.topic.id).toBe('e')
+  })
+  it('kitabın kendi kapsamı birebir eşleşen başka kapsamın önünde', () => {
+    const t = [
+      { id: 'tyt-alan', name: 'Üçgende alan', tier: 'related' as const },
+      { id: 'ten-alan', name: 'Üçgenin Yardımcı Elemanları ve Alan', tier: 'primary' as const },
+      { id: 'tyt-bol', name: 'Bölünebilme Kuralları', tier: 'related' as const },
+      { id: 'ten-bol', name: 'Bölünebilme ve Kalan Problemleri', tier: 'primary' as const },
+    ]
+    expect(suggestTopics('T1 |B3· Ge.Şek. Üçgende Alan', t)[0].topic.id).toBe('ten-alan')
+    const bol = suggestTopics('T3 |B6· Sayılar (Bölünebilme Kuralları)', t)
+    expect(bol[0].topic.id).toBe('ten-bol')
+    expect(bol[0].strong).toBe(false) // tek ortak sözcük: zayıf öneri
+    expect(suggestTopics('T1 |B3· Ge.Şek. Üçgende Alan', t)[0].strong).toBe(true)
+    // toplu ekranda zayıf üst öneri ön işaretlenmez; başka kapsamdaki güçlü öneri de işaretlenmez
+    const rows = buildBulkRows(
+      [
+        { id: 'a', title: 'T1 |B3· Ge.Şek. Üçgende Alan', orderIndex: 1, parentId: null, topicIds: [] },
+        { id: 'b', title: 'T3 |B6· Sayılar (Bölünebilme Kuralları)', orderIndex: 2, parentId: null, topicIds: [] },
+      ],
+      t
+    )
+    expect(rows.map(r => r.preselect)).toEqual(['ten-alan', null])
   })
   it('en fazla 3 öneri', () => {
     const many = Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Fonksiyonlar ${i}`, tier: 'primary' as const }))

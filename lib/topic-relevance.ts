@@ -126,7 +126,14 @@ export interface SuggestCandidate {
 export interface TopicSuggestion<T> {
   topic: T
   score: number
+  /** Güçlü öneri: toplu eşlemede ön işaretlenebilir. Zayıf öneri yalnız gösterilir. */
+  strong: boolean
 }
+
+/** Ön işaret için en düşük skor. */
+export const STRONG_THRESHOLD = 0.6
+/** "Ayırt edici" sözcük uzunluğu (bölünebilme, trigonometri...). */
+const DISTINCT_LEN = 6
 
 /**
  * En yakın `limit` konu. Skor = bölüm sözcüklerinin karşılanma oranı
@@ -154,15 +161,26 @@ export function suggestTopics<T extends SuggestCandidate>(
     // konu adının TAMAMI bölüm adında geçiyor ("Türev Alma Kuralları" →
     // "Türev"; bölüm adları konu adlarından çoğu zaman uzundur).
     const topicFull = topicCover === 1
-    if (titleCover < 0.5 && !topicFull) return
+    // Kitabın KENDİ kapsamında uzun, ayırt edici tek bir ortak sözcük de
+    // öneri için yeter ("Sayılar (Bölünebilme Kuralları)" → "Bölünebilme
+    // ve Kalan Problemleri") — ama zayıf öneri olarak.
+    const distinctHit =
+      tier === 'primary' && title.some(w => w.length >= DISTINCT_LEN && tw.some(t => sameStem(w, t)))
+    if (titleCover < 0.5 && !topicFull && !distinctHit) return
     // Diğer (ilgisiz) kapsamda daha sıkı: bölüm adı tamamen karşılanmalı
     // ya da en az iki sözcüklü konu adı tamamen geçmeli.
     if (tier === 'other' && titleCover < 1 && !(topicFull && tw.length >= 2)) return
     const score = Math.round((titleCover * 0.7 + topicCover * 0.3 + TIER_BONUS[tier]) * 1000) / 1000
-    if (score >= SUGGEST_THRESHOLD) scored.push({ topic, score })
+    if (score >= SUGGEST_THRESHOLD || distinctHit) scored.push({ topic, score, strong: score >= STRONG_THRESHOLD })
   })
-  // Kararlı sıralama: eşit skorda giriş sırası (kademe/kapsam/konu sırası) korunur.
-  return scored.sort((a, b) => b.score - a.score).slice(0, limit)
+  // ÖNCE KADEME, SONRA SKOR (28.11 canlı kabul, Parkur 10): 10. sınıf
+  // kitabında TYT'deki birebir "Üçgende alan", kitabın kendi kapsamındaki
+  // "Üçgenin Yardımcı Elemanları ve Alan"ın önüne geçiyordu. Yanlış
+  // kapsama eşleme öğrencinin o dersteki koruma havuzunu doldurmaz.
+  // Kararlı sıralama: eşitlikte giriş sırası (kapsam/konu sırası) korunur.
+  return scored
+    .sort((a, b) => TIER_ORDER[a.topic.tier ?? 'related'] - TIER_ORDER[b.topic.tier ?? 'related'] || b.score - a.score)
+    .slice(0, limit)
 }
 
 // ------------------------------------------------------------
@@ -185,7 +203,7 @@ export interface BulkRow<T> {
   /** Mevcut (kayıtlı) eşleme. */
   topicIds: string[]
   suggestions: T[]
-  /** Ön işaretli öneri: YALNIZ eşlenmemiş bölümde ve eşik üstü öneride. */
+  /** Ön işaretli öneri: YALNIZ eşlenmemiş bölümde ve en üstteki öneri güçlüyse. */
   preselect: string | null
 }
 
@@ -209,14 +227,18 @@ export function buildBulkRows<T extends SuggestCandidate>(sections: BulkSectionI
     else for (const k of kids) leaves.push({ s: k, parentTitle: top.title })
   }
   return leaves.map(({ s, parentTitle }) => {
-    const suggestions = suggestTopics(s.title, topics.filter(t => !s.topicIds.includes(t.id))).map(x => x.topic)
+    const scored = suggestTopics(s.title, topics.filter(t => !s.topicIds.includes(t.id)))
+    // Ön işaret yalnız EN ÜSTTEKİ öneri güçlüyse. Üstteki (kitabın kendi
+    // kapsamından) zayıfsa başka kapsamdaki güçlü öneri işaretlenmez —
+    // karar öğretmenin.
+    const top = scored[0]
     return {
       id: s.id,
       title: s.title,
       parentTitle,
       topicIds: s.topicIds,
-      suggestions,
-      preselect: s.topicIds.length === 0 ? suggestions[0]?.id ?? null : null,
+      suggestions: scored.map(x => x.topic),
+      preselect: s.topicIds.length === 0 && top?.strong ? top.topic.id : null,
     }
   })
 }
