@@ -32,10 +32,22 @@ export function BulkMapper({
   const [editing, setEditing] = useState<string | null>(null)
   const topicById = useMemo(() => new Map(topics.map(t => [t.id, t])), [topics])
 
-  const changed = rows.filter(r => !sameSet(selection[r.id] ?? [], r.topicIds))
-  const mapped = rows.filter(r => r.topicIds.length > 0).length
-  const ready = rows.filter(r => r.preselect).length
-  const noSuggestion = rows.filter(r => r.topicIds.length === 0 && r.suggestions.length === 0).length
+  // KAYDEDİLEN DURUM YERELDE HEMEN İŞLENİR (28.11 canlı kabul): kayıttan
+  // sonra sunucu yenilemesi ekrana gecikmeli/yansımadan gelebiliyordu ve
+  // özet "1 eşli" diye kalıyordu. Yeni `rows` gelince yerel kayıt
+  // sıfırlanır, sunucu verisi geçerli olur.
+  const [savedIds, setSavedIds] = useState<Record<string, string[]>>({})
+  const [savedBase, setSavedBase] = useState(rows)
+  if (savedBase !== rows) {
+    setSavedBase(rows)
+    setSavedIds({})
+  }
+  const current = (r: BulkRow<TopicOption>) => savedIds[r.id] ?? r.topicIds
+
+  const changed = rows.filter(r => !sameSet(selection[r.id] ?? [], current(r)))
+  const mapped = rows.filter(r => current(r).length > 0).length
+  const ready = rows.filter(r => r.preselect && current(r).length === 0).length
+  const noSuggestion = rows.filter(r => current(r).length === 0 && r.suggestions.length === 0).length
 
   function toggle(rowId: string, topicId: string) {
     setSelection(prev => {
@@ -55,7 +67,10 @@ export function BulkMapper({
         return
       }
       if (r.failed) toast.warning(`${r.saved} bölüm kaydedildi, ${r.failed} bölüm kaydedilemedi.`)
-      else toast.success(`${r.saved} bölümün eşlemesi kaydedildi.`)
+      else {
+        toast.success(`${r.saved} bölümün eşlemesi kaydedildi.`)
+        setSavedIds(prev => ({ ...prev, ...Object.fromEntries(changed.map(row => [row.id, selection[row.id] ?? []])) }))
+      }
       setEditing(null)
       router.refresh()
     })
@@ -90,16 +105,17 @@ export function BulkMapper({
       <ul className="divide-y rounded-lg border bg-card">
         {rows.map(row => {
           const sel = selection[row.id] ?? []
-          const dirty = !sameSet(sel, row.topicIds)
+          const saved = current(row)
+          const dirty = !sameSet(sel, saved)
           const shown = [...new Set([...sel, ...row.suggestions.map(s => s.id)])]
           return (
             <li key={row.id} className={cn('grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]', dirty && 'bg-primary/5')}>
               <div className="min-w-0">
                 {row.parentTitle && <p className="truncate text-[11px] text-muted-foreground">{row.parentTitle}</p>}
                 <p className="text-sm font-medium">{row.title}</p>
-                {row.topicIds.length > 0 && (
+                {saved.length > 0 && (
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Kayıtlı: {row.topicIds.map(id => topicById.get(id)?.name ?? 'Konu').join(', ')}
+                    Kayıtlı: {saved.map(id => topicById.get(id)?.name ?? 'Konu').join(', ')}
                   </p>
                 )}
               </div>
