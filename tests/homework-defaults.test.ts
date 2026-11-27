@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueFromNextSession, pickDefaultDue, suggestScopeForBook } from '@/lib/homework-defaults'
+import { dueFromNextSession, filterPoolBooks, pickDefaultDue, suggestScopeForBook } from '@/lib/homework-defaults'
 
 // "Ödev Verme Akışını Kısaltma" (26.11.2026) §4–§5: varsayılan son teslim
 // asla geçmiş değil; kapanmamış hafta "bayat" olarak işaretlenir.
@@ -102,5 +102,31 @@ describe('suggestScopeForBook', () => {
     expect(suggestScopeForBook({ subject: 'Matematik', levelExam: null }, scopes)).toBeNull()
     expect(suggestScopeForBook({ subject: 'Kimya', levelExam: 'TYT' }, scopes)).toBeNull()
     expect(suggestScopeForBook({ subject: null, levelExam: 'TYT' }, scopes)).toBeNull()
+  })
+})
+
+describe('filterPoolBooks', () => {
+  const pool = [
+    { title: 'Orijinal 10. Sınıf Matematik Soru Bankası', publisher: 'Orijinal Yayınları', levelExam: '10. Sınıf', subject: 'Matematik' },
+    { title: 'Orijinal AYT Matematik Soru Bankası', publisher: 'Orijinal Yayınları', levelExam: 'AYT', subject: 'Matematik' },
+    { title: '345 TYT Fizik Soru Bankası', publisher: '345 Yayınları', levelExam: 'TYT', subject: 'Fizik' },
+    { title: 'Bilgi Sarmal AYT İntegral Fasikülü', publisher: 'Bilgi Sarmal', levelExam: 'AYT', subject: 'Matematik' },
+  ]
+  const titles = (q: string) => filterPoolBooks(pool, q).map(b => b.title)
+
+  it('boş sorgu her şeyi döner', () => {
+    expect(filterPoolBooks(pool, '  ')).toHaveLength(4)
+  })
+  it('sözcüklerin hepsi eşleşmeli; ad, yayın, düzey ve ders üzerinde', () => {
+    expect(titles('orijinal 10')).toEqual(['Orijinal 10. Sınıf Matematik Soru Bankası'])
+    expect(titles('ayt mat')).toEqual(['Orijinal AYT Matematik Soru Bankası', 'Bilgi Sarmal AYT İntegral Fasikülü'])
+    expect(titles('345 yay')).toEqual(['345 TYT Fizik Soru Bankası'])
+  })
+  it('Türkçe harf ve büyük/küçük harf duyarsız', () => {
+    expect(titles('SINIF')).toEqual(['Orijinal 10. Sınıf Matematik Soru Bankası'])
+    expect(titles('integral fasikulu')).toEqual(['Bilgi Sarmal AYT İntegral Fasikülü'])
+  })
+  it('eşleşme yoksa boş', () => {
+    expect(titles('kimya')).toEqual([])
   })
 })

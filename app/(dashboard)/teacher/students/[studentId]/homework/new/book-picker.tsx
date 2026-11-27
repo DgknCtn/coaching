@@ -4,11 +4,12 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
-import { suggestScopeForBook } from '@/lib/homework-defaults'
+import { filterPoolBooks, suggestScopeForBook } from '@/lib/homework-defaults'
 import { assignBookAction } from '../../../actions'
 import { setStudentBookPlanAction } from '../../books/[bookId]/target-actions'
 
@@ -64,6 +65,8 @@ export function BookPicker({
   const [isPending, startTransition] = useTransition()
   const [pick, setPick] = useState<Pick>(null)
   const [scopeId, setScopeId] = useState('')
+  // Havuz araması: havuz uzunsa (yüzü aşabiliyor) açılır listede aramak zor.
+  const [query, setQuery] = useState('')
 
   const total = activeBooks.length + pendingBooks.length + poolBooks.length
   if (total === 0) {
@@ -132,10 +135,15 @@ export function BookPicker({
   }
 
   const suggested = pick?.kind === 'pool' ? suggestScopeForBook(pick.book, scopes) : null
+  const showSearch = poolBooks.length > 8
+  const matchedPool = filterPoolBooks(poolBooks, query)
+  // Seçili havuz kitabı aramadan düşse de listede kalır (seçim kaybolmasın).
+  const visiblePool =
+    pick?.kind === 'pool' && !matchedPool.some(b => b.id === pick.book.id) ? [pick.book, ...matchedPool] : matchedPool
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Label htmlFor="activeBook" className="shrink-0 text-xs text-muted-foreground">
           Kitap
         </Label>
@@ -171,9 +179,9 @@ export function BookPicker({
               ))}
             </optgroup>
           )}
-          {poolBooks.length > 0 && (
-            <optgroup label="Havuzdan ata">
-              {poolBooks.map(b => (
+          {visiblePool.length > 0 && (
+            <optgroup label={query.trim() ? `Havuzdan ata · ${matchedPool.length} sonuç` : 'Havuzdan ata'}>
+              {visiblePool.map(b => (
                 <option key={b.id} value={`pool:${b.id}`}>
                   {[b.title, b.publisher, b.levelExam].filter(Boolean).join(' · ')}
                 </option>
@@ -181,7 +189,42 @@ export function BookPicker({
             </optgroup>
           )}
         </NativeSelect>
+        {showSearch && (
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              aria-label="Havuzda kitap ara"
+              placeholder="Havuzda ara: kitap, yayın, sınıf"
+              className="h-8 pl-8 text-xs"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              disabled={isPending}
+            />
+          </div>
+        )}
       </div>
+      {showSearch && query.trim() !== '' && (
+        <p className="text-[11px] text-muted-foreground">
+          {matchedPool.length === 0
+            ? 'Havuzda eşleşen kitap yok.'
+            : matchedPool.length === 1
+              ? (
+                  <>
+                    Havuzda 1 kitap eşleşti:{' '}
+                    <button
+                      type="button"
+                      className="font-medium text-primary underline underline-offset-2"
+                      onClick={() => onChange(`pool:${matchedPool[0].id}`)}
+                      disabled={isPending}
+                    >
+                      {matchedPool[0].title}
+                    </button>
+                  </>
+                )
+              : `Havuzda ${matchedPool.length} kitap eşleşti; listeden seçin.`}
+        </p>
+      )}
 
       {pick?.kind === 'pending' && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-subtle/40 px-3 py-2 text-xs">
