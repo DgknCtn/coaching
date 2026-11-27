@@ -98,6 +98,7 @@ export function absoluteUrl(path: string): string {
  */
 export const PUBLIC_ROUTES = [
   { path: '/', priority: 1, changeFrequency: 'weekly' as const },
+  { path: '/ozellikler', priority: 0.9, changeFrequency: 'monthly' as const },
   { path: '/demo', priority: 0.8, changeFrequency: 'monthly' as const },
   // Blog LİSTESİ burada; yazıların kendisi app/sitemap.ts'te
   // veritabanından okunuyor (statik bir listeye yazılamazlar).

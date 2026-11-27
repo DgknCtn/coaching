@@ -1,12 +1,25 @@
 import { BRAND, contactMailto } from '@/lib/brand'
-import { REFUND_DAYS, TRIAL_DAYS } from '@/lib/plans'
+import { REFUND_DAYS, TRIAL_DAYS, TRIAL_STUDENT_LIMIT } from '@/lib/plans'
+import { MAX_MONTHS, MAX_SELF_SERVICE_STUDENTS } from '@/lib/billing/pricing'
+import { FaqList } from './faq-list'
 import { SectionHeading } from './section-heading'
 
 // SSS — satın alma kararının önündeki gerçek soruları karşılar.
 // Cevaplar ürünün BUGÜN yaptığı işe göre yazıldı; söz verilen ama
 // yapılmayan bir şey yok.
 
-export const FAQS: { q: string; a: string }[] = [
+export interface Faq {
+  q: string
+  a: string
+  /**
+   * Yalnız /ozellikler'de (Feature Showcase PRD §7.3 Section 17).
+   * Anasayfa listesi ve onun FAQPage verisi DEĞİŞMEZ: arama motoruna
+   * sayfada görünmeyen soru bildirilmez.
+   */
+  featuresOnly?: boolean
+}
+
+export const FAQS: Faq[] = [
   // KART SORUSU EN BAŞTA — bilinçli. Kayıtta kart istemek, satın alma
   // kararının önündeki en büyük yeni engel. Listenin dibine koymak,
   // itirazı cevaplamak değil saklamak olurdu.
@@ -86,35 +99,66 @@ export const FAQS: { q: string; a: string }[] = [
     q: 'Öğrenciler telefondan kullanabilir mi?',
     a: 'Evet. Arayüz telefon için tasarlandı ve uygulamayı ana ekrana ekleyebilirsiniz; tarayıcı çubuğu olmadan, uygulama gibi açılır.',
   },
+  // --- /ozellikler (PRD listesi) --------------------------------------------
+  {
+    q: 'İZ hangi öğretmenler için?',
+    a: 'Birden fazla öğrenciyle çalışan özel ders öğretmenleri ve eğitim koçları için. Ödev, kitap ilerlemesi, ders ve ödeme takibini tek yerde toplamak isteyen herkes kullanabilir.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Öğrenci hesabı nasıl oluşturulur?',
+    a: 'Öğrenciler sayfasından öğrenciyi eklersiniz; ardından öğrenciye ve veliye kullanıcı adı ve 6 haneli PIN oluşturup hazır mesajla iletirsiniz. E-posta gerekmez.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Ödevler nasıl takip edilir?',
+    a: 'Ödevi kitap haritasından seçip haftalık plana eklersiniz. Öğrenci kendi ekranında görür ve tamamladığını bildirir; siz onaylarsınız. Geciken işler hem sizin panelinizde hem velinin ekranında görünür.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Öğretmen onayı neden gerekli?',
+    a: 'Öğrencinin “yaptım” demesi bir beyandır. İlerlemeye yalnız sizin onayladığınız iş sayılır; böylece yüzdeler ve velinin gördüğü bilgi gerçeği gösterir. Gerekirse işi notla iade edebilirsiniz.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Kitap takibi nasıl çalışır?',
+    a: 'Her kitap bölüm ve test ya da sayfa olarak tutulur. Kitap Haritası her birimin durumunu renkle gösterir: verilmedi, ödevde, onay bekliyor, tamamlandı, süresi geçti. İlerleme oranı onaylı birimlerden hesaplanır.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Veli kendi ekranından ne görür?',
+    a: 'Öğretmen onaylı çalışmaları ve teslim edilenleri ayrı ayrı, geciken işleri ve kitap ilerlemesini görür. Birden fazla çocuğu varsa hepsini izler; ödeme yaptığını bildirebilir. Hiçbir şeyi değiştiremez ve akademik notlarınızı görmez.',
+    featuresOnly: true,
+  },
+  {
+    q: 'Ücretsiz deneme nasıl çalışır?',
+    a: `Kayıt olduğunuzda çalışma alanınız açılır ve ${TRIAL_DAYS} gün boyunca tüm özellikleri ${TRIAL_STUDENT_LIMIT} öğrenciye kadar kullanırsınız. Kart istenmez; süre bitince kendiliğinden tahsilat yapılmaz ve verileriniz silinmez.`,
+    featuresOnly: true,
+  },
+  {
+    q: 'Lisans süresi ve öğrenci sınırı nasıl belirlenir?',
+    a: `Lisansı öğrenci sayısına ve süreye (en fazla ${MAX_MONTHS} ay) göre siz seçersiniz; fiyat aşağıdaki hesaplayıcıda anında görünür. ${MAX_SELF_SERVICE_STUDENTS} öğrencinin üzeri için bize yazın. Arşivlediğiniz öğrenciler sınıra dahil değildir.`,
+    featuresOnly: true,
+  },
 ]
 
-export function FaqSection() {
+/** Anasayfa listesi — FAQPage yapılandırılmış verisi de bunu kullanır. */
+export const HOME_FAQS: Faq[] = FAQS.filter(f => !f.featuresOnly)
+
+export function FaqSection({
+  items = HOME_FAQS,
+  trackPage,
+}: {
+  items?: Faq[]
+  /** Verilirse soru açılışı ölçülür (PRD §14). */
+  trackPage?: 'features' | 'home'
+} = {}) {
   return (
     <section id="sss" className="scroll-mt-16 px-6 py-20 md:py-28">
       <div className="mx-auto max-w-3xl">
         <SectionHeading eyebrow="SSS" title="Sık sorulanlar" />
 
-        <div className="mt-12 divide-y rounded-lg border bg-card">
-          {FAQS.map((faq) => (
-            <details
-              key={faq.q}
-              className="group px-5 py-4 transition-colors hover:bg-muted/40 open:bg-muted/20"
-            >
-              <summary className="cursor-pointer list-none text-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
-                <span className="flex items-start justify-between gap-4">
-                  {faq.q}
-                  <span
-                    aria-hidden
-                    className="mt-0.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
-                  >
-                    +
-                  </span>
-                </span>
-              </summary>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{faq.a}</p>
-            </details>
-          ))}
-        </div>
+        <FaqList items={items} trackPage={trackPage} />
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
           Başka bir sorunuz mu var?{' '}

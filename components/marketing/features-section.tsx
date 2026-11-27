@@ -75,7 +75,9 @@ export function FeaturesSection() {
           {roles.map((r) => (
             <div
               key={r.id}
-              className="flex flex-col rounded-lg border bg-card p-6 transition-colors hover:border-primary/40 hover:bg-muted/40"
+              // Footer'daki /ozellikler#ogretmen · #ogrenci · #veli hedefleri.
+              id={r.id === 'koc' ? 'ogretmen' : r.id}
+              className="flex scroll-mt-32 flex-col rounded-lg border bg-card p-6 transition-colors hover:border-primary/40 hover:bg-muted/40"
             >
               <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
                 <r.Icon className="size-4 text-primary" />

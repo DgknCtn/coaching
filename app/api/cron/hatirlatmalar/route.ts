@@ -136,6 +136,13 @@ export async function GET(request: NextRequest) {
     .lt('created_at', new Date(now.getTime() - 180 * 86_400_000).toISOString())
   if (purgeError) console.error('[cron/hatirlatmalar] email_log temizliği başarısız:', purgeError.code)
 
+  // 158'in saklama taahhüdü: anonim pazarlama olayları 180 gün.
+  const { error: eventsPurgeError } = await supabase
+    .from('marketing_events')
+    .delete()
+    .lt('created_at', new Date(now.getTime() - 180 * 86_400_000).toISOString())
+  if (eventsPurgeError) console.error('[cron/hatirlatmalar] marketing_events temizliği başarısız:', eventsPurgeError.code)
+
   const ok = counts.failed === 0
   const { error: logError } = await supabase.from('cron_runs').insert({
     job: 'hatirlatmalar',

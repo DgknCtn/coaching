@@ -44,7 +44,7 @@ export function Navbar() {
               ekliyordu. "/#" öneki hangi sayfada olunursa olunsun ana
               sayfanın ilgili bölümüne götürür. */}
           <nav className="hidden md:flex items-center">
-            <Link href="/#ozellikler"
+            <Link href="/ozellikler"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Özellikler
@@ -105,7 +105,7 @@ export function Navbar() {
         // max-h + scroll: yatay tutulan telefonlarda panel ekranı taşıyordu.
         <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b bg-background px-6 pb-4 md:hidden">
           <nav className="flex flex-col gap-1 pt-2">
-            <Link href="/#ozellikler"
+            <Link href="/ozellikler"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >

@@ -14,6 +14,10 @@ export const SIGNUP_SOURCES = [
   'mobil',
   'footer',
   'demo',
+  // Feature Showcase (PRD): /ozellikler ve anasayfa önizleme kartları.
+  // Hangi kategoriden gelindiği marketing_events'te (158) ayrıca tutulur.
+  'ozellikler',
+  'onizleme',
 ] as const
 
 export type SignupSource = (typeof SIGNUP_SOURCES)[number]

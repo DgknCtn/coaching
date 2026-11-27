@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState } from 'react'
+import { useEffect, useTransition, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,6 +14,7 @@ import { AuthShell } from '@/components/shared/auth-shell'
 import { ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { registerSchema } from '@/lib/validation'
+import { track } from '@/lib/marketing/track'
 
 // ŞEMA SUNUCUYLA ORTAK. Burada ayrı bir kopya vardı ve mesajları
 // sunucudakinden ayrışmıştı ("Ad en az 2 karakter olmalı" vs "Ad Soyad
@@ -52,6 +53,14 @@ export default function RegisterPage() {
   // olduğunu ve ne yapması gerektiğini söylemek zorundayız, yoksa form
   // hiçbir şey olmamış gibi durur.
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
+
+  // Feature Showcase PRD §14: özellik sayfasından gelen deneme başlangıcı.
+  useEffect(() => {
+    const k = new URLSearchParams(window.location.search).get('k')
+    if (k === 'ozellikler' || k === 'onizleme') {
+      track({ event: 'trial_started_from_features', source: k, page: 'register' })
+    }
+  }, [])
 
   const {
     register,
