@@ -85,6 +85,19 @@ describe('suggestScopeForBook', () => {
   it('yalnız ders tekil eşleşme', () => {
     expect(suggestScopeForBook({ subject: 'Fizik', levelExam: 'AYT' }, scopes)).toBe('fizik')
   })
+  it('alanlar boşsa kapsam adından (kabul testi: "10. Sınıf Matematik")', () => {
+    const named = [
+      { id: 'b10', name: '10. Sınıf Biyoloji', subject: null, levelExam: null },
+      { id: 'm10', name: '10. Sınıf Matematik', subject: null, levelExam: null },
+      { id: 'm11', name: '11. Sınıf Matematik', subject: null, levelExam: null },
+      { id: 'tyt', name: 'TYT Matematik', subject: null, levelExam: null },
+    ]
+    expect(suggestScopeForBook({ subject: 'Matematik', levelExam: '10. Sınıf' }, named)).toBe('m10')
+    expect(suggestScopeForBook({ subject: 'Matematik', levelExam: 'TYT' }, named)).toBe('tyt')
+    expect(suggestScopeForBook({ subject: 'Matematik', levelExam: 'TYT+AYT' }, named)).toBeNull()
+    expect(suggestScopeForBook({ subject: 'Matematik', levelExam: null }, named)).toBeNull()
+  })
+
   it('belirsiz ya da hiç eşleşme yoksa öneri yok', () => {
     expect(suggestScopeForBook({ subject: 'Matematik', levelExam: null }, scopes)).toBeNull()
     expect(suggestScopeForBook({ subject: 'Kimya', levelExam: 'TYT' }, scopes)).toBeNull()
