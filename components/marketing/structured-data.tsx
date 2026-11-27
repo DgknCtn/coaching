@@ -45,6 +45,17 @@ export function StructuredData() {
         url: siteUrl(),
         publisher: { '@id': `${siteUrl()}/#organization` },
         offers: OFFER,
+        // Ürün turundaki ekranlarla aynı liste (landing yenilemesi 27.11.2026).
+        featureList: [
+          'Öğrenci ödev takibi ve öğretmen onaylı ilerleme',
+          'Kitap Haritası: test ve sayfa düzeyinde kitap takibi',
+          'Öğrenci haftalık planı (Haftam) ve telefondan teslim',
+          'Veli paneli: onaylı ilerleme ve geciken ödevler',
+          'Ders & Görüşmeler ve Google Takvim entegrasyonu',
+          'Öğrenci başına cari hesap ve ödeme takibi',
+          'Hazır WhatsApp metinleri',
+          'E-postasız öğrenci ve veli girişi (kullanıcı adı + PIN)',
+        ],
       },
       // SSS — sayfadaki listenin AYNISI (faq-section.tsx). Arama sonucunda
       // soru-cevap olarak görünebilir; ayrı bir kopya tutulmuyor.

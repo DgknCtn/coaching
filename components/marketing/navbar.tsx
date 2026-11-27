@@ -9,6 +9,7 @@ import { TRIAL_CTA_LABEL } from '@/lib/plans'
 import { BrandMark } from '@/components/shared/brand-mark'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { cn } from '@/lib/utils'
+import { registerHref } from '@/lib/signup-source'
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -48,10 +49,10 @@ export function Navbar() {
             >
               Özellikler
             </Link>
-            <Link href="/#nasil-calisir"
+            <Link href="/#karsilastir"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
-              Nasıl Çalışır
+              Karşılaştır
             </Link>
             <Link href="/#fiyatlar"
               className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -83,7 +84,7 @@ export function Navbar() {
             <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
               Giriş yap
             </Link>
-            <Link href="/register" className={buttonVariants({ size: 'sm' })}>
+            <Link href={registerHref('navbar')} className={buttonVariants({ size: 'sm' })}>
               {TRIAL_CTA_LABEL}
             </Link>
           </div>
@@ -110,11 +111,11 @@ export function Navbar() {
             >
               Özellikler
             </Link>
-            <Link href="/#nasil-calisir"
+            <Link href="/#karsilastir"
               onClick={() => setMobileOpen(false)}
               className="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
-              Nasıl Çalışır
+              Karşılaştır
             </Link>
             <Link href="/#fiyatlar"
               onClick={() => setMobileOpen(false)}
@@ -143,7 +144,7 @@ export function Navbar() {
             <Link href="/login" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full' })}>
               Giriş yap
             </Link>
-            <Link href="/register" className={buttonVariants({ size: 'sm', className: 'w-full' })}>
+            <Link href={registerHref('navbar')} className={buttonVariants({ size: 'sm', className: 'w-full' })}>
               {TRIAL_CTA_LABEL}
             </Link>
           </div>

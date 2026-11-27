@@ -38,6 +38,10 @@ const PAIRS: { pain: string; fix: string }[] = [
     fix: 'Öğrenciler, kitaplar ve sayfa/test ilerlemesi tek yerde.',
   },
   {
+    pain: 'Dersler takvimde, kayıtları başka yerde',
+    fix: "Google Takvim'deki ders kendiliğinden gelir; yapıldı mı, telafi mi, siz işaretlersiniz.",
+  },
+  {
     pain: 'Ders ücretleri ve ödemeler ayrı bir defterde',
     fix: 'Görüşmeler, öğrenci başına cari hesap ve giderler aynı sistemde.',
   },

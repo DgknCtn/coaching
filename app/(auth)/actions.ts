@@ -20,6 +20,7 @@ import {
   studentLoginPassword,
   USERNAME_PATTERN,
 } from '@/lib/student-login'
+import { normalizeSignupSource } from '@/lib/signup-source'
 
 /** Açık yönlendirme koruması: yalnız kendi sitemiz içindeki yollar. */
 function safeInternalPath(next: string | undefined): string {
@@ -163,7 +164,9 @@ export async function registerAction(
   email: string,
   password: string,
   workspaceName?: string,
-  partnerCode?: string
+  partnerCode?: string,
+  /** Landing ölçümü: hangi bölümün CTA'sı (lib/signup-source.ts). */
+  source?: string | null
 ) {
   const parsed = registerSchema.safeParse({
     fullName,
@@ -209,6 +212,10 @@ export async function registerAction(
         // dönüşünde app/page.tsx'te kuruluyor. Kod yalnız bu istekte
         // dursaydı o yolculukta kaybolur ve partner hakkını yitirirdi.
         partner_code: typedCode,
+        // LANDING ÖLÇÜMÜ (27.11.2026): Vercel Hobby'de özel olay yok;
+        // hangi bölümün kayıt getirdiği buradan okunur. Bilinmeyen değer
+        // yazılmaz (null).
+        signup_source: normalizeSignupSource(source),
       },
     },
   })

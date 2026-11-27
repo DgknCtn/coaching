@@ -73,7 +73,7 @@ export default function OpengraphImage() {
             maxWidth: '900px',
           }}
         >
-          Hangi öğrenci hangi kitabın neresinde?
+          Kim ödevini yaptı, kim geride kaldı?
         </div>
 
         <div
@@ -85,8 +85,7 @@ export default function OpengraphImage() {
             lineHeight: 1.4,
           }}
         >
-          Bu hafta ne verildi, ne teslim edildi, kim geride kaldı — hepsi tek
-          ekranda.
+          Ödev, onay, veli paneli, ders ve ödeme takibi — hepsi tek ekranda.
         </div>
       </div>
     ),

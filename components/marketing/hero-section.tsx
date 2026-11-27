@@ -1,12 +1,15 @@
 import Link from 'next/link'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, Sparkles, Users, Video } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { TRIAL_CTA_LABEL, TRIAL_DAYS } from '@/lib/plans'
 import { GuaranteeStrip } from './guarantee-strip'
 import { PhonePreview } from './phone-preview'
+import { BrowserWindow } from './mock/browser-window'
+import { FloatingCard } from './mock/floating-card'
 import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { counterLabel } from '@/lib/homework-status'
 import { demoStudents, demoSummary } from './demo/demo-students'
+import { registerHref } from '@/lib/signup-source'
 
 // HERO.
 //
@@ -67,13 +70,12 @@ export function HeroSection() {
             Kim ödevini yaptı, kim geride kaldı? Tek bakışta görün.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Siz ödevi verin ve onaylayın; öğrenci telefonundan teslim etsin, veli
-            kendi ekranından takip etsin. WhatsApp mesajları, Excel listeleri ve
-            &ldquo;Çocuğum nasıl gidiyor?&rdquo; soruları tek yerde biter.
+            Ödevi verin ve onaylayın; öğrenci telefonundan teslim etsin, veli kendi
+            ekranından görsün. Dersleriniz, ödemeleriniz ve kitap takibi de aynı yerde.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/register" className={buttonVariants({ size: 'lg' })}>
+            <Link href={registerHref('hero')} className={buttonVariants({ size: 'lg' })}>
               {TRIAL_CTA_LABEL}
               <ArrowRight />
             </Link>
@@ -96,61 +98,104 @@ export function HeroSection() {
           </ul>
         </div>
 
-        {/* İKİ EKRAN: geniş ekranda panel + yanında telefon (panel telefon
-            kadar daraltılır, durum rozetleri kapanmasın); orta genişlikte
-            yalnız panel; mobilde yalnız telefon. */}
+        {/* KATMANLI SAHNE (landing yenilemesi 27.11.2026): koç paneli +
+            öğrencinin telefonu + iki yüzen an ("teslim etti → onayla",
+            "veli onaylı ilerlemeyi gördü"). Üç rolü tek görüntüde anlatır.
+            Mobilde: telefon + tek kart; orta genişlikte panel; geniş
+            ekranda hepsi. */}
         <div className="relative mx-auto mt-16 max-w-5xl">
-          <PhonePreview className="mx-auto md:hidden" />
+          <div className="relative mx-auto w-fit md:hidden">
+            <PhonePreview />
+            <FloatingCard
+              className="absolute -bottom-6 -left-10 w-56"
+              icon={<CheckCircle2 className="size-4" />}
+              title="Ayşe Y. teslim etti"
+              detail="Denklemler · Test 4-6"
+              action="Onayla"
+              delayMs={300}
+            />
+          </div>
 
-          <div className="hidden md:block lg:pr-64">
-            <div className="overflow-hidden rounded-xl border bg-card shadow-xl shadow-primary/5">
-              {/* Sahte pencere çubuğu — kartın bir "ekran" olduğunu okutuyor. */}
-              <div className="flex items-center gap-1.5 border-b bg-muted/40 px-4 py-2.5">
-                <span className="size-2.5 rounded-full bg-destructive/40" />
-                <span className="size-2.5 rounded-full bg-warning/40" />
-                <span className="size-2.5 rounded-full bg-success/40" />
-                <span className="ml-3 text-xs text-muted-foreground">Koç paneli</span>
-              </div>
-
+          <div className="hidden md:block lg:pr-72">
+            <BrowserWindow
+              title="Koç paneli · bu hafta"
+              label="Koç paneli: öğrencilerin bu haftaki teslimleri, ilerlemesi, durumu ve nedeni; bugünkü ders"
+            >
               <div className="grid grid-cols-4 gap-px bg-border">
                 {previewStats.map((s) => (
                   <div key={s.label} className="bg-card p-4">
-                    <p className="text-sm text-muted-foreground">{s.label}</p>
-                    <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
-                      {s.value}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                    <p className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{s.value}</p>
                   </div>
                 ))}
               </div>
 
+              <div className="flex items-center gap-2 border-t bg-info-subtle/40 px-4 py-2 text-xs">
+                <CalendarDays className="size-3.5 text-info-foreground" />
+                <span className="font-medium">Bugün 17:00</span>
+                <span className="text-muted-foreground">Ayşe Y. · Online ders</span>
+                <span className="ml-auto inline-flex items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <CalendarDays className="size-3" />
+                  Calendar
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary">
+                  <Video className="size-3" />
+                  Katıl
+                </span>
+              </div>
+
               <div className="border-t">
-                <div className="flex items-center justify-between border-b px-4 py-3">
+                <div className="flex items-center justify-between border-b px-4 py-2.5">
                   <p className="text-sm font-semibold">Öğrenci durumu</p>
                   <p className="text-xs text-muted-foreground">{summary.students} öğrenci</p>
                 </div>
                 <ul className="divide-y">
-                  {previewRows.map((r) => (
-                    <li key={r.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{r.name}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {r.signals[0] ?? `${r.exam} · ${r.grade}`}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-4">
-                        <span className="text-sm tabular-nums text-muted-foreground">
-                          {r.doneTasks}/{r.totalTasks}
-                        </span>
+                  {previewRows.map((r) => {
+                    const pct = Math.round((r.doneTasks / Math.max(r.totalTasks, 1)) * 100)
+                    return (
+                      <li key={r.id} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-center gap-4 px-4 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{r.name}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {r.signals[0] ?? `${r.exam} · ${r.grade}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-muted">
+                            <div className="h-1.5 rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                            {r.doneTasks}/{r.totalTasks}
+                          </span>
+                        </div>
                         <StudentStatusBadge status={r.status} />
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
-            </div>
+            </BrowserWindow>
           </div>
 
-          <PhonePreview className="absolute -bottom-10 right-0 hidden lg:block" />
+          <PhonePreview className="absolute -bottom-12 right-0 hidden lg:block" />
+
+          {/* Kartlar içerik kapatmasın: biri panelin ÜST kenarında (pencere
+              çubuğu hizası), diğeri ALT kenarında, satırların dışında. */}
+          <FloatingCard
+            className="absolute -top-9 right-80 hidden xl:flex"
+            icon={<CheckCircle2 className="size-4" />}
+            title="Ayşe Y. teslim etti"
+            detail="Denklemler · Test 4-6"
+            action="Onayla"
+            delayMs={400}
+          />
+          <FloatingCard
+            className="absolute -bottom-16 left-[32%] hidden lg:flex"
+            icon={<Users className="size-4" />}
+            title="Veli paneli güncellendi"
+            detail="Bu hafta 7/8 çalışma öğretmen onaylı"
+            delayMs={900}
+          />
         </div>
       </div>
     </section>

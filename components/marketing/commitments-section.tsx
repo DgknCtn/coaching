@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { TRIAL_DAYS } from '@/lib/plans'
 import { cn } from '@/lib/utils'
+import { registerHref } from '@/lib/signup-source'
 
 // TAAHHÜTLER + DEMO — dürüst sosyal kanıt.
 //
@@ -73,7 +74,7 @@ export function CommitmentsSection() {
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link href="/register" className={buttonVariants({ size: 'lg' })}>
+            <Link href={registerHref('taahhut')} className={buttonVariants({ size: 'lg' })}>
               Kendi öğrencilerinizde deneyin
               <ArrowRight />
             </Link>
