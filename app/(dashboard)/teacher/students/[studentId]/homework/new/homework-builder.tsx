@@ -1471,7 +1471,9 @@ export function HomeworkBuilder({
                             </Button>
                           </>
                         )}
-                        {!activeFlow && (
+                        {/* Bayat hafta varken bu cümle uyarıyla çelişiyordu
+                            (kabul testi 27.11.2026). */}
+                        {!activeFlow && !staleFlow && (
                           <p className="text-[11px] text-muted-foreground">
                             Bu öğrencide açık haftalık akış yok; ödev bir
                             haftaya bağlanmaz.

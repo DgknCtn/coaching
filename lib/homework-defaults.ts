@@ -84,16 +84,32 @@ export function pickDefaultDue(input: {
 
 export interface ScopeLike {
   id: string
+  /** "10. Sınıf Matematik" — alanlar boşsa bilgi adda durur. */
+  name?: string
   subject: string | null
   levelExam: string | null
 }
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLocaleLowerCase('tr')
 
+/** Türkçe harf duyarsız sözcükler: "10. Sınıf" → ["10", "sinif"]. */
+function words(s: string | null | undefined): string[] {
+  return norm(s)
+    .replace(/ı/g, 'i')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+}
+
 /**
- * Kitabın ders/kapsam önerisi: önce ders + sınav düzeyi TEK kapsama
- * eşleşirse o, olmazsa yalnız ders TEK kapsama eşleşirse o. Belirsizse
- * öneri yok — öğretmen seçer (yanlış kapsam ders bloklarını bozar).
+ * Kitabın ders/kapsam önerisi, sırayla — her adımda TEK eşleşme şart:
+ *   1. ders + sınav düzeyi alanları
+ *   2. kapsam ADI kitabın ders ve düzey sözcüklerinin hepsini içeriyor
+ *      ("10. Sınıf Matematik" ⊇ {10, sinif, matematik}). Kabul testinde
+ *      (27.11.2026) kapsamların alanları boştu, bilgi yalnız addaydı.
+ *   3. yalnız ders alanı
+ * Belirsizse öneri yok — öğretmen seçer (yanlış kapsam ders bloklarını bozar).
  */
 export function suggestScopeForBook(
   book: { subject: string | null; levelExam: string | null },
@@ -107,6 +123,14 @@ export function suggestScopeForBook(
     const exact = bySubject.filter(s => norm(s.levelExam) === level)
     if (exact.length === 1) return exact[0].id
     if (exact.length > 1) return null
+
+    const wanted = [...words(book.subject), ...words(book.levelExam)]
+    const byName = scopes.filter(s => {
+      const have = new Set(words(s.name))
+      return wanted.every(w => have.has(w))
+    })
+    if (byName.length === 1) return byName[0].id
+    if (byName.length > 1) return null
   }
   return bySubject.length === 1 ? bySubject[0].id : null
 }
