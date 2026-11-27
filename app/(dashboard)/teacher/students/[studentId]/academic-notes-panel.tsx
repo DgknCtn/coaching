@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Loader2, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/shared/empty-state'
 import { StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { filterNotes } from '@/lib/notes-search'
 import {
   addAcademicNoteAction,
   deleteAcademicNoteAction,
@@ -78,6 +80,8 @@ export function AcademicNotesPanel({
   const router = useRouter()
   const [text, setText] = useState('')
   const [pinned, setPinned] = useState(false)
+  // Notlarda arama (PRD 10.2 · Faz 2b): Türkçe harf/büyük-küçük duyarsız.
+  const [query, setQuery] = useState('')
   const [isPending, startTransition] = useTransition()
 
   function add() {
@@ -144,6 +148,7 @@ export function AcademicNotesPanel({
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
     return Date.parse(b.date) - Date.parse(a.date)
   })
+  const visible = filterNotes(ordered, query)
 
   return (
     <div className="space-y-4">
@@ -177,6 +182,23 @@ export function AcademicNotesPanel({
         </p>
       </div>
 
+      {ordered.length > 3 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            aria-label="Notlarda ara"
+            placeholder="Notlarda ara"
+            className="h-8 pl-8 text-sm"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
+      )}
+      {ordered.length > 0 && visible.length === 0 && (
+        <p className="text-sm text-muted-foreground">“{query}” içeren not yok.</p>
+      )}
+
       {ordered.length === 0 ? (
         <div className="rounded-lg border bg-card">
           <EmptyState
@@ -187,7 +209,7 @@ export function AcademicNotesPanel({
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-          {ordered.map(entry =>
+          {visible.map(entry =>
             entry.kind === 'student' ? (
               // ÖĞRENCİNİN CÜMLESİ — SALT OKUNUR.
               // Sabitleme ve silme düğmeleri bilerek YOK: bu metin
@@ -254,3 +276,4 @@ export function AcademicNotesPanel({
     </div>
   )
 }
+

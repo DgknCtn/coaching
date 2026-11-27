@@ -13,10 +13,10 @@ olduğunu, neyin kısmen var olduğunu ve neyin sıfırdan yapılacağını gös
 
 | PRD | Özellik | Öncelik | Bugün | Mevcut temel |
 |---|---|---|---|---|
-| 10.4 | Planı kopyala | P1 | **Yok** | Ödev Planı (156), akademik görevler, `open_weekly_flow` |
-| 10.2 | Öğrenci notları ve etiketler | P1 | **Kısmen** (not var, etiket yok) | `academic_notes`, öğrenci sayfası not paneli |
-| 10.1 | Aktivite zaman tüneli | P1 | **Yok** (veri var) | Ödev/onay, ders (`service_sessions`), ödeme, not, `interventions` tabloları |
-| 10.3 | Ödev şablonları | P1 | **Yok** | Akademik görevler; `curriculum_templates` deseni |
+| 10.4 | Planı kopyala | P1 | **Var** (Faz 2a) | Ödev Ver → "Önceki plandan kopyala" (`lib/plan-copy.ts`) |
+| 10.2 | Öğrenci notları ve etiketler | P1 | **Var** (Faz 2b) | Etiketler (159), liste süzgeci, notlarda arama |
+| 10.1 | Aktivite zaman tüneli | P1 | **Var** (Faz 2c) | Öğrenci → Diğer → Zaman Tüneli (`lib/activity-timeline.ts`) |
+| 10.3 | Ödev şablonları | P1 | **Var** (Faz 2d) | Ödev şablonları (160), Ödev Ver'de uygula/kaydet |
 | 10.5 | Akıllı öğrenci durumu | P1 | **Var** | `lib/student-status.ts` — kurala dayalı, gerekçeli (Yolunda / Takip Et / Geride / Müdahale) |
 | 10.6 | Haftalık yük görselleştirme | P2 | **Kısmen** | Haftalık Akış tempo şeridi, öğrencinin gün dağıtımı (Haftam) |
 | 10.7 | Hedef takibi | P2 | **Kısmen** | Kitap hedefleri ve ara hedefler (`student_book_targets`) |
@@ -30,7 +30,12 @@ olduğunu, neyin kısmen var olduğunu ve neyin sıfırdan yapılacağını gös
 | 10.15 | AI çalışma planı asistanı | P3 | **Yok** | Rapor AI özeti altyapısı |
 | — | Ekip / çok öğretmen | — | **Yok** | PRD Persona 3 "ASSUMED"; tanıtılmaz |
 
-## P1 — sıradaki fazlar (her biri ayrı onaylı tur)
+## P1 — tamamlandı (28.11.2026)
+
+Aşağıdaki tasarımların dördü de uygulandı; katalogda `available`.
+Not: kitap şablonu bilinçli olarak YOK — şablon yalnız görevleri tutar,
+kitap çalışması her hafta haritadan seçilir (ya da "Planı kopyala" ile
+devamı getirilir).
 
 ### 2a · Planı kopyala (PRD 10.4)
 - **Fayda:** Tekrarlayan haftalık işi azaltır.

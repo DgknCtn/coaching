@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { QuotaNotice } from '@/components/shared/quota-notice'
 import { Section } from '@/components/shared/section'
+import { Badge } from '@/components/ui/badge'
+import { loadStudentTags, type StudentTag } from '@/lib/student-tags'
 import { DataTable, type Column } from '@/components/shared/data-table'
 import { StudentStatusBadge } from '@/components/shared/student-status-badge'
 import { SectionUnavailable } from '@/components/shared/section-unavailable'
@@ -44,6 +46,8 @@ type StudentRow = {
   completion: number | null
   status: StudentStatus
   signals: string[]
+  /** Etiketler (159) — yalnız öğretmen görür. */
+  tags: StudentTag[]
 }
 
 export default async function StudentsPage({
@@ -52,7 +56,7 @@ export default async function StudentsPage({
   // Sol menüdeki "Öğrenci Ekranları" grubu buraya ?ekran=... ile gelir:
   // öğrenci seçilmeden o ekranlara girilemez, bu yüzden liste bir seçim
   // adımı olarak kullanılır ve satırlar doğrudan istenen ekrana bağlanır.
-  searchParams: Promise<{ ekran?: string; durum?: string }>
+  searchParams: Promise<{ ekran?: string; durum?: string; etiket?: string }>
 }) {
   const { supabase, workspaceId, usage } = await getTeacherContext()
   const query = await searchParams
@@ -109,8 +113,13 @@ export default async function StudentsPage({
       : []
   )
 
+  // ETİKETLER (PRD 10.2 · Faz 2b, 159). Okunamazsa süzgeç çizilmez.
+  const tagData = await loadStudentTags(supabase, workspaceId)
+  const tagById = new Map((tagData?.tags ?? []).map(t => [t.id, t]))
+  const activeTag = query.etiket && tagById.has(query.etiket) ? tagById.get(query.etiket)! : null
+
   const now = new Date()
-  const rows: StudentRow[] = (operation.ok ? (operation.data as OperationRow[]) : []).map((s) => {
+  const allRows: StudentRow[] = (operation.ok ? (operation.data as OperationRow[]) : []).map((s) => {
     const computed = statusFromOperationRow(s, now)
     return {
       student_id: s.student_id,
@@ -123,8 +132,10 @@ export default async function StudentsPage({
       completion: progress.ok ? (completionById.get(s.student_id) ?? 0) : null,
       status: computed.status,
       signals: computed.signals,
+      tags: (tagData?.byStudent.get(s.student_id) ?? []).map(id => tagById.get(id)).filter((t): t is StudentTag => !!t),
     }
   })
+  const rows = activeTag ? allRows.filter(r => r.tags.some(t => t.id === activeTag.id)) : allRows
 
   // SON ÇALIŞILAN ÖĞRENCİYE DOĞRUDAN GİT (067).
   //
@@ -160,6 +171,15 @@ export default async function StudentsPage({
           <p className="mt-0.5 text-xs text-muted-foreground">
             {[s.exam_type, s.grade_level].filter(Boolean).join(' · ')}
           </p>
+          {s.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {s.tags.map(t => (
+                <Badge key={t.id} variant={t.color} className="px-1.5 py-0 text-[10px]">
+                  {t.name}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       ),
     },
@@ -288,6 +308,33 @@ export default async function StudentsPage({
             },
           ]}
         />
+      )}
+
+      {!screen && !showArchive && tagData && tagData.tags.length > 0 && (
+        <nav aria-label="Etikete göre süz" className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground">Etiket:</span>
+          <Link
+            href="/teacher/students"
+            aria-current={!activeTag ? 'page' : undefined}
+            className={!activeTag ? 'rounded-full bg-primary px-2.5 py-1 text-primary-foreground' : 'rounded-full border px-2.5 py-1 hover:bg-muted'}
+          >
+            Tümü
+          </Link>
+          {tagData.tags.map(t => (
+            <Link
+              key={t.id}
+              href={`/teacher/students?etiket=${t.id}`}
+              aria-current={activeTag?.id === t.id ? 'page' : undefined}
+              className={
+                activeTag?.id === t.id
+                  ? 'rounded-full bg-primary px-2.5 py-1 text-primary-foreground'
+                  : 'rounded-full border px-2.5 py-1 hover:bg-muted'
+              }
+            >
+              {t.name}
+            </Link>
+          ))}
+        </nav>
       )}
 
       <Section variant="card">

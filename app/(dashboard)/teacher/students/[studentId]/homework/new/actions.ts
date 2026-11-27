@@ -308,3 +308,80 @@ export async function startNewWeekAction(input: z.input<typeof startWeekSchema>)
   revalidatePath('/student/haftam')
   return { success: true, flowId: flowId as string, carried, carriedTasks, carryError }
 }
+
+// ============================================================
+// PLANI KOPYALA (Feature Showcase PRD 10.4 · Faz 2a)
+//
+// Görevler: geçen planın akademik görevleri TASLAK olarak kopyalanır
+// (createTasksBulkAction) — sepete düşer, yayın öğretmenin onayıyla.
+// Kitap kalemleri: KOPYALANMAZ; hangi kitaptan hangi birimlerin verildiği
+// döner, istemci aynı kitapta "devamını" önerir (lib/plan-copy.ts).
+// Hiçbir şey yayımlanmaz, hiçbir ödev oluşmaz.
+// ============================================================
+
+export async function copyPlanAction(
+  studentId: string,
+  planId: string
+): Promise<{ error?: string; tasksCopied?: number; books?: { bookId: string; testIds: string[] }[] }> {
+  if (!uuidSchema.safeParse(studentId).success || !uuidSchema.safeParse(planId).success) {
+    return { error: 'Geçersiz plan.' }
+  }
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data: plan } = await supabase
+    .from('homework_plans')
+    .select('id')
+    .eq('id', planId)
+    .eq('student_id', studentId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+  if (!plan) return { error: 'Plan bulunamadı.' }
+
+  const [{ data: tasks, error: taskError }, { data: items, error: itemError }] = await Promise.all([
+    supabase
+      .from('academic_tasks')
+      .select('scope_id, kind, title, target_minutes, academic_task_checklist_items(title, order_index)')
+      .eq('plan_id', planId)
+      .eq('student_id', studentId)
+      .order('created_at'),
+    supabase
+      .from('homework_items')
+      .select('book_id, book_test_id, homework_batches!inner(plan_id)')
+      .eq('homework_batches.plan_id', planId),
+  ])
+  if (taskError || itemError) return { error: dbErrorToTr((taskError ?? itemError)!.message) }
+
+  type TaskRow = {
+    scope_id: string
+    kind: 'gorev' | 'checklist' | 'sure'
+    title: string
+    target_minutes: number | null
+    academic_task_checklist_items: { title: string; order_index: number }[] | null
+  }
+  const rows = ((tasks ?? []) as TaskRow[]).map(t => ({
+    scopeId: t.scope_id,
+    kind: t.kind,
+    title: t.title,
+    targetMinutes: t.target_minutes,
+    checklist: [...(t.academic_task_checklist_items ?? [])].sort((a, b) => a.order_index - b.order_index).map(c => c.title),
+  }))
+
+  let tasksCopied = 0
+  if (rows.length > 0) {
+    const { createTasksBulkAction } = await import('../../dersler/actions')
+    const created = await createTasksBulkAction(studentId, rows)
+    if (created.error) return { error: created.error, tasksCopied: created.created ?? 0 }
+    tasksCopied = created.created ?? 0
+  }
+
+  const byBook = new Map<string, string[]>()
+  for (const it of (items ?? []) as { book_id: string; book_test_id: string }[]) {
+    const list = byBook.get(it.book_id) ?? []
+    list.push(it.book_test_id)
+    byBook.set(it.book_id, list)
+  }
+
+  revalidatePath(`/teacher/students/${studentId}/homework/new`)
+  return { tasksCopied, books: [...byBook].map(([bookId, testIds]) => ({ bookId, testIds })) }
+}
