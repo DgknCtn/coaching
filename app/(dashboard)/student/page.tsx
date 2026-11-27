@@ -4,6 +4,7 @@ import {
   batchStateLabel,
   counterLabel,
   splitByFlowOwnership,
+  todayDateString,
   type HomeworkBatchState,
 } from '@/lib/homework-status'
 import { unitLabel } from '@/lib/unit-labels'
@@ -18,11 +19,17 @@ import { PageHeader } from '@/components/shared/page-header'
 import { Section } from '@/components/shared/section'
 import { AlertBanner } from '@/components/shared/alert-banner'
 import { ProgressBar } from '@/components/shared/progress-bar'
+import { loadMistakeData } from '@/lib/mistakes/load'
+import { todayStats } from '@/lib/mistakes/today'
+import { TodayCard } from '@/components/mistakes/today-card'
 
 export const dynamic = 'force-dynamic'
 
 export default async function StudentPage() {
   const { supabase, student, workspaceId } = await getStudentContext()
+  // Hata defteri + soru takibi (161) — ödev sorgularıyla paralel başlar.
+  // Tablolar yoksa null: kart hiç çizilmez, ödev ekranı aynen kalır.
+  const notebookPromise = loadMistakeData(supabase, { workspaceId, studentId: student.id, days: 7, withPhotos: false })
 
   // Ödevler, kitap ilerlemesi ve bildirim materyalizasyonu birbirinden
   // bağımsız — tek dalgada çalışırlar.
@@ -41,7 +48,7 @@ export default async function StudentPage() {
           id, status, completed_at, teacher_note, rejected_at, submitted_at, book_id,
           books(title, subject, tracking_mode),
           book_sections(id, title, order_index),
-          book_tests(title, order_index, page_start)
+          book_tests(id, title, order_index, page_start)
         )
       `)
       .eq('student_id', student.id)
@@ -164,6 +171,8 @@ export default async function StudentPage() {
   const pastOpenCount = openOf(past.buckets)
   const openCount = openOf(current.buckets) + pastOpenCount
 
+  const notebook = await notebookPromise
+
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-6 md:p-8">
       <PageHeader
@@ -187,6 +196,8 @@ export default async function StudentPage() {
       />
 
       {openCheckIn && <CheckInCard checkInId={openCheckIn.id} />}
+
+      {notebook && <TodayCard stats={todayStats(notebook, todayDateString())} targets={notebook.targets} />}
 
       {/* Haftalık özet. Bu görünüm bugüne kadar YALNIZ veli panelindeydi;
           öğrenci kendi haftasının toplamını göremiyordu. */}

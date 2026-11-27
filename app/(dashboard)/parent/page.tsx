@@ -1,6 +1,7 @@
 import { BookOpen, Users } from 'lucide-react'
 import { deriveBatchState, isOpenBatch } from '@/lib/homework-status'
 import { getParentContext } from '@/lib/workspace'
+import { ParentNotebookCard, type ParentNotebookSummary } from '@/components/mistakes/parent-notebook-card'
 import { Badge } from '@/components/ui/badge'
 import { BookCard } from '@/components/shared/book-card'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -136,6 +137,7 @@ export default async function ParentPage({
         countersRes,
         noticeRes,
         paymentRes,
+        notebookRes,
       ] = await Promise.all([
         supabase
           .from('student_book_progress_view')
@@ -236,6 +238,9 @@ export default async function ParentPage({
           p_student_id: studentId,
           p_month_start: currentMonthStart,
         }),
+        // Hata defteri + soru özeti (161). Yalnız toplu sayılar; fonksiyon
+        // yoksa (migration uygulanmadan) kart çizilmez, panel etkilenmez.
+        supabase.rpc('parent_mistake_summary', { p_student_id: studentId }),
       ])
 
       const bookProgress = listResult(bookProgressRes, 'parent.book_progress')
@@ -307,6 +312,7 @@ export default async function ParentPage({
         // hüküm üretilmez, yalnız bilgi eksik kalır. Hata raporlanıyor.
         hasOpenNotice: notice.ok && Boolean(notice.data),
         paymentState: payment.ok ? ((payment.data as string | null) ?? null) : null,
+        notebook: notebookRes.error ? null : ((notebookRes.data as ParentNotebookSummary | null) ?? null),
         // İsim yalnız uyarı metnini kişiselleştiriyor; gelmezse metin
         // genel hâline düşer, anlamı değişmez.
         teacherName: teacher.ok
@@ -364,6 +370,7 @@ export default async function ParentPage({
           teacherName,
           hasOpenNotice,
           paymentState,
+          notebook,
         }) => {
         // Veli dili "Ödendi", öğretmen dili "Tahsil edildi" (§8).
         const paymentLabel = monthPaymentLabel(paymentState as MonthPaymentState, 'parent')
@@ -714,6 +721,8 @@ export default async function ParentPage({
                 Eskiden bu mesaj hata durumunda da çıkıyordu ve açıklaması
                 "Öğretmen henüz kitap veya ödev atamamış" idi: bir arıza,
                 öğretmeni yanlışlıkla suçlayan bir cümleye dönüşüyordu. */}
+            {notebook && <ParentNotebookCard summary={notebook} />}
+
             {allOk(bookProgress, batches, weekly) &&
               books.length === 0 &&
               batches.ok &&

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { net } from './mistakes/net'
 
 // ÖĞRENCİ AKTİVİTE ZAMAN TÜNELİ (PRD 10.1 · Faz 2c).
 //
@@ -30,6 +31,10 @@ export type TimelineKind =
   | 'intervention_closed'
   | 'payment'
   | 'note'
+  // Hata defteri + soru takibi (161) — EK türler.
+  | 'mistakes_added'
+  | 'mistakes_learned'
+  | 'questions_logged'
 
 export const KIND_CATEGORY: Record<TimelineKind, TimelineCategory> = {
   homework_assigned: 'akademik',
@@ -44,6 +49,9 @@ export const KIND_CATEGORY: Record<TimelineKind, TimelineCategory> = {
   intervention_closed: 'gorusme',
   payment: 'odeme',
   note: 'not',
+  mistakes_added: 'akademik',
+  mistakes_learned: 'akademik',
+  questions_logged: 'akademik',
 }
 
 export interface TimelineEvent {
@@ -64,6 +72,9 @@ export interface TimelineSources {
   interventions: { id: string; opened_at: string | null; closed_at: string | null; note: string | null }[]
   payments: { id: string; paid_on: string; amount_kurus: number; method: string | null }[]
   notes: { id: string; created_at: string; note_text: string; pinned: boolean }[]
+  /** Hata defteri (161). Tablo yoksa boş; isteğe bağlı — eski çağıranlar etkilenmez. */
+  mistakes?: { created_at: string | null; status: string; last_reviewed_at: string | null }[]
+  questionLogs?: { log_date: string; created_at: string; correct: number; wrong: number; blank: number; penalty_divisor: number }[]
 }
 
 const day = (iso: string) => iso.slice(0, 10)
@@ -157,6 +168,34 @@ export function buildTimeline(src: TimelineSources): TimelineEvent[] {
     events.push({ key: `note-${n.id}`, kind: 'note', category: 'not', at: n.created_at, title: n.pinned ? 'Sabit not eklendi' : 'Not eklendi', detail: clip(n.note_text) })
   }
 
+  const mistakes = src.mistakes ?? []
+  events.push(...grouped(mistakes.map(m => m.created_at), 'mistakes_added', n => `${n} hata deftere eklendi`))
+  events.push(
+    ...grouped(
+      mistakes.map(m => (m.status === 'learned' ? m.last_reviewed_at : null)),
+      'mistakes_learned',
+      n => `${n} hata öğrenildi`
+    )
+  )
+  // Soru kaydı GÜN bazında: o günün toplam sorusu ve neti tek satır.
+  const byDay = new Map<string, { q: number; net: number; last: string }>()
+  for (const l of src.questionLogs ?? []) {
+    const cur = byDay.get(l.log_date) ?? { q: 0, net: 0, last: l.created_at }
+    cur.q += l.correct + l.wrong + l.blank
+    cur.net += net(l.correct, l.wrong, l.penalty_divisor)
+    if (l.created_at > cur.last) cur.last = l.created_at
+    byDay.set(l.log_date, cur)
+  }
+  for (const [d, v] of byDay) {
+    events.push({
+      key: `questions_logged-${d}`,
+      kind: 'questions_logged',
+      category: 'akademik',
+      at: v.last,
+      title: `${v.q} soru çözüldü · net ${v.net.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`,
+    })
+  }
+
   return events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.key.localeCompare(b.key)))
 }
 
@@ -179,7 +218,7 @@ export async function loadTimelineSources(
 ): Promise<TimelineSources> {
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
   const sinceDay = since.slice(0, 10)
-  const [batches, items, sessions, checkIns, interventions, payments, notes] = await Promise.all([
+  const [batches, items, sessions, checkIns, interventions, payments, notes, mistakes, questionLogs] = await Promise.all([
     supabase
       .from('homework_batches')
       .select('id, title, created_at, homework_items(count)')
@@ -230,6 +269,20 @@ export async function loadTimelineSources(
       .eq('student_id', studentId)
       .gte('created_at', since)
       .limit(400),
+    supabase
+      .from('mistakes')
+      .select('created_at, status, last_reviewed_at')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId)
+      .or(`created_at.gte.${since},last_reviewed_at.gte.${since}`)
+      .limit(2000),
+    supabase
+      .from('question_logs')
+      .select('log_date, created_at, correct, wrong, blank, penalty_divisor')
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId)
+      .gte('log_date', sinceDay)
+      .limit(2000),
   ])
 
   const inWindow = (at: string | null) => (at && at >= since ? at : null)
@@ -250,5 +303,12 @@ export async function loadTimelineSources(
     interventions: (interventions.data ?? []) as TimelineSources['interventions'],
     payments: (payments.data ?? []) as TimelineSources['payments'],
     notes: (notes.data ?? []) as TimelineSources['notes'],
+    // Tablo yoksa (161 uygulanmadan) hata döner → boş liste.
+    mistakes: ((mistakes.error ? [] : mistakes.data ?? []) as NonNullable<TimelineSources['mistakes']>).map(m => ({
+      status: m.status,
+      created_at: inWindow(m.created_at),
+      last_reviewed_at: inWindow(m.last_reviewed_at),
+    })),
+    questionLogs: (questionLogs.error ? [] : questionLogs.data ?? []) as NonNullable<TimelineSources['questionLogs']>,
   }
 }

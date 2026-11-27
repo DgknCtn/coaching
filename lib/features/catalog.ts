@@ -438,6 +438,39 @@ export const FEATURES: Feature[] = [
     featured: false,
     sortOrder: 4,
   },
+  // Hata Defteri + Soru/Net takibi (migration 161).
+  {
+    id: 'mistake-notebook',
+    slug: 'hata-defteri',
+    title: 'Hata defteri ve soru tekrarı',
+    category: 'student-portal',
+    status: 'available',
+    shortDescription: 'Yanlış yapılan sorular, aralıklı tekrarla.',
+    benefit: 'Öğrenci aynı hatayı tekrarlamaz; siz hangi konuda neden yanıldığını görürsünüz.',
+    bullets: [
+      'Öğrenci yanlış yaptığı soruyu fotoğrafla, kaynağı ve nedeniyle kaydeder.',
+      'Soru 1, 3, 7, 14 ve 30 gün sonra yeniden karşısına çıkar; bildiği soru öğrenildi sayılır.',
+      'Hata nedenleri ve konu analizi; her kayda koç notu yazabilirsiniz.',
+    ],
+    featured: false,
+    sortOrder: 20,
+  },
+  {
+    id: 'question-log',
+    slug: 'soru-ve-net-takibi',
+    title: 'Soru ve net takibi',
+    category: 'student-portal',
+    status: 'available',
+    shortDescription: 'Günlük çözülen soru, net ve doğruluk.',
+    benefit: 'Öğrencinin her gün ne kadar soru çözdüğünü ve netini tek tabloda izlersiniz.',
+    bullets: [
+      'Doğru, yanlış ve boş girilir; net sınav kuralıyla hesaplanır (YKS 4, LGS 3 yanlış).',
+      'Günlük soru ve tekrar hedefini siz belirlersiniz; öğrenci ilerlemeyi ana sayfasında görür.',
+      'Veli yalnız haftalık özeti görür.',
+    ],
+    featured: false,
+    sortOrder: 21,
+  },
   // --- YOL HARİTASI (planned) — herkese açık sayfalarda GÖSTERİLMEZ ---
   { id: 'mock-exams', slug: 'deneme-takibi', title: 'Deneme sınavı takibi', category: 'book-tracking', status: 'planned', shortDescription: 'Deneme sonuçları ve konu analizi.', benefit: 'Zayıf konuları görürsünüz.', bullets: [], featured: false, sortOrder: 90 },
 ]
