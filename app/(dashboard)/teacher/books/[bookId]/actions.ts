@@ -457,6 +457,57 @@ export async function setSectionTopicsAction(
   return { success: true }
 }
 
+/**
+ * TOPLU KONU EŞLEME (Kitap Girişi ve Konu Eşleme 2c).
+ *
+ * Bir kitabın birden çok bölümünün eşlemesi tek kayıtla yazılır. Her satır
+ * yine set_book_section_topics'ten geçer (yetki ve çalışma alanı kontrolü
+ * RPC'de); bu eylem yalnız bölümlerin GERÇEKTEN bu kitaba ait olduğunu
+ * doğrular ve sırayla yazar. Yarım kalırsa hangi bölümlerin yazılamadığı
+ * söylenir — yazılanlar geri alınmaz (her satır kendi başına geçerli).
+ */
+export async function setManySectionTopicsAction(
+  bookId: string,
+  rows: { sectionId: string; topicIds: string[] }[]
+): Promise<{ error?: string; saved?: number; failed?: number }> {
+  const parsed = z
+    .object({ bookId: z.string().uuid(), rows: z.array(sectionTopicsSchema).min(1).max(300) })
+    .safeParse({ bookId, rows })
+  if (!parsed.success) return { error: firstIssue(parsed.error) }
+
+  const { workspaceId } = await getTeacherContext()
+  const supabase = await createClient()
+
+  const { data: own } = await supabase
+    .from('book_sections')
+    .select('id')
+    .eq('book_id', parsed.data.bookId)
+    .eq('workspace_id', workspaceId)
+    .in('id', parsed.data.rows.map(r => r.sectionId))
+  const owned = new Set(((own ?? []) as { id: string }[]).map(r => r.id))
+
+  let saved = 0
+  let failed = 0
+  for (const row of parsed.data.rows) {
+    if (!owned.has(row.sectionId)) {
+      failed++
+      continue
+    }
+    const { error } = await supabase.rpc('set_book_section_topics', {
+      p_section_id: row.sectionId,
+      p_topic_ids: row.topicIds,
+    })
+    if (error) failed++
+    else saved++
+  }
+
+  revalidatePath(`/teacher/books/${parsed.data.bookId}/edit`)
+  revalidatePath(`/teacher/books/${parsed.data.bookId}/eslestir`)
+  revalidatePath(`/teacher/books/${parsed.data.bookId}`)
+  if (saved === 0) return { error: 'Eşlemeler kaydedilemedi.', saved, failed }
+  return { saved, failed }
+}
+
 // ---------------------------------------------------------------
 // R7-03: Alt Bölüm ve test aralığı
 //

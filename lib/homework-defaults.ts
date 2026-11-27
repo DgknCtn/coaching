@@ -93,7 +93,7 @@ export interface ScopeLike {
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLocaleLowerCase('tr')
 
 /** Türkçe harf duyarsız sözcükler: "10. Sınıf" → ["10", "sinif"]. */
-function words(s: string | null | undefined): string[] {
+export function words(s: string | null | undefined): string[] {
   return norm(s)
     .replace(/ı/g, 'i')
     .normalize('NFD')

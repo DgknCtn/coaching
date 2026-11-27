@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { getTeacherContext } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
-import { BookEditForm, type TopicOption } from './book-edit-form'
+import { BookEditForm } from './book-edit-form'
+import { loadBookTopicOptions } from '@/lib/book-topic-options'
 import { fetchAllRows } from '@/lib/fetch-all'
 
 export const dynamic = 'force-dynamic'
@@ -76,67 +77,12 @@ export default async function BookEditPage({
     if (!list.includes(bt.order_index)) list.push(bt.order_index)
   }
 
-  // R7-02 §8: müfredat listesi kitabın Ders + Seviye/Sınav bilgisine göre
-  // FİLTRELENİR. Kabul #8: "TYT Matematik müfredat seçiminde AYT Felsefe
-  // görünmüyor." Filtre kapsam (academic_scopes) düzeyinde uygulanır; kapsam
-  // zaten subject/level_exam taşıyor (038).
-  //
-  // Kapsamın alanı BOŞSA dışarıda bırakılmaz: eski kapsamlarda bu alanlar
-  // doldurulmamış olabilir ve onları gizlemek eşlemeyi imkânsız kılardı.
-  let scopeQuery = supabase
-    .from('academic_scopes')
-    .select('id, name, subject, level_exam')
-    .eq('workspace_id', workspaceId)
-    .eq('active', true)
-
-  if (book.subject) {
-    scopeQuery = scopeQuery.or(`subject.is.null,subject.eq.${book.subject}`)
-  }
-  if (book.level_exam) {
-    scopeQuery = scopeQuery.or(`level_exam.is.null,level_exam.eq.${book.level_exam}`)
-  }
-
-  const { data: scopeRows } = await scopeQuery
-  let scopes = scopeRows ?? []
-
-  // KAÇIŞ YOLU: filtre hiçbir kapsamla eşleşmezse eşleştirme imkânsız hale
-  // gelirdi. R7-02 §8 listeyi DARALTMAK istiyor, eşlemeyi engellemek değil
-  // (R6-15'in "filtre atamayı kısıtlamaz" ilkesiyle aynı mantık). Bu durumda
-  // workspace'in tüm aktif kapsamlarına düşülür ve kullanıcıya söylenir.
-  const filtered = scopes.length > 0
-  if (!filtered) {
-    const { data: allScopes } = await supabase
-      .from('academic_scopes')
-      .select('id, name, subject, level_exam')
-      .eq('workspace_id', workspaceId)
-      .eq('active', true)
-    scopes = allScopes ?? []
-  }
-
-  const scopeIds = scopes.map((s) => s.id)
-  const scopeNameById = new Map(scopes.map((s) => [s.id, s.name]))
-
-  // H03 (İz V2): tek istek 1000 satırda kesiliyordu — tüm konular sayfalı okunur.
-  const { data: topicRows } = scopeIds.length
-    ? await fetchAllRows<{ id: string; name: string; scope_id: string }>((from, to) =>
-        supabase
-          .from('topics')
-          .select('id, name, scope_id')
-          .eq('workspace_id', workspaceId)
-          .eq('active', true)
-          .in('scope_id', scopeIds)
-          .order('sort_order')
-          .order('name')
-          .order('id')
-          .range(from, to)
-      )
-    : { data: [] }
-
-  const topics: TopicOption[] = (topicRows ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    scopeName: scopeNameById.get(t.scope_id) ?? 'Kapsam',
-  }))
+  // Kapsam kademesi + konu listesi (2a) — toplu eşleme ekranıyla ortak.
+  const { topics, filtered } = await loadBookTopicOptions(supabase, {
+    workspaceId,
+    subject: book.subject,
+    levelExam: book.level_exam,
+  })
 
   const parts = (book.book_parts ?? [])
     .slice()
@@ -204,10 +150,14 @@ export default async function BookEditPage({
         <Button variant="ghost" size="icon-sm" render={<Link href={`/teacher/books/${bookId}`} />}>
           <ArrowLeft className="size-4" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-semibold">Kitabı Düzenle</h1>
           <p className="text-sm text-muted-foreground">{book.title}</p>
         </div>
+        {/* 2c: bütün bölümler tek tabloda, önerilerle. */}
+        <Button variant="outline" size="sm" render={<Link href={`/teacher/books/${bookId}/eslestir`} />}>
+          Konuları toplu eşle
+        </Button>
       </div>
 
       <BookEditForm

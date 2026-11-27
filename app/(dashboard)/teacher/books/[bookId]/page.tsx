@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { formatUnitCount } from '@/lib/unit-labels'
+import { formatUnitCount, unitTitle } from '@/lib/unit-labels'
 import { formatTestRange } from '@/lib/book-structure'
 import { cn } from '@/lib/utils'
 import { notFound } from 'next/navigation'
@@ -119,7 +119,7 @@ export default async function BookDetailPage({
         <Card>
           <CardContent className="pt-4 text-center">
             <p className="text-2xl font-semibold tabular-nums tracking-tight">{totalTests}</p>
-            <p className="text-xs text-muted-foreground">Test</p>
+            <p className="text-xs text-muted-foreground">{unitTitle(book.tracking_mode)}</p>
           </CardContent>
         </Card>
         <Card>

@@ -163,6 +163,18 @@ const sectionSchema = z.object({
   // Sayfa takipli kitapta bölüm "sf. 1-56" gibi fiziksel kapsamla tanımlanır.
   page_start: z.number().int().min(1).max(100000).optional().nullable(),
   page_end: z.number().int().min(1).max(100000).optional().nullable(),
+  // Kitap Girişi 3a: yeni kitap formunda içindekilerden gelen alt bölümler.
+  // Varsa bölüm TESTSİZ kurulur, testler alt bölümlerle açılır.
+  subsections: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        test_start: z.number().int().min(1).max(100000),
+        test_end: z.number().int().min(1).max(100000),
+      })
+    )
+    .max(100)
+    .optional(),
 })
   .refine(
     (v) => v.page_start == null || v.page_end == null || v.page_end >= v.page_start,

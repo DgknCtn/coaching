@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { createBookAction } from '../actions'
+import { BookOutlineImport, type OutlineFill } from '@/components/shared/book-outline-import'
+import { attachSubsections, outlineToRows } from '@/lib/book-entry'
+import type { ParsedChapter } from '@/lib/book-import'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -66,8 +70,14 @@ export function BookForm({ terms, defaultTermId }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<string | null>(null)
+  // 3b: başarılı kayıttan sonra yönlendirme bitene dek düğme KİLİTLİ
+  // kalır — ikinci basış aynı kitabı ikinci kez oluşturmasın.
+  const submittedRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  // 3a: içindekilerden gelen bölümlerin alt bölümleri (test kitabı).
+  const [outlineChapters, setOutlineChapters] = useState<ParsedChapter[]>([])
 
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, getValues, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       termId: defaultTermId,
@@ -81,7 +91,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'sections' })
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'sections' })
 
   // Sayfa takipli kitapta bölüm, test sayısıyla değil fiziksel kapsamıyla
   // tanımlanır: "Üçgenler | sf. 1-78" (R4 §3).
@@ -90,6 +100,21 @@ export function BookForm({ terms, defaultTermId }: Props) {
   // bağlanır. MÖF F1-F5 böylece ayrı kitap açılmadan tek kaynakta durur.
   const isMultiPart = watch('structureKind') === 'multi'
   const videoUrlProminent = videoUrlIsProminent(watch('videoMode'))
+
+  // Hangi satır içindekilerden gelen alt bölümleri taşıyor (adla eşleşme).
+  const watchedSections = watch('sections')
+  const rowSubsections = useMemo(
+    () => (isPageBook ? [] : attachSubsections(watchedSections.map(r => ({ title: r.title ?? '' })), outlineChapters)),
+    [isPageBook, watchedSections, outlineChapters]
+  )
+
+  function fillFromOutline(fill: OutlineFill) {
+    const { rows, replace: replaceAll } = outlineToRows(fill, getValues('sections'))
+    if (replaceAll) replace(rows)
+    else append(rows)
+    if (fill.kind === 'test') setOutlineChapters(prev => (replaceAll ? fill.chapters : [...prev, ...fill.chapters]))
+    toast.success(`${rows.length} bölüm forma eklendi. Kontrol edip kaydedin.`)
+  }
 
   // R7-02 §6.5: Enter tuşu formu KAYDETMEMELİ. Bölüm satırlarında gezinirken
   // yanlışlıkla yarım kitap kaydı oluşmasının başlıca sebebi buydu; kayıt
@@ -103,7 +128,10 @@ export function BookForm({ terms, defaultTermId }: Props) {
   }
 
   const onSubmit = (data: FormData) => {
+    if (submittedRef.current) return
     setServerError(null)
+    setSaving(true)
+    const subs = isPageBook ? [] : attachSubsections(data.sections, outlineChapters)
     startTransition(async () => {
       const result = await createBookAction({
         title: data.title,
@@ -120,7 +148,7 @@ export function BookForm({ terms, defaultTermId }: Props) {
         termId: data.termId,
         resourceType: data.resourceType,
         structureKind: data.structureKind,
-        sections: data.sections.map((s) => ({
+        sections: data.sections.map((s, i) => ({
           title: s.title,
           // Tek parçalı kaynakta parça adı hiç gönderilmez.
           part: isMultiPart ? s.part?.trim() || undefined : undefined,
@@ -130,12 +158,16 @@ export function BookForm({ terms, defaultTermId }: Props) {
           note: s.note,
           page_start: isPageBook && Number.isFinite(s.page_start) ? (s.page_start as number) : null,
           page_end: isPageBook && Number.isFinite(s.page_end) ? (s.page_end as number) : null,
+          subsections: subs[i] ?? undefined,
         })),
       })
       if (result?.error) {
         setServerError(result.error)
+        setSaving(false)
         return
       }
+      submittedRef.current = true
+      if (result?.warning) toast.warning(result.warning)
 
       // R7-03 §2: kayıttan sonra 2. ADIM — alt bölümler.
       //
@@ -146,8 +178,14 @@ export function BookForm({ terms, defaultTermId }: Props) {
       // bölüm açılmaz (061) ve öğretmeni yapamayacağı bir ekrana
       // göndermek, adımı gereksiz bir engele çevirirdi.
       const newBookId = (result?.data as { book_id?: string } | null)?.book_id
+      //
+      // 3b: sayfa kitabı artık kitabın KENDİ sayfasına gider. Havuz listesi
+      // (yüzlerce kitap) yeniden çizilirken düğme 20+ sn dönüyordu; yeni
+      // kitabı görmek de öğretmenin zaten bir sonraki adımı.
       if (newBookId && !isPageBook) {
         router.push(`/teacher/books/${newBookId}/subsections`)
+      } else if (newBookId) {
+        router.push(`/teacher/books/${newBookId}`)
       } else {
         router.push('/teacher/books')
       }
@@ -321,9 +359,13 @@ export function BookForm({ terms, defaultTermId }: Props) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium">{isMultiPart ? 'Parçalar ve Bölümler' : 'Bölümler'}</h2>
-          <p className="text-xs text-muted-foreground">
-            Toplam: {fields.length} bölüm
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              Toplam: {fields.length} bölüm
+            </p>
+            {/* 3a: içindekiler yeni kitapta da — iki aşamalı giriş bitti. */}
+            <BookOutlineImport trackingMode={isPageBook ? 'page' : 'test'} onFill={fillFromOutline} />
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -360,6 +402,15 @@ export function BookForm({ terms, defaultTermId }: Props) {
                       {...register(`sections.${index}.page_end`, { valueAsNumber: true })}
                     />
                   </>
+                ) : rowSubsections[index] ? (
+                  // İçindekilerden gelen bölüm: testler alt bölümlerle açılır.
+                  <p
+                    className="flex h-9 shrink-0 items-center rounded-md bg-muted px-2 text-xs tabular-nums text-muted-foreground"
+                    title={rowSubsections[index]!.map(x => `${x.title} ${x.test_start}-${x.test_end}`).join('\n')}
+                  >
+                    {rowSubsections[index]!.length} alt bölüm ·{' '}
+                    {rowSubsections[index]!.reduce((n, x) => n + x.test_end - x.test_start + 1, 0)} test
+                  </p>
                 ) : (
                   <Input
                     type="number"
@@ -407,11 +458,21 @@ export function BookForm({ terms, defaultTermId }: Props) {
       <Separator />
 
       {serverError && <p className="text-sm text-destructive">{serverError}</p>}
+      {(isPending || saving) && (
+        <p className="text-xs text-muted-foreground" role="status">
+          Bölümler ve {isPageBook ? 'sayfalar' : 'testler'} oluşturuluyor. Büyük kitaplarda birkaç saniye sürebilir; sayfadan
+          ayrılmayın ve düğmeye yeniden basmayın.
+        </p>
+      )}
 
       <div className="flex gap-3">
-        <Button type="submit" disabled={isPending}>
-          {isPending && <Loader2 className="size-4 animate-spin" />}
-          {isPageBook ? 'Kitabı Kaydet' : 'Kaydet ve alt bölümlere geç'}
+        <Button type="submit" disabled={isPending || saving}>
+          {(isPending || saving) && <Loader2 className="size-4 animate-spin" />}
+          {isPending || saving
+            ? 'Kaydediliyor, lütfen bekleyin…'
+            : isPageBook
+              ? 'Kitabı Kaydet'
+              : 'Kaydet ve alt bölümlere geç'}
         </Button>
         <Button type="button" variant="ghost" onClick={() => router.push('/teacher/books')}>
           İptal

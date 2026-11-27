@@ -13,7 +13,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { parseBookOutline, parsePageOutline } from '@/lib/book-import'
+import {
+  parseBookOutline,
+  parsePageOutline,
+  type ParsedChapter,
+  type ParsedPageSection,
+} from '@/lib/book-import'
 import {
   importBookOutlineAction,
   importPageSectionsAction,
@@ -54,8 +59,22 @@ const PAGE_PLACEHOLDER = `Üçgenler 1-56
 Çokgenler 57-98
 Çember sf. 99-140`
 
+/**
+ * Forma doldurma kipinin sonucu (yeni kitap formu, 3a). Kitap henüz
+ * kaydedilmediği için sunucuya gidilmez; ayrıştırılan liste forma verilir.
+ */
+export type OutlineFill =
+  | { kind: 'page'; sections: ParsedPageSection[] }
+  | { kind: 'test'; chapters: ParsedChapter[] }
+
 interface BookOutlineImportProps {
-  bookId: string
+  /** Kayıtlı kitaba doğrudan ekleme (düzenleme ekranı). `onFill` verilirse yok sayılır. */
+  bookId?: string
+  /**
+   * Verilirse "forma doldur" kipi: sunucu eylemi ÇAĞRILMAZ, sonuç
+   * çağırana verilir (yeni kitap formu — kitap henüz yok).
+   */
+  onFill?: (fill: OutlineFill) => void
   /**
    * Kitabın takip türü. 'page' ise sayfa kipi; diğer tüm türler
    * (test/section/step/trial) `book_tests`'i test gibi kullanır ve test
@@ -64,7 +83,7 @@ interface BookOutlineImportProps {
   trackingMode?: string
 }
 
-export function BookOutlineImport({ bookId, trackingMode }: BookOutlineImportProps) {
+export function BookOutlineImport({ bookId, trackingMode, onFill }: BookOutlineImportProps) {
   const isPage = trackingMode === 'page'
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
@@ -92,6 +111,13 @@ export function BookOutlineImport({ bookId, trackingMode }: BookOutlineImportPro
     (isPage ? pageOutline!.sections.length > 0 : outline!.chapters.length > 0)
 
   function handleImport() {
+    if (onFill) {
+      onFill(isPage ? { kind: 'page', sections: pageOutline!.sections } : { kind: 'test', chapters: outline!.chapters })
+      setText('')
+      setOpen(false)
+      return
+    }
+    if (!bookId) return
     startTransition(async () => {
       if (isPage) {
         const res = await importPageSectionsAction(bookId, pageOutline!.sections)
@@ -122,7 +148,18 @@ export function BookOutlineImport({ bookId, trackingMode }: BookOutlineImportPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    // METİN DOLUYKEN dış tıklama/Esc pencereyi KAPATMAZ (27.11 kabul
+    // testi): kısa ekranda Ekle'ye ulaşmaya çalışırken dışarı tıklanınca
+    // pencere kapanıyor, yapıştırılan metin sessizce kayboluyordu.
+    // Vazgeç düğmesi her zaman çalışır.
+    <Dialog
+      open={open}
+      onOpenChange={(next, details) => {
+        if (!next && text.trim() !== '' && details?.reason === 'escape-key') return
+        setOpen(next)
+      }}
+      disablePointerDismissal={text.trim() !== ''}
+    >
       <DialogTrigger
         render={
           <Button type="button" variant="outline" size="sm">
@@ -147,7 +184,9 @@ export function BookOutlineImport({ bookId, trackingMode }: BookOutlineImportPro
             onChange={(e) => setText(e.target.value)}
             placeholder={isPage ? PAGE_PLACEHOLDER : TEST_PLACEHOLDER}
             rows={10}
-            className="font-mono text-xs"
+            // Yapıştırılan her satırla sınırsız uzamasın (field-sizing);
+            // uzun metin kutunun içinde kayar.
+            className="max-h-[40dvh] overflow-y-auto font-mono text-xs"
             aria-label="İçindekiler metni"
           />
 
@@ -217,7 +256,7 @@ export function BookOutlineImport({ bookId, trackingMode }: BookOutlineImportPro
             Vazgeç
           </Button>
           <Button type="button" onClick={handleImport} disabled={!canImport}>
-            {pending ? 'Ekleniyor…' : 'Ekle'}
+            {pending ? 'Ekleniyor…' : onFill ? 'Forma aktar' : 'Ekle'}
           </Button>
         </DialogFooter>
       </DialogContent>

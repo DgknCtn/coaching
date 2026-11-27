@@ -13,6 +13,7 @@ import { TempoStrip } from '@/components/shared/tempo-strip'
 import { ProgressSummary } from '@/components/shared/progress-summary'
 import { BookMapGrid, BookMapLegend } from '@/components/shared/book-map-grid'
 import { StudentBookVideos } from './book-videos'
+import { bookLevelLabel } from '@/lib/book-taxonomy'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,7 +70,7 @@ export default async function StudentBookMapPage({
         backHref="/student"
         title={book.title}
         subtitle={[book.subject, book.publisher].filter(Boolean).join(' · ') || undefined}
-        badges={book.examType ? <Badge variant="info">{book.examType}</Badge> : undefined}
+        badges={bookLevelLabel(book.levelExam, book.examType) ? <Badge variant="info">{bookLevelLabel(book.levelExam, book.examType)}</Badge> : undefined}
       />
 
       <MetricTiles

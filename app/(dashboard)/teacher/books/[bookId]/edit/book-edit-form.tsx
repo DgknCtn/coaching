@@ -917,6 +917,7 @@ function SectionRowForm({
           selectedIds={topicIds}
           onChange={setTopicIds}
           filtered={topicsFiltered}
+          suggestFor={title}
         />
       </div>
     </div>

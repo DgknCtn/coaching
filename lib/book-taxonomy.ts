@@ -187,3 +187,16 @@ export type VideoMode = (typeof VIDEO_MODES)[number]
  *  sorgudan gelir, bu yalnızca form için üst/alt sınırdır. */
 export const EDITION_YEAR_MIN = 2000
 export const EDITION_YEAR_MAX = 2100
+
+/**
+ * Kitabın seviye/sınav ROZETİ (Kitap Girişi 4). Görüntüleme alanı
+ * `level_exam`'dır; `exam_type` derive_exam_type ile dar bir kümeye
+ * indirgenir ve "9. Sınıf" gibi değerleri "Other" yapar (021). "Other"
+ * ve "Belirtilmedi" kullanıcıya hiçbir şey söylemez — rozet çizilmez.
+ */
+export function bookLevelLabel(levelExam: string | null | undefined, examType?: string | null): string | null {
+  const meaningless = (v: string | null | undefined) => !v?.trim() || /^(other|belirtilmedi|diğer)$/i.test(v.trim())
+  if (!meaningless(levelExam)) return levelExam!.trim()
+  if (!meaningless(examType)) return examType!.trim()
+  return null
+}

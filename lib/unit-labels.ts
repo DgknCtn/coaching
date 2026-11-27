@@ -40,6 +40,13 @@ export function unitLabel(mode: UnitMode): string {
   return UNIT_LABEL[mode ?? ''] ?? 'test'
 }
 
+/** Başlık biçimi: "Test" | "Sayfa" — sayaç etiketleri için (Kitap Girişi 4:
+ *  sayfa takipli kitapta sayaç "330 Test" diyordu). */
+export function unitTitle(mode: UnitMode): string {
+  const u = unitLabel(mode)
+  return u.charAt(0).toLocaleUpperCase('tr') + u.slice(1)
+}
+
 /** Çoğul birim adı. Türkçede bu bağlamda sayıdan sonra çoğul eki
  *  kullanılmaz ("71 sayfa", "71 test"), bu yüzden tekil ile aynıdır.
  *  Yine de ayrı bir fonksiyon olarak durur: çağıran taraf niyetini

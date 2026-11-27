@@ -11,6 +11,7 @@ import { listResult } from '@/lib/data-result'
 import { PrintButton } from './print-button'
 import { AiSummaryPanel } from './ai-summary-panel'
 import { aiSummariesEnabled } from '@/lib/ai/gateway'
+import { bookLevelLabel } from '@/lib/book-taxonomy'
 
 export const dynamic = 'force-dynamic'
 
@@ -154,7 +155,7 @@ export default async function StudentReportPage({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{b.book_title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {[b.subject, b.exam_type].filter(Boolean).join(' · ')}
+                      {[b.subject, bookLevelLabel(b.level_exam, b.exam_type)].filter(Boolean).join(' · ')}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
