@@ -1,18 +1,10 @@
-import { ArrowRight, ClipboardPaste, Library } from 'lucide-react'
+import { ClipboardPaste, Library } from 'lucide-react'
 import { SectionHeading } from './section-heading'
-import { BrowserWindow } from './mock/browser-window'
+import { ImportMock } from './mock/import-mock'
 
 // HIZLI KURULUM — "kurması zor mu?" itirazı. Kitap tek tek girilmez:
 // hazır kütüphaneden seçilir ya da içindekiler yapıştırılır. Kütüphanedeki
 // kitap SAYISI yazılmaz — doğrulanamayan sayı kullanılmaz (taahhütler).
-
-const PASTED = ['1. Denklemler ........ 5', '   Test 1-6', '2. Problemler ........ 41', '   Test 1-8', '3. Oran ve Orantı .... 77', '   Test 1-7']
-
-const PARSED = [
-  { title: 'Denklemler', detail: '6 test' },
-  { title: 'Problemler', detail: '8 test' },
-  { title: 'Oran ve Orantı', detail: '7 test' },
-]
 
 export function SetupSection() {
   return (
@@ -52,22 +44,7 @@ export function SetupSection() {
           </ul>
         </div>
 
-        <BrowserWindow title="Kitap ekle · içindekileri yapıştır" label="İçindekiler metni yapıştırılınca bölüm listesinin kendiliğinden oluşması">
-          <div className="grid items-center gap-3 p-4 sm:grid-cols-[1fr_auto_1fr]">
-            <pre className="overflow-hidden rounded-lg border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              {PASTED.join('\n')}
-            </pre>
-            <ArrowRight className="mx-auto size-5 rotate-90 text-primary sm:rotate-0" />
-            <ul className="space-y-2">
-              {PARSED.map(p => (
-                <li key={p.title} className="flex items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2 text-xs">
-                  <span className="font-medium">{p.title}</span>
-                  <span className="text-muted-foreground">{p.detail}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </BrowserWindow>
+        <ImportMock />
       </div>
     </section>
   )

@@ -14,7 +14,7 @@ export function HomeworkMock() {
       title="Ödev Ver · TYT Matematik Soru Bankası"
       label="Ödev verme ekranı: kitap haritasında testlerin durumu renklerle, sayfa aralığıyla ödeve ekleme ve haftalık plan sepeti"
     >
-      <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_13rem]">
+      <div className="grid gap-3 p-3 @2xl:grid-cols-[minmax(0,1fr)_13rem]">
         <div className="min-w-0 space-y-3">
           <div className="max-h-[300px] overflow-hidden">
             <BookMapGrid book={book} readOnly />
@@ -29,7 +29,7 @@ export function HomeworkMock() {
             <span className="text-muted-foreground">→ 9 sayfa ödeve eklendi</span>
           </div>
         </div>
-        <div className="hidden space-y-2 rounded-lg border p-3 text-xs lg:block">
+        <div className="hidden space-y-2 rounded-lg border p-3 text-xs @2xl:block">
           <p className="font-medium">Haftalık Çalışma Planı</p>
           <p className="text-[11px] text-muted-foreground">Son teslim: sıradaki ders</p>
           <ul className="space-y-1.5 pt-1">
